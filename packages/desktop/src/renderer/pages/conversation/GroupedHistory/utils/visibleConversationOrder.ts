@@ -1,41 +1,33 @@
+import type { TChatConversation } from '@/common/config/storage';
+import { getActivityTime } from '@/renderer/utils/chat/timeline';
+
 import type { GroupedHistoryResult } from '../types';
 
-type VisibleConversationOrderInput = GroupedHistoryResult & {
-  expandedWorkspaces: string[];
-  siderCollapsed: boolean;
+/**
+ * Every chat in the order the history panel lists them: pinned chats first, then all
+ * others newest first (workspace groups are flattened). A non-empty `keyword` keeps
+ * only chats whose title contains it, case-insensitively.
+ */
+export const orderHistoryConversations = (
+  { pinnedConversations, timelineSections }: GroupedHistoryResult,
+  keyword = ''
+): { pinned: TChatConversation[]; others: TChatConversation[] } => {
+  const needle = keyword.trim().toLowerCase();
+  const matches = (conversation: TChatConversation) =>
+    !needle || (conversation.name ?? '').toLowerCase().includes(needle);
+
+  return {
+    pinned: pinnedConversations.filter(matches),
+    others: timelineSections
+      .flatMap((section) => section.items)
+      .flatMap((item) => item.workspaceGroup?.conversations ?? (item.conversation ? [item.conversation] : []))
+      .filter(matches)
+      .toSorted((a, b) => getActivityTime(b) - getActivityTime(a)),
+  };
 };
 
-export const buildVisibleConversationIds = ({
-  pinnedConversations,
-  timelineSections,
-  expandedWorkspaces,
-  siderCollapsed,
-}: VisibleConversationOrderInput): string[] => {
-  const expandedWorkspaceSet = new Set(expandedWorkspaces);
-  const visibleConversationIds: string[] = [];
-
-  pinnedConversations.forEach((conversation) => {
-    visibleConversationIds.push(conversation.id);
-  });
-
-  timelineSections.forEach((section) => {
-    section.items.forEach((item) => {
-      if (item.type === 'conversation' && item.conversation) {
-        visibleConversationIds.push(item.conversation.id);
-        return;
-      }
-
-      if (item.type === 'workspace' && item.workspaceGroup) {
-        if (!siderCollapsed && !expandedWorkspaceSet.has(item.workspaceGroup.workspace)) {
-          return;
-        }
-
-        item.workspaceGroup.conversations.forEach((conversation) => {
-          visibleConversationIds.push(conversation.id);
-        });
-      }
-    });
-  });
-
-  return visibleConversationIds;
+/** Ids of every chat in history-panel order; the Ctrl+Tab cycle order. */
+export const buildVisibleConversationIds = (grouped: GroupedHistoryResult): string[] => {
+  const { pinned, others } = orderHistoryConversations(grouped);
+  return [...pinned, ...others].map((conversation) => conversation.id);
 };

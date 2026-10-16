@@ -10,6 +10,7 @@ import { useConversationHistoryContext } from '@/renderer/hooks/context/Conversa
 import ConversationRow from '@/renderer/pages/conversation/GroupedHistory/ConversationRow';
 import { useConversationActions } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationActions';
 import type { GroupedHistoryResult } from '@/renderer/pages/conversation/GroupedHistory/types';
+import { orderHistoryConversations } from '@/renderer/pages/conversation/GroupedHistory/utils/visibleConversationOrder';
 import { getActivityTime, getTimelineLabel } from '@/renderer/utils/chat/timeline';
 
 const PANEL_WIDTH = 360;
@@ -21,23 +22,14 @@ type HistorySection = { key: string; label: string; conversations: TChatConversa
 
 /** Pinned chats first, then every other chat by recency under Today / Yesterday / Last 7 Days / Earlier. */
 export const buildHistorySections = (
-  { pinnedConversations, timelineSections }: GroupedHistoryResult,
+  grouped: GroupedHistoryResult,
   keyword: string,
   now: number,
   t: (key: string) => string
 ): HistorySection[] => {
-  const needle = keyword.trim().toLowerCase();
-  const matches = (conversation: TChatConversation) =>
-    !needle || (conversation.name ?? '').toLowerCase().includes(needle);
-
-  const others = timelineSections
-    .flatMap((section) => section.items)
-    .flatMap((item) => item.workspaceGroup?.conversations ?? (item.conversation ? [item.conversation] : []))
-    .filter(matches)
-    .toSorted((a, b) => getActivityTime(b) - getActivityTime(a));
+  const { pinned, others } = orderHistoryConversations(grouped, keyword);
 
   const sections: HistorySection[] = [];
-  const pinned = pinnedConversations.filter(matches);
   if (pinned.length > 0) {
     sections.push({ key: 'pinned', label: t('conversation.history.pinned'), conversations: pinned });
   }

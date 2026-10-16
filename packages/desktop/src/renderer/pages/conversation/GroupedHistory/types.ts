@@ -30,17 +30,6 @@ export type GroupedHistoryResult = {
   timelineSections: TimelineSection[];
 };
 
-export type ExportZipFile = {
-  name: string;
-  content?: string;
-  sourcePath?: string;
-};
-
-export type ExportTask =
-  | { mode: 'single'; conversation: TChatConversation }
-  | { mode: 'batch'; conversation_ids: string[] }
-  | null;
-
 export type ConversationRowProps = {
   conversation: TChatConversation;
   isGenerating: boolean;
@@ -74,15 +63,4 @@ export type ConversationRowProps = {
   dimIcon?: boolean;
   /** Hover-reveal drag handle overlaying the leading icon; supplied by the sortable wrapper for reorderable (pinned) rows. */
   dragHandle?: ReactNode;
-};
-
-export type DragItemType = 'conversation' | 'workspace';
-
-export type DragItem = {
-  type: DragItemType;
-  id: string;
-  conversation?: TChatConversation;
-  workspaceGroup?: WorkspaceGroup;
-  sourceSection: 'pinned' | string;
-  sourceWorkspace?: string;
 };
