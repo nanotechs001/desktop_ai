@@ -26,5 +26,9 @@
     <button id="publish">Publish</button>
     <input id="title" placeholder="Page title" />
     <p>Builder canvas text</p>
+    <script>
+      window.clicks = 0;
+      document.getElementById('publish').addEventListener('click', () => window.clicks++);
+    </script>
   </body>
 </html>

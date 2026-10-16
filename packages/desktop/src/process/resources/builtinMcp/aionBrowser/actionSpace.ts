@@ -7,6 +7,7 @@
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
 import {
   FRAME_TIMEOUT_MS,
+  PAGE_NOT_READABLE,
   collectFramesReport,
   forgetWorld,
   withTimeout,
@@ -22,7 +23,8 @@ export const MAX_ROWS = 250;
 export const MAX_TEXT_LENGTH = 4000;
 const MAX_LABEL_LENGTH = 120;
 const MAX_VALUE_LENGTH = 120;
-const MAX_OPTION_LENGTH = 60;
+/** Option labels as observe shows them; select matches the agent's text against labels cut the same way. */
+export const MAX_OPTION_LENGTH = 60;
 const MAX_FRAME_LABEL_LENGTH = 80;
 /** Options shown per select; snapshot.js caps at the same number and adds a "+N more" entry. */
 const MAX_OPTIONS = 50;
@@ -45,7 +47,18 @@ export type SnapshotAction = {
   options?: string[];
 } & Partial<Record<(typeof STATE_KEYS)[number], 'true' | 'false' | 'mixed'>>;
 
-export type FrameSnapshot = { actions: SnapshotAction[]; text: string; omitted: number };
+export type FrameSnapshot = {
+  actions: SnapshotAction[];
+  text: string;
+  omitted: number;
+  /** Hash of jev's page key (url, scroll, viewport, form values); '' when the snapshot had none. */
+  pageKey: string;
+  /** Hash of jev's guard per node: identity, role, name, state and surrounding text. */
+  guards: Record<string, string>;
+};
+
+/** What act checks a frame against: its last snapshot's page key, guards and set of controls. */
+export type FrameBaseline = { pageKey: string; guards: Record<string, string>; controls: string };
 
 /** One row of the merged table: page strings sanitized, rect in top-viewport px. */
 export type ActionRow = {
@@ -73,6 +86,11 @@ export type Observation = {
 
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const isString = (value: unknown): value is string => typeof value === 'string';
+
+const parseGuards = (value: unknown): Record<string, string> =>
+  value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => isString(entry[1])))
+    : {};
 
 const parseRect = (value: unknown): Rect | null => {
   const r = value as Record<string, unknown> | null;
@@ -107,8 +125,39 @@ export function parseSnapshot(value: unknown): FrameSnapshot | null {
     actions: s.actions.map(parseAction).filter((a): a is SnapshotAction => a !== null),
     text: isString(s.text) ? s.text : '',
     omitted: isNumber(s.omitted_actions) ? s.omitted_actions : 0,
+    pageKey: isString(s.page_key) ? s.page_key : '',
+    guards: parseGuards(s.guards),
   };
 }
+
+/** Per connection, per page session, per frame key: the baseline act checks before input. */
+const baselines = new WeakMap<CdpConnection, Map<string, Map<string, FrameBaseline>>>();
+
+/** The baseline of a snapshot; `controls` changes when controls appear, go or are renamed, not when values do. */
+export const baselineOf = (snapshot: FrameSnapshot): FrameBaseline => ({
+  pageKey: snapshot.pageKey,
+  guards: snapshot.guards,
+  controls: JSON.stringify(snapshot.actions.map((a) => [a.node, a.role, a.label])),
+});
+
+/** The baseline act checks a frame against: from the latest observe, or from act's own re-read after an action. */
+export const frameBaseline = (
+  conn: CdpConnection,
+  pageSessionId: string,
+  frameKey: string
+): FrameBaseline | undefined => baselines.get(conn)?.get(pageSessionId)?.get(frameKey);
+
+/** Replaces the baselines of some frames of a tab; frames not in `keep` (when given) are dropped. */
+export const rememberBaselines = (
+  conn: CdpConnection,
+  pageSessionId: string,
+  entries: Array<[string, FrameBaseline]>,
+  keep?: ReadonlySet<string>
+): void => {
+  const tabs = baselines.get(conn) ?? new Map<string, Map<string, FrameBaseline>>();
+  const old = [...(tabs.get(pageSessionId) ?? [])].filter(([key]) => !keep || keep.has(key));
+  baselines.set(conn, tabs.set(pageSessionId, new Map([...old, ...entries])));
+};
 
 const toRow = (frame: FrameHandle, frameLabel: string, a: SnapshotAction): ActionRow => {
   const value = VALUE_ROLES.has(a.role) ? sanitizePageText(a.value, MAX_VALUE_LENGTH) : '';
@@ -190,7 +239,8 @@ export function formatObservation(obs: Observation, options: { text?: boolean } 
 
 type EvaluateReply = { result?: { value?: unknown }; exceptionDetails?: unknown };
 
-const snapshotFrame = async (conn: CdpConnection, frame: FrameHandle): Promise<FrameSnapshot | null> => {
+/** Runs the snapshot in `frame`'s isolated world; null when its result is unusable. */
+export const snapshotFrame = async (conn: CdpConnection, frame: FrameHandle): Promise<FrameSnapshot | null> => {
   const reply = await withTimeout(
     conn.send<EvaluateReply>(
       'Runtime.evaluate',
@@ -202,10 +252,12 @@ const snapshotFrame = async (conn: CdpConnection, frame: FrameHandle): Promise<F
   );
   if (reply.exceptionDetails) throw new Error(`Frame ${frame.frameKey} could not be read`);
   // null: the document has no body yet (still loading).
-  return reply.result?.value === null ? { actions: [], text: '', omitted: 0 } : parseSnapshot(reply.result?.value);
+  const empty: FrameSnapshot = { actions: [], text: '', omitted: 0, pageKey: '', guards: {} };
+  return reply.result?.value === null ? empty : parseSnapshot(reply.result?.value);
 };
 
-const isPausedRefusal = (error: unknown): boolean => error instanceof Error && error.message.startsWith(PAUSED_PREFIX);
+export const isPausedRefusal = (error: unknown): boolean =>
+  error instanceof Error && error.message.startsWith(PAUSED_PREFIX);
 
 const describeFailure = ({ frameKey, label }: FrameFailure): string =>
   frameKey ?? JSON.stringify(sanitizePageText(label, MAX_FRAME_LABEL_LENGTH));
@@ -213,8 +265,9 @@ const describeFailure = ({ frameKey, label }: FrameFailure): string =>
 /**
  * Observes the tab behind `pageSessionId`: one snapshot per visible frame, all in parallel, merged into one table.
  * `scope` (a frame label or key) limits the snapshots to matching frames. A frame that fails or does not answer
- * within {@link FRAME_TIMEOUT_MS} is reported and the others still return; when none can be read, the first error is
- * thrown. Never takes a screenshot.
+ * within {@link FRAME_TIMEOUT_MS} is reported and the others still return; when the top frame or no frame can be read,
+ * it throws ({@link PAGE_NOT_READABLE}, or the relay's refusal when the user took over). Remembers each read frame's
+ * baseline for act. Never takes a screenshot.
  */
 export async function observePage(
   conn: CdpConnection,
@@ -240,8 +293,19 @@ export async function observePage(
     if (result.status === 'fulfilled' || !isPausedRefusal(result.reason))
       forgetWorld(conn, pageSessionId, frame.frameKey);
   });
+  // Without the top document an observation would be empty, not true (the user taking over is said as such).
+  const top = results[chosen.indexOf(frames[0])];
+  if (top && !(top.status === 'fulfilled' && top.value)) {
+    throw top.status === 'rejected' && isPausedRefusal(top.reason) ? top.reason : new Error(PAGE_NOT_READABLE);
+  }
   // Nothing readable at all (e.g. the relay refused because the user took over): say why instead of listing keys.
   const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (firstError && results.every((r) => r.status === 'rejected')) throw firstError.reason;
+  rememberBaselines(
+    conn,
+    pageSessionId,
+    snapshots.map(({ frame, snapshot }) => [frame.frameKey, baselineOf(snapshot)]),
+    new Set(frames.map((f) => f.frameKey))
+  );
   return { frames, failed, ...mergeSnapshots(snapshots, frames[0]?.frameKey) };
 }

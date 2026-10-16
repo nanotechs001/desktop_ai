@@ -197,4 +197,14 @@ describe('decideRelayCommand: ownership and pause', () => {
     expect(decide('Page.getFrameTree', {}, { tab }).allow).toBe(true);
     expect(decide('Page.captureScreenshot', { format: 'png' }, { tab }).allow).toBe(true);
   });
+
+  it('lets an agent switch drag interception off on a paused tab, never on', () => {
+    // A drag the user interrupted must not leave the user's own drags intercepted.
+    const tab = { ...ownTab, paused: true };
+    expect(decide('Input.setInterceptDrags', { enabled: false }, { tab })).toEqual({ allow: true });
+    expect(decide('Input.setInterceptDrags', { enabled: true }, { tab })).toMatchObject({
+      allow: false,
+      message: expect.stringContaining('user took over'),
+    });
+  });
 });

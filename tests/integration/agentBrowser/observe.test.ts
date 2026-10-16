@@ -2,33 +2,19 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   formatObservation,
   observePage,
-  type ActionRow,
   type Observation,
 } from '@process/resources/builtinMcp/aionBrowser/actionSpace';
 import { FRAME_TIMEOUT_MS, frameByKey, watchFrames } from '@process/resources/builtinMcp/aionBrowser/frames';
 import SNAPSHOT_SOURCE from '@process/resources/builtinMcp/aionBrowser/snapshot.js?raw';
 import { chromePath, launchTestChrome, type TestChrome } from './helpers/chrome';
 import { startFixtureServers, type FixtureServers } from './helpers/fixtureServer';
-
-const WAIT_MS = 5000;
+import { observeUntil as observeConnUntil, rowsIn } from './helpers/observeUntil';
 
 let chrome: TestChrome;
 let servers: FixtureServers;
 
-/** Observes until `ready` holds: OOPIFs attach (and nested ones load) a little after the top load event. */
-async function observeUntil(
-  sessionId: string,
-  ready: (obs: Observation) => boolean,
-  deadline = Date.now() + WAIT_MS
-): Promise<Observation> {
-  const obs = await observePage(chrome.conn, sessionId);
-  if (ready(obs) || Date.now() > deadline) return obs;
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  return observeUntil(sessionId, ready, deadline);
-}
-
-const rowsIn = (obs: Observation, frameLabel: string, label: string): ActionRow[] =>
-  obs.rows.filter((row) => row.frameLabel === frameLabel && row.label === label);
+const observeUntil = (sessionId: string, ready: (obs: Observation) => boolean): Promise<Observation> =>
+  observeConnUntil(chrome.conn, sessionId, ready);
 
 describe.skipIf(!chromePath)('observe on real Chrome', () => {
   beforeAll(async () => {

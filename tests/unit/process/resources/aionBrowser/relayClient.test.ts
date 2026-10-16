@@ -16,6 +16,7 @@ beforeEach(async () => {
   relay.on('Target.createTarget', () => ({ targetId: 'wc-7' }));
   relay.on('Target.attachToTarget', (params) => ({ sessionId: `s-${String(params.targetId)}` }));
   relay.on('Target.closeTarget', () => ({ success: true }));
+  relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
   relay.on('AionRelay.listTabs', () => ({
     tabs: [{ targetId: 'wc-7', title: 'T', url: 'https://example.com/', owner: 'agent' }],
   }));
@@ -64,6 +65,10 @@ describe('RelayClient', () => {
     expect(await client.session('wc-7')).toBe('s-wc-7');
     expect(await client.session('wc-7')).toBe('s-wc-7');
     expect(relay.callsTo('Target.attachToTarget')).toEqual([{ targetId: 'wc-7', flatten: true }]);
+    // Focus emulation keeps a background tab rendering (rAF, menus); once per session.
+    expect(relay.requests.filter((r) => r.method === 'Emulation.setFocusEmulationEnabled')).toEqual([
+      { method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true }, sessionId: 's-wc-7' },
+    ]);
 
     await client.closeTab('wc-7');
     expect(relay.callsTo('Target.closeTarget')).toEqual([{ targetId: 'wc-7' }]);

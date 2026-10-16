@@ -3,7 +3,8 @@
  * each frame, so the page can neither read nor forge window.__aionFast.
  *
  * Ported from jev-ultrafast (https://github.com/browser-use/jev-ultrafast, jev_ultrafast/snapshot.js).
- * Changes: walks open shadow roots; reports every contenteditable (and a designMode body) as textbox; one
+ * Changes: walks open shadow roots; reports every contenteditable (and a designMode body) as textbox, and
+ * other draggable="true" elements (builder widgets, sortable items) as draggable, for the drag tool; one
  * entry per element (a select lists its options instead of one action per option; no "Open" duplicates,
  * no scroll/wait pseudo-actions); state lives in window.__aionFast; marker, page key and guards are returned
  * as short hashes, and page strings are cut (labels, values and options to 200 chars, 50 options per select,
@@ -123,7 +124,7 @@
     'spinbutton',
   ];
   const selector =
-    'a[href],button,input,textarea,select,summary,[contenteditable]:not([contenteditable="false"]),' +
+    'a[href],button,input,textarea,select,summary,[contenteditable]:not([contenteditable="false"]),[draggable="true"],' +
     roles.map((role) => '[role="' + role + '"]').join(',');
   const role = (e) => {
     const explicit = e.getAttribute('role');
@@ -139,6 +140,7 @@
       if (e.type === 'number') return 'spinbutton';
       if (['text', 'email', 'url', 'tel'].includes(e.type)) return 'textbox';
     }
+    if (e.getAttribute('draggable') === 'true') return 'draggable';
     return null;
   };
   cache.pageKey = () => [

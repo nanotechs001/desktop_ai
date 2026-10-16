@@ -18,6 +18,8 @@ export type FrameHandle = {
   contextId: number;
   /** The frame's content-box origin in top-viewport CSS px. */
   offset: { x: number; y: number };
+  /** The part of the frame the top viewport shows (clipped by every iframe around it), in top-viewport CSS px. */
+  clip: { x: number; y: number; w: number; h: number };
 };
 
 /** A frame that did not answer in time or failed: by key once it has one, else by its (unsanitized) origin. */
@@ -29,6 +31,8 @@ export const FRAME_TIMEOUT_MS = 2000;
 const WORLD_NAME = 'aion-browser';
 /** Label for an OOPIF that never answered and has neither a key nor a url yet. */
 const UNKNOWN_FRAME = 'a cross-origin frame';
+/** Thrown when the tab's own document cannot be read: an observation without it would be empty, not true. */
+export const PAGE_NOT_READABLE = 'The page is not readable right now; try again.';
 
 type CdpFrame = { id: string; loaderId: string; url: string; securityOrigin?: string };
 type CdpFrameTree = { frame: CdpFrame; childFrames?: CdpFrameTree[] };
@@ -37,7 +41,7 @@ type Box = Point & { w: number; h: number };
 
 /** A frame found in one session's frame tree; `ownerSession` holds its iframe element (null for the top frame). */
 type FoundFrame = { frame: CdpFrame; sessionId: string; ownerSession: string | null };
-type Placement = { offset: Point; name?: string } | null;
+type Placement = { offset: Point; clip: Box; name?: string } | null;
 /** A frame key and the one world it names; minted together, retired together. */
 type FrameWorld = { frameKey: string; world: Promise<number> };
 
@@ -163,8 +167,14 @@ const ownerBox = async (conn: CdpConnection, frameId: string, sessionId: string)
   return { box: { x: x1, y: y1, w: x2 - x1, h: y3 - y1 }, name: named };
 };
 
-const intersects = (box: Box, viewport: { w: number; h: number }): boolean =>
-  box.w > 0 && box.h > 0 && box.x < viewport.w && box.y < viewport.h && box.x + box.w > 0 && box.y + box.h > 0;
+/** The overlap of two boxes, or null when they do not overlap. */
+const intersect = (a: Box, b: Box): Box | null => {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const w = Math.min(a.x + a.w, b.x + b.w) - x;
+  const h = Math.min(a.y + a.h, b.y + b.h) - y;
+  return w > 0 && h > 0 ? { x, y, w, h } : null;
+};
 
 type FoundFrames = { found: FoundFrame[]; sessionRoot: Map<string, string>; failed: FrameFailure[] };
 
@@ -224,7 +234,7 @@ export async function collectFramesReport(
     FRAME_TIMEOUT_MS,
     'The page'
   );
-  const viewport = { w: metrics.cssLayoutViewport.clientWidth, h: metrics.cssLayoutViewport.clientHeight };
+  const viewport = { x: 0, y: 0, w: metrics.cssLayoutViewport.clientWidth, h: metrics.cssLayoutViewport.clientHeight };
   const previous = state.tabs.get(pageSessionId);
   const { found, sessionRoot, failed } = await findFrames(conn, state, pageSessionId, topTree.frameTree, previous);
   const byId = new Map(found.map((f) => [f.frame.id, f]));
@@ -235,14 +245,15 @@ export async function collectFramesReport(
     const memo = placed.get(f.frame.id);
     if (memo) return memo;
     const result = (async (): Promise<Placement> => {
-      if (!f.ownerSession) return { offset: { x: 0, y: 0 } };
+      if (!f.ownerSession) return { offset: { x: 0, y: 0 }, clip: viewport };
       // The owner's box is relative to the viewport of its session's root frame.
       const ownerRoot = byId.get(sessionRoot.get(f.ownerSession) ?? '');
       if (!ownerRoot) return null;
       const [base, owner] = await Promise.all([place(ownerRoot), ownerBox(conn, f.frame.id, f.ownerSession)]);
       if (!base) return null;
       const box = { ...owner.box, x: owner.box.x + base.offset.x, y: owner.box.y + base.offset.y };
-      return intersects(box, viewport) ? { offset: { x: box.x, y: box.y }, name: owner.name } : null;
+      const clip = intersect(box, base.clip);
+      return clip ? { offset: { x: box.x, y: box.y }, clip, name: owner.name } : null;
     })().catch((): Placement => null); // a frame that detached mid-call is simply not observed
     placed.set(f.frame.id, result);
     return result;
@@ -269,7 +280,14 @@ export async function collectFramesReport(
     try {
       const contextId = await entry.world;
       const label = where.name || originOf(f.frame);
-      return { frameKey: entry.frameKey, label, sessionId: f.sessionId, contextId, offset: where.offset };
+      return {
+        frameKey: entry.frameKey,
+        label,
+        sessionId: f.sessionId,
+        contextId,
+        offset: where.offset,
+        clip: where.clip,
+      };
     } catch (error) {
       tab.worlds.delete(doc); // the frame went away mid-call; a later collect starts over with a new key
       throw error;
@@ -284,9 +302,12 @@ export async function collectFramesReport(
     }
     const doc = `${found[i].sessionId}|${found[i].frame.id}|${found[i].frame.loaderId}`;
     failed.push({ frameKey: tab.worlds.get(doc)?.frameKey, label: originOf(found[i].frame) });
+    // A lost reply (e.g. createIsolatedWorld) would time this document out on every collect; start it over.
+    tab.worlds.delete(doc);
   });
   frames.forEach((h) => tab.handles.set(h.frameKey, h));
   state.tabs.set(pageSessionId, tab);
+  if (results[0]?.status !== 'fulfilled') throw new Error(PAGE_NOT_READABLE); // found[0] is the top frame
   return { frames, failed };
 }
 

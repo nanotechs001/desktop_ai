@@ -7,6 +7,7 @@
 // Runs inside the standalone aion-browser MCP process: no electron imports, and nothing that pulls them in.
 import WebSocket from 'ws';
 import { CdpConnection, createWebSocketTransport } from '@process/services/agentBrowser/cdpConnection';
+import type { ReportedAction } from './actions';
 import { watchFrames } from './frames';
 
 /** Thrown by {@link RelayClient.connect} when the AionUi relay env vars are absent or unusable. */
@@ -29,6 +30,8 @@ const HANDSHAKE_TIMEOUT_MS = 5000;
 const LABEL_PREFIX = 'aion-browser';
 const MAX_LABEL_LENGTH = 40;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+/** Relay target ids are `wc-<webContents id>` (targetRegistry.targetIdFor). */
+const TARGET_ID = /^wc-(\d{1,9})$/;
 
 /** Wait before the `failures`-th consecutive reconnect attempt: 250 ms doubling, capped at 5 s. */
 export const retryDelayMs = (failures: number): number =>
@@ -155,8 +158,10 @@ export class RelayClient {
     if (cached) return cached;
     const attach = conn
       .send<{ sessionId?: unknown }>('Target.attachToTarget', { targetId, flatten: true })
-      .then(({ sessionId }) => {
+      .then(async ({ sessionId }) => {
         if (typeof sessionId !== 'string') throw new Error('The AionUi browser returned no session id');
+        // Keeps rAF, focus and menus working in a tab the user is not looking at (spec §4 Observation step 1).
+        await conn.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
         return sessionId;
       });
     this.sessions.set(targetId, attach);
@@ -164,6 +169,13 @@ export class RelayClient {
       if (this.sessions.get(targetId) === attach) this.sessions.delete(targetId);
     });
     return attach;
+  }
+
+  /** Tells the pane (AionRelay.reportAction) that an action ran on `targetId`, for its highlight. */
+  async reportAction(targetId: string, action: ReportedAction): Promise<void> {
+    const match = TARGET_ID.exec(targetId);
+    if (!match) return;
+    await this.connection.send('AionRelay.reportAction', { webContentsId: Number(match[1]), ...action });
   }
 
   /** True once after the connection was re-established, so callers can tell the agent its old tabs are gone. */

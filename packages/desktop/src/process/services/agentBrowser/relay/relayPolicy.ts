@@ -193,7 +193,10 @@ export function decideRelayCommand(ctx: PolicyContext): PolicyDecision {
   if (unknown) return deny(`${method}: param "${unknown}" is not allowed for agents`);
   if (!tab) return deny('No such target: the tab is gone');
   if (!mayAct(tab, ctx.client)) return deny('This tab is not shared with agents');
-  const pausable = PAUSED_METHODS.has(method) || PAUSED_PREFIXES.some((prefix) => method.startsWith(prefix));
+  // Switching drag interception off ends an agent drag the user interrupted; left on, it would eat the user's drags.
+  const endsDrag = method === 'Input.setInterceptDrags' && params.enabled === false;
+  const pausable =
+    !endsDrag && (PAUSED_METHODS.has(method) || PAUSED_PREFIXES.some((prefix) => method.startsWith(prefix)));
   if (tab.paused && pausable) return deny('Paused: the user took over this tab. Wait for the user to resume.');
   return decideValues(ctx);
 }

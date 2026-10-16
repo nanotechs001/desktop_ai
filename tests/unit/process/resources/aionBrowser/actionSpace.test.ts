@@ -20,6 +20,7 @@ const top: FrameHandle = {
   sessionId: 's1',
   contextId: 1,
   offset: { x: 0, y: 0 },
+  clip: { x: 0, y: 0, w: 1200, h: 900 },
 };
 const builder: FrameHandle = {
   frameKey: 'f1',
@@ -27,6 +28,7 @@ const builder: FrameHandle = {
   sessionId: 's2',
   contextId: 2,
   offset: { x: 30, y: 100 },
+  clip: { x: 30, y: 100, w: 400, h: 200 },
 };
 
 const action = (node: number, label: string, extra: Record<string, unknown> = {}) => ({
@@ -155,6 +157,7 @@ describe('observe tool', () => {
     relay = await FakeRelay.start();
     relay.on('Target.createTarget', () => ({ targetId: 'wc-7' }));
     relay.on('Target.attachToTarget', () => ({ sessionId: 's1' }));
+    relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
     relay.on('Page.getLayoutMetrics', () => ({ cssLayoutViewport: { clientWidth: 1200, clientHeight: 900 } }));
     relay.on('Page.getFrameTree', () => ({
       frameTree: {
@@ -233,6 +236,46 @@ describe('observe tool', () => {
     expect(next).toBeDefined();
     expect(next).not.toBe(first);
     expect(relay.callsTo('Page.createIsolatedWorld')).toHaveLength(2);
+  });
+
+  it('a frame whose world never arrives is retired: the next observe makes a fresh world under a new key', async () => {
+    relay.on('Page.getFrameTree', () => ({
+      frameTree: {
+        frame: { id: 'F1', loaderId: 'L1', url: 'https://app.example/', securityOrigin: 'https://app.example' },
+        childFrames: [{ frame: { id: 'F2', loaderId: 'L2', url: 'https://app.example/builder' } }],
+      },
+    }));
+    relay.on('DOM.getFrameOwner', () => ({ backendNodeId: 5 }));
+    relay.on('DOM.getBoxModel', () => ({ model: { content: [30, 100, 430, 100, 430, 300, 30, 300] } }));
+    relay.on('DOM.describeNode', () => ({ node: { attributes: ['title', 'GHL builder'] } }));
+    let lost = true;
+    relay.on('Page.createIsolatedWorld', (params) => {
+      if (params.frameId === 'F2' && lost) {
+        lost = false;
+        return new Promise(() => {}); // the reply never comes
+      }
+      return { executionContextId: params.frameId === 'F1' ? 41 : 42 };
+    });
+    await client.callTool({ name: 'tabs', arguments: { action: 'open' } });
+
+    const first = (await observe({})).content[0].text ?? '';
+    const lostKey = /Could not read frames: (f\d+);/.exec(first)?.[1];
+    expect(lostKey).toBeDefined();
+    const second = (await observe({})).content[0].text ?? '';
+    expect(second).not.toContain('Could not read frames');
+    expect(second).toMatch(/· in: "GHL builder"/);
+    expect(second).not.toContain(`${lostKey} "GHL builder"`);
+    expect(relay.callsTo('Page.createIsolatedWorld').filter((p) => p.frameId === 'F2')).toHaveLength(2);
+  }, 10_000);
+
+  it('says the page is not readable when the top frame cannot be read', async () => {
+    relay.on('Page.createIsolatedWorld', () => {
+      throw new Error('No frame for given id found');
+    });
+    await client.callTool({ name: 'tabs', arguments: { action: 'open' } });
+    const reply = await observe({});
+    expect(reply.isError).toBe(true);
+    expect(reply.content[0].text).toBe('The page is not readable right now; try again.');
   });
 
   it('asks for a tab when there is no current one', async () => {
