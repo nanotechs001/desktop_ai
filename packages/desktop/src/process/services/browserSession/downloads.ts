@@ -48,7 +48,7 @@ const extensionOf = (filename: string): string => COMPOUND_EXTENSION.exec(filena
 export function sanitizeFilename(name: string): string {
   const cleaned = name
     .replace(UNSAFE_FILENAME_CHARS, '')
-    .replace(/\.{2,}/g, '')
+    .replace(/\.\./g, '')
     .replace(/[. ]+$/, '')
     .trim();
   if (/^\.*$/.test(cleaned)) return FALLBACK_FILENAME;
@@ -108,9 +108,19 @@ export function handleWillDownload(item: Electron.DownloadItem): void {
     (p) => existsSync(p) || reservedPaths.has(p)
   );
   reservedPaths.add(savePath);
-  item.setSavePath(savePath);
-  activeItems.set(id, item);
+  try {
+    item.setSavePath(savePath);
+    activeItems.set(id, item);
+    trackDownload(item, id, savePath);
+  } catch (error) {
+    // No `done` will release this path if setup failed, so free it here.
+    reservedPaths.delete(savePath);
+    activeItems.delete(id);
+    throw error;
+  }
+}
 
+const trackDownload = (item: Electron.DownloadItem, id: string, savePath: string): void => {
   const snapshot = (state: DownloadItem['state']): DownloadItem => ({
     id,
     url: item.getURL(),
@@ -121,9 +131,14 @@ export function handleWillDownload(item: Electron.DownloadItem): void {
     totalBytes: item.getTotalBytes(),
   });
 
-  let lastUpdateEmit = 0;
-  apply({ type: 'started', item: snapshot('progressing') });
+  item.on('done', (_event, state) => {
+    activeItems.delete(id);
+    reservedPaths.delete(savePath);
+    apply({ type: 'done', item: snapshot(state) });
+    if (state === 'cancelled') removePartialFile(savePath);
+  });
 
+  let lastUpdateEmit = 0;
   item.on('updated', (_event, state) => {
     const nextItem = snapshot(state);
     const now = Date.now();
@@ -136,13 +151,8 @@ export function handleWillDownload(item: Electron.DownloadItem): void {
     apply({ type: 'updated', item: nextItem });
   });
 
-  item.on('done', (_event, state) => {
-    activeItems.delete(id);
-    reservedPaths.delete(savePath);
-    apply({ type: 'done', item: snapshot(state) });
-    if (state === 'cancelled') removePartialFile(savePath);
-  });
-}
+  apply({ type: 'started', item: snapshot('progressing') });
+};
 
 /** Current download list, oldest first. */
 export function getDownloads(): DownloadItem[] {
@@ -194,4 +204,11 @@ export function cancelDownload(id: string): ActionResult {
 /** Starts saving every download from the given session. */
 export function installDownloads(browserSession: Electron.Session): void {
   browserSession.on('will-download', (_event, item) => handleWillDownload(item));
+}
+
+/** Test-only: forget all tracked downloads and reserved paths. */
+export function __resetDownloadsForTests(): void {
+  downloads = [];
+  activeItems.clear();
+  reservedPaths.clear();
 }

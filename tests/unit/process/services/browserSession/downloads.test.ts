@@ -24,6 +24,7 @@ vi.mock('fs', () => ({ existsSync: mocks.existsSync, promises: { unlink: mocks.u
 vi.mock('@/common', () => ({ ipcBridge: { browser: { downloadsChanged: { emit: mocks.emit } } } }));
 
 import {
+  __resetDownloadsForTests,
   cancelDownload,
   getDownloads,
   handleWillDownload,
@@ -73,6 +74,7 @@ const lastEmitted = (): DownloadItem[] => (mocks.emit.mock.calls.at(-1) ?? [[]])
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetDownloadsForTests();
   mocks.existsSync.mockReturnValue(false);
   vi.useRealTimers();
 });
@@ -136,6 +138,11 @@ describe('sanitizeFilename', () => {
     expect(multibyte).not.toContain('\uFFFD');
   });
 
+  it('keeps the dot before the extension when a dot run is stripped', () => {
+    expect(sanitizeFilename('Report...pdf')).toBe('Report.pdf');
+    expect(sanitizeFilename('Invoice...2024.pdf')).toBe('Invoice.2024.pdf');
+  });
+
   it('returns "download" when nothing is left', () => {
     expect(sanitizeFilename('.\u0000.')).toBe('download');
     expect(sanitizeFilename('')).toBe('download');
@@ -178,6 +185,22 @@ describe('handleWillDownload', () => {
     expect(third.setSavePath).toHaveBeenCalledWith('/dl/race (2).pdf');
     second.emit('done', {}, 'cancelled');
     third.emit('done', {}, 'completed');
+  });
+
+  it('releases the reservation on done even when the file never reached disk', () => {
+    const first = start('gone.pdf');
+    first.emit('done', {}, 'interrupted');
+    const next = start('gone.pdf');
+    expect(next.setSavePath).toHaveBeenCalledWith('/dl/gone.pdf');
+  });
+
+  it('frees the name again when setup throws', () => {
+    const broken = makeElectronItem('boom.pdf');
+    broken.setSavePath.mockImplementationOnce(() => {
+      throw new Error('bad path');
+    });
+    expect(() => handleWillDownload(broken as unknown as ElectronItemArg)).toThrow('bad path');
+    expect(start('boom.pdf').setSavePath).toHaveBeenCalledWith('/dl/boom.pdf');
   });
 
   it('cancelling one download never unlinks the file of a same-name download', () => {
