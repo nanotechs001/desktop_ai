@@ -37,6 +37,8 @@ const e2eStateFile = path.join(e2eStateSandboxDir, 'extension-states.json');
 // touching the developer's real database (a shared DB that fails migration
 // blocks the whole app from booting). Consumed by configureChromium.ts.
 const e2eUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-userdata-'));
+// Where built-in browser downloads land during the run (read by the app via AIONUI_BROWSER_DOWNLOADS_DIR).
+export const e2eBrowserDownloadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-downloads-'));
 const rendererDiagnostics = new WeakMap<Page, RendererDiagnostic[]>();
 
 function isDevToolsWindow(page: Page): boolean {
@@ -205,6 +207,7 @@ async function launchApp(): Promise<ElectronApplication> {
     AIONUI_DISABLE_DEVTOOLS: '1',
     AIONUI_E2E_TEST: '1',
     AIONUI_E2E_USER_DATA_DIR: process.env.AIONUI_E2E_USER_DATA_DIR || e2eUserDataDir,
+    AIONUI_BROWSER_DOWNLOADS_DIR: e2eBrowserDownloadsDir,
     /**
      * 以前这里设 '0' 把 CDP 整个关掉，因为那时开 CDP 等于开 Chromium 的应用级
      * remote-debugging-port —— 无认证地暴露每个 WebContents，还会在多实例间抢端口，
@@ -363,6 +366,7 @@ function registerCleanup(): void {
     }
     fs.rmSync(e2eStateSandboxDir, { recursive: true, force: true });
     fs.rmSync(e2eUserDataDir, { recursive: true, force: true });
+    fs.rmSync(e2eBrowserDownloadsDir, { recursive: true, force: true });
   });
 
   // Synchronous fallback for abrupt termination
@@ -370,6 +374,7 @@ function registerCleanup(): void {
     try {
       fs.rmSync(e2eStateSandboxDir, { recursive: true, force: true });
       fs.rmSync(e2eUserDataDir, { recursive: true, force: true });
+      fs.rmSync(e2eBrowserDownloadsDir, { recursive: true, force: true });
     } catch {
       // best-effort
     }
