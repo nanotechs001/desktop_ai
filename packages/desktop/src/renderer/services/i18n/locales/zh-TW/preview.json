@@ -176,5 +176,15 @@
   "zoomIn": "放大",
   "zoomOut": "縮小",
   "zoomReset": "重設視圖",
-  "diagramZoomHint": "滾輪縮放 • 拖曳平移 • ESC 關閉"
+  "diagramZoomHint": "滾輪縮放 • 拖曳平移 • ESC 關閉",
+  "browserChrome": {
+    "downloads": {
+      "title": "Downloads",
+      "empty": "No downloads yet",
+      "open": "Open",
+      "showInFolder": "Show in folder",
+      "cancel": "Cancel",
+      "failed": "Failed"
+    }
+  }
 }

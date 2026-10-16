@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     },
     fromPartition: vi.fn(() => browserSession),
     installWindowOpenHandler: vi.fn(),
+    installDownloads: vi.fn(),
   };
 });
 
@@ -27,6 +28,8 @@ vi.mock('electron', () => ({
   app: mocks.app,
   session: { fromPartition: mocks.fromPartition },
 }));
+
+vi.mock('@process/services/browserSession/downloads', () => ({ installDownloads: mocks.installDownloads }));
 
 vi.mock('@process/services/browserSession/windowOpen', () => ({
   installWindowOpenHandler: mocks.installWindowOpenHandler,
@@ -71,6 +74,7 @@ beforeEach(() => {
   mocks.browserSession.setUserAgent.mockClear();
   mocks.browserSession.webRequest.onBeforeSendHeaders.mockClear();
   mocks.installWindowOpenHandler.mockClear();
+  mocks.installDownloads.mockClear();
 });
 
 afterEach(() => {
@@ -133,6 +137,8 @@ describe('initBrowserSession', () => {
     expect(mocks.browserSession.setUserAgent).toHaveBeenCalledTimes(1);
     expect(mocks.browserSession.setUserAgent).toHaveBeenCalledWith(CHROME_UA);
     expect(mocks.browserSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
+    expect(mocks.installDownloads).toHaveBeenCalledTimes(1);
+    expect(mocks.installDownloads).toHaveBeenCalledWith(mocks.browserSession);
     expect(mocks.app.on.mock.calls.filter(([name]) => name === 'web-contents-created')).toHaveLength(1);
   });
 

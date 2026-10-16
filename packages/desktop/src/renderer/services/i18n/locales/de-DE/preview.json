@@ -176,5 +176,15 @@
   "zoomIn": "Vergrößern",
   "zoomOut": "Verkleinern",
   "zoomReset": "Ansicht zurücksetzen",
-  "diagramZoomHint": "Scrollen zum Zoomen • Ziehen zum Verschieben • ESC zum Schließen"
+  "diagramZoomHint": "Scrollen zum Zoomen • Ziehen zum Verschieben • ESC zum Schließen",
+  "browserChrome": {
+    "downloads": {
+      "title": "Downloads",
+      "empty": "No downloads yet",
+      "open": "Open",
+      "showInFolder": "Show in folder",
+      "cancel": "Cancel",
+      "failed": "Failed"
+    }
+  }
 }

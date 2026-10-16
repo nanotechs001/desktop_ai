@@ -6,6 +6,7 @@
 
 import React, { useCallback } from 'react';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import DownloadsButton from './BrowserChrome/DownloadsButton';
 import {
   BROWSER_BLANK_URL,
   BROWSER_SESSION_PARTITION,
@@ -71,6 +72,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({ url, tabId, onUrlChange, 
       partition={BROWSER_SESSION_PARTITION}
       showNavBar
       interceptNavigation={false}
+      navBarExtra={<DownloadsButton />}
       className='bg-bg-1'
       resolveUrlInput={resolveAddressBarInput}
       onUrlChange={handleUrlChange}

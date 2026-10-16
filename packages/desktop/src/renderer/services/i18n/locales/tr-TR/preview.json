@@ -176,5 +176,15 @@
   "zoomIn": "Yakınlaştır",
   "zoomOut": "Uzaklaştır",
   "zoomReset": "Görünümü sıfırla",
-  "diagramZoomHint": "Yakınlaştırmak için kaydırın • Taşımak için sürükleyin • ESC ile kapatın"
+  "diagramZoomHint": "Yakınlaştırmak için kaydırın • Taşımak için sürükleyin • ESC ile kapatın",
+  "browserChrome": {
+    "downloads": {
+      "title": "Downloads",
+      "empty": "No downloads yet",
+      "open": "Open",
+      "showInFolder": "Show in folder",
+      "cancel": "Cancel",
+      "failed": "Failed"
+    }
+  }
 }

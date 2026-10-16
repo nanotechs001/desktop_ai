@@ -13,6 +13,7 @@
  */
 
 import type { IConfirmation } from '@/common/chat/chatLib';
+import type { DownloadItem } from '@/common/types/browser';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import { buildListTasksPath } from './teamTaskPath';
@@ -1481,6 +1482,12 @@ export const deepLink = {
 export const browser = {
   // main → renderer: a browser page asked for a new tab (target=_blank, window.open)
   openTabRequested: bridge.buildEmitter<{ url: string; background: boolean }>('browser.open-tab-requested'),
+  getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
+  openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),
+  showDownloadInFolder: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.show-download-in-folder'),
+  cancelDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.cancel-download'),
+  // main → renderer: the full download list, on every change (progress is throttled in main)
+  downloadsChanged: bridge.buildEmitter<DownloadItem[]>('browser.downloads-changed'),
 };
 
 // ---------------------------------------------------------------------------

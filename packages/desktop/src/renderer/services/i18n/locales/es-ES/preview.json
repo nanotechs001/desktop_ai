@@ -176,5 +176,15 @@
   "zoomIn": "Acercar",
   "zoomOut": "Alejar",
   "zoomReset": "Restablecer vista",
-  "diagramZoomHint": "Desplazarse para ampliar • Arrastrar para mover • ESC para cerrar"
+  "diagramZoomHint": "Desplazarse para ampliar • Arrastrar para mover • ESC para cerrar",
+  "browserChrome": {
+    "downloads": {
+      "title": "Downloads",
+      "empty": "No downloads yet",
+      "open": "Open",
+      "showInFolder": "Show in folder",
+      "cancel": "Cancel",
+      "failed": "Failed"
+    }
+  }
 }

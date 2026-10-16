@@ -178,5 +178,15 @@
   "zoomIn": "Увеличить",
   "zoomOut": "Уменьшить",
   "zoomReset": "Сбросить вид",
-  "diagramZoomHint": "Колесо — масштаб • Перетаскивание — панорама • ESC — закрыть"
+  "diagramZoomHint": "Колесо — масштаб • Перетаскивание — панорама • ESC — закрыть",
+  "browserChrome": {
+    "downloads": {
+      "title": "Downloads",
+      "empty": "No downloads yet",
+      "open": "Open",
+      "showInFolder": "Show in folder",
+      "cancel": "Cancel",
+      "failed": "Failed"
+    }
+  }
 }

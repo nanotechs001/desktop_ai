@@ -176,5 +176,15 @@
   "zoomIn": "بزرگ‌نمایی",
   "zoomOut": "کوچک‌نمایی",
   "zoomReset": "بازنشانی نما",
-  "diagramZoomHint": "برای بزرگنمایی اسکرول کنید • برای جابهجایی بکشید • ESC برای بستن"
+  "diagramZoomHint": "برای بزرگنمایی اسکرول کنید • برای جابهجایی بکشید • ESC برای بستن",
+  "browserChrome": {
+    "downloads": {
+      "title": "Downloads",
+      "empty": "No downloads yet",
+      "open": "Open",
+      "showInFolder": "Show in folder",
+      "cancel": "Cancel",
+      "failed": "Failed"
+    }
+  }
 }
