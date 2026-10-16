@@ -42,4 +42,16 @@ describe('parseArtifactToolCall', () => {
   it('leaves title and kind out when the input does not carry strings', () => {
     expect(parseArtifactToolCall('mcp__aionui-artifacts__update', { title: 3 }, result)).toEqual({ version: 2, url });
   });
+
+  it('reads title and kind from an input that arrives as a JSON string (tool_group)', () => {
+    expect(parseArtifactToolCall('mcp__aionui-artifacts__create', '{"title":"T","kind":"svg"}', result)).toEqual({
+      title: 'T',
+      kind: 'svg',
+      version: 2,
+      url,
+    });
+    expect(parseArtifactToolCall('mcp__aionui-artifacts__create', 'plain description', result)).toMatchObject({
+      version: 2,
+    });
+  });
 });

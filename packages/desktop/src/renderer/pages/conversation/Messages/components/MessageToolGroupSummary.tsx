@@ -117,11 +117,6 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
           )}
         </div>
       )}
-      {item.artifact && (
-        <div className='m-l-20px m-t-8px'>
-          <ArtifactCard {...item.artifact} />
-        </div>
-      )}
       {item.imagePath && (
         <div className='group relative m-l-20px m-t-8px overflow-hidden rounded border bg-1 p-2 max-w-280px'>
           <LocalImageView
@@ -155,6 +150,8 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   }, [hasRunning]);
 
   const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
+  // Cards stay visible while the steps are folded: they are what the user asked the agent to make.
+  const artifactTools = tools.filter((tool) => tool.artifact && tool.status === 'completed');
 
   return (
     <div className='tool-group-summary'>
@@ -167,6 +164,11 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
           <Right theme='outline' size='12' />
         </span>
       </div>
+      {artifactTools.map((tool) => (
+        <div key={tool.key} className='m-y-8px'>
+          <ArtifactCard {...tool.artifact} />
+        </div>
+      ))}
       {showMore && (
         <div className='tool-group-summary__body'>
           {tools.map((item) => (

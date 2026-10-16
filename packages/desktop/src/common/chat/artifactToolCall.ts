@@ -24,7 +24,7 @@ const parseResult = (output: string | undefined): Record<string, unknown> | unde
 /**
  * Reads a create/update call of the built-in artifacts MCP. `name` is the engine's tool name (it may carry the
  * server) and `server` the separate server field some engines send. The result text is the MCP's JSON
- * `{ id, version, url }`; title and kind come from the call input. Returns undefined for any other call and for
+ * `{ id, version, url }`; title and kind come from the call input (an object, or a JSON string). Returns undefined for any other call and for
  * a missing or malformed result, so the caller falls back to the plain tool row.
  */
 export const parseArtifactToolCall = (
@@ -39,6 +39,7 @@ export const parseArtifactToolCall = (
   const result = parseResult(output);
   const url = asText(result?.url);
   if (!result || !url || typeof result.version !== 'number' || !asText(result.id)) return undefined;
-  const fields = isRecord(input) ? input : {};
+  // Some engines hand the input over as text (a JSON string, or just a description).
+  const fields = (typeof input === 'string' ? parseResult(input) : isRecord(input) ? input : undefined) ?? {};
   return { title: asText(fields.title), kind: asText(fields.kind), version: result.version, url };
 };

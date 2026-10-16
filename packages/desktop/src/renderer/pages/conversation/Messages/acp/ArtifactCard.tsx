@@ -13,12 +13,16 @@ import { copyText } from '@/renderer/utils/ui/clipboard';
 
 const ARTIFACT_PATH = /^\/a\/[A-Za-z0-9_-]{22}(\/v\/[1-9][0-9]*)?$/;
 
-/** The normalized url when it is a local artifact link (`http://127.0.0.1:<port>/a/<id>[/v/<n>]`), else null. */
-const toArtifactHref = (url: string): string | null => {
+/**
+ * The link to open for a local artifact url (`http://127.0.0.1:<port>/a/<id>[/v/<n>]`), else null.
+ * An unversioned url gets `/v/<version>` so a card for an old version keeps showing that version.
+ */
+const toArtifactHref = (url: string, version: number): string | null => {
   try {
     const parsed = new URL(url);
     const local = parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1' && parsed.port !== '';
-    return local && !parsed.username && !parsed.password && ARTIFACT_PATH.test(parsed.pathname) ? parsed.href : null;
+    if (!local || parsed.username || parsed.password || !ARTIFACT_PATH.test(parsed.pathname)) return null;
+    return parsed.pathname.includes('/v/') ? parsed.href : `${parsed.origin}${parsed.pathname}/v/${version}`;
   } catch {
     return null;
   }
@@ -34,7 +38,7 @@ const ArtifactCard: React.FC<ArtifactCardProps> = ({ title, kind, version, url }
   const { t } = useTranslation();
   const preview = useOptionalPreviewContext();
   const [messageApi, messageContext] = Message.useMessage();
-  const href = toArtifactHref(url);
+  const href = toArtifactHref(url, version);
 
   const handleCopy = useCallback(async () => {
     if (!href) return;
@@ -55,6 +59,9 @@ const ArtifactCard: React.FC<ArtifactCardProps> = ({ title, kind, version, url }
           {title || t('messages.artifactCard.title')}
         </span>
         {kind && <Tag size='small'>{kind}</Tag>}
+        <span className='text-12px text-t-secondary' aria-hidden>
+          ·
+        </span>
         <span className='text-12px text-t-secondary'>{`v${version}`}</span>
       </div>
       {href && (

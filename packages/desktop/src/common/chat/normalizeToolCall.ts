@@ -28,6 +28,8 @@ const formatValue = (value: unknown): string => {
   }
 };
 
+const hasKeys = (value: Record<string, unknown> | undefined): boolean => Object.keys(value ?? {}).length > 0;
+
 // ===== tool_group → NormalizedToolCall[] =====
 
 function normalizeToolGroupStatus(status: string): NormalizedToolStatus {
@@ -84,7 +86,7 @@ export function normalizeToolGroup(message: IMessageToolGroup): NormalizedToolCa
       output: getResultDisplayText(result_display),
       artifact: parseArtifactToolCall(
         name,
-        undefined,
+        input,
         getResultDisplayText(result_display),
         type === 'mcp' ? confirmationDetails.server_name : undefined
       ),
@@ -226,7 +228,7 @@ export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall
     description: description || undefined,
     input: displayInput,
     output,
-    artifact: parseArtifactToolCall(name, input ?? args, output),
+    artifact: parseArtifactToolCall(name, hasKeys(input) ? input : args, output),
   };
 }
 

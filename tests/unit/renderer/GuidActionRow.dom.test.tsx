@@ -10,7 +10,7 @@ import React from 'react';
 import GuidActionRow from '@/renderer/pages/guid/components/GuidActionRow';
 import type { IMcpServer, IProvider } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 
 const environment = vi.hoisted(() => ({ isMobile: false, isDesktop: true }));
 
@@ -317,6 +317,24 @@ describe('GuidActionRow skill/MCP submenu search', () => {
       expect(checkbox).toBeChecked();
       expect(checkbox).toBeDisabled();
       expect(screen.getByTitle('mcp.browserAlwaysOn')).toBeInTheDocument();
+    });
+
+    it('locks the built-in artifacts row on with its own always-on text', () => {
+      const artifactsServer = {
+        id: 'builtin-artifacts',
+        name: BUILTIN_ARTIFACTS_MCP_NAME,
+        builtin: true,
+      } as IMcpServer;
+      const onToggleMcpServer = vi.fn();
+      renderActionRow({ mcpServers: [artifactsServer], selectedMcpServerIds: [], onToggleMcpServer });
+
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(BUILTIN_ARTIFACTS_MCP_NAME) });
+      expect(checkbox).toBeChecked();
+      expect(checkbox).toBeDisabled();
+      expect(screen.getByTitle('mcp.artifactsAlwaysOn')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText(BUILTIN_ARTIFACTS_MCP_NAME).closest('[role="menuitem"]')!);
+      expect(onToggleMcpServer).not.toHaveBeenCalled();
     });
 
     it('leaves a user server named like the built-in selectable', () => {

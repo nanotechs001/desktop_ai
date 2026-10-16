@@ -19,6 +19,10 @@ export const isBuiltinBrowserMcp = (server: BuiltinCandidate): boolean =>
 export const isBuiltinSessionMcp = (server: BuiltinCandidate): boolean =>
   BUILTIN_SESSION_MCP_NAMES.some((name) => isBuiltinNamed(server, name));
 
+/** True when the catalog holds a built-in record for every session MCP (browser, artifacts). */
+export const hasAllBuiltinSessionMcps = (available: IMcpServer[]): boolean =>
+  BUILTIN_SESSION_MCP_NAMES.every((name) => available.some((server) => isBuiltinNamed(server, name)));
+
 /**
  * Ensure the built-in session MCPs (browser, artifacts) are part of a new conversation's session servers.
  * AionCore only injects their tools when they are listed here, so every renderer-created conversation goes

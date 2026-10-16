@@ -8,7 +8,7 @@ import { ipcBridge } from '@/common';
 import { type ChatFileRef, chatFileRefPath } from '@/common/types/chatFile';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { ensureBackendMcpCatalog, toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
-import { isBuiltinBrowserMcp, withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
+import { hasAllBuiltinSessionMcps, isBuiltinSessionMcp, withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 import { emitter } from '@/renderer/utils/emitter';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { Message } from '@arco-design/web-react';
@@ -105,12 +105,12 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       return;
     }
 
-    // A send that races the catalog load (or follows a failed load) has no browser record;
-    // refetch so the conversation still gets the browser tools.
-    const mcpCatalog = availableMcpServers.some(isBuiltinBrowserMcp)
+    // A send that races the catalog load (or follows a failed load) lacks a built-in session record;
+    // refetch so the conversation still gets the browser and artifacts tools.
+    const mcpCatalog = hasAllBuiltinSessionMcps(availableMcpServers)
       ? availableMcpServers
       : await ensureBackendMcpCatalog()
-          .then(({ allServers }) => (allServers.some(isBuiltinBrowserMcp) ? allServers : availableMcpServers))
+          .then(({ allServers }) => (allServers.some(isBuiltinSessionMcp) ? allServers : availableMcpServers))
           .catch((error: unknown) => {
             console.error('[useGuidSend] Failed to refetch MCP catalog:', error);
             return availableMcpServers;

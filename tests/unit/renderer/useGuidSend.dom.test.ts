@@ -7,7 +7,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMcpServer } from '@/common/config/storage';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
 const createConversationInvokeMock = vi.fn();
@@ -407,6 +407,14 @@ describe('useGuidSend', () => {
       transport: { type: 'stdio', command: 'node' },
     } as IMcpServer;
 
+    const artifactsServer = {
+      id: 'builtin-artifacts',
+      name: BUILTIN_ARTIFACTS_MCP_NAME,
+      enabled: true,
+      builtin: true,
+      transport: { type: 'stdio', command: 'node' },
+    } as IMcpServer;
+
     const userRecordFor = () => ({ id: 'mcp-user', name: 'User MCP', enabled: true, builtin: false }) as IMcpServer;
 
     const sentSessionServerNames = () =>
@@ -454,9 +462,25 @@ describe('useGuidSend', () => {
       expect(sentSessionServerNames()).toEqual([BUILTIN_BROWSER_MCP_NAME]);
     });
 
-    it('does not refetch when the browser record is already known', async () => {
+    it('refetches the catalog when only the artifacts record is missing', async () => {
       const deps = createDeps();
       deps.availableMcpServers = [...deps.availableMcpServers, browserServer];
+      ensureBackendMcpCatalogMock.mockResolvedValue({
+        allServers: [userRecordFor(), browserServer, artifactsServer],
+      });
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(ensureBackendMcpCatalogMock).toHaveBeenCalledTimes(1);
+      expect(sentSessionServerNames()).toEqual([BUILTIN_BROWSER_MCP_NAME, BUILTIN_ARTIFACTS_MCP_NAME]);
+    });
+
+    it('does not refetch when every built-in session record is already known', async () => {
+      const deps = createDeps();
+      deps.availableMcpServers = [...deps.availableMcpServers, browserServer, artifactsServer];
 
       const { result } = renderHook(() => useGuidSend(deps));
       await act(async () => {
