@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "O agente padrão não pode ser excluído.",
   "ruleSyncFailed": "O agente foi salvo, mas as regras de navegador dele não puderam ser atualizadas. Reinicie o aplicativo para tentar novamente.",
-  "ruleMarkersBroken": "Corrija os marcadores de bloco do AionUi nas instruções deste agente."
+  "ruleMarkersBroken": "Corrija os marcadores de bloco do AionUi nas instruções deste agente.",
+  "notebook": {
+    "title": "Caderno",
+    "hint": "O que este Agente aprendeu e suas instruções. Elas são adicionadas às instruções dele em novas conversas.",
+    "addInstruction": "Adicionar instrução",
+    "placeholder": "Uma instrução para este Agente",
+    "empty": "Nenhuma nota ainda.",
+    "loadFailed": "Não foi possível carregar o caderno.",
+    "saveFailed": "Não foi possível salvar a nota.",
+    "deleteFailed": "Não foi possível excluir a nota.",
+    "source": {
+      "agent": "Aprendido",
+      "user": "Instrução",
+      "page": "De uma página web"
+    }
+  }
 }

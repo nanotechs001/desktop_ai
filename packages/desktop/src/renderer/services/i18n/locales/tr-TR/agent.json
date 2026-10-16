@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "Varsayılan Agent silinemez.",
   "ruleSyncFailed": "Agent kaydedildi ancak tarayıcı kuralları güncellenemedi. Yeniden denemek için uygulamayı yeniden başlatın.",
-  "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki AionUi blok işaretlerini düzeltin."
+  "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki AionUi blok işaretlerini düzeltin.",
+  "notebook": {
+    "title": "Not defteri",
+    "hint": "Bu Ajanın öğrendikleri ve talimatlarınız. Yeni sohbetlerde talimatlarına eklenir.",
+    "addInstruction": "Talimat ekle",
+    "placeholder": "Bu Ajan için bir talimat",
+    "empty": "Henüz not yok.",
+    "loadFailed": "Not defteri yüklenemedi.",
+    "saveFailed": "Not kaydedilemedi.",
+    "deleteFailed": "Not silinemedi.",
+    "source": {
+      "agent": "Öğrenildi",
+      "user": "Talimat",
+      "page": "Bir web sayfasından"
+    }
+  }
 }

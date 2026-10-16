@@ -73,5 +73,6 @@
     "urgent": "緊急"
   },
   "browserAlwaysOn": "常にオン: エージェントは AionUi のブラウザペインを使用します",
-  "artifactsAlwaysOn": "常にオン: エージェントはページやドキュメントの表示に使用します"
+  "artifactsAlwaysOn": "常にオン: エージェントはページやドキュメントの表示に使用します",
+  "notesAlwaysOn": "常にオン：エージェントがノートに学びを保存します"
 }

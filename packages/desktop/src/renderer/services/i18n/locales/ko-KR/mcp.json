@@ -73,5 +73,6 @@
     "urgent": "긴급"
   },
   "browserAlwaysOn": "항상 켜짐: 에이전트가 AionUi 브라우저 창을 사용합니다",
-  "artifactsAlwaysOn": "항상 켜짐: 에이전트가 페이지와 문서를 보여 주는 데 사용합니다"
+  "artifactsAlwaysOn": "항상 켜짐: 에이전트가 페이지와 문서를 보여 주는 데 사용합니다",
+  "notesAlwaysOn": "항상 켜짐: 에이전트가 노트에 배운 내용을 저장합니다"
 }

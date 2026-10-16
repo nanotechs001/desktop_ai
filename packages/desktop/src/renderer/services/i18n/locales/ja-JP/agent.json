@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "既定のエージェントは削除できません。",
   "ruleSyncFailed": "エージェントは保存されましたが、ブラウザールールを更新できませんでした。アプリを再起動して再試行してください。",
-  "ruleMarkersBroken": "このエージェントの指示にある AionUi ブロックのマーカーを修正してください。"
+  "ruleMarkersBroken": "このエージェントの指示にある AionUi ブロックのマーカーを修正してください。",
+  "notebook": {
+    "title": "ノート",
+    "hint": "このエージェントが学んだことと、あなたの指示です。新しいチャットでその指示に追加されます。",
+    "addInstruction": "指示を追加",
+    "placeholder": "このエージェントへの指示",
+    "empty": "まだノートはありません。",
+    "loadFailed": "ノートを読み込めませんでした。",
+    "saveFailed": "ノートを保存できませんでした。",
+    "deleteFailed": "ノートを削除できませんでした。",
+    "source": {
+      "agent": "学習",
+      "user": "指示",
+      "page": "ウェブページから"
+    }
+  }
 }

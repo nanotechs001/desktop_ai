@@ -10,7 +10,11 @@ import React from 'react';
 import GuidActionRow from '@/renderer/pages/guid/components/GuidActionRow';
 import type { IMcpServer, IProvider } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
-import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import {
+  BUILTIN_ARTIFACTS_MCP_NAME,
+  BUILTIN_BROWSER_MCP_NAME,
+  BUILTIN_NOTES_MCP_NAME,
+} from '@/common/config/constants';
 
 const environment = vi.hoisted(() => ({ isMobile: false, isDesktop: true }));
 
@@ -335,6 +339,16 @@ describe('GuidActionRow skill/MCP submenu search', () => {
 
       fireEvent.click(screen.getByText(BUILTIN_ARTIFACTS_MCP_NAME).closest('[role="menuitem"]')!);
       expect(onToggleMcpServer).not.toHaveBeenCalled();
+    });
+
+    it('locks the built-in notes row on with its own always-on text', () => {
+      const notesServer = { id: 'builtin-notes', name: BUILTIN_NOTES_MCP_NAME, builtin: true } as IMcpServer;
+      renderActionRow({ mcpServers: [notesServer], selectedMcpServerIds: [] });
+
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(BUILTIN_NOTES_MCP_NAME) });
+      expect(checkbox).toBeChecked();
+      expect(checkbox).toBeDisabled();
+      expect(screen.getByTitle('mcp.notesAlwaysOn')).toBeInTheDocument();
     });
 
     it('leaves a user server named like the built-in selectable', () => {

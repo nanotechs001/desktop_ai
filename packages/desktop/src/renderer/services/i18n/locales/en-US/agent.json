@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "The default Agent can't be deleted.",
   "ruleSyncFailed": "The Agent was saved, but its browser rules could not be updated. Restart the app to retry.",
-  "ruleMarkersBroken": "Fix the AionUi block markers in this Agent's instructions."
+  "ruleMarkersBroken": "Fix the AionUi block markers in this Agent's instructions.",
+  "notebook": {
+    "title": "Notebook",
+    "hint": "What this Agent learned, and your instructions. They are added to its instructions in new chats.",
+    "addInstruction": "Add instruction",
+    "placeholder": "An instruction for this Agent",
+    "empty": "No notes yet.",
+    "loadFailed": "Couldn't load the notebook.",
+    "saveFailed": "Couldn't save the note.",
+    "deleteFailed": "Couldn't delete the note.",
+    "source": {
+      "agent": "Learned",
+      "user": "Instruction",
+      "page": "From a web page"
+    }
+  }
 }

@@ -22,6 +22,7 @@ import IdentitySection from './editor/IdentitySection';
 import PromptsSection from './editor/PromptsSection';
 import DefaultsSection from './editor/DefaultsSection';
 import RulesSection from './editor/RulesSection';
+import AgentNotebook from './editor/AgentNotebook';
 
 /** Select value for "follow the default engine"; never a real engine id. */
 const USE_DEFAULT_ENGINE = '__use_default_engine__';
@@ -586,6 +587,9 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
         setEditContext={setEditContext}
         readOnlyLabel={readOnlyLabel}
       />
+
+      {/* Built-ins reject rule writes, so their notes could never reach the agent. */}
+      {activeAssistant && !isCreating && !isBuiltin ? <AgentNotebook agentId={activeAssistant.id} /> : null}
     </div>
   );
 };

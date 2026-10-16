@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "기본 에이전트는 삭제할 수 없습니다.",
   "ruleSyncFailed": "에이전트가 저장되었지만 브라우저 규칙을 업데이트하지 못했습니다. 앱을 다시 시작해 다시 시도하세요.",
-  "ruleMarkersBroken": "이 에이전트 지침의 AionUi 블록 마커를 수정하세요."
+  "ruleMarkersBroken": "이 에이전트 지침의 AionUi 블록 마커를 수정하세요.",
+  "notebook": {
+    "title": "노트",
+    "hint": "이 에이전트가 배운 내용과 사용자의 지시입니다. 새 채팅에서 지시에 추가됩니다.",
+    "addInstruction": "지시 추가",
+    "placeholder": "이 에이전트에 대한 지시",
+    "empty": "아직 노트가 없습니다.",
+    "loadFailed": "노트를 불러올 수 없습니다.",
+    "saveFailed": "노트를 저장할 수 없습니다.",
+    "deleteFailed": "노트를 삭제할 수 없습니다.",
+    "source": {
+      "agent": "학습함",
+      "user": "지시",
+      "page": "웹 페이지에서"
+    }
+  }
 }

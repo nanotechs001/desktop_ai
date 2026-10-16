@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "L'agent par défaut ne peut pas être supprimé.",
   "ruleSyncFailed": "L'agent a été enregistré, mais ses règles de navigateur n'ont pas pu être mises à jour. Redémarrez l'application pour réessayer.",
-  "ruleMarkersBroken": "Corrigez les marqueurs de bloc AionUi dans les instructions de cet agent."
+  "ruleMarkersBroken": "Corrigez les marqueurs de bloc AionUi dans les instructions de cet agent.",
+  "notebook": {
+    "title": "Carnet",
+    "hint": "Ce que cet Agent a appris, et vos instructions. Elles sont ajoutées à ses instructions dans les nouvelles discussions.",
+    "addInstruction": "Ajouter une instruction",
+    "placeholder": "Une instruction pour cet Agent",
+    "empty": "Aucune note pour l'instant.",
+    "loadFailed": "Impossible de charger le carnet.",
+    "saveFailed": "Impossible d'enregistrer la note.",
+    "deleteFailed": "Impossible de supprimer la note.",
+    "source": {
+      "agent": "Appris",
+      "user": "Instruction",
+      "page": "D'une page web"
+    }
+  }
 }

@@ -73,5 +73,6 @@
     "urgent": "Urgente"
   },
   "browserAlwaysOn": "Siempre activo: los agentes usan el panel de navegador de AionUi",
-  "artifactsAlwaysOn": "Siempre activo: los agentes lo usan para mostrar páginas y documentos"
+  "artifactsAlwaysOn": "Siempre activo: los agentes lo usan para mostrar páginas y documentos",
+  "notesAlwaysOn": "Siempre activo: los agentes guardan lecciones en su cuaderno"
 }

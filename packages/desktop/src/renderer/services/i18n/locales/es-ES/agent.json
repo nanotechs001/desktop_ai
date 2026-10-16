@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "El agente predeterminado no se puede eliminar.",
   "ruleSyncFailed": "El agente se guardó, pero no se pudieron actualizar sus reglas del navegador. Reinicia la aplicación para reintentarlo.",
-  "ruleMarkersBroken": "Corrige los marcadores de bloque de AionUi en las instrucciones de este agente."
+  "ruleMarkersBroken": "Corrige los marcadores de bloque de AionUi en las instrucciones de este agente.",
+  "notebook": {
+    "title": "Cuaderno",
+    "hint": "Lo que este Agente aprendió y tus instrucciones. Se añaden a sus instrucciones en los chats nuevos.",
+    "addInstruction": "Añadir instrucción",
+    "placeholder": "Una instrucción para este Agente",
+    "empty": "Aún no hay notas.",
+    "loadFailed": "No se pudo cargar el cuaderno.",
+    "saveFailed": "No se pudo guardar la nota.",
+    "deleteFailed": "No se pudo eliminar la nota.",
+    "source": {
+      "agent": "Aprendido",
+      "user": "Instrucción",
+      "page": "De una página web"
+    }
+  }
 }

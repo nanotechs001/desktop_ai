@@ -73,5 +73,6 @@
     "urgent": "Dringend"
   },
   "browserAlwaysOn": "Immer aktiv: Agenten nutzen den AionUi-Browserbereich",
-  "artifactsAlwaysOn": "Immer aktiv: Agenten zeigen damit Seiten und Dokumente an"
+  "artifactsAlwaysOn": "Immer aktiv: Agenten zeigen damit Seiten und Dokumente an",
+  "notesAlwaysOn": "Immer aktiv: Agenten speichern Erkenntnisse in ihrem Notizbuch"
 }

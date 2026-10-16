@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "默认 Agent 无法删除。",
   "ruleSyncFailed": "Agent 已保存，但无法更新其浏览器规则。请重启应用后重试。",
-  "ruleMarkersBroken": "请修正此 Agent 指令中的 AionUi 区块标记。"
+  "ruleMarkersBroken": "请修正此 Agent 指令中的 AionUi 区块标记。",
+  "notebook": {
+    "title": "笔记本",
+    "hint": "此智能体学到的内容和你的指示。新对话中会加入它的指令。",
+    "addInstruction": "添加指示",
+    "placeholder": "给此智能体的一条指示",
+    "empty": "还没有笔记。",
+    "loadFailed": "无法加载笔记本。",
+    "saveFailed": "无法保存笔记。",
+    "deleteFailed": "无法删除笔记。",
+    "source": {
+      "agent": "已学到",
+      "user": "指示",
+      "page": "来自网页"
+    }
+  }
 }

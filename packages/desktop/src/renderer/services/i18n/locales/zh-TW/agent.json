@@ -70,5 +70,20 @@
   },
   "cannotDeleteDefault": "預設 Agent 無法刪除。",
   "ruleSyncFailed": "Agent 已儲存，但無法更新其瀏覽器規則。請重新啟動應用程式後重試。",
-  "ruleMarkersBroken": "請修正此 Agent 指令中的 AionUi 區塊標記。"
+  "ruleMarkersBroken": "請修正此 Agent 指令中的 AionUi 區塊標記。",
+  "notebook": {
+    "title": "筆記本",
+    "hint": "此智慧體學到的內容與你的指示。新對話中會加入它的指令。",
+    "addInstruction": "新增指示",
+    "placeholder": "給此智慧體的一條指示",
+    "empty": "還沒有筆記。",
+    "loadFailed": "無法載入筆記本。",
+    "saveFailed": "無法儲存筆記。",
+    "deleteFailed": "無法刪除筆記。",
+    "source": {
+      "agent": "已學到",
+      "user": "指示",
+      "page": "來自網頁"
+    }
+  }
 }

@@ -16,6 +16,7 @@ import type {
 } from '@/renderer/components/chat/MobileActionSheet/types';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import type { AgentRuntimeDerivedOption } from '@/renderer/utils/model/agentRuntimeCatalog';
+import { BUILTIN_NOTES_MCP_NAME } from '@/common/config/constants';
 import { isBuiltinBrowserMcp, isBuiltinSessionMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { getCleanFileNames, FileService } from '@/renderer/services/FileService';
@@ -201,10 +202,14 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
     skill.isAuto ? !disabledBuiltinSkills.includes(skill.name) : enabledSkills.includes(skill.name);
 
   const activeSkillCount = allSkills.filter(isSkillChecked).length;
-  // The browser and artifacts MCPs are attached to every conversation (see withBrowserMcp), so their rows are locked on.
+  // The browser, artifacts and notes MCPs are attached to every conversation (see withBrowserMcp), so their rows are locked on.
   const isBrowserMcp = isBuiltinSessionMcp;
   const alwaysOnText = (server: IMcpServer) =>
-    isBuiltinBrowserMcp(server) ? t('mcp.browserAlwaysOn') : t('mcp.artifactsAlwaysOn');
+    isBuiltinBrowserMcp(server)
+      ? t('mcp.browserAlwaysOn')
+      : server.name === BUILTIN_NOTES_MCP_NAME
+        ? t('mcp.notesAlwaysOn')
+        : t('mcp.artifactsAlwaysOn');
   const isMcpChecked = (server: IMcpServer) => isBrowserMcp(server) || selectedMcpServerIds.includes(server.id);
   const activeMcpCount = mcpServers.filter(isMcpChecked).length;
 
