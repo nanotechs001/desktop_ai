@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "后退",
+      "forward": "前进",
+      "reload": "重新加载",
+      "openLinkInNewTab": "在新标签页中打开链接",
+      "copyLink": "复制链接地址",
+      "openImageInNewTab": "在新标签页中打开图片",
+      "copyImage": "复制图片",
+      "saveImageAs": "图片另存为…",
+      "copy": "复制",
+      "cut": "剪切",
+      "paste": "粘贴",
+      "selectAll": "全选",
+      "searchSelection": "使用 Google 搜索“{{text}}”",
+      "addToDictionary": "添加到字典",
+      "inspect": "检查"
     }
   }
 }

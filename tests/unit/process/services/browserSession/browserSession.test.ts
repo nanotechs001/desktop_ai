@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     },
     fromPartition: vi.fn(() => browserSession),
     installWindowOpenHandler: vi.fn(),
+    installContextMenu: vi.fn(),
     installDownloads: vi.fn(),
     installPermissions: vi.fn(),
   };
@@ -33,6 +34,10 @@ vi.mock('electron', () => ({
 vi.mock('@process/services/browserSession/downloads', () => ({ installDownloads: mocks.installDownloads }));
 
 vi.mock('@process/services/browserSession/permissions', () => ({ installPermissions: mocks.installPermissions }));
+
+vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
+  installContextMenu: mocks.installContextMenu,
+}));
 
 vi.mock('@process/services/browserSession/windowOpen', () => ({
   installWindowOpenHandler: mocks.installWindowOpenHandler,
@@ -77,6 +82,7 @@ beforeEach(() => {
   mocks.browserSession.setUserAgent.mockClear();
   mocks.browserSession.webRequest.onBeforeSendHeaders.mockClear();
   mocks.installWindowOpenHandler.mockClear();
+  mocks.installContextMenu.mockClear();
   mocks.installDownloads.mockClear();
   mocks.installPermissions.mockClear();
 });
@@ -228,6 +234,22 @@ describe('initBrowserSession', () => {
 
       expect(mocks.installWindowOpenHandler.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
       expect(mocks.installWindowOpenHandler.mock.calls[0][1]()).toBe(main);
+    });
+
+    it('installs the context menu on browser webviews and popups only', async () => {
+      const { initBrowserSession } = await loadModule();
+      const main = makeMainWindow(makeContents('window', mocks.otherSession));
+      initBrowserSession({ getMainWindow: () => asWindow(main) });
+      const handler = getCreatedHandler();
+
+      const webview = makeContents('webview');
+      const popup = makeContents('window');
+      handler({}, webview);
+      handler({}, popup);
+      handler({}, main.webContents);
+
+      expect(mocks.installContextMenu.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
+      expect(mocks.installContextMenu.mock.calls[0][1]()).toBe(main);
     });
 
     it('stops notifying a listener once it is unsubscribed', async () => {

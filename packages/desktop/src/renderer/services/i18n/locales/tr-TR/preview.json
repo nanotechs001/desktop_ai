@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "Geri",
+      "forward": "İleri",
+      "reload": "Yeniden yükle",
+      "openLinkInNewTab": "Bağlantıyı yeni sekmede aç",
+      "copyLink": "Bağlantı adresini kopyala",
+      "openImageInNewTab": "Resmi yeni sekmede aç",
+      "copyImage": "Resmi kopyala",
+      "saveImageAs": "Resmi farklı kaydet…",
+      "copy": "Kopyala",
+      "cut": "Kes",
+      "paste": "Yapıştır",
+      "selectAll": "Tümünü seç",
+      "searchSelection": "Google'da \"{{text}}\" ara",
+      "addToDictionary": "Sözlüğe ekle",
+      "inspect": "İncele"
     }
   }
 }

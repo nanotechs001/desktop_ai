@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "Retour",
+      "forward": "Avancer",
+      "reload": "Actualiser",
+      "openLinkInNewTab": "Ouvrir le lien dans un nouvel onglet",
+      "copyLink": "Copier l'adresse du lien",
+      "openImageInNewTab": "Ouvrir l'image dans un nouvel onglet",
+      "copyImage": "Copier l'image",
+      "saveImageAs": "Enregistrer l'image sous…",
+      "copy": "Copier",
+      "cut": "Couper",
+      "paste": "Coller",
+      "selectAll": "Tout sélectionner",
+      "searchSelection": "Rechercher « {{text}} » sur Google",
+      "addToDictionary": "Ajouter au dictionnaire",
+      "inspect": "Inspecter"
     }
   }
 }

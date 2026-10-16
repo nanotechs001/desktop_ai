@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "戻る",
+      "forward": "進む",
+      "reload": "再読み込み",
+      "openLinkInNewTab": "新しいタブでリンクを開く",
+      "copyLink": "リンクのアドレスをコピー",
+      "openImageInNewTab": "新しいタブで画像を開く",
+      "copyImage": "画像をコピー",
+      "saveImageAs": "名前を付けて画像を保存…",
+      "copy": "コピー",
+      "cut": "切り取り",
+      "paste": "貼り付け",
+      "selectAll": "すべて選択",
+      "searchSelection": "Google で「{{text}}」を検索",
+      "addToDictionary": "辞書に追加",
+      "inspect": "検証"
     }
   }
 }

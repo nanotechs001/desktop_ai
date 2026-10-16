@@ -201,6 +201,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "Назад",
+      "forward": "Вперёд",
+      "reload": "Обновить",
+      "openLinkInNewTab": "Открыть ссылку в новой вкладке",
+      "copyLink": "Копировать адрес ссылки",
+      "openImageInNewTab": "Открыть изображение в новой вкладке",
+      "copyImage": "Копировать изображение",
+      "saveImageAs": "Сохранить изображение как…",
+      "copy": "Копировать",
+      "cut": "Вырезать",
+      "paste": "Вставить",
+      "selectAll": "Выделить всё",
+      "searchSelection": "Найти в Google: «{{text}}»",
+      "addToDictionary": "Добавить в словарь",
+      "inspect": "Исследовать"
     }
   }
 }

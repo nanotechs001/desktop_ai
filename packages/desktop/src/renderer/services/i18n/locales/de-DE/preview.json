@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "Zurück",
+      "forward": "Vorwärts",
+      "reload": "Neu laden",
+      "openLinkInNewTab": "Link in neuem Tab öffnen",
+      "copyLink": "Linkadresse kopieren",
+      "openImageInNewTab": "Bild in neuem Tab öffnen",
+      "copyImage": "Bild kopieren",
+      "saveImageAs": "Bild speichern unter…",
+      "copy": "Kopieren",
+      "cut": "Ausschneiden",
+      "paste": "Einfügen",
+      "selectAll": "Alles auswählen",
+      "searchSelection": "Mit Google nach „{{text}}“ suchen",
+      "addToDictionary": "Zum Wörterbuch hinzufügen",
+      "inspect": "Untersuchen"
     }
   }
 }

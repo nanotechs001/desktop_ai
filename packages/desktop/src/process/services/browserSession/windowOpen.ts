@@ -26,7 +26,7 @@ const clamp = (value: number, { min, max }: { min: number; max: number }): numbe
   Math.min(max, Math.max(min, value));
 
 /** Only web pages and the blank page that sign-in flows open and then navigate are allowed. */
-const isSafeUrl = (url: string): boolean => {
+export const isSafeUrl = (url: string): boolean => {
   if (url === 'about:blank') return true;
   try {
     const { protocol } = new URL(url);

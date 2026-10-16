@@ -201,6 +201,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "Назад",
+      "forward": "Вперед",
+      "reload": "Перезавантажити",
+      "openLinkInNewTab": "Відкрити посилання в новій вкладці",
+      "copyLink": "Копіювати адресу посилання",
+      "openImageInNewTab": "Відкрити зображення в новій вкладці",
+      "copyImage": "Копіювати зображення",
+      "saveImageAs": "Зберегти зображення як…",
+      "copy": "Копіювати",
+      "cut": "Вирізати",
+      "paste": "Вставити",
+      "selectAll": "Вибрати все",
+      "searchSelection": "Шукати в Google: «{{text}}»",
+      "addToDictionary": "Додати до словника",
+      "inspect": "Дослідити"
     }
   }
 }

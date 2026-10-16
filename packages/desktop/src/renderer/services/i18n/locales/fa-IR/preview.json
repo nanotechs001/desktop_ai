@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "بازگشت",
+      "forward": "جلو",
+      "reload": "بارگذاری مجدد",
+      "openLinkInNewTab": "باز کردن پیوند در برگه جدید",
+      "copyLink": "کپی نشانی پیوند",
+      "openImageInNewTab": "باز کردن تصویر در برگه جدید",
+      "copyImage": "کپی تصویر",
+      "saveImageAs": "ذخیره تصویر به‌عنوان…",
+      "copy": "کپی",
+      "cut": "برش",
+      "paste": "جای‌گذاری",
+      "selectAll": "انتخاب همه",
+      "searchSelection": "جستجوی «{{text}}» در Google",
+      "addToDictionary": "افزودن به فرهنگ لغت",
+      "inspect": "بازرسی"
     }
   }
 }

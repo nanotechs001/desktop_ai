@@ -199,6 +199,23 @@
       "allow": "Allow",
       "block": "Block",
       "remember": "Remember for this site"
+    },
+    "menu": {
+      "back": "返回",
+      "forward": "前往",
+      "reload": "重新載入",
+      "openLinkInNewTab": "在新分頁中開啟連結",
+      "copyLink": "複製連結網址",
+      "openImageInNewTab": "在新分頁中開啟圖片",
+      "copyImage": "複製圖片",
+      "saveImageAs": "另存圖片為…",
+      "copy": "複製",
+      "cut": "剪下",
+      "paste": "貼上",
+      "selectAll": "全選",
+      "searchSelection": "使用 Google 搜尋「{{text}}」",
+      "addToDictionary": "新增至字典",
+      "inspect": "檢查"
     }
   }
 }
