@@ -31,7 +31,7 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
  * the store's message; transport and 4xx failures become short readable messages, never stacks.
  */
 export function createArtifactsApi(env: NodeJS.ProcessEnv, fetchImpl: typeof fetch = fetch): ArtifactsApi {
-  const origin = env.AION_ARTIFACTS_URL || null;
+  const origin = env.AION_ARTIFACTS_URL?.replace(/\/+$/, '') || null;
   const token = env.AION_ARTIFACTS_TOKEN;
   const conversationId = env.AIONUI_CONVERSATION_ID;
   if (!origin || !token || !conversationId) {
@@ -60,6 +60,7 @@ export function createArtifactsApi(env: NodeJS.ProcessEnv, fetchImpl: typeof fet
         return { ok: false, message: message ?? `Artifacts request failed (HTTP ${response.status})` };
       }
       if (payload.ok !== true) return { ok: false, message: message ?? 'Artifacts request failed' };
+      if (!asRecord(payload.value)) return { ok: false, message: 'Artifacts returned an unexpected reply' };
       return { ok: true, value: payload.value as T };
     },
   };

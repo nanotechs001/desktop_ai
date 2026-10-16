@@ -215,4 +215,63 @@ describe('runBackendMigrations', () => {
       'yes'
     );
   });
+
+  describe('built-in artifacts MCP', () => {
+    const artifactsServer = (overrides: Partial<IMcpServer> = {}): IMcpServer => {
+      const config = { command: 'node', args: ['/mock/builtin-mcp-artifacts.js'] };
+      return {
+        id: 'artifacts-server-id',
+        name: 'aionui-artifacts',
+        description: 'x',
+        enabled: true,
+        builtin: true,
+        transport: { type: 'stdio', ...config },
+        created_at: 1,
+        updated_at: 1,
+        original_json: JSON.stringify({ mcpServers: { 'aionui-artifacts': config } }, null, 2),
+        ...overrides,
+      };
+    };
+    const importedNames = (): string[] =>
+      batchImportServersMock.mock.calls.flatMap(([arg]) => (arg.servers as IMcpServer[]).map((s) => s.name));
+
+    it('registers it enabled and builtin on a fresh install', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      listServersMock.mockResolvedValue([]);
+
+      await runBackendMigrations(configFile as never);
+
+      const imported = batchImportServersMock.mock.calls
+        .flatMap(([arg]) => arg.servers as IMcpServer[])
+        .find((server) => server.name === 'aionui-artifacts');
+      expect(imported).toMatchObject({
+        enabled: true,
+        builtin: true,
+        transport: { type: 'stdio', command: 'node', args: ['/mock/builtin-mcp-artifacts.js'] },
+      });
+    });
+
+    it('repairs a drifted script path without touching the enabled flag', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const stale = { type: 'stdio' as const, command: 'node', args: ['/old/builtin-mcp-artifacts.js'] };
+      listServersMock.mockResolvedValue([artifactsServer({ transport: stale, enabled: false })]);
+
+      await runBackendMigrations(configFile as never);
+
+      const call = updateServerMock.mock.calls.find(([arg]) => arg.id === 'artifacts-server-id');
+      expect(call?.[0].data.transport.args).toEqual(['/mock/builtin-mcp-artifacts.js']);
+      expect(call?.[0].data).not.toHaveProperty('enabled');
+      expect(importedNames()).not.toContain('aionui-artifacts');
+    });
+
+    it('leaves a user-disabled server disabled and untouched', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      listServersMock.mockResolvedValue([artifactsServer({ enabled: false })]);
+
+      await runBackendMigrations(configFile as never);
+
+      expect(updateServerMock.mock.calls.some(([arg]) => arg.id === 'artifacts-server-id')).toBe(false);
+      expect(importedNames()).not.toContain('aionui-artifacts');
+    });
+  });
 });

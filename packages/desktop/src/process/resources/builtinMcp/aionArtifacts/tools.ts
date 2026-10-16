@@ -27,7 +27,7 @@ const content = z.string().refine((s) => Buffer.byteLength(s, 'utf8') <= ARTIFAC
   message: `content exceeds ${ARTIFACT_LIMITS.maxContentBytes} bytes`,
 });
 const title = z.string().min(1).max(ARTIFACT_LIMITS.maxTitleChars);
-const id = z.string().min(1).max(64);
+const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 
 const createInput = { title, kind: z.enum(ARTIFACT_KINDS as [string, ...string[]]), content };
 const updateInput = { id, content, title: title.optional() };

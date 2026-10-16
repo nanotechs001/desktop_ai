@@ -36,6 +36,9 @@ const envFor = (conversationId: string): NodeJS.ProcessEnv => ({
   AIONUI_CONVERSATION_ID: conversationId,
 });
 
+/** A well-formed id nothing was stored under. */
+const UNKNOWN_ID = 'A'.repeat(22);
+
 const call = async (client: Client, name: string, args: Record<string, unknown>): Promise<ToolReply> =>
   (await client.callTool({ name, arguments: args })) as ToolReply;
 
@@ -132,8 +135,8 @@ describe('aionui-artifacts MCP', () => {
       const client = await connect(env);
       for (const [name, args] of [
         ['create', { title: 'T', kind: 'html', content: 'x' }],
-        ['update', { id: 'abc', content: 'x' }],
-        ['get', { id: 'abc' }],
+        ['update', { id: UNKNOWN_ID, content: 'x' }],
+        ['get', { id: UNKNOWN_ID }],
       ] as const) {
         const reply = await call(client, name, args);
         expect(reply.isError).toBe(true);
@@ -145,14 +148,57 @@ describe('aionui-artifacts MCP', () => {
 
   it('reports a stopped server as unavailable, and a wrong token without a stack', async () => {
     const wrongToken = await connect({ ...envFor('conv-1'), AION_ARTIFACTS_TOKEN: 'nope' });
-    const denied = await call(wrongToken, 'get', { id: 'abc' });
+    const denied = await call(wrongToken, 'get', { id: UNKNOWN_ID });
     expect(denied.isError).toBe(true);
     expect(textOf(denied)).toMatch(/token/i);
 
     const env = envFor('conv-1');
     await started.server.close();
     const down = await connect(env);
-    expect(textOf(await call(down, 'get', { id: 'abc' }))).toBe(ARTIFACTS_UNAVAILABLE);
+    expect(textOf(await call(down, 'get', { id: UNKNOWN_ID }))).toBe(ARTIFACTS_UNAVAILABLE);
+  });
+
+  it('rejects malformed ids before calling the API', async () => {
+    const spy = vi.fn(fetch);
+    const client = await connect(envFor('conv-1'), spy);
+    for (const id of ['abc', `${'A'.repeat(21)}/`, 'A'.repeat(23), '../etc/passwd-xxxxxxxx']) {
+      expect((await call(client, 'get', { id })).isError).toBe(true);
+      expect((await call(client, 'update', { id, content: 'x' })).isError).toBe(true);
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('turns HTTP errors and malformed replies into readable tool errors', async () => {
+    const reply =
+      (status: number, body: string): typeof fetch =>
+      async () =>
+        new Response(body, { status });
+    const cases: Array<[string, typeof fetch, RegExp]> = [
+      ['413', reply(413, '{"ok":false,"error":"too-large","message":"Body exceeds 4259840 bytes"}'), /exceeds/],
+      ['400', reply(400, '{"ok":false,"error":"bad-content","message":"Body must be JSON"}'), /must be JSON/],
+      ['non-JSON 200', reply(200, '<html>nope</html>'), /request failed \(HTTP 200\)/],
+      ['ok without value', reply(200, '{"ok":true}'), /unexpected reply/],
+      ['ok with null value', reply(200, '{"ok":true,"value":null}'), /unexpected reply/],
+    ];
+    for (const [label, fetchImpl, expected] of cases) {
+      const client = await connect(envFor('conv-1'), fetchImpl);
+      for (const [name, args] of [
+        ['create', { title: 'T', kind: 'html', content: 'x' }],
+        ['update', { id: UNKNOWN_ID, content: 'x' }],
+        ['get', { id: UNKNOWN_ID }],
+      ] as const) {
+        const result = await call(client, name, args);
+        expect(result.isError, `${label} ${name}`).toBe(true);
+        expect(textOf(result), `${label} ${name}`).toMatch(expected);
+        expect(textOf(result)).not.toMatch(/\n\s+at /);
+      }
+    }
+  });
+
+  it('builds links without a double slash when the url ends in a slash', async () => {
+    const client = await connect({ ...envFor('conv-1'), AION_ARTIFACTS_URL: `${started.server.origin}/` });
+    const { url, id } = jsonOf(await call(client, 'create', { title: 'T', kind: 'html', content: 'x' }));
+    expect(url).toBe(`${started.server.origin}/a/${String(id)}`);
   });
 
   it('is named after the built-in MCP record and marks stored text as untrusted in get', async () => {

@@ -72,6 +72,28 @@ describe('startArtifacts', () => {
   });
 });
 
+describe('create API body cap', () => {
+  it('accepts near-limit content whose JSON escaping more than doubles the body', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'artifacts-cap-'));
+    const started = await startArtifacts({ rootDir: root });
+    try {
+      // 1.9 MB of content; escaped (\" and \n) the request body is about 3.8 MB, past the old content + 64 KB cap.
+      const content = '"\n'.repeat(Math.floor((1.9 * 1024 * 1024) / 2)).slice(0, 1.9 * 1024 * 1024);
+      const response = await fetch(`${started?.server.origin}/api/artifacts/create`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${started?.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: 'c1', title: 'Escapes', kind: 'html', content }),
+      });
+      expect(JSON.stringify({ content }).length).toBeGreaterThan(ARTIFACT_LIMITS.maxContentBytes + 64 * 1024);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ ok: true });
+    } finally {
+      await started?.server.close();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('readBody', () => {
   /** A request stream the test drives by hand. */
   const fakeRequest = () => new PassThrough() as unknown as IncomingMessage & PassThrough;
@@ -97,7 +119,7 @@ describe('readBody', () => {
   it('an upload past the cap rejects as too large', async () => {
     const req = fakeRequest();
     const body = readBody(req);
-    req.end(Buffer.alloc(ARTIFACT_LIMITS.maxContentBytes + 65 * 1024));
+    req.end(Buffer.alloc(2 * ARTIFACT_LIMITS.maxContentBytes + 65 * 1024));
     await expect(body).rejects.toBeInstanceOf(BodyTooLarge);
   });
 });

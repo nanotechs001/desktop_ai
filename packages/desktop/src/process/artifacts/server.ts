@@ -47,8 +47,11 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Resource-Policy': 'same-origin',
 };
 
-/** Content plus room for the JSON envelope and the other fields. */
-const MAX_BODY_BYTES = ARTIFACT_LIMITS.maxContentBytes + 64 * 1024;
+/**
+ * Twice the content limit plus room for the other fields: JSON escaping can double near-limit content (every quote,
+ * backslash or control character costs two bytes or more). The store enforces the real content limit after parsing.
+ */
+const MAX_BODY_BYTES = 2 * ARTIFACT_LIMITS.maxContentBytes + 64 * 1024;
 /** Past this the upload is cut off instead of drained to its end. */
 const MAX_DRAIN_BYTES = 4 * MAX_BODY_BYTES;
 const PAGE_RE = /^\/a\/([A-Za-z0-9_-]{22})(?:\/v\/([1-9]\d{0,8}))?$/;
