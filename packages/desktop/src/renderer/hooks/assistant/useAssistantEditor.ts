@@ -12,6 +12,8 @@ import type {
 } from '@/renderer/pages/settings/AssistantSettings/types';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { getSkillImportErrorMessage } from '@/renderer/pages/settings/SkillsSettings/skillImportMessages';
+import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
+import { stripBrowserRule } from '@/common/types/agent/managedRuleBlock';
 import { emitter } from '@/renderer/utils/emitter';
 import { assistantOrderAfterToggle, selectableAssistants } from '@/renderer/utils/model/assistantSelection';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -284,7 +286,7 @@ export const useAssistantEditor = ({
       setEditAvatar(detail.profile.avatar || '');
       setEditAvatarPreview(undefined);
       setEditAgent(detail.engine.agent_id || assistant.agent_id || '');
-      setEditContext(detail.rules.content || '');
+      setEditContext(stripBrowserRule(detail.rules.content || ''));
       setEditRecommendedPromptsText(resolveLocalizedRecommendedPrompts(detail, localeKey).join('\n'));
       setDefaultModelMode(detail.defaults.model.mode === 'fixed' ? 'fixed' : 'auto');
       setDefaultModelValue(detail.defaults.model.value || '');
@@ -362,7 +364,7 @@ export const useAssistantEditor = ({
 
     try {
       const { detail, skillsList, autoSkills, mcpServers } = await loadEditorResources(assistant.id);
-      setEditContext(detail.rules.content || '');
+      setEditContext(stripBrowserRule(detail.rules.content || ''));
       setEditRecommendedPromptsText(resolveLocalizedRecommendedPrompts(detail, localeKey).join('\n'));
       setDefaultModelMode(detail.defaults.model.mode === 'fixed' ? 'fixed' : 'auto');
       setDefaultModelValue(detail.defaults.model.value || '');
@@ -393,17 +395,25 @@ export const useAssistantEditor = ({
   /** Put the AionUi rule block into the Agent's rule now; the next start would only repair it later. */
   const syncAgentRuleBlock = useCallback(
     async (assistantId: string) => {
+      let unbalanced = false;
       try {
         const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({ assistantId, locale: localeKey });
         if (reply.success) return;
+        unbalanced = reply.data?.unbalanced === true;
         console.error('Failed to add the AionUi rule block to the Agent:', reply.msg);
       } catch (error) {
         console.error('Failed to add the AionUi rule block to the Agent:', error);
       }
+      // Broken markers need the user's fix; any other failure is repaired by the next start.
       message.warning(
-        t('agent.ruleSyncFailed', {
-          defaultValue: 'The Agent was saved, but its browser rules could not be updated. Restart the app to retry.',
-        })
+        unbalanced
+          ? t('agent.ruleMarkersBroken', {
+              defaultValue: "Fix the AionUi block markers in this Agent's instructions.",
+            })
+          : t('agent.ruleSyncFailed', {
+              defaultValue:
+                'The Agent was saved, but its browser rules could not be updated. Restart the app to retry.',
+            })
       );
     },
     [localeKey, message, t]
@@ -596,7 +606,7 @@ export const useAssistantEditor = ({
 
   /** The default Agent always exists; say so instead of opening the confirm dialog. */
   const refuseDefaultAgentDelete = (assistantId: string): boolean => {
-    if (assistantId !== configService.get('agent.builtinDefaultId')) return false;
+    if (!isUndeletableAgent(assistantId, configService.get('agent.builtinDefaultId'))) return false;
     message.warning(t('agent.cannotDeleteDefault', { defaultValue: "The default Agent can't be deleted." }));
     return true;
   };

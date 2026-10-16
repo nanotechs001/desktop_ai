@@ -5,6 +5,7 @@ import {
   backendAssistantRuleDeps,
   ensureBrowserRuleForAssistant,
   ensureBrowserRuleInAssistants,
+  handleEnsureAgentRule,
 } from '@process/services/agentBrowser/assistantRules';
 
 vi.mock('@/common/adapter/httpBridge', () => ({ httpRequest: vi.fn() }));
@@ -119,7 +120,7 @@ describe('ensureBrowserRuleForAssistant', () => {
       'new-agent',
       'zh-CN'
     );
-    expect(result).toEqual({ updated: 2, skipped: 0, failed: 0 });
+    expect(result).toEqual({ updated: 2, skipped: 0, failed: 0, unbalanced: 0 });
     expect(rules['zh-CN:']).toBe(withBlock('my notes'));
     expect(rules[':']).toBe(withBlock(''));
   });
@@ -128,10 +129,65 @@ describe('ensureBrowserRuleForAssistant', () => {
     const readRule = vi.fn(async () => withBlock('x'));
     const listAssistants = vi.fn(async () => []);
     const result = await ensureBrowserRuleForAssistant({ listAssistants, readRule, writeRule: vi.fn() }, 'solo');
-    expect(result).toEqual({ updated: 0, skipped: 1, failed: 0 });
+    expect(result).toEqual({ updated: 0, skipped: 1, failed: 0, unbalanced: 0 });
     expect(readRule).toHaveBeenCalledTimes(1);
     expect(readRule).toHaveBeenCalledWith('solo', '');
     expect(listAssistants).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleEnsureAgentRule', () => {
+  const deps = (rule = '') => ({
+    listAssistants: async () => [],
+    readRule: vi.fn(async () => rule),
+    writeRule: vi.fn(async () => {}),
+  });
+
+  it.each([
+    ['no request', undefined],
+    ['a non-object request', 'agent'],
+    ['a missing id', {}],
+    ['an empty id', { assistantId: '' }],
+    ['a numeric id', { assistantId: 7 }],
+    ['an id over 128 characters', { assistantId: 'a'.repeat(129) }],
+    ['a locale that is not a language tag', { assistantId: 'a', locale: '../etc' }],
+    ['a locale with an underscore', { assistantId: 'a', locale: 'en_US' }],
+    ['a one-letter locale', { assistantId: 'a', locale: 'e' }],
+    ['a non-string locale', { assistantId: 'a', locale: 5 }],
+  ])('rejects %s without touching any rule', async (_name, request) => {
+    const d = deps();
+    await expect(handleEnsureAgentRule(request, d)).resolves.toEqual({ success: false, msg: 'Invalid arguments' });
+    expect(d.readRule).not.toHaveBeenCalled();
+    expect(d.writeRule).not.toHaveBeenCalled();
+  });
+
+  it.each(['en', 'en-US', 'zh-CN', 'fil', 'es-419', 'zh-Hant-TW'])('accepts the locale %s', async (locale) => {
+    const d = deps();
+    await expect(handleEnsureAgentRule({ assistantId: 'a'.repeat(128), locale }, d)).resolves.toEqual({
+      success: true,
+    });
+    expect(d.writeRule).toHaveBeenCalledWith('a'.repeat(128), locale, expect.any(String));
+  });
+
+  it('reports unbalanced markers as such, so the UI does not suggest a restart', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const d = deps(`mine\n${BROWSER_RULE_MARKERS.start}\nhalf`);
+    await expect(handleEnsureAgentRule({ assistantId: 'a' }, d)).resolves.toEqual({
+      success: false,
+      data: { unbalanced: true },
+      msg: 'The AionUi block markers in this Agent are unbalanced',
+    });
+    expect(d.writeRule).not.toHaveBeenCalled();
+  });
+
+  it('reports a backend failure as a plain failure', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const d = deps();
+    d.writeRule.mockRejectedValue(new Error('down'));
+    await expect(handleEnsureAgentRule({ assistantId: 'a' }, d)).resolves.toEqual({
+      success: false,
+      msg: 'Could not update the Agent rule',
+    });
   });
 });
 

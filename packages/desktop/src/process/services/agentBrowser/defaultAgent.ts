@@ -6,19 +6,16 @@
 
 import { httpRequest, isBackendHttpError } from '@/common/adapter/httpBridge';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_AGENT_NAME,
+  DEFAULT_AGENT_SETTING_KEY,
+  pickDefaultEngineId,
+  type EngineEntry,
+} from '@/common/types/agent/defaultAgent';
+import { backendAssistantRuleDeps, ensureBrowserRuleForAssistant, type AssistantRuleDeps } from './assistantRules';
 
-/** Name of the Agent that always exists. */
-export const DEFAULT_AGENT_NAME = 'Agent';
-/** Id the default Agent is created with; a duplicate create answers 409. */
-export const DEFAULT_AGENT_ID = 'aion-default-agent';
-
-const BUILTIN_DEFAULT_ID_KEY = 'agent.builtinDefaultId';
 const DEFAULT_ENGINE_KEY = 'agent.defaultAgentId';
-/** Engine types the app no longer runs (mirrors the renderer's deprecated list). */
-const DEPRECATED_ENGINE_TYPES = new Set(['openclaw-gateway', 'nanobot', 'remote', 'gemini']);
-
-/** The fields of a managed agent (engine) this module reads. */
-export type EngineEntry = { id: string; enabled?: boolean; status?: string; agent_type?: string };
 
 export type DefaultAgentDeps = {
   getSetting(key: string): Promise<string | undefined>;
@@ -29,36 +26,19 @@ export type DefaultAgentDeps = {
   createAssistant(request: { id: string; name: string; agent_id: string }): Promise<'created' | 'exists'>;
 };
 
-const isEligible = (engine: EngineEntry): boolean =>
-  engine.enabled !== false && !DEPRECATED_ENGINE_TYPES.has(engine.agent_type ?? '');
-
-/**
- * The engine Agents run on by default: the stored choice while it is enabled, else the first
- * installed enabled engine, else the first enabled one. Same order as the renderer's useDefaultEngine.
- */
-export function pickDefaultEngineId(engines: readonly EngineEntry[], storedId: string | undefined): string | null {
-  const eligible = engines.filter(isEligible);
-  return (
-    (
-      eligible.find((engine) => engine.id === storedId) ??
-      eligible.find((engine) => engine.status !== 'missing') ??
-      eligible[0]
-    )?.id ?? null
-  );
-}
-
 /**
  * Make sure the undeletable default Agent exists. Looks it up by the stored id, then by name, and
  * creates it last, bound to the default engine. Returns null (and creates nothing) while there is
  * no engine, so the next start retries.
  */
 export async function ensureDefaultAgent(deps: DefaultAgentDeps): Promise<{ id: string; created: boolean } | null> {
-  const [storedId, assistants] = await Promise.all([deps.getSetting(BUILTIN_DEFAULT_ID_KEY), deps.listAssistants()]);
-  const existing =
-    assistants.find((assistant) => assistant.id === storedId) ??
-    assistants.find((assistant) => assistant.source === 'user' && assistant.name === DEFAULT_AGENT_NAME);
+  const [storedId, assistants] = await Promise.all([deps.getSetting(DEFAULT_AGENT_SETTING_KEY), deps.listAssistants()]);
+  // A name match is adopted only before any id is stored, and only when the user made it.
+  const existing = storedId
+    ? assistants.find((assistant) => assistant.id === storedId)
+    : assistants.find((assistant) => assistant.source === 'user' && assistant.name === DEFAULT_AGENT_NAME);
   if (existing) {
-    if (existing.id !== storedId) await deps.setSetting(BUILTIN_DEFAULT_ID_KEY, existing.id);
+    if (existing.id !== storedId) await deps.setSetting(DEFAULT_AGENT_SETTING_KEY, existing.id);
     return { id: existing.id, created: false };
   }
 
@@ -66,8 +46,24 @@ export async function ensureDefaultAgent(deps: DefaultAgentDeps): Promise<{ id: 
   if (!engineId) return null;
 
   const outcome = await deps.createAssistant({ id: DEFAULT_AGENT_ID, name: DEFAULT_AGENT_NAME, agent_id: engineId });
-  await deps.setSetting(BUILTIN_DEFAULT_ID_KEY, DEFAULT_AGENT_ID);
+  await deps.setSetting(DEFAULT_AGENT_SETTING_KEY, DEFAULT_AGENT_ID);
   return { id: DEFAULT_AGENT_ID, created: outcome === 'created' };
+}
+
+/**
+ * Create the default Agent if it is missing, give it the rule block and tell the renderer its id,
+ * so its settings cache protects the Agent from deletion at once. Null while there is no engine.
+ */
+export async function setUpDefaultAgent(options: {
+  deps?: DefaultAgentDeps;
+  ruleDeps?: AssistantRuleDeps;
+  notify: (id: string) => void;
+}): Promise<{ id: string; created: boolean } | null> {
+  const result = await ensureDefaultAgent(options.deps ?? backendDefaultAgentDeps);
+  if (!result) return null;
+  if (result.created) await ensureBrowserRuleForAssistant(options.ruleDeps ?? backendAssistantRuleDeps, result.id);
+  options.notify(result.id);
+  return result;
 }
 
 /** Backend-wired deps. */

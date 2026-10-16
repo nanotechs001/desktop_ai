@@ -1,5 +1,6 @@
 import type { AssistantEditorViewModel, AssistantListItem } from './types';
 import { Button, Tooltip } from '@arco-design/web-react';
+import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { ArrowLeft } from '@icon-park/react';
 import React from 'react';
@@ -18,7 +19,7 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activ
   const canDelete = !isCreating && activeAssistant?.source === 'user';
   const canSave = isCreating || Boolean(activeAssistant);
   const [defaultAgentId] = useConfig('agent.builtinDefaultId');
-  const isDefaultAgent = Boolean(activeAssistant) && activeAssistant?.id === defaultAgentId;
+  const isDefaultAgent = Boolean(activeAssistant) && isUndeletableAgent(activeAssistant?.id ?? '', defaultAgentId);
 
   return (
     <div data-testid='assistant-editor-page' className='flex h-full min-h-0 flex-col overflow-hidden bg-transparent'>

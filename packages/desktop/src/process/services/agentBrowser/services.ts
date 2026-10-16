@@ -10,6 +10,8 @@ import { PendingConfirms } from './confirmGate';
 import { startRelayServer } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
 import { parseConversationId } from './relay/relayTransport';
+import { handleEnsureAgentRule } from './assistantRules';
+import { setUpDefaultAgent } from './defaultAgent';
 import { CreateTabWaiter, offerNewTab } from './tabWaiter';
 
 export type AgentBrowserServices = { url: string; token: string; close(): Promise<void> };
@@ -52,12 +54,24 @@ const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry
   });
 };
 
+const failure = (error: unknown): Reply => {
+  console.error('[AgentBrowser] IPC handler failed:', error);
+  return { success: false, msg: error instanceof Error ? error.message : String(error) };
+};
+
 const guard = async <D>(handler: () => Reply<D>): Promise<Reply<D>> => {
   try {
     return handler();
   } catch (error) {
-    console.error('[AgentBrowser] IPC handler failed:', error);
-    return { success: false, msg: error instanceof Error ? error.message : String(error) };
+    return failure(error);
+  }
+};
+
+const guardAsync = async <D>(handler: () => Promise<Reply<D>>): Promise<Reply<D>> => {
+  try {
+    return await handler();
+  } catch (error) {
+    return failure(error);
   }
 };
 
@@ -98,6 +112,15 @@ const registerProviders = (
     guard(() => {
       if (typeof id !== 'string' || typeof allow !== 'boolean' || typeof alwaysForSite !== 'boolean') return INVALID;
       return confirms.reply(id, allow, alwaysForSite) ? { success: true } : UNKNOWN_CONFIRM;
+    })
+  );
+  // The app created or edited an Agent: its rule gets the AionUi block now, not at the next start.
+  ipcBridge.agentBrowser.ensureAgentRule.provider((request) => guardAsync(() => handleEnsureAgentRule(request)));
+  // An engine may have been connected since startup: create the default Agent if it is still missing.
+  ipcBridge.agentBrowser.ensureDefaultAgent.provider(() =>
+    guardAsync(async () => {
+      await setUpDefaultAgent({ notify: (id) => ipcBridge.agentBrowser.defaultAgentReady.emit({ id }) });
+      return { success: true };
     })
   );
   // The pane refused a requested tab at its cap: the agent waiting for it gets the reason now, not a 15 s timeout.

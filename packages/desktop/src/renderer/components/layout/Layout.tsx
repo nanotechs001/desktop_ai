@@ -30,7 +30,7 @@ import { PreviewPanel } from '@renderer/pages/conversation/Preview';
 import BrowserTabLayer from '@renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHistoryContext';
-import { useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
+import { useDefaultAgentSync, useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
 import { useBrowserNotification } from '@renderer/hooks/system/notification/useBrowserNotification';
@@ -143,6 +143,7 @@ const Layout: React.FC<{
   useBrowserNotification();
   useDesktopTurnNotification();
   useEngineDriftSync();
+  useDefaultAgentSync();
   const navigate = useNavigate();
   const location = useLocation();
   const workspaceAvailable =

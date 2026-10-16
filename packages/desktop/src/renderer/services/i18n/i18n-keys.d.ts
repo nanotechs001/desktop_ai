@@ -56,6 +56,7 @@ export type I18nKey =
   | 'agent.model.searchPlaceholder'
   | 'agent.model.switchFailed'
   | 'agent.model.switchSuccess'
+  | 'agent.ruleMarkersBroken'
   | 'agent.ruleSyncFailed'
   | 'agent.runtimeRestart.confirmContent'
   | 'agent.runtimeRestart.failed'

@@ -8,7 +8,7 @@ import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
-import { isDeprecatedRuntimeAgentType } from '@/renderer/utils/model/agentTypeSupportPolicy';
+import { DEFAULT_AGENT_SETTING_KEY, isEligibleEngine, pickDefaultEngineId } from '@/common/types/agent/defaultAgent';
 import {
   ENGINE_CATALOG_SWR_KEY,
   fetchManagedAgentsOrThrow,
@@ -31,9 +31,6 @@ export type EnginePins = Readonly<Record<string, string>>;
 
 type EngineRebind = { assistant: Assistant; agentId: string };
 
-const isEligibleEngine = (agent: ManagedAgent): boolean =>
-  agent.enabled !== false && !isDeprecatedRuntimeAgentType(agent.agent_type);
-
 /**
  * The stored default if that engine still exists and is enabled; otherwise the
  * first enabled engine (preferring one that is actually installed); else null.
@@ -42,13 +39,8 @@ export function resolveDefaultEngine(
   agents: readonly ManagedAgent[],
   storedId: string | undefined
 ): ManagedAgent | null {
-  const eligible = agents.filter(isEligibleEngine);
-  return (
-    eligible.find((agent) => agent.id === storedId) ??
-    eligible.find((agent) => agent.status !== 'missing') ??
-    eligible[0] ??
-    null
-  );
+  const id = pickDefaultEngineId(agents, storedId);
+  return agents.find((agent) => agent.id === id) ?? null;
 }
 
 /**
@@ -273,4 +265,37 @@ export function useEngineDriftSync(): void {
     doneRef.current = true;
     void sync({ defaultId, engineIds }, true);
   }, [defaultId, engineIds, sync]);
+}
+
+/**
+ * App-wide. Keeps the default Agent known to this window: main announces its id when it exists
+ * (stored in the settings cache so it can never be deleted, even on a first run), and asks main
+ * to create it when none is known yet, once at startup and once more when an engine gets
+ * connected during the session.
+ */
+export function useDefaultAgentSync(): void {
+  const [defaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
+  const { hasConnectedEngine } = useDefaultEngine();
+  const missing = !defaultAgentId;
+  const askedRef = useRef(new Set<boolean>());
+
+  useEffect(
+    () =>
+      ipcBridge.agentBrowser.defaultAgentReady.on(({ id }) => {
+        configService.setLocal(DEFAULT_AGENT_SETTING_KEY, id);
+        void swrMutate('assistants.list');
+      }),
+    []
+  );
+
+  useEffect(() => {
+    if (!missing || askedRef.current.has(hasConnectedEngine)) return;
+    askedRef.current.add(hasConnectedEngine);
+    ipcBridge.agentBrowser.ensureDefaultAgent
+      .invoke()
+      .then((reply) => {
+        if (!reply.success) console.error('[agent] Could not set up the default Agent:', reply.msg);
+      })
+      .catch((error) => console.error('[agent] Could not set up the default Agent:', error));
+  }, [missing, hasConnectedEngine]);
 }

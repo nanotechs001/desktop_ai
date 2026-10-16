@@ -1522,10 +1522,16 @@ export const agentBrowser = {
   replyConfirm: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; alwaysForSite: boolean }>(
     'agent-browser.reply-confirm'
   ),
-  // an Agent was just created or edited in the app: put the AionUi rule block into its rule right away (locale = the one the editor wrote)
-  ensureAgentRule: bridge.buildProvider<IBridgeResponse<void>, { assistantId: string; locale?: string }>(
-    'agent-browser.ensure-agent-rule'
-  ),
+  // an Agent was just created or edited in the app: put the AionUi rule block into its rule right away (locale = the one the editor wrote).
+  // `data.unbalanced` is set when the rule's block markers are broken and need the user's fix.
+  ensureAgentRule: bridge.buildProvider<
+    IBridgeResponse<{ unbalanced: true } | undefined>,
+    { assistantId: string; locale?: string }
+  >('agent-browser.ensure-agent-rule'),
+  // create the default Agent now if it is missing (an engine may have been connected since the app started)
+  ensureDefaultAgent: bridge.buildProvider<IBridgeResponse<void>, void>('agent-browser.ensure-default-agent'),
+  // main → renderer: the default Agent exists with this assistant id
+  defaultAgentReady: bridge.buildEmitter<{ id: string }>('agent-browser.default-agent-ready'),
   // the pane refused an openTabRequested at its tab cap (max); the agent of that chat waiting for that url fails at once
   refuseTab: bridge.buildProvider<IBridgeResponse<void>, { url: string; max: number; conversationId?: string }>(
     'agent-browser.refuse-tab'

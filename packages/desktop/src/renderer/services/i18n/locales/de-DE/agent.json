@@ -69,5 +69,6 @@
     "label": "Engine"
   },
   "cannotDeleteDefault": "Der Standard-Agent kann nicht gelöscht werden.",
-  "ruleSyncFailed": "Der Agent wurde gespeichert, aber seine Browser-Regeln konnten nicht aktualisiert werden. Starte die App neu, um es erneut zu versuchen."
+  "ruleSyncFailed": "Der Agent wurde gespeichert, aber seine Browser-Regeln konnten nicht aktualisiert werden. Starte die App neu, um es erneut zu versuchen.",
+  "ruleMarkersBroken": "Korrigiere die AionUi-Blockmarkierungen in den Anweisungen dieses Agents."
 }

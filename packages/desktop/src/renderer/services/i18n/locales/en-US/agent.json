@@ -69,5 +69,6 @@
     "label": "Engine"
   },
   "cannotDeleteDefault": "The default Agent can't be deleted.",
-  "ruleSyncFailed": "The Agent was saved, but its browser rules could not be updated. Restart the app to retry."
+  "ruleSyncFailed": "The Agent was saved, but its browser rules could not be updated. Restart the app to retry.",
+  "ruleMarkersBroken": "Fix the AionUi block markers in this Agent's instructions."
 }

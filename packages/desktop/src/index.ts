@@ -349,12 +349,6 @@ function registerCronResumeBridge(backendPort: number): void {
 const scheduleBackendMigrations = (): void => {
   if (backendMigrationsScheduled || !backendStartedOk) return;
   backendMigrationsScheduled = true;
-  ipcBridge.agentBrowser.ensureAgentRule.provider(async ({ assistantId, locale }) => {
-    const { ensureBrowserRuleForAssistant, backendAssistantRuleDeps } =
-      await import('./process/services/agentBrowser/assistantRules');
-    const summary = await ensureBrowserRuleForAssistant(backendAssistantRuleDeps, assistantId, locale);
-    return summary.failed > 0 ? { success: false, msg: 'Could not update the Agent rule' } : { success: true };
-  });
   void (async () => {
     try {
       const { runBackendMigrations } = await import('./process/utils/runBackendMigrations');
@@ -364,20 +358,16 @@ const scheduleBackendMigrations = (): void => {
         import('./process/services/agentBrowser/defaultAgent'),
         import('./process/services/agentBrowser/assistantRules'),
       ])
-        .then(
-          async ([
-            { ensureDefaultAgent, backendDefaultAgentDeps },
-            { ensureBrowserRuleInAssistants, backendAssistantRuleDeps },
-          ]) => {
-            // The default Agent first, so the sync below gives it the rule block too.
-            try {
-              console.info('[AionUi] Default Agent:', await ensureDefaultAgent(backendDefaultAgentDeps));
-            } catch (error) {
-              console.error('[AionUi] Default Agent setup failed:', error);
-            }
-            return ensureBrowserRuleInAssistants(backendAssistantRuleDeps);
+        .then(async ([{ setUpDefaultAgent }, { ensureBrowserRuleInAssistants, backendAssistantRuleDeps }]) => {
+          // The default Agent first, so the sync below covers every Agent that exists now.
+          try {
+            const notify = (id: string) => ipcBridge.agentBrowser.defaultAgentReady.emit({ id });
+            console.info('[AionUi] Default Agent:', await setUpDefaultAgent({ notify }));
+          } catch (error) {
+            console.error('[AionUi] Default Agent setup failed:', error);
           }
-        )
+          return ensureBrowserRuleInAssistants(backendAssistantRuleDeps);
+        })
         .then((summary) => console.info('[AionUi] Browser rule sync:', summary))
         .catch((error) => console.error('[AionUi] Browser rule sync failed:', error));
       // The launcher is a POSIX sh script, so it is not installed on Windows.

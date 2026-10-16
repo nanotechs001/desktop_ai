@@ -69,5 +69,6 @@
     "label": "Moteur"
   },
   "cannotDeleteDefault": "L'agent par défaut ne peut pas être supprimé.",
-  "ruleSyncFailed": "L'agent a été enregistré, mais ses règles de navigateur n'ont pas pu être mises à jour. Redémarrez l'application pour réessayer."
+  "ruleSyncFailed": "L'agent a été enregistré, mais ses règles de navigateur n'ont pas pu être mises à jour. Redémarrez l'application pour réessayer.",
+  "ruleMarkersBroken": "Corrigez les marqueurs de bloc AionUi dans les instructions de cet agent."
 }

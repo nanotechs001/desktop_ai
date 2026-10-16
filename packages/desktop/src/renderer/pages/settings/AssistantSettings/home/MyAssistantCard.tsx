@@ -8,6 +8,7 @@ import type { AssistantListItem } from '../types';
 import AssistantAvatar from '../AssistantAvatar';
 import RuntimeBadge from './RuntimeBadge';
 import { Button, Dropdown, Menu, Switch, Tooltip } from '@arco-design/web-react';
+import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { Attention, MoreOne } from '@icon-park/react';
 import React from 'react';
@@ -40,7 +41,7 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
   const enabled = assistant.enabled !== false;
   const canDelete = assistant.source === 'user';
   const [defaultAgentId] = useConfig('agent.builtinDefaultId');
-  const isDefaultAgent = assistant.id === defaultAgentId;
+  const isDefaultAgent = isUndeletableAgent(assistant.id, defaultAgentId);
 
   const actionMenu = (
     <Menu

@@ -53,7 +53,10 @@ vi.mock('@/common/config/constants', () => ({
 vi.mock('@/renderer/components/layout/PwaPullToRefresh', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar', () => ({ default: () => null }));
 vi.mock('@/renderer/components/settings/UpdateModal', () => ({ default: () => null }));
-vi.mock('@renderer/hooks/agent/useDefaultEngine', () => ({ useEngineDriftSync: () => {} }));
+vi.mock('@renderer/hooks/agent/useDefaultEngine', () => ({
+  useEngineDriftSync: () => {},
+  useDefaultAgentSync: () => {},
+}));
 vi.mock('@renderer/hooks/system/useDeepLink', () => ({ useDeepLink: () => {} }));
 vi.mock('@renderer/hooks/system/notification/useNotificationClick', () => ({ useNotificationClick: () => {} }));
 vi.mock('@renderer/hooks/system/notification/useBrowserNotification', () => ({ useBrowserNotification: () => {} }));

@@ -23,6 +23,9 @@ const h = vi.hoisted(() => {
         getConfirmRequests: provider('getConfirmRequests'),
         replyConfirm: provider('replyConfirm'),
         refuseTab: provider('refuseTab'),
+        ensureAgentRule: provider('ensureAgentRule'),
+        ensureDefaultAgent: provider('ensureDefaultAgent'),
+        defaultAgentReady: emitter(),
       },
       browser: { openTabRequested: emitter(), closeTabRequested: emitter() },
     },
@@ -30,6 +33,11 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('@/common', () => ({ ipcBridge: h.ipcBridge }));
+const backend = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('@/common/adapter/httpBridge', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/common/adapter/httpBridge')>()),
+  httpRequest: backend.request,
+}));
 // The "Always allow" file lives under the home directory; keep a test run away from the user's own.
 vi.mock('node:os', async (importOriginal) => {
   const os = await importOriginal<typeof import('node:os')>();
@@ -323,5 +331,59 @@ describe('agent browser services: take-over', () => {
     );
 
     expect((await ownership(11))?.paused).toBe(false);
+  });
+});
+
+describe('Agent IPC', () => {
+  afterEach(() => {
+    backend.request.mockReset();
+    h.ipcBridge.agentBrowser.defaultAgentReady.emit.mockClear();
+  });
+
+  it('ensureAgentRule validates its arguments before touching any rule', async () => {
+    await start();
+    const invalid = { success: false, msg: 'Invalid arguments' };
+    expect(await call('ensureAgentRule', {})).toEqual(invalid);
+    expect(await call('ensureAgentRule', { assistantId: 'x'.repeat(129) })).toEqual(invalid);
+    expect(await call('ensureAgentRule', { assistantId: 'a', locale: '../x' })).toEqual(invalid);
+    expect(backend.request).not.toHaveBeenCalled();
+  });
+
+  it('ensureAgentRule adds the block to the default and the given locale rule, and answers even with agent control off', async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    backend.request.mockImplementation(async (_method: string, path: string, body: Record<string, unknown>) => {
+      if (path.endsWith('/write')) writes.push(body);
+      return '';
+    });
+    // not started: the provider is registered for the renderer either way
+    await startAgentBrowserServices({ enabled: false, blockedPorts: () => [] });
+
+    expect(await call('ensureAgentRule', { assistantId: 'new-agent', locale: 'zh-CN' })).toEqual({ success: true });
+
+    expect(writes.map((w) => w.locale)).toEqual([undefined, 'zh-CN']);
+    expect(writes.every((w) => w.assistant_id === 'new-agent' && String(w.content).includes('aion-browser-rule'))).toBe(
+      true
+    );
+  });
+
+  it('ensureDefaultAgent creates the Agent and announces it, or stays quiet with no engine', async () => {
+    backend.request.mockImplementation(async (method: string, path: string) => {
+      if (path.startsWith('/api/settings/client') && method === 'GET') return {};
+      if (path === '/api/assistants' && method === 'GET') return [];
+      if (path === '/api/agents/management')
+        return [{ id: 'claude', enabled: true, status: 'online', agent_type: 'acp' }];
+      return '';
+    });
+    await startAgentBrowserServices({ enabled: false, blockedPorts: () => [] });
+
+    expect(await call('ensureDefaultAgent')).toEqual({ success: true });
+    expect(h.ipcBridge.agentBrowser.defaultAgentReady.emit).toHaveBeenCalledWith({ id: 'aion-default-agent' });
+
+    h.ipcBridge.agentBrowser.defaultAgentReady.emit.mockClear();
+    backend.request.mockImplementation(async (method: string, path: string) =>
+      path === '/api/agents/management' ? [] : path === '/api/assistants' && method === 'GET' ? [] : {}
+    );
+    expect(await call('ensureDefaultAgent')).toEqual({ success: true });
+    expect(h.ipcBridge.agentBrowser.defaultAgentReady.emit).not.toHaveBeenCalled();
   });
 });

@@ -69,5 +69,6 @@
     "label": "Motor"
   },
   "cannotDeleteDefault": "Varsayılan Agent silinemez.",
-  "ruleSyncFailed": "Agent kaydedildi ancak tarayıcı kuralları güncellenemedi. Yeniden denemek için uygulamayı yeniden başlatın."
+  "ruleSyncFailed": "Agent kaydedildi ancak tarayıcı kuralları güncellenemedi. Yeniden denemek için uygulamayı yeniden başlatın.",
+  "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki AionUi blok işaretlerini düzeltin."
 }

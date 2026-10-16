@@ -56,7 +56,10 @@ const mocks = vi.hoisted(() => ({
     writeRule: vi.fn(),
     deleteRule: vi.fn(),
     ensureRule: vi.fn(),
+    ensureDefaultAgent: vi.fn(),
   },
+  swrMutate: vi.fn(),
+  ready: { current: undefined as ((event: { id: string }) => void) | undefined },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -71,6 +74,7 @@ vi.mock('@/common/config/configService', () => ({
   configService: {
     get: (key: string) => mocks.config.get(key),
     set: vi.fn(async () => {}),
+    setLocal: (key: string, value: unknown) => mocks.config.set(key, value),
     whenReady: async () => {},
     initialize: async () => {},
     isInitialized: () => true,
@@ -81,7 +85,7 @@ vi.mock('@/common/config/configService', () => ({
 vi.mock('swr', () => ({
   __esModule: true,
   default: () => ({ data: mocks.engines.current }),
-  mutate: vi.fn(),
+  mutate: mocks.swrMutate,
 }));
 
 vi.mock('@/common', () => ({
@@ -101,7 +105,18 @@ vi.mock('@/common', () => ({
       deleteAssistantRule: { invoke: mocks.invoke.deleteRule },
       importSkills: { invoke: vi.fn() },
     },
-    agentBrowser: { ensureAgentRule: { invoke: mocks.invoke.ensureRule } },
+    agentBrowser: {
+      ensureAgentRule: { invoke: mocks.invoke.ensureRule },
+      ensureDefaultAgent: { invoke: mocks.invoke.ensureDefaultAgent },
+      defaultAgentReady: {
+        on: (callback: (event: { id: string }) => void) => {
+          mocks.ready.current = callback;
+          return () => {
+            mocks.ready.current = undefined;
+          };
+        },
+      },
+    },
   },
 }));
 
@@ -112,7 +127,9 @@ vi.mock('@/renderer/hooks/mcp/catalog', () => ({
 vi.mock('@/renderer/pages/settings/AssistantSettings/AssistantAvatar', () => ({ default: () => <span /> }));
 vi.mock('@/renderer/pages/settings/AssistantSettings/AssistantEditorSections', () => ({ default: () => <div /> }));
 
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import { useAssistantEditor } from '@/renderer/hooks/assistant/useAssistantEditor';
+import { useDefaultAgentSync } from '@/renderer/hooks/agent/useDefaultEngine';
 import SiderAssistantEntry from '@/renderer/components/layout/Sider/SiderNav/SiderAssistantEntry';
 import AssistantEditorPage from '@/renderer/pages/settings/AssistantSettings/AssistantEditorPage';
 import DeleteAssistantModal from '@/renderer/pages/settings/AssistantSettings/DeleteAssistantModal';
@@ -144,9 +161,12 @@ beforeEach(() => {
   mocks.config.clear();
   mocks.engines.current = [{ id: 'engine-a', name: 'Engine Alpha', name_i18n: {} }];
   Object.values(mocks.invoke).forEach((fn) => fn.mockReset());
+  mocks.swrMutate.mockReset();
+  mocks.ready.current = undefined;
   mocks.invoke.writeRule.mockResolvedValue(true);
   mocks.invoke.deleteRule.mockResolvedValue(true);
   mocks.invoke.ensureRule.mockResolvedValue({ success: true });
+  mocks.invoke.ensureDefaultAgent.mockResolvedValue({ success: true });
 });
 
 afterEach(cleanup);
@@ -485,5 +505,221 @@ describe('a new or edited Agent gets the AionUi rule block right away', () => {
 
     expect(message.warning).toHaveBeenCalledWith(expect.stringContaining('browser rules could not be updated'));
     expect(message.success).toHaveBeenCalled();
+  });
+});
+
+describe('the default Agent is protected before its id reaches the settings cache', () => {
+  // First run: main created the Agent a moment ago, the renderer cache has no agent.builtinDefaultId yet.
+  const defaultAgent = () => assistant({ id: DEFAULT_AGENT_ID, name: 'Agent' });
+
+  it('disables Delete in the card menu', async () => {
+    const onDelete = vi.fn();
+    render(
+      <ConfigProvider>
+        <MyAssistantCard
+          assistant={defaultAgent()}
+          localeKey='en-US'
+          onOpenDetail={vi.fn()}
+          onDelete={onDelete}
+          onToggleEnabled={vi.fn()}
+          onStartChat={vi.fn()}
+        />
+      </ConfigProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('btn-assistant-more-aion-default-agent'));
+    const label = await screen.findByTestId(`menu-delete-${DEFAULT_AGENT_ID}`);
+    expect(label.closest('[role="menuitem"]')?.className).toContain('disabled');
+    fireEvent.click(label);
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it('disables Delete in the editor', () => {
+    render(
+      <ConfigProvider>
+        <AssistantEditorPage
+          editor={
+            {
+              isCreating: false,
+              profile: { name: 'Agent' },
+              actions: { save: vi.fn(), requestDelete: vi.fn(), duplicate: vi.fn() },
+            } as never
+          }
+          activeAssistant={defaultAgent()}
+          onBack={vi.fn()}
+        />
+      </ConfigProvider>
+    );
+
+    expect(screen.getByTestId('btn-delete-assistant')).toBeDisabled();
+  });
+
+  it('refuses the delete request', () => {
+    const warning = vi.fn();
+    const { result } = renderHook(() =>
+      useAssistantEditor({
+        localeKey: 'en-US',
+        activeAssistant: defaultAgent(),
+        setActiveAssistantId: vi.fn(),
+        loadAssistants: vi.fn(),
+        assistants: [],
+        assistantOrder: [],
+        setAssistantOrder: vi.fn(async () => {}),
+        message: { success: vi.fn(), error: vi.fn(), warning, info: vi.fn() } as never,
+      })
+    );
+
+    act(() => result.current.handleDeleteRequest(defaultAgent()));
+    act(() => result.current.handleDeleteClick());
+
+    expect(warning).toHaveBeenCalledTimes(2);
+    expect(result.current.deleteConfirmVisible).toBe(false);
+  });
+});
+
+describe('useDefaultAgentSync', () => {
+  it('stores the id main announces in the settings cache and refreshes the Agent list', () => {
+    mocks.config.set('agent.builtinDefaultId', 'x'); // already known: no catch-up call needed
+    renderHook(() => useDefaultAgentSync());
+
+    act(() => mocks.ready.current?.({ id: DEFAULT_AGENT_ID }));
+
+    expect(mocks.config.get('agent.builtinDefaultId')).toBe(DEFAULT_AGENT_ID);
+    expect(mocks.swrMutate).toHaveBeenCalledWith('assistants.list');
+    expect(mocks.invoke.ensureDefaultAgent).not.toHaveBeenCalled();
+  });
+
+  it('asks main to create the default Agent when none is known yet, once per engine state', async () => {
+    const { rerender } = renderHook(() => useDefaultAgentSync());
+    await waitFor(() => expect(mocks.invoke.ensureDefaultAgent).toHaveBeenCalledTimes(1));
+
+    rerender();
+    expect(mocks.invoke.ensureDefaultAgent).toHaveBeenCalledTimes(1);
+
+    // An engine gets connected during the session: the engine list now has a usable engine.
+    mocks.engines.current = [];
+    rerender();
+    mocks.engines.current = [{ id: 'engine-a', name: 'Engine Alpha' }];
+    rerender();
+    await waitFor(() => expect(mocks.invoke.ensureDefaultAgent).toHaveBeenCalledTimes(2));
+    rerender();
+    expect(mocks.invoke.ensureDefaultAgent).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the editor hides the AionUi managed rule blocks', () => {
+  const BLOCK = '<!-- aion-browser-rule:start -->\nUse the pane.\n<!-- aion-browser-rule:end -->';
+  const detailWith = (content: string) => ({
+    id: 'mine',
+    source: 'user',
+    profile: { name: 'Researcher', name_i18n: {}, description: '', description_i18n: {}, avatar: '' },
+    state: { enabled: true, sort_order: 1 },
+    engine: { agent_id: 'engine-a', agent: { type: 'acp', source: 'builtin', acp_backend: 'claude' } },
+    rules: { content, storage_mode: 'user_file' },
+    prompts: { recommended: [], recommended_i18n: {} },
+    defaults: {
+      model: { mode: 'auto' },
+      permission: { mode: 'auto' },
+      thought_level: { mode: 'auto' },
+      skills: { mode: 'auto', value: [] },
+      mcps: { mode: 'auto', value: [] },
+    },
+    capabilities: { default_skill_ids: [], custom_skill_names: [], default_disabled_builtin_skill_ids: [] },
+    preferences: {},
+  });
+  const build = (source: 'user' | 'builtin' = 'user') => {
+    const message = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() };
+    const active = assistant({ source });
+    const hook = renderHook(() =>
+      useAssistantEditor({
+        localeKey: 'en-US',
+        activeAssistant: active,
+        setActiveAssistantId: vi.fn(),
+        loadAssistants: vi.fn(),
+        assistants: [],
+        assistantOrder: [],
+        setAssistantOrder: vi.fn(async () => {}),
+        message: message as never,
+      })
+    );
+    return { ...hook, message, active };
+  };
+
+  it('shows only the user text, and saving writes the user text for main to re-add the block', async () => {
+    mocks.invoke.get.mockResolvedValue(detailWith(`Be brief.\n\n${BLOCK}\n`));
+    mocks.invoke.update.mockResolvedValue({ id: 'mine' });
+    const { result, active } = build();
+
+    await act(async () => {
+      await result.current.handleEdit(active);
+    });
+    await waitFor(() => expect(result.current.editContext).toBe('Be brief.'));
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+    expect(mocks.invoke.writeRule).toHaveBeenCalledWith(expect.objectContaining({ content: 'Be brief.' }));
+    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'mine', locale: 'en-US' });
+  });
+
+  it('also hides it in a duplicate', async () => {
+    mocks.invoke.get.mockResolvedValue(detailWith(`Be brief.\n\n${BLOCK}\n`));
+    const { result, active } = build();
+
+    await act(async () => {
+      await result.current.handleDuplicate(active);
+    });
+
+    await waitFor(() => expect(result.current.editContext).toBe('Be brief.'));
+  });
+
+  it('leaves a rule with broken markers fully visible so the user can fix it', async () => {
+    const broken = 'Be brief.\n<!-- aion-browser-rule:start -->\nhalf';
+    mocks.invoke.get.mockResolvedValue(detailWith(broken));
+    const { result, active } = build();
+
+    await act(async () => {
+      await result.current.handleEdit(active);
+    });
+
+    await waitFor(() => expect(result.current.editContext).toBe(broken));
+  });
+
+  it('asks the user to fix broken markers, instead of offering a restart that cannot help', async () => {
+    mocks.invoke.create.mockResolvedValue({ id: 'new-agent' });
+    mocks.invoke.ensureRule.mockResolvedValue({ success: false, data: { unbalanced: true }, msg: 'unbalanced' });
+    const { result, message } = build();
+
+    await act(async () => {
+      await result.current.handleCreate();
+    });
+    act(() => {
+      result.current.setEditName('Writer');
+      result.current.setEditContext('oops <!-- aion-notes:start -->');
+    });
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(message.warning).toHaveBeenCalledWith("Fix the AionUi block markers in this Agent's instructions.");
+    expect(message.warning).not.toHaveBeenCalledWith(expect.stringContaining('Restart'));
+    expect(message.success).toHaveBeenCalled();
+  });
+
+  it('does not touch the rule of a built-in assistant when its engine settings are saved', async () => {
+    mocks.invoke.get.mockResolvedValue({ ...detailWith('official rule'), source: 'builtin' });
+    mocks.invoke.update.mockResolvedValue({ id: 'mine' });
+    const { result, active } = build('builtin');
+
+    await act(async () => {
+      await result.current.handleEdit(active);
+    });
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(mocks.invoke.update).toHaveBeenCalled();
+    expect(mocks.invoke.writeRule).not.toHaveBeenCalled();
+    expect(mocks.invoke.ensureRule).not.toHaveBeenCalled();
   });
 });
