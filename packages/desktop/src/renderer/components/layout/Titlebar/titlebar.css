@@ -245,6 +245,53 @@
   height: 18px !important;
 }
 
+/* Titlebar controls rendered as Arco text Buttons: the extra .arco-btn classes out-rank
+   Arco's own size, hover and disabled rules so they match the plain titlebar buttons. */
+.app-titlebar__button.arco-btn.arco-btn-size-mini {
+  -webkit-app-region: no-drag;
+  width: var(--titlebar-height);
+  height: var(--titlebar-height);
+  padding: 0;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-primary);
+}
+
+.app-titlebar__button.arco-btn.arco-btn-text:not(.arco-btn-disabled):hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+
+.app-titlebar__button.arco-btn.arco-btn-text:not(.arco-btn-disabled):active {
+  background-color: rgba(0, 0, 0, 0.14);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .app-titlebar__button.arco-btn.arco-btn-text:not(.arco-btn-disabled):hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .app-titlebar__button.arco-btn.arco-btn-text:not(.arco-btn-disabled):active {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.app-titlebar__button.arco-btn.arco-btn-disabled {
+  opacity: 0.35;
+  cursor: default;
+  background-color: transparent;
+  color: var(--text-primary);
+}
+
+.app-titlebar__button.arco-btn .arco-btn-icon {
+  margin: 0;
+}
+
+.app-titlebar__button--mobile.arco-btn.arco-btn-size-mini {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
 .app-window-controls {
   display: flex;
   align-items: stretch;

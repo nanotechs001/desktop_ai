@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const layoutState = vi.hoisted(() => ({ isMobile: false }));
 const nav = vi.hoisted(() => ({
   canBack: true,
   canForward: false,
@@ -17,17 +18,27 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 vi.mock('@/common', () => ({
-  ipcBridge: { conversation: { get: { invoke: vi.fn() } } },
+  ipcBridge: { conversation: { get: { invoke: vi.fn().mockResolvedValue(null) } } },
 }));
 vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
 vi.mock('@/renderer/components/layout/Titlebar/HistoryPanel', () => ({
-  default: ({ open }: { open: boolean }) => (open ? <div data-testid='history-panel' /> : null),
+  default: ({ open, onSearchMessages }: { open: boolean; onSearchMessages?: () => void }) =>
+    open ? (
+      <div data-testid='history-panel'>
+        <span role='button' onClick={onSearchMessages}>
+          panel-search-messages
+        </span>
+      </div>
+    ) : null,
+}));
+vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({
+  default: ({ open }: { open?: boolean }) => <div data-testid='message-search' data-open={String(Boolean(open))} />,
 }));
 vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({ useChatNavHistory: () => nav }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
+  useLayoutContext: () => ({ ...layoutState, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
 }));
 vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
   useFeedback: () => ({ openFeedback: vi.fn() }),
@@ -41,6 +52,7 @@ import Titlebar from '@/renderer/components/layout/Titlebar';
 
 describe('Titlebar chat history controls', () => {
   beforeEach(() => {
+    layoutState.isMobile = false;
     nav.canBack = true;
     nav.canForward = false;
     nav.back.mockClear();
@@ -80,5 +92,42 @@ describe('Titlebar chat history controls', () => {
     fireEvent.click(back);
     expect(nav.back).toHaveBeenCalledTimes(1);
     expect(nav.forward).not.toHaveBeenCalled();
+  });
+
+  it('renders the titlebar controls as Arco buttons', () => {
+    render(<Titlebar workspaceAvailable={false} />);
+
+    for (const name of [
+      'common.collapse',
+      'conversation.history.searchChats',
+      'common.historyBack',
+      'common.forward',
+    ]) {
+      expect(screen.getByRole('button', { name })).toHaveClass('arco-btn', 'app-titlebar__button');
+    }
+  });
+
+  it('keeps one message-search popover mounted for Cmd+Shift+F on desktop', () => {
+    render(<Titlebar workspaceAvailable={false} />);
+
+    expect(screen.getByTestId('message-search')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('leaves message search to the sidebar on mobile', () => {
+    layoutState.isMobile = true;
+    render(<Titlebar workspaceAvailable={false} />);
+
+    expect(screen.queryByTestId('message-search')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'conversation.history.searchChats' })).toBeInTheDocument();
+  });
+
+  it('closes the history panel and opens message search from the panel entry', () => {
+    render(<Titlebar workspaceAvailable={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.history.searchChats' }));
+
+    fireEvent.click(screen.getByText('panel-search-messages'));
+
+    expect(screen.queryByTestId('history-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('message-search')).toHaveAttribute('data-open', 'true');
   });
 });

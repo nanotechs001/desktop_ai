@@ -33,10 +33,6 @@ vi.mock('@renderer/components/layout/Sider/SiderFooter', () => ({
 }));
 vi.mock('@renderer/components/layout/Sider/TeamSiderSection', () => ({ default: () => null }));
 vi.mock('@renderer/pages/settings/components/SettingsSider', () => ({ default: () => null }));
-vi.mock('@renderer/pages/conversation/GroupedHistory', () => ({
-  default: () => <div data-testid='conversation-list' />,
-}));
-
 import Sider from '@renderer/components/layout/Sider';
 
 describe('Sider', () => {
@@ -52,6 +48,6 @@ describe('Sider', () => {
     expect(screen.getByTestId('sider-new-chat')).toBeInTheDocument();
     expect(screen.getByTestId('sider-agents')).toBeInTheDocument();
     expect(screen.getByTestId('sider-scheduled')).toBeInTheDocument();
-    expect(screen.queryByTestId('conversation-list')).not.toBeInTheDocument();
+    expect(document.querySelector('[id^="c-"], .chat-history__item')).toBeNull();
   });
 });

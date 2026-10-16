@@ -76,15 +76,6 @@ export type ConversationRowProps = {
   dragHandle?: ReactNode;
 };
 
-export type WorkspaceGroupedHistoryProps = {
-  onSessionClick?: () => void;
-  collapsed?: boolean;
-  tooltipEnabled?: boolean;
-  batchMode?: boolean;
-  onBatchModeChange?: (value: boolean) => void;
-  afterPinnedContent?: ReactNode;
-};
-
 export type DragItemType = 'conversation' | 'workspace';
 
 export type DragItem = {

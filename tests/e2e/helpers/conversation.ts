@@ -299,8 +299,8 @@ export async function openHistoryPanel(page: Page): Promise<void> {
 }
 
 /**
- * Delete a conversation through the UI: open the history panel, open the row's
- * context menu, click "Delete", then confirm in the modal dialog.
+ * Remove a conversation from the active list through the UI: open the history panel, open
+ * the row's context menu and archive it (the row menu has no hard delete), then close the panel.
  */
 export async function deleteConversation(page: Page, conversationId: string): Promise<boolean> {
   await openHistoryPanel(page);
@@ -313,17 +313,13 @@ export async function deleteConversation(page: Page, conversationId: string): Pr
   await menuTrigger.waitFor({ state: 'visible', timeout: 5_000 });
   await menuTrigger.click();
 
-  const deleteItem = page.locator('.arco-dropdown-menu-item').filter({ hasText: /Delete|删除/ });
-  await deleteItem.waitFor({ state: 'visible', timeout: 5_000 });
-  await deleteItem.click();
+  const archiveItem = page.locator('.arco-dropdown-menu-item').filter({ hasText: /Archive|归档/ });
+  await archiveItem.waitFor({ state: 'visible', timeout: 5_000 });
+  await archiveItem.click();
 
-  const confirmBtn = page.locator('.arco-modal .arco-btn-primary.arco-btn-status-warning');
-  await confirmBtn.waitFor({ state: 'visible', timeout: 5_000 });
-  await confirmBtn.click();
-
-  await page
-    .waitForFunction(() => !window.location.hash.includes('/conversation/'), { timeout: 10_000 })
-    .catch(() => {});
+  await row.waitFor({ state: 'detached', timeout: 10_000 });
+  // Close the drawer so its mask does not block later steps.
+  await page.keyboard.press('Escape');
 
   return true;
 }

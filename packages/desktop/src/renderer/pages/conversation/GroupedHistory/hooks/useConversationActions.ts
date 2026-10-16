@@ -19,25 +19,29 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { isConversationPinned } from '../utils/groupingHelpers';
 
 type UseConversationActionsParams = {
-  batchMode: boolean;
+  /** Batch selection is optional: callers without a batch UI omit all of the batch params. */
+  batchMode?: boolean;
   onSessionClick?: () => void;
   onBatchModeChange?: (value: boolean) => void;
-  selectedConversationIds: Set<string>;
-  setSelectedConversationIds: React.Dispatch<React.SetStateAction<Set<string>>>;
-  toggleSelectedConversation: (conversation: TChatConversation) => void;
+  selectedConversationIds?: Set<string>;
+  setSelectedConversationIds?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  toggleSelectedConversation?: (conversation: TChatConversation) => void;
   markAsRead: (conversation_id: string) => void;
   markManualUnread: (conversation_id: string) => void;
   clearManualUnread: (conversation_id: string) => void;
   isManualUnread: (conversation_id: string) => boolean;
 };
 
+const NO_SELECTION: Set<string> = new Set();
+const ignoreSelection = () => {};
+
 export const useConversationActions = ({
-  batchMode,
+  batchMode = false,
   onSessionClick,
   onBatchModeChange,
-  selectedConversationIds,
-  setSelectedConversationIds,
-  toggleSelectedConversation,
+  selectedConversationIds = NO_SELECTION,
+  setSelectedConversationIds = ignoreSelection,
+  toggleSelectedConversation = ignoreSelection,
   markAsRead,
   markManualUnread,
   clearManualUnread,

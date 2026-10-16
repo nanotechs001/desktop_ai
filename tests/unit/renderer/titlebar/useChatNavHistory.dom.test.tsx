@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true, isMacOS: () => true }));
 
+import { emitter } from '@/renderer/utils/emitter';
 import { useChatNavHistory } from '@/renderer/components/layout/Titlebar/useChatNavHistory';
 
 const router = vi.hoisted(() => ({
@@ -115,5 +116,47 @@ describe('useChatNavHistory', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: ']', metaKey: true, cancelable: true }));
     });
     expect(router.pathname).toBe('/conversation/b');
+  });
+
+  it('can go forward again after visiting a non-chat route', () => {
+    const { result } = renderNav();
+    go('/conversation/b');
+    act(() => result.current.back());
+    go('/settings/agent');
+
+    expect(result.current.canForward).toBe(true);
+    act(() => result.current.forward());
+    expect(router.pathname).toBe('/conversation/b');
+  });
+
+  it('treats query variants of the same chat as one entry', () => {
+    const { result } = renderNav();
+    go('/conversation/a?x=1');
+
+    expect(result.current.canBack).toBe(false);
+  });
+
+  it('forgets a deleted chat so Back never lands on it', () => {
+    const { result } = renderNav();
+    go('/conversation/b');
+    go('/conversation/c');
+
+    act(() => emitter.emit('conversation.deleted', 'b'));
+    act(() => result.current.back());
+
+    expect(router.pathname).toBe('/conversation/a');
+    expect(result.current.canBack).toBe(false);
+  });
+
+  it('is not trapped after the open chat is deleted', () => {
+    const { result } = renderNav();
+    go('/conversation/b');
+
+    act(() => emitter.emit('conversation.deleted', 'b'));
+    go('/guid');
+
+    expect(result.current.canBack).toBe(true);
+    act(() => result.current.back());
+    expect(router.pathname).toBe('/conversation/a');
   });
 });

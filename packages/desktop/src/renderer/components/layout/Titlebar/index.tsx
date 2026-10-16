@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
+import { Button } from '@arco-design/web-react';
 import { ArrowCircleLeft, ArrowLeft, ArrowRight, ExpandLeft, ExpandRight, Peoples, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ipcBridge } from '@/common';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
+import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 import HistoryPanel from './HistoryPanel';
 import MobileConversationBrand from './MobileConversationBrand';
 import WindowControls from '../WindowControls';
@@ -105,6 +107,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const layout = useLayoutContext();
   const chatNav = useChatNavHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const { openFeedback } = useFeedback();
   const location = useLocation();
   const navigate = useNavigate();
@@ -159,6 +162,13 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const historyForwardTooltip = t('common.forward', { defaultValue: 'Forward' });
   // The chat list lives in the history panel opened from here, on every platform.
   const searchTooltip = t('conversation.history.searchChats');
+
+  const titlebarButtonClass = classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile');
+
+  const handleSearchMessages = () => {
+    setHistoryOpen(false);
+    setMessageSearchOpen(true);
+  };
 
   const handleSiderToggle = () => {
     if (!showSiderToggle || !layout?.setSiderCollapsed) return;
@@ -321,53 +331,55 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
           </button>
         )}
         {showSiderToggle && (
-          <button
-            type='button'
-            className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}
+          <Button
+            type='text'
+            size='mini'
+            className={titlebarButtonClass}
+            icon={<SidebarIcon size={iconSize} strokeWidth={desktopIconStroke} />}
             onClick={handleSiderToggle}
             aria-label={siderTooltip}
-          >
-            <SidebarIcon size={iconSize} strokeWidth={desktopIconStroke} />
-          </button>
+          />
         )}
-        <button
-          type='button'
-          className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}
+        <Button
+          type='text'
+          size='mini'
+          className={titlebarButtonClass}
+          icon={
+            <Search
+              theme='outline'
+              size={iconSize}
+              fill='currentColor'
+              strokeWidth={desktopIconStroke}
+              className='block leading-none'
+              style={{ lineHeight: 0 }}
+            />
+          }
           onClick={() => setHistoryOpen(true)}
           aria-label={searchTooltip}
           title={searchTooltip}
-        >
-          <Search
-            theme='outline'
-            size={iconSize}
-            fill='currentColor'
-            strokeWidth={desktopIconStroke}
-            className='block leading-none'
-            style={{ lineHeight: 0 }}
-          />
-        </button>
+        />
         {showHistoryNav && (
           <>
-            <button
-              type='button'
-              className='app-titlebar__button app-titlebar__button--nav'
+            <Button
+              type='text'
+              size='mini'
+              className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
+              icon={<ArrowLeft theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
               onClick={() => chatNav.back()}
               disabled={!chatNav.canBack}
               aria-label={historyBackTooltip}
               title={historyBackTooltip}
-            >
-              <ArrowLeft theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />
-            </button>
-            <button
-              type='button'
-              className='app-titlebar__button app-titlebar__button--nav'
+            />
+            <Button
+              type='text'
+              size='mini'
+              className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
+              icon={<ArrowRight theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
               onClick={() => chatNav.forward()}
               disabled={!chatNav.canForward}
               aria-label={historyForwardTooltip}
               title={historyForwardTooltip}
-            >
-              <ArrowRight theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />
-            </button>
+            />
           </>
         )}
       </div>
@@ -426,7 +438,19 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         )}
         {showWindowControls && <WindowControls />}
       </div>
-      <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <HistoryPanel
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onSearchMessages={layout?.isMobile ? undefined : handleSearchMessages}
+      />
+      {/* Always mounted on desktop (outside the drawer) so Cmd/Ctrl+Shift+F opens message search anywhere. */}
+      {!layout?.isMobile && (
+        <ConversationSearchPopover
+          open={messageSearchOpen}
+          onOpenChange={setMessageSearchOpen}
+          renderTrigger={() => null}
+        />
+      )}
     </div>
   );
 };

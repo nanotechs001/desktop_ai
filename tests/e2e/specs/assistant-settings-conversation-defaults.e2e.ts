@@ -489,6 +489,7 @@ async function reopenConversationFromHistory(page: Page, conversationId: string)
   if (await historyRow.isVisible().catch(() => false)) {
     await historyRow.click();
   } else {
+    await page.keyboard.press('Escape');
     await page.evaluate((id) => {
       window.location.assign(`#/conversation/${id}`);
     }, conversationId);

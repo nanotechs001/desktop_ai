@@ -9,10 +9,13 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { useConversationListSync } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import type { GroupedHistoryResult } from '@/renderer/pages/conversation/GroupedHistory/types';
+import { useCronJobsMap } from '@/renderer/pages/cron';
 import { buildGroupedHistory } from '@/renderer/pages/conversation/GroupedHistory/utils/groupingHelpers';
 
 export type ConversationHistoryContextValue = ReturnType<typeof useConversationListSync> & {
   groupedHistory: GroupedHistoryResult;
+  getJobStatus: ReturnType<typeof useCronJobsMap>['getJobStatus'];
+  markAsRead: ReturnType<typeof useCronJobsMap>['markAsRead'];
 };
 
 const ConversationHistoryContext = createContext<ConversationHistoryContextValue | null>(null);
@@ -21,6 +24,7 @@ export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({
   const { t } = useTranslation();
   const conversationListSync = useConversationListSync();
 
+  const { getJobStatus, markAsRead, setActiveConversation: setCronActiveConversation } = useCronJobsMap();
   const { pathname } = useLocation();
   const { setActiveConversation, clearCompletionUnread, clearManualUnread } = conversationListSync;
 
@@ -30,10 +34,11 @@ export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({
     const activeId = pathname.match(/^\/conversation\/([^/]+)/)?.[1] ?? null;
     setActiveConversation(activeId);
     if (activeId) {
+      setCronActiveConversation(activeId);
       clearCompletionUnread(activeId);
       clearManualUnread(activeId);
     }
-  }, [pathname, setActiveConversation, clearCompletionUnread, clearManualUnread]);
+  }, [pathname, setActiveConversation, setCronActiveConversation, clearCompletionUnread, clearManualUnread]);
 
   const groupedHistory = useMemo(() => {
     return buildGroupedHistory(conversationListSync.conversations, t);
@@ -43,8 +48,10 @@ export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({
     return {
       ...conversationListSync,
       groupedHistory,
+      getJobStatus,
+      markAsRead,
     };
-  }, [conversationListSync, groupedHistory]);
+  }, [conversationListSync, groupedHistory, getJobStatus, markAsRead]);
 
   return <ConversationHistoryContext.Provider value={value}>{children}</ConversationHistoryContext.Provider>;
 };

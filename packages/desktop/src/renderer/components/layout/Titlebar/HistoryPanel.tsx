@@ -1,18 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Drawer, Empty, Input, Modal } from '@arco-design/web-react';
+import { Button, Drawer, Empty, Input, Modal } from '@arco-design/web-react';
 import { Search } from '@icon-park/react';
+import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 import type { TChatConversation } from '@/common/config/storage';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
 import ConversationRow from '@/renderer/pages/conversation/GroupedHistory/ConversationRow';
-import { useBatchSelection } from '@/renderer/pages/conversation/GroupedHistory/hooks/useBatchSelection';
 import { useConversationActions } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationActions';
 import type { GroupedHistoryResult } from '@/renderer/pages/conversation/GroupedHistory/types';
-import { useCronJobsMap } from '@/renderer/pages/cron';
 import { getActivityTime, getTimelineLabel } from '@/renderer/utils/chat/timeline';
 
 const PANEL_WIDTH = 360;
+
+// Rows only toggle a checkbox in batch mode, which this panel does not have.
+const ignoreChecked = () => {};
 
 type HistorySection = { key: string; label: string; conversations: TChatConversation[] };
 
@@ -53,30 +56,29 @@ export const buildHistorySections = (
 type HistoryPanelProps = {
   open: boolean;
   onClose: () => void;
+  /** Shows a "Search messages" entry in the header; omitted where message search lives elsewhere. */
+  onSearchMessages?: () => void;
 };
 
 /** Search field and chat list. Mounted only while the drawer is open, so its data hooks cost nothing when closed. */
-const HistoryPanelBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open'>> = ({ onClose, onSearchMessages }) => {
   const { t } = useTranslation();
   const [keyword, setKeyword] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const history = useConversationHistoryContext();
-  const { getJobStatus, markAsRead } = useCronJobsMap();
-  const { selectedConversationIds, setSelectedConversationIds, toggleSelectedConversation } = useBatchSelection(
-    false,
-    history.conversations
-  );
+  const openConversationId = useLocation().pathname.match(/^\/conversation\/([^/]+)/)?.[1];
   const actions = useConversationActions({
-    batchMode: false,
     onSessionClick: onClose,
-    selectedConversationIds,
-    setSelectedConversationIds,
-    toggleSelectedConversation,
-    markAsRead,
+    markAsRead: history.markAsRead,
     markManualUnread: history.markManualUnread,
     clearManualUnread: history.clearManualUnread,
     isManualUnread: history.isManualUnread,
   });
+  const conversationNameById = useMemo(
+    () => new Map(history.conversations.map((conversation) => [conversation.id, conversation.name])),
+    [history.conversations]
+  );
+  const resolveConversationName = useCallback((id: string) => conversationNameById.get(id), [conversationNameById]);
 
   const sections = useMemo(
     () => buildHistorySections(history.groupedHistory, keyword, Date.now(), t),
@@ -122,6 +124,18 @@ const HistoryPanelBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             prefix={<Search theme='outline' size='14' fill='currentColor' />}
             placeholder={t('conversation.history.searchChats')}
           />
+          {onSearchMessages && (
+            <Button
+              long
+              type='text'
+              size='small'
+              className='mt-4px !justify-start'
+              icon={<Search theme='outline' size='14' fill='currentColor' />}
+              onClick={onSearchMessages}
+            >
+              {t('conversation.historySearch.tooltip')}
+            </Button>
+          )}
         </div>
         <div className='flex-1 min-h-0 overflow-y-auto px-8px pb-12px'>
           {sections.length === 0 ? (
@@ -137,30 +151,38 @@ const HistoryPanelBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   {section.label}
                 </div>
                 {section.conversations.map((conversation) => (
-                  <ConversationRow
+                  <div
                     key={conversation.id}
-                    conversation={conversation}
-                    isGenerating={history.isConversationGenerating(conversation.id)}
-                    isWaitingConfirmation={history.isConversationWaitingConfirmation(conversation.id)}
-                    hasUnread={history.hasCompletionUnread(conversation.id) || history.isManualUnread(conversation.id)}
-                    isManualUnread={history.isManualUnread(conversation.id)}
-                    collapsed={false}
-                    tooltipEnabled={false}
-                    batchMode={false}
-                    checked={false}
-                    selected={activeConversation?.id === conversation.id}
-                    menuVisible={actions.dropdownVisibleId === conversation.id}
-                    onToggleChecked={toggleSelectedConversation}
-                    onConversationClick={actions.handleConversationClick}
-                    onOpenMenu={actions.handleOpenMenu}
-                    onMenuVisibleChange={actions.handleMenuVisibleChange}
-                    onEditStart={actions.handleEditStart}
-                    onCreateCronTask={actions.handleCreateCronTask}
-                    onArchive={actions.handleArchive}
-                    onTogglePin={actions.handleTogglePin}
-                    onToggleManualUnread={actions.handleToggleManualUnread}
-                    getJobStatus={getJobStatus}
-                  />
+                    data-active={activeConversation?.id === conversation.id}
+                    className={classNames({ 'rd-8px bg-fill-2': activeConversation?.id === conversation.id })}
+                  >
+                    <ConversationRow
+                      conversation={conversation}
+                      isGenerating={history.isConversationGenerating(conversation.id)}
+                      isWaitingConfirmation={history.isConversationWaitingConfirmation(conversation.id)}
+                      hasUnread={
+                        history.hasCompletionUnread(conversation.id) || history.isManualUnread(conversation.id)
+                      }
+                      isManualUnread={history.isManualUnread(conversation.id)}
+                      collapsed={false}
+                      tooltipEnabled={false}
+                      batchMode={false}
+                      checked={false}
+                      selected={openConversationId === conversation.id}
+                      menuVisible={actions.dropdownVisibleId === conversation.id}
+                      onToggleChecked={ignoreChecked}
+                      onConversationClick={actions.handleConversationClick}
+                      onOpenMenu={actions.handleOpenMenu}
+                      onMenuVisibleChange={actions.handleMenuVisibleChange}
+                      onEditStart={actions.handleEditStart}
+                      onCreateCronTask={actions.handleCreateCronTask}
+                      onArchive={actions.handleArchive}
+                      onTogglePin={actions.handleTogglePin}
+                      onToggleManualUnread={actions.handleToggleManualUnread}
+                      getJobStatus={history.getJobStatus}
+                      resolveConversationName={resolveConversationName}
+                    />
+                  </div>
                 ))}
               </section>
             ))
@@ -193,7 +215,7 @@ const HistoryPanelBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 /** Left drawer listing every chat by date with title search; clicking a chat opens it and closes the panel. */
-const HistoryPanel: React.FC<HistoryPanelProps> = ({ open, onClose }) => (
+const HistoryPanel: React.FC<HistoryPanelProps> = ({ open, onClose, onSearchMessages }) => (
   <Drawer
     visible={open}
     placement='left'
@@ -205,7 +227,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ open, onClose }) => (
     onCancel={onClose}
     bodyStyle={{ padding: 0 }}
   >
-    <HistoryPanelBody onClose={onClose} />
+    <HistoryPanelBody onClose={onClose} onSearchMessages={onSearchMessages} />
   </Drawer>
 );
 

@@ -99,6 +99,9 @@ interface ConversationSearchPopoverProps {
   label?: string;
   fullWidth?: boolean;
   renderTrigger?: (props: { onClick: () => void; isActive: boolean }) => React.ReactNode;
+  /** Controlled visibility; omit to let the popover manage itself. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const ConversationAgentMark: React.FC<{ conversation: IMessageSearchItem['conversation'] }> = ({ conversation }) => {
@@ -137,10 +140,20 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   label,
   fullWidth = false,
   renderTrigger,
+  open,
+  onOpenChange,
 }) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [visible, setVisible] = useState(false);
+  const [ownVisible, setOwnVisible] = useState(false);
+  const visible = open ?? ownVisible;
+  const setVisible = useCallback(
+    (next: boolean) => {
+      setOwnVisible(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange]
+  );
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [items, setItems] = useState<IMessageSearchItem[]>([]);
@@ -248,7 +261,7 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
     setHasMore(false);
     setLoading(false);
     setLoadingMore(false);
-  }, []);
+  }, [setVisible]);
 
   const handleLoadMore = useCallback(() => {
     if (!visible || !debouncedKeyword || loading || loadingMore || !hasMore) {
@@ -300,7 +313,7 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
     if (!disabled) {
       setVisible(true);
     }
-  }, [disabled]);
+  }, [disabled, setVisible]);
 
   useEffect(() => {
     const handleGlobalSearchShortcut = (event: KeyboardEvent) => {

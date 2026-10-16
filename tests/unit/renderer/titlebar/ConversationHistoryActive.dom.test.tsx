@@ -10,6 +10,13 @@ const sync = vi.hoisted(() => ({
   clearManualUnread: vi.fn(),
 }));
 
+const cron = vi.hoisted(() => ({
+  setActiveConversation: vi.fn(),
+  getJobStatus: vi.fn(() => 'none'),
+  markAsRead: vi.fn(),
+}));
+
+vi.mock('@/renderer/pages/cron', () => ({ useCronJobsMap: () => cron }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync', () => ({
   useConversationListSync: () => sync,
@@ -33,6 +40,12 @@ describe('ConversationHistoryProvider active conversation', () => {
     expect(sync.setActiveConversation).toHaveBeenLastCalledWith('abc');
     expect(sync.clearCompletionUnread).toHaveBeenCalledWith('abc');
     expect(sync.clearManualUnread).toHaveBeenCalledWith('abc');
+  });
+
+  it('keeps cron unread tracking pointed at the open chat without any panel mounted', () => {
+    renderAt('/conversation/abc');
+
+    expect(cron.setActiveConversation).toHaveBeenLastCalledWith('abc');
   });
 
   it('clears the active chat on other routes', () => {

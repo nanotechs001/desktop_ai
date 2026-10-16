@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { addEventListener } from '@/renderer/utils/emitter';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { isPrimaryApplicationShortcut } from '@/renderer/utils/ui/keyboardShortcuts';
 
 /** Most chats remembered for Back/Forward in one window. */
 export const CHAT_NAV_MAX_ENTRIES = 50;
 
-const CHAT_ROUTE = /^\/conversation\/[^/]+/;
+// The chat part of a route; query strings and deeper segments do not make a new entry.
+const CHAT_ROUTE = /^\/conversation\/([^/]+)/;
 
 type ChatNavState = { stack: readonly string[]; cursor: number };
 
@@ -18,6 +20,18 @@ export const recordChatVisit = (state: ChatNavState, path: string): ChatNavState
   if (state.stack[state.cursor] === path) return state;
   const stack = [...state.stack.slice(0, state.cursor + 1), path].slice(-CHAT_NAV_MAX_ENTRIES);
   return { stack, cursor: stack.length - 1 };
+};
+
+/** Forget every visit to the chat `id`: later entries shift down and the cursor stays on the nearest earlier entry. */
+export const forgetChat = (state: ChatNavState, id: string): ChatNavState => {
+  const target = `/conversation/${id}`;
+  const stack: string[] = [];
+  let cursor = -1;
+  state.stack.forEach((path, index) => {
+    if (path !== target && stack.at(-1) !== path) stack.push(path);
+    if (index <= state.cursor) cursor = stack.length - 1;
+  });
+  return stack.length === state.stack.length ? state : { stack, cursor };
 };
 
 export type ChatNavHistory = {
@@ -35,11 +49,13 @@ export const useChatNavHistory = (): ChatNavHistory => {
   const location = useLocation();
   const navigate = useNavigate();
   const [state, setState] = useState<ChatNavState>(EMPTY_STATE);
-  const currentChatPath = CHAT_ROUTE.test(location.pathname) ? `${location.pathname}${location.search}` : null;
+  const currentChatPath = CHAT_ROUTE.exec(location.pathname)?.[0] ?? null;
 
   useEffect(() => {
     if (currentChatPath) setState((prev) => recordChatVisit(prev, currentChatPath));
   }, [currentChatPath]);
+
+  useEffect(() => addEventListener('conversation.deleted', (id) => setState((prev) => forgetChat(prev, id))), []);
 
   const { stack, cursor } = state;
   const onCursorChat = currentChatPath !== null && stack[cursor] === currentChatPath;

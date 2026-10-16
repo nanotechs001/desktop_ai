@@ -136,16 +136,16 @@ test.describe('Feature Name', () => {
 
 ### Key Helpers
 
-| Helper                           | Purpose                                            | Import from  |
-| -------------------------------- | -------------------------------------------------- | ------------ |
-| `invokeBridge(page, key, data)`  | Call main process IPC                              | `../helpers` |
-| `navigateTo(page, hash)`         | Navigate via sidebar UI                            | `../helpers` |
-| `waitForAiReply(page)`           | Wait for AI response (handles Shadow DOM)          | `../helpers` |
-| `selectAgent(page, backend)`     | Select an available assistant for a backend        | `../helpers` |
-| `sendMessageFromGuid(page, msg)` | Send message and get conversation ID               | `../helpers` |
-| `deleteConversation(page, id)`   | Delete conversation by ID (cleanup)                | `../helpers` |
-| `MODE_SELECTOR`                  | Mode selector pill `[data-testid="mode-selector"]` | `../helpers` |
-| `modeMenuItemByValue(value)`     | Mode dropdown item `[data-mode-value="..."]`       | `../helpers` |
+| Helper                           | Purpose                                                | Import from  |
+| -------------------------------- | ------------------------------------------------------ | ------------ |
+| `invokeBridge(page, key, data)`  | Call main process IPC                                  | `../helpers` |
+| `navigateTo(page, hash)`         | Navigate via sidebar UI                                | `../helpers` |
+| `waitForAiReply(page)`           | Wait for AI response (handles Shadow DOM)              | `../helpers` |
+| `selectAgent(page, backend)`     | Select an available assistant for a backend            | `../helpers` |
+| `sendMessageFromGuid(page, msg)` | Send message and get conversation ID                   | `../helpers` |
+| `deleteConversation(page, id)`   | Archive conversation by ID via history panel (cleanup) | `../helpers` |
+| `MODE_SELECTOR`                  | Mode selector pill `[data-testid="mode-selector"]`     | `../helpers` |
+| `modeMenuItemByValue(value)`     | Mode dropdown item `[data-mode-value="..."]`           | `../helpers` |
 
 ### invokeBridge Rules
 
