@@ -13,7 +13,7 @@ import {
   createPipeTransport,
   type CdpEventMessage,
   type CdpTransport,
-} from '@process/services/chromeHost/launch/cdpConnection';
+} from '@process/services/agentBrowser/cdpConnection';
 
 function createFakeTransport() {
   const sent: string[] = [];
