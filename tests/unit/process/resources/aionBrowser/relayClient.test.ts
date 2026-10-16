@@ -81,8 +81,16 @@ describe('RelayClient', () => {
     expect(await client.listTabs()).toHaveLength(1);
     expect(relay.labels).toHaveLength(2);
     expect(client.currentTab).toBeNull();
+    expect(client.takeReconnected()).toBe(true);
+    expect(client.takeReconnected()).toBe(false);
     await client.session('wc-7');
     expect(relay.callsTo('Target.attachToTarget')).toHaveLength(2);
+  });
+
+  it('does not report the first connection as a reconnect', async () => {
+    const client = newClient();
+    await client.listTabs();
+    expect(client.takeReconnected()).toBe(false);
   });
 
   it('forgets a tab the user closed: its session and the current tab', async () => {

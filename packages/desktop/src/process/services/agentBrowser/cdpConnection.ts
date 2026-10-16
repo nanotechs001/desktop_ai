@@ -88,8 +88,10 @@ export function createPipeTransport(toChrome: NodeJS.WritableStream, fromChrome:
  * this module stays free of runtime dependencies. Closing the transport closes the socket.
  */
 export function createWebSocketTransport(ws: WebSocket): CdpTransport {
+  ws.on('error', () => {}); // a socket error is followed by 'close'; unhandled it would crash the process
   return {
     send(message) {
+      // Sending on a socket that is not OPEN throws; a closed socket is reported through onClose instead.
       if (ws.readyState === ws.OPEN) ws.send(message);
     },
     onMessage(cb) {
@@ -99,7 +101,6 @@ export function createWebSocketTransport(ws: WebSocket): CdpTransport {
       // A socket that is already closed will not emit 'close' again.
       if (ws.readyState === ws.CLOSED) queueMicrotask(cb);
       else ws.on('close', () => cb());
-      ws.on('error', () => {}); // a socket error is followed by 'close'; unhandled it would crash the process
     },
     close() {
       ws.close();

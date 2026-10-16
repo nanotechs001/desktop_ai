@@ -66,7 +66,9 @@ const openSocket = (url: URL, token: string): Promise<WebSocket> =>
     ws.once('error', reject);
   });
 
-const isTabSummary = (value: unknown): value is { targetId: string; title: string; url: string; owner: string } => {
+type RelayTab = { targetId: string; title: string; url: string; owner: TabSummary['owner'] };
+
+const isRelayTab = (value: unknown): value is RelayTab => {
   const tab = value as Record<string, unknown> | null;
   return (
     typeof tab === 'object' &&
@@ -90,6 +92,8 @@ export class RelayClient {
 
   private conn: CdpConnection | null = null;
   private connecting: Promise<CdpConnection> | null = null;
+  private hadConnection = false;
+  private reconnected = false;
   private failures = 0;
   private retryAt = 0;
   private sessions = new Map<string, Promise<string>>();
@@ -127,7 +131,7 @@ export class RelayClient {
   async listTabs(): Promise<TabSummary[]> {
     const conn = await this.ensureConnected();
     const { tabs } = await conn.send<{ tabs?: unknown }>('AionRelay.listTabs');
-    const list = Array.isArray(tabs) ? tabs.filter(isTabSummary) : [];
+    const list = Array.isArray(tabs) ? tabs.filter(isRelayTab) : [];
     return list.map(({ targetId, title, url, owner }) => ({
       tab: targetId,
       title,
@@ -159,6 +163,13 @@ export class RelayClient {
       if (this.sessions.get(targetId) === attach) this.sessions.delete(targetId);
     });
     return attach;
+  }
+
+  /** True once after the connection was re-established, so callers can tell the agent its old tabs are gone. */
+  takeReconnected(): boolean {
+    const reconnected = this.reconnected;
+    this.reconnected = false;
+    return reconnected;
   }
 
   /** Drops the connection; a later call reconnects. */
@@ -195,6 +206,8 @@ export class RelayClient {
       throw new RelayConnectError(error instanceof Error ? error.message : String(error));
     }
     this.failures = 0;
+    this.reconnected = this.hadConnection;
+    this.hadConnection = true;
     const conn = new CdpConnection(createWebSocketTransport(ws));
     conn.on('Target.targetDestroyed', ({ targetId }) => {
       if (typeof targetId === 'string') this.forgetTab(targetId);
