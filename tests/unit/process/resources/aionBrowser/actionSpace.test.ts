@@ -21,6 +21,8 @@ const top: FrameHandle = {
   contextId: 1,
   offset: { x: 0, y: 0 },
   clip: { x: 0, y: 0, w: 1200, h: 900 },
+  frameId: 'F1',
+  owners: [],
 };
 const builder: FrameHandle = {
   frameKey: 'f1',
@@ -29,6 +31,8 @@ const builder: FrameHandle = {
   contextId: 2,
   offset: { x: 30, y: 100 },
   clip: { x: 30, y: 100, w: 400, h: 200 },
+  frameId: 'F2',
+  owners: [{ sessionId: 's1', frameId: 'F2', rootFrameId: 'F1' }],
 };
 
 const action = (node: number, label: string, extra: Record<string, unknown> = {}) => ({

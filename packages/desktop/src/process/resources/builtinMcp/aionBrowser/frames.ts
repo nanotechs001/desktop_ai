@@ -20,7 +20,16 @@ export type FrameHandle = {
   offset: { x: number; y: number };
   /** The part of the frame the top viewport shows (clipped by every iframe around it), in top-viewport CSS px. */
   clip: { x: number; y: number; w: number; h: number };
+  frameId: string;
+  /**
+   * From this frame up to the top: each iframe element that shows it or a frame around it, as the session holding the
+   * element, the frame it shows, and that session's root frame (the document act hit-tests in). Empty for the top.
+   */
+  owners: FrameOwner[];
 };
+
+/** An iframe element on the way from a frame to the top; see {@link FrameHandle.owners}. */
+export type FrameOwner = { sessionId: string; frameId: string; rootFrameId: string };
 
 /** A frame that did not answer in time or failed: by key once it has one, else by its (unsanitized) origin. */
 export type FrameFailure = { frameKey?: string; label: string };
@@ -168,7 +177,7 @@ const ownerBox = async (conn: CdpConnection, frameId: string, sessionId: string)
 };
 
 /** The overlap of two boxes, or null when they do not overlap. */
-const intersect = (a: Box, b: Box): Box | null => {
+export const intersect = (a: Box, b: Box): Box | null => {
   const x = Math.max(a.x, b.x);
   const y = Math.max(a.y, b.y);
   const w = Math.min(a.x + a.w, b.x + b.w) - x;
@@ -259,6 +268,15 @@ export async function collectFramesReport(
     return result;
   };
 
+  /** The owner chain of `f` (see FrameHandle.owners), one entry per session boundary or same-session iframe. */
+  const ownersOf = (f: FoundFrame): FrameOwner[] => {
+    if (!f.ownerSession) return [];
+    const rootFrameId = sessionRoot.get(f.ownerSession) ?? '';
+    const root = byId.get(rootFrameId);
+    const above = root ? ownersOf(root) : [];
+    return [{ sessionId: f.ownerSession, frameId: f.frame.id, rootFrameId }, ...above];
+  };
+
   const tab: TabFrames = { worlds: new Map(), handles: new Map() };
   const settle = async (f: FoundFrame): Promise<FrameHandle | null> => {
     const doc = `${f.sessionId}|${f.frame.id}|${f.frame.loaderId}`;
@@ -287,6 +305,8 @@ export async function collectFramesReport(
         contextId,
         offset: where.offset,
         clip: where.clip,
+        frameId: f.frame.id,
+        owners: ownersOf(f),
       };
     } catch (error) {
       tab.worlds.delete(doc); // the frame went away mid-call; a later collect starts over with a new key

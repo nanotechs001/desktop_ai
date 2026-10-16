@@ -13,9 +13,9 @@ import {
   rememberBaselines,
   snapshotFrame,
 } from './actionSpace';
-import { collectFramesReport, withTimeout, type FrameHandle } from './frames';
+import { collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
 import { sanitizePageText } from './pageText';
-import { DEVICE_PIXEL_RATIO, RESOLVE_TARGET, SELECT_OPTION, SETTLE } from './inPage';
+import { DEVICE_PIXEL_RATIO, OWNER_HIT, RESOLVE_TARGET, SELECT_OPTION, SETTLE } from './inPage';
 
 /** An executed action as the pane shows it (AgentActionEvent): code-owned op, a bounded label, top-viewport rect. */
 export type ReportedAction = {
@@ -65,6 +65,11 @@ export type StepResult = { op: ActOp; target?: string } & Outcome;
 const SETTLE_MS = 50;
 /** Upper bound for the in-page settle (comboboxes wait up to 200 ms for their options). */
 const SETTLE_TIMEOUT_MS = 500;
+/** Longest wait for one input, screenshot or report command; a page stuck in a dialog never answers. */
+const COMMAND_TIMEOUT_MS = 5000;
+const NO_RESPONSE = 'the page did not respond (a dialog may be open)';
+/** Largest screenshot side, CSS px. */
+const MAX_SCREENSHOT_SIDE = 4096;
 const DRAG_STEPS = 5;
 /** How long a started HTML5 drag takes to show up as Input.dragIntercepted (spike: within 200 ms). */
 const DRAG_INTERCEPT_MS = 200;
@@ -111,14 +116,30 @@ const inside = (p: Point, box: Box): boolean =>
   p.x >= box.x && p.y >= box.y && p.x < box.x + box.w && p.y < box.y + box.h;
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
+/**
+ * Sends a page-session command that may hang while the page is blocked (Input.*, captureScreenshot): after
+ * {@link COMMAND_TIMEOUT_MS} it fails the step with {@link NO_RESPONSE}. The command is never retried.
+ */
+const sendBounded = <T>(ctx: ActionContext, method: string, params: Record<string, unknown>): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new StepError('error', NO_RESPONSE)), COMMAND_TIMEOUT_MS);
+  });
+  return Promise.race([ctx.conn.send<T>(method, params, ctx.sessionId), timeout]).finally(() => clearTimeout(timer));
+};
+
+/** A Runtime.callFunctionOn argument: a value, or a remote object in the same world. */
+type CallArgument = { value: unknown } | { objectId: string };
+const values = (...args: unknown[]): CallArgument[] => args.map((value) => ({ value }));
+
 type CallReply = { result?: { value?: unknown }; exceptionDetails?: unknown };
 
-/** Calls one of our in-page functions in `frame`'s isolated world; arguments travel as values, never as code. */
+/** Calls one of our in-page functions in `frame`'s isolated world; arguments travel as CDP arguments, never as code. */
 const callIn = async (
   conn: CdpConnection,
   frame: FrameHandle,
   fn: string,
-  args: unknown[],
+  args: CallArgument[],
   awaitPromise = false
 ): Promise<unknown> => {
   const reply = await conn.send<CallReply>(
@@ -126,7 +147,7 @@ const callIn = async (
     {
       functionDeclaration: fn,
       executionContextId: frame.contextId,
-      arguments: args.map((value) => ({ value })),
+      arguments: args,
       returnByValue: true,
       awaitPromise,
     },
@@ -167,22 +188,54 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   const frame = frames.find((f) => f.frameKey === match[1]);
   if (!frame) throw new StepError('stale', 'its frame changed or is off-screen');
   const node = Number(match[2]);
-  const value = await callIn(ctx.conn, frame, RESOLVE_TARGET, [node, baseline.pageKey, guard, hitTest]).catch(
-    (error: unknown) => {
-      if (isPausedRefusal(error)) throw error;
-      return { stale: 'the page changed since observe' }; // e.g. the document went away mid-call
-    }
+  const value = await callIn(ctx.conn, frame, RESOLVE_TARGET, values(node, baseline.pageKey, guard, hitTest)).catch(
+    staleUnlessPaused
   );
   const found = parseResolved(value);
   if (typeof found === 'string') throw new StepError('stale', found);
   const rect = { ...found.rect, x: found.rect.x + frame.offset.x, y: found.rect.y + frame.offset.y };
   const point = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
   if (!inside(point, frame.clip)) throw new StepError('stale', 'the target is off-screen');
+  if (hitTest) await checkOwners(ctx, frames, frame, point);
   return { ...found, id, frame, isTop: frame === frames[0], node, rect, point };
 }
 
+/** A failed freshness call means the document changed (e.g. went away mid-call); the user taking over stays paused. */
+const staleUnlessPaused = (error: unknown): never => {
+  if (isPausedRefusal(error) || error instanceof StepError) throw error;
+  throw new StepError('stale', 'the page changed since observe');
+};
+
+/**
+ * The elementFromPoint check for the frames around the target: in each document up to the top, the topmost element
+ * at the point must be the iframe that shows the target's frame (else a cover in an outer page, e.g. a modal over a
+ * builder iframe, would take the click). Each owner is resolved into our own world of its session's root frame.
+ */
+async function checkOwners(ctx: ActionContext, frames: FrameHandle[], frame: FrameHandle, point: Point): Promise<void> {
+  for (const owner of frame.owners) {
+    const root = frames.find((f) => f.sessionId === owner.sessionId && f.frameId === owner.rootFrameId);
+    if (!root) throw new StepError('stale', 'its frame changed or is off-screen');
+    const shown = await (async () => {
+      const { backendNodeId } = await ctx.conn.send<{ backendNodeId: number }>(
+        'DOM.getFrameOwner',
+        { frameId: owner.frameId },
+        owner.sessionId
+      );
+      const { object } = await ctx.conn.send<{ object: { objectId?: string } }>(
+        'DOM.resolveNode',
+        { backendNodeId, executionContextId: root.contextId },
+        owner.sessionId
+      );
+      if (!object.objectId) return false;
+      const at = { x: point.x - root.offset.x, y: point.y - root.offset.y };
+      return callIn(ctx.conn, root, OWNER_HIT, [{ objectId: object.objectId }, ...values(at.x, at.y)]);
+    })().catch(staleUnlessPaused);
+    if (shown !== true) throw new StepError('stale', 'the target is covered by another element');
+  }
+}
+
 const mouse = (ctx: ActionContext, type: string, at: Point, extra: Record<string, unknown> = {}): Promise<unknown> =>
-  ctx.conn.send('Input.dispatchMouseEvent', { type, x: at.x, y: at.y, ...extra }, ctx.sessionId);
+  sendBounded(ctx, 'Input.dispatchMouseEvent', { type, x: at.x, y: at.y, ...extra });
 
 const click = async (ctx: ActionContext, at: Point): Promise<void> => {
   await mouse(ctx, 'mouseMoved', at);
@@ -197,13 +250,13 @@ const pressKey = async (ctx: ActionContext, spec: KeySpec, extra: Record<string,
     windowsVirtualKeyCode: spec.keyCode,
     ...extra,
   };
-  await ctx.conn.send(
-    'Input.dispatchKeyEvent',
-    { type: spec.text ? 'keyDown' : 'rawKeyDown', ...base, ...(spec.text ? { text: spec.text } : {}) },
-    ctx.sessionId
-  );
+  await sendBounded(ctx, 'Input.dispatchKeyEvent', {
+    type: spec.text ? 'keyDown' : 'rawKeyDown',
+    ...base,
+    ...(spec.text ? { text: spec.text } : {}),
+  });
   const { commands: _commands, ...up } = base;
-  await ctx.conn.send('Input.dispatchKeyEvent', { type: 'keyUp', ...up }, ctx.sessionId);
+  await sendBounded(ctx, 'Input.dispatchKeyEvent', { type: 'keyUp', ...up });
 };
 
 const SELECT_ALL: KeySpec = { key: 'a', code: 'KeyA', keyCode: 65 };
@@ -217,7 +270,7 @@ const rectOf = (t: Target): ReportedAction['rect'] => ({ x: t.rect.x, y: t.rect.
 
 /** Tells the pane; the highlight is cosmetic, so a refused or rate-limited report never fails an action that ran. */
 const reportSafely = (ctx: ActionContext, action: ReportedAction): Promise<void> =>
-  ctx.report(action).catch((): void => undefined);
+  withTimeout(ctx.report(action), COMMAND_TIMEOUT_MS, 'Report').catch((): void => undefined);
 
 /** Two animation frames or 50 ms in the frame acted in (200 ms for a combobox's options); `null` frame: 50 ms. */
 const settle = async (
@@ -227,7 +280,7 @@ const settle = async (
 ): Promise<void> => {
   if (!frame) return sleep(SETTLE_MS);
   // A click that navigates takes the world with it; that page has settled as far as this step is concerned.
-  await withTimeout(callIn(ctx.conn, frame, SETTLE, [comboboxNode], true), SETTLE_TIMEOUT_MS, 'Settle').catch(
+  await withTimeout(callIn(ctx.conn, frame, SETTLE, values(comboboxNode), true), SETTLE_TIMEOUT_MS, 'Settle').catch(
     (): void => undefined
   );
 };
@@ -248,10 +301,13 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle |
     await click(ctx, t.point);
   } else if (op === 'type') {
     const text = need(step.text, 'text', op);
-    if (!TEXT_ROLES.has(t.role) || !t.editable) throw new StepError('error', `${t.id} is not an editable text field.`);
+    // A native select is a combobox too, but typing into it would only jump between options.
+    if (!TEXT_ROLES.has(t.role) || !t.editable || t.options) {
+      throw new StepError('error', `${t.id} is not an editable text field.`);
+    }
     await click(ctx, t.point);
     await pressKey(ctx, SELECT_ALL, { modifiers: SELECT_ALL_MODIFIER, commands: ['selectAll'] });
-    await ctx.conn.send('Input.insertText', { text }, ctx.sessionId);
+    await sendBounded(ctx, 'Input.insertText', { text });
   } else {
     await selectOption(ctx, t, need(step.text, 'the option label as text', op));
   }
@@ -267,7 +323,8 @@ async function selectOption(ctx: ActionContext, t: Target, text: string): Promis
   const wanted = sanitizePageText(text, MAX_OPTION_LENGTH);
   const index = t.options.findIndex((o) => sanitizePageText(o, MAX_OPTION_LENGTH) === wanted);
   if (index < 0) throw new StepError('error', `${t.id} has no enabled option with that label.`);
-  if ((await callIn(ctx.conn, t.frame, SELECT_OPTION, [t.node, index])) !== true) {
+  // The page picks the option by its full label again, so a list that changed since the check is never misread.
+  if ((await callIn(ctx.conn, t.frame, SELECT_OPTION, values(t.node, t.options[index]))) !== true) {
     throw new StepError('stale', 'the dropdown changed since observe');
   }
 }
@@ -281,8 +338,10 @@ async function press(ctx: ActionContext, step: ActStep): Promise<FrameHandle | n
   await pressKey(ctx, spec);
   const label = t ? `${spec.code} on ${targetLabel(t)}` : spec.code;
   await reportSafely(ctx, { op: 'press', label, rect: t ? rectOf(t) : null });
-  await settle(ctx, t?.frame ?? null);
-  return t?.frame ?? null;
+  // Without a target the key went to whatever has focus; the top frame is the one we can re-read for sure.
+  const frame = t?.frame ?? (await collectFramesReport(ctx.conn, ctx.sessionId)).frames[0];
+  await settle(ctx, frame);
+  return frame;
 }
 
 async function scroll(ctx: ActionContext, step: ActStep): Promise<FrameHandle | null> {
@@ -397,28 +456,41 @@ async function dragBetween(ctx: ActionContext, from: Point, to: Point): Promise<
   const off = ctx.conn.on('Input.dragIntercepted', (params, sessionId) => {
     if (sessionId === ctx.sessionId) intercepted(params.data);
   });
-  await ctx.conn.send('Input.setInterceptDrags', { enabled: true }, ctx.sessionId);
+  let pressed = false;
+  let released = false;
+  let last = from;
+  let failure: { error: unknown } | null = null;
+  const keepFirst = (error: unknown): void => {
+    failure ??= { error };
+  };
   try {
+    await sendBounded(ctx, 'Input.setInterceptDrags', { enabled: true });
     await mouse(ctx, 'mouseMoved', from);
+    pressed = true; // before the send: a press that times out may still have landed
     await mouse(ctx, 'mousePressed', from, LEFT);
     for (let step = 1; step <= DRAG_STEPS; step++) {
-      const at = {
+      last = {
         x: from.x + ((to.x - from.x) * step) / DRAG_STEPS,
         y: from.y + ((to.y - from.y) * step) / DRAG_STEPS,
       };
-      await mouse(ctx, 'mouseMoved', at, { button: 'left', buttons: 1 });
+      await mouse(ctx, 'mouseMoved', last, { button: 'left', buttons: 1 });
     }
     const data = await Promise.race([dragData, sleep(DRAG_INTERCEPT_MS).then((): null => null)]);
     if (data && typeof data === 'object') {
       for (const type of ['dragEnter', 'dragOver', 'drop']) {
-        await ctx.conn.send('Input.dispatchDragEvent', { type, x: to.x, y: to.y, data }, ctx.sessionId);
+        await sendBounded(ctx, 'Input.dispatchDragEvent', { type, x: to.x, y: to.y, data });
       }
     }
     await mouse(ctx, 'mouseReleased', to, LEFT);
-  } finally {
-    off();
-    await ctx.conn.send('Input.setInterceptDrags', { enabled: false }, ctx.sessionId);
+    released = true;
+  } catch (error) {
+    keepFirst(error);
   }
+  off();
+  // Best effort, in this order: a button left down or interception left on would break the user's own drags.
+  if (pressed && !released) await mouse(ctx, 'mouseReleased', last, LEFT).catch(keepFirst);
+  await sendBounded(ctx, 'Input.setInterceptDrags', { enabled: false }).catch(keepFirst);
+  if (failure) throw failure.error;
 }
 
 type LayoutMetrics = {
@@ -442,16 +514,22 @@ export async function screenshot(ctx: ActionContext, targetId?: string): Promise
   // The image comes out in device px; scaling by 1/dpr keeps image px equal to the CSS px click_point takes.
   const ratio = await callIn(ctx.conn, frames[0], DEVICE_PIXEL_RATIO, []);
   const dpr = isNumber(ratio) && ratio > 0 ? ratio : 1;
-  const area = t
-    ? { x: t.rect.x, y: t.rect.y, w: t.rect.w, h: t.rect.h }
-    : { x: 0, y: 0, w: css.clientWidth, h: css.clientHeight };
+  const viewport = { x: 0, y: 0, w: css.clientWidth, h: css.clientHeight };
+  // A target shows only where its frame is visible (resolve checked its center, so this is never empty).
+  const area = (t ? intersect(t.rect, t.frame.clip) : viewport) ?? viewport;
   // Clip coordinates are document coordinates.
-  const clip = { x: area.x + css.pageX, y: area.y + css.pageY, width: area.w, height: area.h, scale: 1 / dpr };
-  const { data } = await ctx.conn.send<{ data: string }>(
-    'Page.captureScreenshot',
-    { format: 'jpeg', quality: 70, clip },
-    ctx.sessionId
-  );
+  const clip = {
+    x: area.x + css.pageX,
+    y: area.y + css.pageY,
+    width: Math.min(area.w, MAX_SCREENSHOT_SIDE),
+    height: Math.min(area.h, MAX_SCREENSHOT_SIDE),
+    scale: 1 / dpr,
+  };
+  const { data } = await sendBounded<{ data: string }>(ctx, 'Page.captureScreenshot', {
+    format: 'jpeg',
+    quality: 70,
+    clip,
+  });
   return data;
 }
 

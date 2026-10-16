@@ -33,11 +33,11 @@ describe('targetRegistry', () => {
     registry.track(new FakeContents(2));
     registry.claim(2, agent);
 
-    registry.noteUserInput(1, { kind: 'key' });
+    registry.noteUserInput(1, { kind: 'key', key: 'a', code: 'KeyA' });
     registry.noteUserInput(1, { kind: 'mouse', x: 1, y: 1 });
     expect(registry.ownership(1)?.paused).toBe(false);
 
-    registry.noteUserInput(2, { kind: 'key' });
+    registry.noteUserInput(2, { kind: 'key', key: 'a', code: 'KeyA' });
     expect(registry.ownership(2)?.paused).toBe(true);
 
     registry.share(1, true);
@@ -71,11 +71,31 @@ describe('targetRegistry', () => {
     registry.beginAgentInput(2, { x: 100, y: 50 });
     registry.beginAgentInput(3, { x: 100, y: 50 });
 
-    registry.noteUserInput(2, { kind: 'key' });
+    registry.noteUserInput(2, { kind: 'key', key: 'a', code: 'KeyA' });
     registry.noteUserInput(3, { kind: 'mouse', x: 103, y: 50 });
 
     expect(registry.ownership(2)?.paused).toBe(true);
     expect(registry.ownership(3)?.paused).toBe(true);
+  });
+
+  it('suppresses only the keyDown Electron reports for an in-flight agent key (same key and code), once', () => {
+    const registry = createTargetRegistry();
+    registry.track(new FakeContents(2));
+    registry.track(new FakeContents(3));
+    registry.claim(2, agent);
+    registry.claim(3, agent);
+    const end = registry.beginAgentInput(2, { key: 'Enter', code: 'Enter' });
+    registry.beginAgentInput(3, { key: 'Enter', code: 'Enter' });
+
+    registry.noteUserInput(2, { kind: 'key', key: 'Enter', code: 'Enter' });
+    expect(registry.ownership(2)?.paused).toBe(false);
+    // The same key again is the user: one report per agent key.
+    registry.noteUserInput(2, { kind: 'key', key: 'Enter', code: 'Enter' });
+    expect(registry.ownership(2)?.paused).toBe(true);
+    // A user key that does not match the agent's, while it is in flight, pauses.
+    registry.noteUserInput(3, { kind: 'key', key: 'x', code: 'KeyX' });
+    expect(registry.ownership(3)?.paused).toBe(true);
+    end();
   });
 
   it('forgets an in-flight agent click after 5 s even if its command never settles', () => {
@@ -85,7 +105,11 @@ describe('targetRegistry', () => {
       registry.track(new FakeContents(2));
       registry.claim(2, agent);
       registry.beginAgentInput(2, { x: 10, y: 10 });
+      registry.beginAgentInput(2, { key: 'a', code: 'KeyA' });
       vi.advanceTimersByTime(5000);
+      registry.noteUserInput(2, { kind: 'key', key: 'a', code: 'KeyA' });
+      expect(registry.ownership(2)?.paused).toBe(true);
+      registry.setPaused(2, false);
       registry.noteUserInput(2, { kind: 'mouse', x: 10, y: 10 });
       expect(registry.ownership(2)?.paused).toBe(true);
     } finally {

@@ -131,10 +131,83 @@ describe('act tool', () => {
     expect(relay.callsTo('Page.createIsolatedWorld')).toHaveLength(1);
   });
 
+  it('surfaces "user took over" when the relay refuses the freshness check, with no input', async () => {
+    const id = await openAndObserve();
+    relay.on('Runtime.callFunctionOn', () => {
+      throw new Error(PAUSED);
+    });
+    const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'click', target: id }] }))) as {
+      results: unknown[];
+    };
+    expect(reply.results).toEqual([{ op: 'click', target: id, result: 'paused', reason: PAUSED }]);
+    expect(inputRequests()).toEqual([]);
+  });
+
+  it('a page that never answers input gives "did not respond" and the tab stays usable', async () => {
+    const id = await openAndObserve();
+    relay.on('Input.dispatchMouseEvent', () => new Promise(() => {}));
+    const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'click', target: id }] }))) as {
+      results: unknown[];
+    };
+    expect(reply.results).toEqual([
+      { op: 'click', target: id, result: 'error', reason: 'the page did not respond (a dialog may be open)' },
+    ]);
+    expect(inputRequests()).toHaveLength(1); // never retried
+    expect((await call('observe', {})).isError).toBeFalsy();
+  }, 15_000);
+
+  it('re-reads the top frame after a press without target', async () => {
+    const id = await openAndObserve();
+    relay.on('Input.dispatchKeyEvent', () => ({}));
+    const snapshotsBefore = relay.callsTo('Runtime.evaluate').length;
+    await call('act', {
+      actions: [
+        { op: 'press', key: 'Enter' },
+        { op: 'click', target: id },
+      ],
+    });
+    expect(relay.callsTo('Runtime.evaluate')).toHaveLength(snapshotsBefore + 1);
+  });
+
+  it('caps typed text at 10,000 characters', async () => {
+    const id = await openAndObserve();
+    const reply = await call('act', { actions: [{ op: 'type', target: id, text: 'x'.repeat(10_001) }] });
+    expect(reply.isError).toBe(true);
+    expect(inputRequests()).toEqual([]);
+  });
+
   it('switches focus emulation on once per tab', async () => {
     const id = await openAndObserve();
     await call('act', { actions: [{ op: 'click', target: id }] });
     expect(relay.callsTo('Emulation.setFocusEmulationEnabled')).toEqual([{ enabled: true }]);
+  });
+});
+
+describe('drag tool', () => {
+  it('releases the mouse and switches interception off when a drop fails, and reports the first error', async () => {
+    const id = await openAndObserve();
+    relay.on('Input.setInterceptDrags', () => ({}));
+    relay.on('Input.dispatchMouseEvent', (params, sessionId) => {
+      if (params.buttons === 1)
+        relay.emit('Input.dragIntercepted', { data: { items: [], dragOperationsMask: 1 } }, sessionId);
+      if (params.type === 'mouseReleased') throw new Error('release failed too');
+      return {};
+    });
+    relay.on('Input.dispatchDragEvent', () => {
+      throw new Error('drop failed');
+    });
+
+    const reply = JSON.parse(textOf(await call('drag', { from: id, to: id }))) as Record<string, unknown>;
+
+    expect(reply).toEqual({ result: 'error', reason: 'drop failed' });
+    const cleanup = relay.requests
+      .filter((r) => r.method === 'Input.setInterceptDrags' || r.params.type === 'mouseReleased')
+      .map((r) => `${r.method} ${String(r.params.type ?? r.params.enabled)}`);
+    expect(cleanup).toEqual([
+      'Input.setInterceptDrags true',
+      'Input.dispatchMouseEvent mouseReleased',
+      'Input.setInterceptDrags false',
+    ]);
   });
 });
 

@@ -31,7 +31,9 @@ const INVALID: Reply = { success: false, msg: 'Invalid arguments' };
 /** Pauses agent input on a tab the user types or clicks in (agent-owned or shared tabs only). */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
   contents.on('before-input-event', (_event, input) => {
-    if (input.type === 'keyDown' && !MODIFIER_KEYS.has(input.key)) registry.noteUserInput(contents.id, { kind: 'key' });
+    if (input.type === 'keyDown' && !MODIFIER_KEYS.has(input.key)) {
+      registry.noteUserInput(contents.id, { kind: 'key', key: input.key, code: input.code });
+    }
   });
   contents.on('before-mouse-event', (_event, mouse) => {
     if (mouse.type !== 'mouseDown') return;

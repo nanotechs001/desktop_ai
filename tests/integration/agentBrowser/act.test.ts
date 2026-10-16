@@ -99,6 +99,25 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(reported[0].label).toContain('Publish');
   });
 
+  it('clicks through two levels of frames (an A frame inside a B builder inside A), each owner hit-tested', async () => {
+    const session = await chrome.openPage(`${servers.originA}/builder-crossorigin.html`);
+    const obs = await observeUntil(chrome.conn, session, (o) => rowsIn(o, servers.originA, 'Publish').length > 0);
+    const [nested] = rowsIn(obs, servers.originA, 'Publish');
+    const frame = frameByKey(chrome.conn, session, nested.frameKey);
+    expect(frame?.owners).toHaveLength(2);
+    // Headless Chrome routes input to a just-loaded nested OOPIF only once its parent has embedded it, which is also
+    // when the frame first sees itself on screen.
+    const embedded = `new Promise((resolve) => new IntersectionObserver((entries, observer) => {
+      if (entries[0].isIntersecting) { observer.disconnect(); requestAnimationFrame(() => requestAnimationFrame(resolve)); }
+    }).observe(document.body))`;
+    await chrome.conn.send('Runtime.evaluate', { expression: embedded, awaitPromise: true }, frame?.sessionId);
+
+    const { results } = await act(contextFor(session).ctx, [{ op: 'click', target: nested.id }]);
+
+    expect(results[0].result).toBe('done');
+    expect(await evaluate(frame?.sessionId ?? '', 'window.clicks')).toBe(1);
+  });
+
   it('drags item A below item B in the HTML5 drag list (order verified)', async () => {
     const session = await chrome.openPage(`${servers.originA}/drag.html`);
     const obs = await observePage(chrome.conn, session);
@@ -107,13 +126,53 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     const result = await drag(ctx, row(obs, 'Item 1').id, row(obs, 'Item 2').id, 'after');
 
     expect(result.result).toBe('done');
-    expect(await evaluate(session, `[...document.querySelectorAll('li')].map((li) => li.id)`)).toEqual([
+    expect(await evaluate(session, `[...document.querySelectorAll('#list li')].map((li) => li.id)`)).toEqual([
       'd2',
       'd1',
       'd3',
     ]);
     expect(await evaluate(session, 'window.dropLog')).toEqual(['d1->d2']);
     expect(reported.map((r) => r.op)).toEqual(['drag']);
+  });
+
+  it('drags a pointer-only sortable card (no HTML5 drag) with press, move and release', async () => {
+    const session = await chrome.openPage(`${servers.originA}/drag.html`);
+    const obs = await observePage(chrome.conn, session);
+    const { ctx } = contextFor(session);
+    const send = vi.spyOn(chrome.conn, 'send');
+    try {
+      expect((await drag(ctx, row(obs, 'Card 1').id, row(obs, 'Card 2').id, 'after')).result).toBe('done');
+      expect(send.mock.calls.some(([method]) => method === 'Input.dispatchDragEvent')).toBe(false);
+    } finally {
+      send.mockRestore();
+    }
+    expect(await evaluate(session, `[...document.querySelectorAll('#sortable li')].map((li) => li.id)`)).toEqual([
+      'p2',
+      'p1',
+      'p3',
+    ]);
+    expect(await evaluate(session, 'window.sortLog')).toEqual(['p1->p2']);
+  });
+
+  it('a top-page overlay over a cross-origin iframe makes its controls stale, with no input', async () => {
+    const session = await chrome.openPage(`${servers.originA}/builder-crossorigin.html`);
+    const obs = await observeUntil(chrome.conn, session, (o) => rowsIn(o, servers.originB, 'Publish').length > 0);
+    const [publish] = rowsIn(obs, servers.originB, 'Publish');
+    const child = frameByKey(chrome.conn, session, publish.frameKey)?.sessionId ?? '';
+    await evaluate(
+      session,
+      `document.body.append(Object.assign(document.createElement('div'), { style: 'position:fixed;inset:0;z-index:9' }))`
+    );
+    const { ctx } = contextFor(session);
+
+    let outcome: Awaited<ReturnType<typeof act>> | undefined;
+    const input = await inputSentDuring(async () => {
+      outcome = await act(ctx, [{ op: 'click', target: publish.id }]);
+    });
+
+    expect(input).toEqual([]);
+    expect(outcome?.results[0]).toMatchObject({ result: 'stale', reason: expect.stringMatching(/covered/) });
+    expect(await evaluate(child, 'window.clicks')).toBe(0);
   });
 
   it('a stale page (DOM replaced between observe and act) returns stale and performs no input', async () => {
@@ -178,6 +237,8 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     const obs = await observePage(chrome.conn, session);
     const select = row(obs, 'Big list');
     const { ctx } = contextFor(session);
+    const refused = await act(ctx, [{ op: 'type', target: select.id, text: 'x' }]);
+    expect(refused.results[0]).toMatchObject({ result: 'error', reason: expect.stringMatching(/not an editable/) });
 
     const { results } = await act(ctx, [
       { op: 'select', target: select.id, text: select.options?.[1] },
@@ -222,6 +283,22 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
       expect(clipped.length).toBeLessThan(full.length);
       const clips = send.mock.calls.filter(([method]) => method === 'Page.captureScreenshot').map(([, p]) => p);
       expect(clips[1]).toMatchObject({ format: 'jpeg', clip: { x: 10, y: 20, width: 80, height: 30 } });
+    } finally {
+      send.mockRestore();
+    }
+  });
+
+  it('clips a target screenshot to the part the viewport shows', async () => {
+    const session = await chrome.openPage(`${servers.originA}/builder-sameorigin.html`);
+    const obs = await observeUntil(chrome.conn, session, (o) => rowsIn(o, 'GHL builder', 'Publish').length > 0);
+    // Publish spans y 120-150 on the page; 130 px down it shows only its lower 20 px (its center still on screen).
+    await evaluate(session, 'scrollTo(0, 130)');
+    const { ctx } = contextFor(session);
+    const send = vi.spyOn(chrome.conn, 'send');
+    try {
+      await screenshot(ctx, rowsIn(obs, 'GHL builder', 'Publish')[0].id);
+      const [, params] = send.mock.calls.find(([method]) => method === 'Page.captureScreenshot') ?? [];
+      expect(params).toMatchObject({ clip: { x: 40, y: 130, width: 80, height: 20 } });
     } finally {
       send.mockRestore();
     }

@@ -446,6 +446,29 @@ describe('relay server: sessions', () => {
     expect(registry.ownership(13)?.paused).toBe(true);
   });
 
+  it('marks an agent keyDown and rawKeyDown in flight so their own keyDown does not pause the tab, but a user key does', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    const tab = ownedTab(14, 'claude');
+    const session = await attach(client, 14);
+    // Electron reports both CDP keyDown and rawKeyDown as a keyDown in before-input-event.
+    tab.debugger.handler = () => {
+      registry.noteUserInput(14, { kind: 'key', key: 'a', code: 'KeyA' });
+      return {};
+    };
+    for (const type of ['keyDown', 'rawKeyDown']) {
+      await client.send('Input.dispatchKeyEvent', { type, key: 'a', code: 'KeyA', commands: ['selectAll'] }, session);
+    }
+    expect(registry.ownership(14)?.paused).toBe(false);
+
+    tab.debugger.handler = () => {
+      registry.noteUserInput(14, { kind: 'key', key: 'q', code: 'KeyQ' });
+      return {};
+    };
+    await client.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter' }, session);
+    expect(registry.ownership(14)?.paused).toBe(true);
+  });
+
   it('unsharing a user tab detaches agent sessions on it', async () => {
     const handle = await start();
     const client = await connect(handle);

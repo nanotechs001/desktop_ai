@@ -61,6 +61,14 @@ describe('decideRelayCommand: methods', () => {
     expect(decide(method, params)).toEqual({ allow: true });
   });
 
+  it('resolves a node only into an isolated world this client created', () => {
+    // ownContexts is {3}: the page's main world (or another client's world) never gets a handle.
+    expect(decide('DOM.resolveNode', { backendNodeId: 4, executionContextId: 3 })).toEqual({ allow: true });
+    expect(decide('DOM.resolveNode', { backendNodeId: 4, executionContextId: 9 }).allow).toBe(false);
+    expect(decide('DOM.resolveNode', { backendNodeId: 4 }).allow).toBe(false);
+    expect(decide('DOM.resolveNode', { backendNodeId: 4, executionContextId: 3, objectGroup: 'x' }).allow).toBe(false);
+  });
+
   it('denies a dragged file', () => {
     const data = { items: [], files: ['/etc/passwd'], dragOperationsMask: 1 };
     expect(decide('Input.dispatchDragEvent', { type: 'drop', x: 1, y: 1, data }).allow).toBe(false);

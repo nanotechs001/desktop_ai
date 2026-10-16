@@ -133,7 +133,10 @@ export function parseSnapshot(value: unknown): FrameSnapshot | null {
 /** Per connection, per page session, per frame key: the baseline act checks before input. */
 const baselines = new WeakMap<CdpConnection, Map<string, Map<string, FrameBaseline>>>();
 
-/** The baseline of a snapshot; `controls` changes when controls appear, go or are renamed, not when values do. */
+/**
+ * The baseline of a snapshot; `controls` changes when controls appear, go or are renamed, not when values do.
+ * jev's marker is not checked: the page key and guards before input, plus this controls comparison after it, replace it.
+ */
 export const baselineOf = (snapshot: FrameSnapshot): FrameBaseline => ({
   pageKey: snapshot.pageKey,
   guards: snapshot.guards,

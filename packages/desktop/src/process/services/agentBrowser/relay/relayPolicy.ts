@@ -100,6 +100,8 @@ const ALLOWED_PARAMS: Readonly<Record<string, ReadonlySet<string>>> = {
   'DOM.getFrameOwner': keys('frameId'),
   'DOM.getBoxModel': keys('nodeId', 'backendNodeId', 'objectId'),
   'DOM.describeNode': keys('nodeId', 'backendNodeId', 'objectId', 'depth', 'pierce'),
+  // Only into the client's own isolated world (decideValues): act compares a frame's owner iframe with a hit test.
+  'DOM.resolveNode': keys('backendNodeId', 'executionContextId'),
   'Emulation.setFocusEmulationEnabled': keys('enabled'),
   'Input.dispatchMouseEvent': keys(
     ...MOUSE_KEYS,
@@ -175,6 +177,9 @@ const decideValues = (ctx: PolicyContext): PolicyDecision => {
     const url = params.url;
     if (typeof url === 'string' && isAgentNavigableUrl(url, ctx.blockedPorts)) return ALLOWED;
     return deny('Page.navigate only accepts web urls outside link-local, metadata and app-internal addresses');
+  }
+  if (method === 'DOM.resolveNode' && !isOwnContext(params.executionContextId, ctx.ownContexts)) {
+    return deny('DOM.resolveNode needs an isolated-world context this client created in the current page');
   }
   if (method === 'Input.dispatchDragEvent' && hasDraggedFiles(params.data))
     return deny('Dragging files is not allowed');

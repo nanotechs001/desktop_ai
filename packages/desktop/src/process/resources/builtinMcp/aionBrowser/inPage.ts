@@ -50,16 +50,48 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   };
 }`;
 
-/** (node, index) → true once the index-th enabled option of a native select is chosen and input/change fired. */
-export const SELECT_OPTION = `function (node, index) {
+/** (node, label) → true once the first enabled option of a native select with exactly that label is chosen. */
+export const SELECT_OPTION = `function (node, label) {
   const e = window.__aionFast && window.__aionFast.nodes.get(node);
   if (!e || e.tagName !== 'SELECT') return false;
-  const option = [...e.options].filter((o) => !o.disabled && !o.closest('optgroup[disabled]'))[index];
+  const option = [...e.options].find((o) => !o.disabled && !o.closest('optgroup[disabled]') && o.label === label);
   if (!option) return false;
   e.value = option.value;
   e.dispatchEvent(new Event('input', { bubbles: true }));
   e.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
+}`;
+
+/**
+ * (owner, x, y) → true when the topmost element at (x, y) of this document is `owner` (an iframe element resolved
+ * into this world), passing through open shadow roots and through same-origin iframes in between (whose documents
+ * this world can read). A cover in any document on the way makes it false.
+ */
+export const OWNER_HIT = `function (owner, x, y) {
+  let doc = document;
+  for (let depth = 0; depth < 10; depth++) {
+    let hit = doc.elementFromPoint(x, y);
+    while (hit && hit.shadowRoot) {
+      const inner = hit.shadowRoot.elementFromPoint(x, y);
+      if (!inner || inner === hit) break;
+      hit = inner;
+    }
+    if (!hit) return false;
+    if (hit === owner) return true;
+    let inner = null;
+    try {
+      inner = hit.tagName === 'IFRAME' || hit.tagName === 'FRAME' ? hit.contentDocument : null;
+    } catch {
+      inner = null;
+    }
+    if (!inner) return false;
+    const r = hit.getBoundingClientRect();
+    const style = getComputedStyle(hit);
+    x -= r.left + hit.clientLeft + parseFloat(style.paddingLeft);
+    y -= r.top + hit.clientTop + parseFloat(style.paddingTop);
+    doc = inner;
+  }
+  return false;
 }`;
 
 /**

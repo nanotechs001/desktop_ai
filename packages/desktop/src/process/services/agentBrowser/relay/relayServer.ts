@@ -27,6 +27,7 @@ import {
 import {
   targetIdFor,
   webContentsIdFromTargetId,
+  type AgentInput,
   type RelayClient,
   type RelayContents,
   type TargetRegistry,
@@ -81,14 +82,16 @@ const parseRect = (value: unknown): AgentActionEvent['rect'] | undefined => {
   return { x, y, width, height };
 };
 
-/** The point of an agent mousePressed, the only agent input Electron also reports as user input. */
-const agentClickPoint = (method: string, params: Params): { x: number; y: number } | null =>
-  method === 'Input.dispatchMouseEvent' &&
-  params.type === 'mousePressed' &&
-  isFiniteNumber(params.x) &&
-  isFiniteNumber(params.y)
-    ? { x: params.x, y: params.y }
-    : null;
+/** An agent input Electron also reports as user input: a mousePressed's point, a keyDown/rawKeyDown's key and code. */
+const agentInputOf = (method: string, params: Params): AgentInput | null => {
+  if (method === 'Input.dispatchMouseEvent') {
+    const pressed = params.type === 'mousePressed' && isFiniteNumber(params.x) && isFiniteNumber(params.y);
+    return pressed ? { x: params.x as number, y: params.y as number } : null;
+  }
+  const keyDown = method === 'Input.dispatchKeyEvent' && (params.type === 'keyDown' || params.type === 'rawKeyDown');
+  if (!keyDown || typeof params.key !== 'string') return null;
+  return { key: params.key, code: typeof params.code === 'string' ? params.code : '' };
+};
 
 /**
  * Starts the agent relay: a token-guarded loopback WebSocket that exposes the in-app browser's tabs
@@ -291,8 +294,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     });
     if (decision.allow === false) throw new Error(decision.message);
     if (method === 'Page.reload') return reload(session, params);
-    const click = agentClickPoint(method, params);
-    const endInput = click ? registry.beginAgentInput(webContentsId, click) : null;
+    const agentInput = agentInputOf(method, params);
+    const endInput = agentInput ? registry.beginAgentInput(webContentsId, agentInput) : null;
     try {
       const result = await sessions.send(sessionId, method, params);
       const contextId = asParams(result)?.executionContextId;

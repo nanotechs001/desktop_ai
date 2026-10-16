@@ -19,6 +19,11 @@
       <li id="d2" draggable="true">Item 2</li>
       <li id="d3" draggable="true">Item 3</li>
     </ul>
+    <ul id="sortable">
+      <li id="p1" role="option">Card 1</li>
+      <li id="p2" role="option">Card 2</li>
+      <li id="p3" role="option">Card 3</li>
+    </ul>
     <script>
       window.dropLog = [];
       let dragged = null;
@@ -34,6 +39,18 @@
           li.after(dragged);
         });
       }
+      // A pointer-only sortable (no HTML5 drag): the card held down moves after the card it is released over.
+      window.sortLog = [];
+      let held = null;
+      for (const li of document.querySelectorAll('#sortable li')) li.addEventListener('pointerdown', () => (held = li));
+      document.addEventListener('pointerup', (e) => {
+        const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('#sortable li');
+        if (held && over && over !== held) {
+          window.sortLog.push(`${held.id}->${over.id}`);
+          over.after(held);
+        }
+        held = null;
+      });
     </script>
   </body>
 </html>

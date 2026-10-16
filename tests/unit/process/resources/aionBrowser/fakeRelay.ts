@@ -51,9 +51,9 @@ export class FakeRelay {
     return this.requests.filter((r) => r.method === method).map((r) => r.params);
   }
 
-  /** Pushes a CDP event to every client. */
-  emit(method: string, params: Params): void {
-    this.sockets.forEach((ws) => ws.send(JSON.stringify({ method, params })));
+  /** Pushes a CDP event to every client, tagged with `sessionId` when given. */
+  emit(method: string, params: Params, sessionId?: string): void {
+    this.sockets.forEach((ws) => ws.send(JSON.stringify({ method, params, sessionId })));
   }
 
   /** Closes every client socket the way a restarting relay does. */
