@@ -804,6 +804,18 @@ const handleAppReady = async (): Promise<void> => {
     console.error('[AgentBrowser] Failed to start the relay; agent browser control stays off.', error);
   }
 
+  // Artifact server (loopback, token-guarded). Same rule as the relay: its env must be set before
+  // startBackendOrExit() so the artifacts MCP under aioncore inherits it. Only the url is logged.
+  const { startArtifacts, cleanupArtifacts } = await import('./process/artifacts');
+  const artifacts = await startArtifacts();
+  if (artifacts) {
+    process.env.AION_ARTIFACTS_URL = artifacts.server.origin;
+    process.env.AION_ARTIFACTS_TOKEN = artifacts.token;
+    console.log(`[artifacts] server listening on ${artifacts.server.origin} (token required)`);
+    app.once('will-quit', () => void artifacts.server.close());
+    mark('artifactServer');
+  }
+
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
   if (debugBackendStartupFailure) {
     applyDebugBackendStartupFailure(debugBackendStartupFailure);
@@ -882,6 +894,9 @@ const handleAppReady = async (): Promise<void> => {
     if (backendStartedOk && bootBackendPort) {
       await ensureAdminUserOnce(bootBackendPort);
     }
+
+    // Before any window opens, so no artifact can be created first. Skips itself on any error.
+    if (artifacts && backendStartedOk) await cleanupArtifacts(artifacts.store);
   }
 
   // One-shot backend migrations are deferred until after the renderer finishes
