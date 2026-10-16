@@ -316,6 +316,77 @@ test.describe('Agents in the browser pane', () => {
     await expect.poll(clicks).toBe(1);
   });
 
+  test('an agent keeps clicking and typing in its tab while another chat is on screen or the panel is closed', async ({
+    electronApp,
+    page,
+  }) => {
+    const client = agent as Client;
+    const wc = webContentsIdOf(builderTab);
+    const titleValue = () => evalInFrame(electronApp, wc, childUrl, `document.getElementById('title').value`);
+    const clicks = () => evalInFrame(electronApp, wc, childUrl, 'window.clicks');
+    // The agent's tab is in the layer, hidden (and never inert: inert would reach into the guest and swallow input).
+    const hiddenNotInert = () =>
+      page.evaluate(
+        (id) =>
+          Array.from(document.querySelectorAll<HTMLElement>('[data-browser-tab]')).some((wrapper) => {
+            const webview = wrapper.querySelector('webview') as (HTMLElement & { getWebContentsId(): number }) | null;
+            return (
+              wrapper.style.visibility !== 'visible' &&
+              webview?.getWebContentsId() === id &&
+              !webview.closest('[inert]')
+            );
+          }),
+        wc
+      );
+    const prompt = page.locator('.arco-modal').filter({ hasText: 'Allow this agent action?' });
+    await observeControl(client, 'textbox', 'Page title', servers.originB); // the OOPIF is attached
+    const otherChat = await httpInvoke<{ id: string }>(page, 'POST', '/api/conversations', {
+      name: 'E2E agent browser pane (other project)',
+      assistant: { id: (await findAssistantIdForBackend(page, 'claude')) ?? '' },
+      extra: { workspace: fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-other-')), custom_workspace: true },
+    });
+    try {
+      // Another project's chat on screen: the agent's tab is hidden in the background.
+      await page.goto(`${page.url().split('#')[0]}#/conversation/${otherChat.id}`);
+      await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
+      await expect.poll(hiddenNotInert).toBe(true);
+
+      const clicked = act(client, [
+        { op: 'click', target: await observeControl(client, 'button', 'Publish', servers.originB) },
+      ]);
+      await expect(prompt).toBeVisible();
+      await prompt.getByRole('button', { name: 'Allow' }).click();
+      expect((await clicked).results.map((r) => r.result)).toEqual(['done']);
+      await expect.poll(clicks).toBe(1);
+      const typed = await act(client, [
+        { op: 'type', target: await observeControl(client, 'textbox', 'Page title', servers.originB), text: 'In B' },
+      ]);
+      expect(typed.results.map((r) => r.result)).toEqual(['done']);
+      await expect.poll(titleValue).toBe('In B');
+
+      // No panel at all (the new-chat page).
+      await page.goto(`${page.url().split('#')[0]}#/guid`);
+      await expect.poll(hiddenNotInert).toBe(true);
+      const typedAgain = await act(client, [
+        {
+          op: 'type',
+          target: await observeControl(client, 'textbox', 'Page title', servers.originB),
+          text: 'Panel closed',
+        },
+      ]);
+      expect(typedAgain.results.map((r) => r.result)).toEqual(['done']);
+      await expect.poll(titleValue).toBe('Panel closed');
+      const hover = await act(client, [
+        { op: 'hover', target: await observeControl(client, 'textbox', 'Page title', servers.originB) },
+      ]);
+      expect(hover.results.map((r) => r.result)).toEqual(['done']); // never paused
+    } finally {
+      await httpInvoke(page, 'DELETE', `/api/conversations/${otherChat.id}`).catch(() => undefined);
+      await page.goto(`${page.url().split('#')[0]}#/conversation/${conversationId}`);
+      await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
+    }
+  });
+
   test('an unshared user tab is not listed/accessible to the agent', async ({ electronApp }) => {
     const client = agent as Client;
     const userTab = await openUserTab(electronApp, `${servers.originA}/confirm.html`);

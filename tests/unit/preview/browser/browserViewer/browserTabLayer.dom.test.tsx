@@ -132,10 +132,18 @@ describe('BrowserTabLayer', () => {
     ]);
   });
 
-  it('marks hidden tabs inert and blurs a webview whose tab stops being shown', () => {
+  it('sits on top while a tab is shown, and behind the app while none is (agent tabs stay hit-testable there)', () => {
     const { rerender } = render(layout(TABS, 'tab-1'));
-    expect(wrapperOf('tab-1')?.hasAttribute('inert')).toBe(false);
-    expect(wrapperOf('tab-2')?.hasAttribute('inert')).toBe(true);
+    const layer = () => wrapperOf('tab-1')?.parentElement as HTMLElement;
+    expect(layer().style.zIndex).toBe('10');
+
+    rerender(layout(TABS, 'tab-1', false));
+
+    expect(layer().style.zIndex).toBe('-1');
+  });
+
+  it('blurs a webview whose tab stops being shown', () => {
+    const { rerender } = render(layout(TABS, 'tab-1'));
     const first = document.querySelector<HTMLElement>('[data-testid="webview-tab-1"]');
     act(() => first?.focus());
     expect(document.activeElement).toBe(first);
@@ -143,7 +151,6 @@ describe('BrowserTabLayer', () => {
     rerender(layout([TABS[0], { ...TABS[1], metadata: { agentOwned: true } }], 'tab-2'));
 
     expect(document.activeElement).not.toBe(first);
-    expect(wrapperOf('tab-1')?.hasAttribute('inert')).toBe(true);
     // An agent's tab never takes the focus.
     expect(document.activeElement?.getAttribute('data-testid')).not.toBe('webview-tab-2');
   });
@@ -155,5 +162,34 @@ describe('BrowserTabLayer', () => {
     rerender(layout(TABS, 'tab-2'));
 
     expect(document.activeElement?.getAttribute('data-testid')).toBe('webview-tab-2');
+  });
+
+  it('still hands the focus over when the page lost it to the body first (inert focus fixup)', () => {
+    const { rerender } = render(layout([TABS[0]], 'tab-1'));
+    act(() => document.querySelector<HTMLElement>('[data-testid="webview-tab-1"]')?.focus());
+    act(() => (document.activeElement as HTMLElement).blur()); // focus falls to the body, no focusin
+
+    rerender(layout(TABS, 'tab-2'));
+
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('webview-tab-2');
+  });
+
+  it('leaves the focus alone when the user was elsewhere (e.g. typing in the chat)', () => {
+    const { rerender } = render(
+      <>
+        <textarea data-testid='chat' />
+        {layout([TABS[0]], 'tab-1')}
+      </>
+    );
+    act(() => document.querySelector<HTMLElement>('[data-testid="chat"]')?.focus());
+
+    rerender(
+      <>
+        <textarea data-testid='chat' />
+        {layout(TABS, 'tab-2')}
+      </>
+    );
+
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('chat');
   });
 });

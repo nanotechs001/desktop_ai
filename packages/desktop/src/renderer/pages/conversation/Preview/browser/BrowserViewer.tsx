@@ -112,6 +112,16 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   const tabWebContentsId = useMemo(() => (webview ? ownWebContentsId(webview) : null), [webview]);
   const { ownership, actions } = useAgentBrowser(tabWebContentsId);
   const agentOwned = ownership !== null && ownership.owner !== 'user';
+  // Agents drive their own and shared tabs even while hidden. Chromium routes their (CDP) mouse input by
+  // hit-testing the window, so such a tab must stay rendered and hit-testable: transparent and covered (the
+  // layer keeps it under the tab on screen, or behind the app), never inert, visibility:hidden or
+  // pointer-events:none. It leaves the tab order instead, and the layer blurs it when hidden.
+  const agentReachable = agentOwned || ownership?.sharedWith === 'all';
+  const hiddenStyle: React.CSSProperties | undefined = active
+    ? undefined
+    : agentReachable
+      ? { visibility: 'visible', opacity: 0, pointerEvents: 'auto' }
+      : { visibility: 'hidden', pointerEvents: 'none' };
   const reportedAgentOwned = useRef(false);
 
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
@@ -284,8 +294,14 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   }, [agentOwned, tabId, onAgentOwnedChange]);
 
   return (
-    <div className='relative h-full w-full' onKeyDown={handleControlKeyDown}>
+    <div
+      className='relative h-full w-full'
+      onKeyDown={handleControlKeyDown}
+      inert={!active && !agentReachable}
+      style={hiddenStyle}
+    >
       <WebviewHost
+        webviewTabIndex={active ? undefined : -1}
         url={url || BROWSER_BLANK_URL}
         partition={BROWSER_SESSION_PARTITION}
         showNavBar

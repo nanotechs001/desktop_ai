@@ -64,7 +64,14 @@ afterEach(() => {
 
 const mount = () => {
   const { container } = render(
-    <BrowserViewer url={URL} tabId='tab-1' onUrlChange={vi.fn()} onTitleChange={vi.fn()} onFaviconChange={vi.fn()} />
+    <BrowserViewer
+      active
+      url={URL}
+      tabId='tab-1'
+      onUrlChange={vi.fn()}
+      onTitleChange={vi.fn()}
+      onFaviconChange={vi.fn()}
+    />
   );
   const webview = container.querySelector('webview') as HTMLElement;
   act(() => {

@@ -63,6 +63,8 @@ export interface WebviewHostProps {
   onResponsive?: () => void;
   /** Called on every `dom-ready` with the webview element, once its methods (findInPage, getWebContentsId) work */
   onWebviewReady?: (webview: Electron.WebviewTag) => void;
+  /** `tabIndex` of the `<webview>` itself, e.g. -1 to keep a hidden page out of the tab order. */
+  webviewTabIndex?: number;
   /** The webview got its guest (`did-attach`): its webContents id is known, though the page may still be loading. */
   onWebviewAttached?: (webview: Electron.WebviewTag) => void;
   /** Receives the address bar's input element, so the owner can focus it (needs `showNavBar`) */
@@ -102,6 +104,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onResponsive,
   onWebviewReady,
   onWebviewAttached,
+  webviewTabIndex,
   addressInputRef,
 }) => {
   const { t } = useTranslation();
@@ -864,6 +867,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
             opacity: !showNavBar && isLoading ? 0 : 1,
             transition: 'opacity 150ms ease-in',
           }}
+          tabIndex={webviewTabIndex}
           {...webviewAttrs}
         />
       </div>

@@ -5,12 +5,13 @@
  */
 
 import React from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   report: vi.fn(() => Promise.resolve({ success: true })),
   closeHandlers: new Set<(request: { webContentsId: number }) => void>(),
+  ownership: [] as unknown[],
 }));
 
 vi.mock('@/common', () => ({
@@ -19,7 +20,7 @@ vi.mock('@/common', () => ({
     agentBrowser: {
       ownershipChanged: { on: () => () => {} },
       agentAction: { on: () => () => {} },
-      getOwnership: { invoke: () => Promise.resolve({ success: true, data: [] }) },
+      getOwnership: { invoke: () => Promise.resolve({ success: true, data: mocks.ownership }) },
     },
     browser: {
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
@@ -54,6 +55,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mocks.ownership = [];
   cleanup();
   vi.clearAllMocks();
   for (const name of Object.keys(stubs)) {
@@ -116,6 +118,47 @@ describe('BrowserViewer tab activation', () => {
 
     expect(onRequestClose).toHaveBeenCalledTimes(1);
     expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+  });
+
+  it('keeps a hidden user tab invisible and inert, out of reach of the keyboard', async () => {
+    const { container } = render(viewer(false));
+    act(() => {
+      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+    });
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.hasAttribute('inert')).toBe(true);
+    expect(root.style.visibility).toBe('hidden');
+    expect(container.querySelector('webview')?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('never makes a hidden agent tab inert (agent input must reach it), only takes it out of the tab order', async () => {
+    mocks.ownership = [
+      { webContentsId: 7, owner: { clientId: 'c', label: 'claude' }, sharedWith: null, paused: false },
+    ];
+    const { container, rerender } = render(viewer(false));
+    act(() => {
+      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+    });
+    await waitFor(() => expect(container.firstElementChild?.hasAttribute('inert')).toBe(false));
+    expect(container.querySelector('webview')?.getAttribute('tabindex')).toBe('-1');
+    // Chromium routes agent (CDP) mouse input by hit-testing the window: the page must stay rendered and
+    // hit-testable (covered, transparent), never visibility:hidden or pointer-events:none.
+    const root = container.firstElementChild as HTMLElement;
+    expect([root.style.visibility, root.style.opacity, root.style.pointerEvents]).toEqual(['visible', '0', 'auto']);
+
+    rerender(viewer(true));
+    expect([root.style.visibility, root.style.opacity, root.style.pointerEvents]).toEqual(['', '', '']);
+    expect(container.querySelector('webview')?.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('never makes a hidden tab the user shared with agents inert', async () => {
+    mocks.ownership = [{ webContentsId: 7, owner: 'user', sharedWith: 'all', paused: false }];
+    const { container } = render(viewer(false));
+    act(() => {
+      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+    });
+    await waitFor(() => expect(container.firstElementChild?.hasAttribute('inert')).toBe(false));
   });
 
   it('does not report before the webview is ready', () => {

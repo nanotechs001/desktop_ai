@@ -110,8 +110,8 @@ const webviewOf = (layer: HTMLElement, tabId: string): HTMLElement | null =>
  * visibility changes: a webview that leaves the DOM (or moves in it) reloads, losing scroll position,
  * form input and any in-flight agent operation. So closing the panel, leaving for /settings or another
  * project's chat only hides a tab; the tab on screen is laid over the panel's {@link BrowserSlot}.
- * Hidden tabs use `visibility` rather than `display:none` so they keep real dimensions (agents read
- * and screenshot them), and take no pointer input.
+ * Hidden tabs are never `display:none`, so they keep real dimensions (agents read and screenshot them);
+ * see BrowserViewer for how user and agent tabs are hidden.
  */
 const BrowserTabLayer: React.FC = () => {
   const preview = useOptionalPreviewContext();
@@ -140,33 +140,60 @@ const BrowserTabLayer: React.FC = () => {
     [updateTab]
   );
 
-  // Keyboard focus never stays in a hidden page. When the focus was in the browser and a page opened
-  // the tab now shown (target=_blank), the new tab takes it, as in a browser; an agent's tab never does.
+  // Whether the user's last focus was in a page of this layer (not the chat, not the app's controls). Kept from
+  // focusin, because when a hidden page becomes inert Chromium moves the focus to the body before any effect runs.
+  const focusWasInBrowser = useRef(false);
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      focusWasInBrowser.current =
+        target instanceof HTMLElement && target.tagName === 'WEBVIEW' && Boolean(layerRef.current?.contains(target));
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, []);
+
+  // Keyboard focus never stays in a hidden page. When the user was in the browser and the tab on screen changes
+  // (a page opened one with target=_blank, or switching tabs), the shown page takes the focus, as in a browser;
+  // an agent's tab never does.
   useEffect(() => {
     const layer = layerRef.current;
-    const focused = document.activeElement;
-    if (!layer || !(focused instanceof HTMLElement) || focused.tagName !== 'WEBVIEW' || !layer.contains(focused))
-      return;
+    if (!layer) return;
     const shownWebview = shownId ? webviewOf(layer, shownId) : null;
-    if (focused === shownWebview) return;
-    focused.blur();
-    if (!shownByAgent) shownWebview?.focus();
+    const focused = document.activeElement;
+    if (
+      focused instanceof HTMLElement &&
+      focused.tagName === 'WEBVIEW' &&
+      layer.contains(focused) &&
+      focused !== shownWebview
+    ) {
+      focused.blur();
+    }
+    if (focusWasInBrowser.current && !shownByAgent && shownWebview && document.activeElement !== shownWebview) {
+      shownWebview.focus();
+    }
   }, [shownId, shownByAgent]);
 
   if (!preview || tabs.length === 0) return null;
 
   return (
-    <div ref={layerRef} className='fixed overflow-hidden z-10 pointer-events-none' style={box}>
+    // On top while a tab is shown (laid over the slot, hidden tabs under it); behind the app's opaque layout
+    // otherwise, where hidden agent tabs stay hit-testable for agent input but out of the user's sight and reach.
+    <div
+      ref={layerRef}
+      className='fixed overflow-hidden pointer-events-none'
+      style={{ ...box, zIndex: shownId ? 10 : -1 }}
+    >
       {tabs.map((tab) => {
         const shown = tab.id === shownId;
         return (
           <div
             key={tab.id}
             data-browser-tab={tab.id}
-            inert={!shown}
             className='absolute inset-0 flex flex-col'
             style={{
-              visibility: shown ? 'visible' : 'hidden',
+              // Hidden tabs are hidden by the viewer itself: user tabs invisible, agent tabs transparent.
+              visibility: shown ? 'visible' : undefined,
               pointerEvents: shown ? 'auto' : 'none',
               zIndex: shown ? 1 : 0,
             }}
