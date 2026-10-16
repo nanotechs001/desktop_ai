@@ -20,12 +20,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/common', () => ({
   ipcBridge: {
     application: { reportBrowserWebContentsId: { invoke: vi.fn(() => Promise.resolve({ success: true })) } },
-    // BrowserViewer mounts DownloadsButton in the nav bar.
     agentBrowser: {
       ownershipChanged: { on: () => () => {} },
       agentAction: { on: () => () => {} },
       getOwnership: { invoke: () => Promise.resolve({ success: true, data: [] }) },
     },
+    // BrowserViewer mounts DownloadsButton in the nav bar.
     browser: {
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },

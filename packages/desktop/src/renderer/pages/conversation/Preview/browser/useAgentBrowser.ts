@@ -11,9 +11,12 @@ import type { AgentActionEvent, TabOwnership } from '@/common/types/browser';
 /** The action feed keeps this many actions per tab, in memory only. */
 export const MAX_AGENT_ACTIONS = 50;
 
-/** Returns a new list with `event` added, trimmed to the newest {@link MAX_AGENT_ACTIONS}. */
+/** Longest label kept in the feed; the MCP already bounds labels, this keeps the renderer safe on its own. */
+export const MAX_AGENT_LABEL_LENGTH = 200;
+
+/** Returns a new list with `event` added (label cut to {@link MAX_AGENT_LABEL_LENGTH}), trimmed to the newest {@link MAX_AGENT_ACTIONS}. */
 export const appendAction = (actions: AgentActionEvent[], event: AgentActionEvent): AgentActionEvent[] =>
-  [...actions, event].slice(-MAX_AGENT_ACTIONS);
+  [...actions, { ...event, label: event.label.slice(0, MAX_AGENT_LABEL_LENGTH) }].slice(-MAX_AGENT_ACTIONS);
 
 /**
  * Ownership and recent agent actions of one browser tab, found by its webContentsId.

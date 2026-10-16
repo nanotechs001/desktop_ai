@@ -244,6 +244,22 @@ describe('PreviewContext browser tab persistence', () => {
     expect(browserTabs()[0].metadata?.agentActive).toBe(false);
   });
 
+  it('never restores the agent-owned badge as set', () => {
+    // Ownership is a live relay fact; a stored true would show an Agent badge on a user tab after restart.
+    renderProvider();
+    act(() => ctx.closePreviewIfScopeChanged('project-a'));
+    act(() => ctx.openBrowserTab('https://example.com'));
+    const tabId = browserTabs()[0].id;
+    act(() => ctx.updateTab(tabId, { metadata: { agentOwned: true } }));
+    expect(browserTabs()[0].metadata?.agentOwned).toBe(true);
+
+    act(() => ctx.closePreviewIfScopeChanged('project-b'));
+
+    expect(readScope('project-a').tabs[0].metadata.agentOwned).toBe(false);
+    act(() => ctx.closePreviewIfScopeChanged('project-a'));
+    expect(browserTabs()[0].metadata?.agentOwned).toBe(false);
+  });
+
   it('persists the favicon so restored tabs keep their site icon', () => {
     renderProvider();
     act(() => ctx.closePreviewIfScopeChanged('project-a'));

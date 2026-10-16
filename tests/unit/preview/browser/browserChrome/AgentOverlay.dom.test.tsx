@@ -69,4 +69,13 @@ describe('AgentOverlay', () => {
     rerender(<AgentOverlay action={null} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it('clears its highlight timer on unmount', () => {
+    const { unmount } = render(<AgentOverlay action={action()} />);
+    expect(vi.getTimerCount()).toBe(1);
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

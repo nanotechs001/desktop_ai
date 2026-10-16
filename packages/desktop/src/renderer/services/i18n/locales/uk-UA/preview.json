@@ -234,7 +234,8 @@
       "stopSharing": "Stop sharing",
       "paused": "Paused: you took over.",
       "resume": "Resume agent",
-      "actions": "Agent actions"
+      "actions": "Agent actions",
+      "actionFailed": "Couldn't update the agent. Try again."
     },
     "crash": {
       "crashed": "This tab crashed.",

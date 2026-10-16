@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Alert, Button } from '@arco-design/web-react';
+import { Alert, Button, Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 
@@ -16,10 +16,14 @@ const AgentBanner: React.FC<{ webContentsId: number }> = ({ webContentsId }) => 
   const { t } = useTranslation();
 
   const resume = (): void => {
-    // On failure the tab stays paused and this banner stays up, so the user can simply click again.
-    void ipcBridge.agentBrowser.resume.invoke({ webContentsId }).catch((error: unknown) => {
-      console.warn('[BrowserViewer] could not resume the agent:', error);
-    });
+    // Main resolves { success: false } rather than rejecting, so both outcomes end in the same message.
+    void ipcBridge.agentBrowser.resume
+      .invoke({ webContentsId })
+      .then((res) => res.success)
+      .catch(() => false)
+      .then((ok) => {
+        if (!ok) Message.error(t(`${KEY}.actionFailed`));
+      });
   };
 
   return (

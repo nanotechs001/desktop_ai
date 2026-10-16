@@ -10,12 +10,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentActionEvent, TabOwnership } from '@/common/types/browser';
 
 const mocks = vi.hoisted(() => ({
-  share: vi.fn(() => Promise.resolve({ success: true })),
-  resume: vi.fn(() => Promise.resolve({ success: true })),
+  share: vi.fn(
+    (_arg: { webContentsId: number; on: boolean }): Promise<{ success: boolean }> => Promise.resolve({ success: true })
+  ),
+  resume: vi.fn((_arg: { webContentsId: number }): Promise<{ success: boolean }> => Promise.resolve({ success: true })),
+  messageError: vi.fn(),
   getOwnership: vi.fn(),
   ownership: null as ((list: TabOwnership[]) => void) | null,
   action: null as ((event: AgentActionEvent) => void) | null,
 }));
+
+// Arco's imperative Message needs a legacy ReactDOM.render, which React 19 lacks in jsdom.
+vi.mock('@arco-design/web-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@arco-design/web-react')>();
+  return { ...actual, Message: { ...actual.Message, error: mocks.messageError } };
+});
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -51,7 +60,11 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
 }));
 
 import BrowserViewer from '@/renderer/pages/conversation/Preview/browser/BrowserViewer';
-import { appendAction, MAX_AGENT_ACTIONS } from '@/renderer/pages/conversation/Preview/browser/useAgentBrowser';
+import {
+  appendAction,
+  MAX_AGENT_ACTIONS,
+  MAX_AGENT_LABEL_LENGTH,
+} from '@/renderer/pages/conversation/Preview/browser/useAgentBrowser';
 
 const KEY = 'preview.browserChrome.agent';
 const WEB_CONTENTS_ID = 7;
@@ -179,6 +192,38 @@ describe('BrowserViewer agent chrome', () => {
   });
 });
 
+describe('BrowserViewer agent failures', () => {
+  const failures = [
+    ['rejects', () => Promise.reject(new Error('ipc down'))],
+    ['resolves success: false', () => Promise.resolve({ success: false })],
+  ] as const;
+
+  it.each(failures)('tells the user when sharing %s', async (_name, outcome) => {
+    mocks.share.mockImplementationOnce(outcome);
+    await mount([tab()]);
+
+    fireEvent.click(await screen.findByText(`${KEY}.share`));
+
+    await waitFor(() => expect(mocks.messageError).toHaveBeenCalledWith(`${KEY}.actionFailed`));
+  });
+
+  it('does not complain when sharing succeeds', async () => {
+    await mount([tab()]);
+    fireEvent.click(await screen.findByText(`${KEY}.share`));
+    await waitFor(() => expect(mocks.share).toHaveBeenCalled());
+    expect(mocks.messageError).not.toHaveBeenCalled();
+  });
+
+  it.each(failures)('tells the user when resume %s', async (_name, outcome) => {
+    mocks.resume.mockImplementationOnce(outcome);
+    await mount([tab({ sharedWith: 'all', paused: true })]);
+
+    fireEvent.click(await screen.findByText(`${KEY}.resume`));
+
+    await waitFor(() => expect(mocks.messageError).toHaveBeenCalledWith(`${KEY}.actionFailed`));
+  });
+});
+
 describe('appendAction', () => {
   it('keeps only the last 50 actions and does not mutate its input', () => {
     const first = Array.from({ length: MAX_AGENT_ACTIONS }, (_, i) => event({ at: i }));
@@ -189,5 +234,11 @@ describe('appendAction', () => {
     expect(next.at(-1)?.at).toBe(999);
     expect(first).toHaveLength(MAX_AGENT_ACTIONS);
     expect(first[0].at).toBe(0);
+  });
+
+  it('cuts an over-long label to the label limit', () => {
+    const [stored] = appendAction([], event({ label: 'x'.repeat(MAX_AGENT_LABEL_LENGTH + 50) }));
+
+    expect(stored.label).toHaveLength(MAX_AGENT_LABEL_LENGTH);
   });
 });
