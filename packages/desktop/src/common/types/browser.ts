@@ -49,3 +49,24 @@ export type BrowserShortcutRequest = {
   webContentsId: number;
   action: Extract<BrowserShortcutAction, 'find' | 'focus-address' | 'new-tab' | 'close-tab' | 'escape'>;
 };
+
+/** Who may drive a browser tab through the agent relay. */
+export type TabOwnership = {
+  webContentsId: number;
+  /** 'user' for tabs the user opened; an agent client for tabs it opened through the relay. */
+  owner: 'user' | { clientId: string; label: string };
+  /** 'all' once the user clicked "Share with agent": every agent client may act on the tab. */
+  sharedWith: 'all' | null;
+  /** The user took over (typed or clicked) an agent or shared tab; agent input is refused until resume. */
+  paused: boolean;
+};
+
+/** One agent action, reported by the agent's MCP server, for the pane's highlight overlay and action feed. */
+export type AgentActionEvent = {
+  webContentsId: number;
+  clientLabel: string;
+  op: string;
+  label: string;
+  rect: { x: number; y: number; width: number; height: number } | null;
+  at: number;
+};

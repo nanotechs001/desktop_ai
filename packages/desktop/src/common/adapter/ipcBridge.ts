@@ -13,7 +13,13 @@
  */
 
 import type { IConfirmation } from '@/common/chat/chatLib';
-import type { BrowserShortcutRequest, DownloadItem, PermissionRequest } from '@/common/types/browser';
+import type {
+  AgentActionEvent,
+  BrowserShortcutRequest,
+  DownloadItem,
+  PermissionRequest,
+  TabOwnership,
+} from '@/common/types/browser';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import { buildListTasksPath } from './teamTaskPath';
@@ -700,18 +706,8 @@ export const application = {
    */
   clearBrowserData: bridge.buildProvider<IBridgeResponse<void>, void>('app.clear-browser-data'),
   /**
-   * 渲染进程把侧边浏览器 webview 的 webContents id 报给主进程，用于把单目标 CDP 通道
-   * 附加到它。
-   *
-   * 为什么必须由渲染进程报：webview 的句柄只存在于渲染进程（webviewRef），主进程无法
-   * 凭空知道哪个 webContents 是「侧边浏览器」。主进程会校验 getType() === 'webview'，
-   * 所以即使这个通道被误用也无法拿主窗口去附加。
-   *
-   * The renderer reports the in-app browser webview's webContents id so the single-target
-   * CDP bridge can attach to it. It must come from the renderer because the webview handle
-   * only exists there (webviewRef); main cannot otherwise tell which WebContents is the
-   * in-app browser. Main validates getType() === 'webview', so even a misused call cannot
-   * attach to the main window.
+   * The renderer reports the browser tab on screen, so extensions follow the active tab
+   * (`chrome.tabs.onActivated`). Main ignores ids that are not on the browser session.
    */
   reportBrowserWebContentsId: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>(
     'app.report-browser-webcontents-id'
@@ -1500,6 +1496,19 @@ export const browser = {
   shortcut: bridge.buildEmitter<BrowserShortcutRequest>('browser.shortcut'),
   // main → renderer: an extension closed a tab (chrome.tabs.remove); the tab whose webview has this id closes
   closeTabRequested: bridge.buildEmitter<{ webContentsId: number }>('browser.close-tab-requested'),
+};
+
+// Agents in the browser pane: who may drive each tab, and what agents are doing there
+export const agentBrowser = {
+  // main → renderer: every browser tab's ownership, on every change
+  ownershipChanged: bridge.buildEmitter<TabOwnership[]>('agent-browser.ownership-changed'),
+  // main → renderer: one agent action, for the highlight overlay and the action feed
+  agentAction: bridge.buildEmitter<AgentActionEvent>('agent-browser.agent-action'),
+  // "Share with agent" toggle: on lets every agent client drive this user tab
+  share: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; on: boolean }>('agent-browser.share'),
+  // clears the take-over pause so agents may send input to the tab again
+  resume: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>('agent-browser.resume'),
+  getOwnership: bridge.buildProvider<TabOwnership[], void>('agent-browser.get-ownership'),
 };
 
 // ---------------------------------------------------------------------------

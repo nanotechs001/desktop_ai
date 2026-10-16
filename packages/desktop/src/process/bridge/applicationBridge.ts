@@ -11,7 +11,6 @@ import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { getZoomFactor, setZoomFactor } from '@process/utils/zoom';
 import { getCdpStatus, updateCdpConfig } from '@process/utils/configureChromium';
-import { getCdpBridgeHandle } from '@process/utils/cdpBridgeRegistry';
 import { getGpuStatus, setGpuUserOverride } from '@process/utils/gpuRecovery';
 import { selectBrowserTab } from '@process/services/browserSession/browserSession';
 import { initApplicationBridgeCore } from './applicationBridgeCore';
@@ -223,33 +222,13 @@ export function initApplicationBridge(): void {
     }
   });
 
+  // The relay exposes every browser tab itself; this only tells extensions which tab is on screen.
   ipcBridge.application.reportBrowserWebContentsId.provider(async ({ webContentsId }) => {
-    /**
-     * 把单目标 CDP 通道附加到侧边浏览器。
-     *
-     * 每次浏览器 tab 切换都会重报一次：通道同时只服务一个目标，切换即改附加对象，
-     * 这样 Agent 操作的始终是用户当前看到的那个页面。多 tab 情况下这是刻意的取舍 ——
-     * 与其同时暴露 10 个 webContents，不如只暴露活跃的那一个。
-     *
-     * Attaches the single-target CDP bridge to the in-app browser. Re-reported on every
-     * browser tab switch: the bridge serves one target at a time, so switching re-points
-     * it and the agent always drives the page the user is actually looking at. With
-     * multiple tabs this is a deliberate trade-off — exposing only the active webContents
-     * rather than all ten at once.
-     */
     try {
-      // Extensions track the active tab regardless of whether agent control is enabled.
       selectBrowserTab(webContentsId);
-    } catch (e) {
-      console.warn('[applicationBridge] could not report the active tab to extensions:', e);
-    }
-    try {
-      const handle = getCdpBridgeHandle();
-      if (!handle) return { success: false, msg: 'Agent browser control is not enabled.' };
-      const result = handle.attach(webContentsId);
-      if (result.ok === false) return { success: false, msg: result.reason };
       return { success: true };
     } catch (e) {
+      console.warn('[applicationBridge] could not report the active tab to extensions:', e);
       return { success: false, msg: e instanceof Error ? e.message : String(e) };
     }
   });

@@ -761,71 +761,32 @@ const handleAppReady = async (): Promise<void> => {
   process.env.CLAUDE_CODE_ENABLE_CFC = '0';
 
   /**
-   * 启动单目标 CDP 通道，并把端口/口令写进自己的 env。
+   * Start the agent relay (every browser tab as a CDP target, token-guarded, loopback only) and
+   * publish its url/token into our own env.
    *
-   * ⚠️ 必须在 startBackendOrExit() 之前 —— 这是硬顺序，不是风格问题。
-   *
-   * 两个值靠进程继承链传给 Agent：aioncore 是本进程的子进程，内置浏览器 MCP 又是
-   * aioncore 的子进程，所以不用落库、不用写配置。但继承是「spawn 那一刻的快照」：
-   * backend-launcher 用 `{ ...process.env }` spawn aioncore，此后我们再改 process.env
-   * 对已经起来的 aioncore 毫无影响。一旦这段挪到 backend 启动之后，aioncore 继承到的
-   * 口令就是 undefined，浏览器 MCP 读不到凭证直接 exit(1)，「Agent 可控」这条链就断在
-   * 最后一环 —— 而手动浏览、标签、前进后退全都正常，故障看起来跟浏览器无关，极难排查。
-   *
-   * 这里只起一个 node http/ws 服务，不碰 Electron 的 app.ready 相关能力，
-   * 附加目标是后续渲染进程通过 IPC 报上来的，所以放在这个位置是安全的。
-   *
-   * Start the single-target CDP bridge and publish port/token into our own env.
-   *
-   * ⚠️ MUST run before startBackendOrExit(). This ordering is a hard requirement, not
-   * style. Both values reach the agent by process inheritance (aioncore is our child; the
-   * in-app browser MCP is aioncore's child), so neither is persisted. But inheritance is a
-   * snapshot taken at spawn time: backend-launcher spawns aioncore with
-   * `{ ...process.env }`, and any later mutation of our process.env is invisible to the
-   * already-running aioncore. Move this block after backend startup and aioncore inherits
-   * an undefined token, so the browser MCP exits(1) for want of credentials and agent
-   * control silently breaks at the last hop — while manual browsing, tabs and history all
-   * keep working, making the failure look unrelated to the browser and very hard to trace.
-   *
-   * Safe this early: it only starts a node http/ws server and touches no app.ready-gated
-   * Electron API. The attach target arrives later over IPC from the renderer.
+   * MUST run before startBackendOrExit(): aioncore and the browser MCP under it inherit the env as
+   * a snapshot at spawn time, so a later write never reaches them and agent browser control breaks
+   * silently. Safe this early: it only starts a loopback ws server and registers per-tab listeners
+   * that fire once the browser session dispatches tabs. Only the url is logged, never the token.
    */
   const { cdpStartupEnabled, setActiveCdpPort } = await import('./process/utils/configureChromium');
   if (cdpStartupEnabled) {
     try {
-      const { startCdpBridge } = await import('./process/resources/builtinMcp/cdpBridge');
-      const { setCdpBridgeHandle } = await import('./process/utils/cdpBridgeRegistry');
-      const bridge = await startCdpBridge();
-      setCdpBridgeHandle(bridge);
-      /**
-       * 回填真实端口，让设置页显示的是「连得上的地址」。
-       * 以前这里显示的是 9230 段那个预留号，而通道走 listen(0) —— 用户照着复制的
-       * MCP 配置根本连不上。
-       *
-       * Backfill the real port so the settings page shows a reachable address. It used to
-       * display the reserved 9230-range number while the bridge listened on listen(0), so
-       * any MCP config the user copied from there could never connect.
-       */
-      setActiveCdpPort(bridge.port);
-      process.env.AIONUI_CDP_ACTIVE_PORT = String(bridge.port);
-      process.env.AIONUI_CDP_BRIDGE_TOKEN = bridge.token;
-      console.log(`[CDP] Single-target bridge listening on 127.0.0.1:${bridge.port} (token required)`);
+      const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
+      const agentBrowser = await startAgentBrowserServices();
+      process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;
+      process.env.AION_BROWSER_RELAY_TOKEN = agentBrowser.token;
+      // The settings page reports agent control as on while this port is set.
+      setActiveCdpPort(Number(new URL(agentBrowser.url).port));
+      console.log(`[AgentBrowser] relay listening on ${agentBrowser.url} (token required)`);
       app.once('will-quit', () => {
-        void bridge.close();
-        setCdpBridgeHandle(null);
+        void agentBrowser.close();
         setActiveCdpPort(null);
       });
-      mark('cdpBridge');
+      mark('agentBrowserRelay');
     } catch (error) {
-      /**
-       * 通道起不来就不设 env。MCP 读不到端口/口令会自行退出（见 browserServer.ts），
-       * 绝不会退回去自己开一个独立 Chrome —— 那正是我们要消灭的行为。
-       *
-       * If the bridge fails to start we leave the env unset. The MCP exits when it cannot
-       * read port/token (see browserServer.ts) and never falls back to spawning its own
-       * separate Chrome — the exact behaviour we are eliminating.
-       */
-      console.error('[CDP] Failed to start single-target bridge; agent browser control stays off.', error);
+      // Without the env the browser MCP reports agent control as unavailable; browsing still works.
+      console.error('[AgentBrowser] Failed to start the relay; agent browser control stays off.', error);
     }
   }
 

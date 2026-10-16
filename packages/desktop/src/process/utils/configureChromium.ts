@@ -75,20 +75,10 @@ if (isWebUI || isResetPassword) {
 // ---------------------------------------------------------------------------
 // Agent browser control (CDP) — user-facing on/off switch and its persisted config.
 //
-// This block no longer allocates a port. The single-target bridge (cdpBridge.ts) binds an
-// OS-assigned ephemeral port via listen(0) and backfills it here through setActiveCdpPort,
-// so there is exactly one port concept in the codebase: the one you can actually connect to.
-//
-// The 9230-9250 reservation and the ~/.aionui-cdp-registry.json instance registry were
-// removed with Chromium's application-wide remote-debugging-port switch. Once that switch
-// was gone nothing listened on that range, so the registry tracked a service that did not
-// exist, multi-instance avoidance was avoiding phantoms, and — worst of all — the settings
-// page displayed the reserved number as "the current CDP port" and built copy-pasteable MCP
-// config from it, handing users an address that could never connect.
-//
-// Do not move the bridge onto a fixed port to bring that bookkeeping back: the ephemeral
-// port is the only real barrier against same-user local processes, because the token leaks
-// through the unauthenticated discovery endpoint (see the threat model note in cdpBridge.ts).
+// This block allocates no port. The agent relay (process/services/agentBrowser/relay) binds an
+// OS-assigned port via listen(0) and backfills it here through setActiveCdpPort, so status/UI
+// report the port that is actually listening. Chromium's application-wide remote-debugging-port
+// switch, its 9230-9250 reservation and the ~/.aionui-cdp-registry.json registry are gone.
 //
 // Configuration file: userData/cdp.config.json
 // - enabled: boolean - whether agent browser control is enabled (default: on)
@@ -224,31 +214,10 @@ function shouldEnableCdp(config: CdpConfig): boolean {
   return true;
 }
 
-/**
- * 通道的实际监听端口，由 cdpBridge 启动后回填；未启用/未起来时为 null。
- *
- * 刻意不再在这里预留 9230-9250 段的端口号。移除 remote-debugging-port 之后那个号段
- * 没有任何进程监听，findAvailablePort/registerInstance 追踪的是一个不存在的服务：
- * 多实例避让失去意义，而设置页把它显示成「当前 CDP 端口」、还据此生成可复制的 MCP 配置，
- * 等于给用户一个连不上的地址。通道走 listen(0)（这也是本机唯一真实屏障，见 cdpBridge.ts
- * 的威胁模型说明），所以真实端口只可能在桥起来之后才知道 —— 由它回填这里，全局只保留
- * 一个端口概念。
- *
- * The bridge's real listening port, backfilled by cdpBridge once it starts; null while agent
- * browser control is off or the bridge has not come up.
- *
- * Deliberately no longer reserves a port from the 9230-9250 range here. With
- * remote-debugging-port gone nothing listens on that range, so findAvailablePort /
- * registerInstance were tracking a service that does not exist: multi-instance avoidance
- * became meaningless, while the settings page displayed it as "the current CDP port" and
- * generated copy-pasteable MCP config from it — handing the user an address that cannot be
- * reached. The bridge uses listen(0) (also the only real local barrier — see the threat model
- * note in cdpBridge.ts), so the real port is only knowable after it starts. It backfills this
- * value, leaving exactly one port concept in the codebase.
- */
+/** The relay's real listening port, backfilled once it starts; null while agent control is off or down. */
 export let cdpPort: number | null = null;
 
-/** Called by cdpBridge once it is listening, so status/UI report the reachable port. */
+/** Called once the agent relay is listening, so status/UI report the reachable port. */
 export function setActiveCdpPort(port: number | null): void {
   cdpPort = port;
 }
@@ -261,24 +230,9 @@ const cdpConfig = loadCdpConfig();
 cdpStartupEnabled = shouldEnableCdp(cdpConfig);
 
 if (cdpStartupEnabled) {
-  /**
-   * 刻意不再调用 appendSwitch('remote-debugging-port', ...)。
-   *
-   * Chromium 那个开关是应用级的，没有 per-target ACL：一开就把每个 WebContents 都
-   * 暴露出去，包括挂着 preload 桥的主窗口，而且不需要任何认证。本机任意进程连上去就能
-   * 驱动整个应用。
-   *
-   * 改由 cdpBridge 只暴露侧边浏览器那一个 webContents。端口与 env 的写入都移到桥启动处
-   * （见 index.ts），这里只负责判断「用户是否开启了这个能力」。
-   *
-   * Deliberately no longer calls appendSwitch('remote-debugging-port', ...). That switch is
-   * application-wide with no per-target ACL: it exposes every WebContents — including the
-   * main window with its preload bridge — with no authentication, so any local process can
-   * drive the whole app. cdpBridge exposes only the in-app browser webview instead. Port
-   * allocation and env publication now live where the bridge starts (see index.ts); this
-   * block only decides whether the user enabled the capability at all.
-   */
-  console.log('[CDP] Agent browser control enabled (single-target bridge)');
+  // Deliberately no appendSwitch('remote-debugging-port'): it exposes every WebContents, the main
+  // window included, without authentication. The token-guarded relay exposes browser tabs only.
+  console.log('[CDP] Agent browser control enabled (agent relay)');
 } else {
   console.log('[CDP] Agent browser control disabled');
 }
@@ -287,19 +241,6 @@ if (cdpStartupEnabled) {
 // Runs regardless of the switch: users who turned the capability off should not be left
 // with the stale file either.
 removeLegacyCdpRegistryFile();
-
-/**
- * verifyCdpReady 已随 remote-debugging-port 一并移除。
- *
- * 它探测的是 Chromium 那个应用级端口的 /json/version；现在没有进程在那个端口上监听，
- * 留着只会让启动日志报一个必然失败的警告。单目标通道的就绪与否由 startCdpBridge()
- * 的返回值直接体现，不需要再探测。
- *
- * verifyCdpReady was removed together with remote-debugging-port. It probed
- * /json/version on Chromium's application-wide port, where nothing listens any more, so
- * keeping it would only emit a warning that can never succeed. Bridge readiness is now
- * evident from startCdpBridge()'s return value, with no probing required.
- */
 
 /**
  * Get current CDP status for display in UI.
