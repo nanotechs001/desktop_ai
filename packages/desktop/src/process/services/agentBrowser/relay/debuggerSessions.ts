@@ -13,7 +13,12 @@ export type RelayEvent = { method: string; params: Record<string, unknown>; sess
 /** Where a client's events go; `id` identifies the client. */
 export type SessionSink = { id: string; emit(event: RelayEvent): void };
 
-export type SessionInfo = { webContentsId: number; sinkId: string; ownContexts: Set<number> };
+export type SessionInfo = {
+  webContentsId: number;
+  sinkId: string;
+  cdpSessionId: string;
+  ownContexts: ReadonlySet<number>;
+};
 
 export type DebuggerSessions = {
   /**
@@ -26,6 +31,8 @@ export type DebuggerSessions = {
   /** Sends on the tab's debugger, to the OOPIF child session when the relay session is one. */
   send(relaySessionId: string, method: string, params: Record<string, unknown>): Promise<unknown>;
   session(relaySessionId: string): SessionInfo | null;
+  /** Records an isolated world the session created; forgotten when its frame's document changes. */
+  addOwnContext(relaySessionId: string, contextId: number): void;
   detachSession(relaySessionId: string): void;
   /** Ends every top session for which `keep` is false, telling its client. */
   prune(keep: (webContentsId: number, sinkId: string) => boolean): void;
@@ -50,8 +57,6 @@ type TabState = {
 type Session = SessionInfo & {
   id: string;
   sink: SessionSink;
-  /** CDP session id on the tab's debugger; '' for the top (page) session. */
-  cdpSessionId: string;
   /** Parent relay session; null for a top session. */
   parent: string | null;
   /** The top relay session this one hangs off (itself for a top session). */
@@ -63,8 +68,17 @@ type Session = SessionInfo & {
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
-const logAutoAttachError = (error: unknown): void => {
-  console.warn('[AgentBrowserRelay] auto-attach on a child session failed:', error);
+const isRootFrame = (params: Record<string, unknown>): boolean => asRecord(params.frame).parentId === undefined;
+
+const logSetupError = (error: unknown): void => {
+  console.warn('[AgentBrowserRelay] session setup command failed:', error);
+};
+
+/** The relay's own per-session setup: Page events (to see navigations) and OOPIF auto-attach. */
+const setUpSession = (dbg: RelayDebugger, cdpSessionId?: string): Promise<unknown> => {
+  const send = (method: string, params: object) =>
+    cdpSessionId ? dbg.sendCommand(method, params, cdpSessionId) : dbg.sendCommand(method, params);
+  return Promise.all([send('Page.enable', {}), send('Target.setAutoAttach', AUTO_ATTACH)]);
 };
 
 /** Owns `webContents.debugger` for every browser tab and fans its sessions out to relay clients. */
@@ -139,6 +153,11 @@ export function createDebuggerSessions(): DebuggerSessions {
     }
   };
 
+  /** A new document in the session's root frame: isolated worlds made for the old one are gone. */
+  const forgetContexts = (webContentsId: number, cdpSessionId: string): void => {
+    for (const s of sessionsOn(webContentsId, cdpSessionId)) sessions.set(s.id, { ...s, ownContexts: new Set() });
+  };
+
   const onChildAttached = (
     webContentsId: number,
     tab: TabState,
@@ -149,7 +168,7 @@ export function createDebuggerSessions(): DebuggerSessions {
     if (typeof cdpSessionId !== 'string' || tab.children.has(cdpSessionId)) return;
     tab.children.set(cdpSessionId, { parent: parentCdp, params });
     // Nested OOPIFs only attach when auto-attach is set on their parent's session too.
-    tab.dbg.sendCommand('Target.setAutoAttach', AUTO_ATTACH, cdpSessionId).catch(logAutoAttachError);
+    setUpSession(tab.dbg, cdpSessionId).catch(logSetupError);
     sessionsOn(webContentsId, parentCdp).forEach((parent) => openChild(parent, cdpSessionId, params));
   };
 
@@ -177,6 +196,7 @@ export function createDebuggerSessions(): DebuggerSessions {
         const source = cdpSessionId ?? '';
         if (method === 'Target.attachedToTarget') return onChildAttached(webContentsId, tab, source, params);
         if (method === 'Target.detachedFromTarget') return onChildDetached(webContentsId, tab, params);
+        if (method === 'Page.frameNavigated' && isRootFrame(params)) forgetContexts(webContentsId, source);
         sessionsOn(webContentsId, source).forEach((s) => deliver(s, { method, params, sessionId: s.id }));
       },
       onDetach: () => dropContents(webContentsId),
@@ -223,7 +243,7 @@ export function createDebuggerSessions(): DebuggerSessions {
       replayChildren(session, tab);
       if (firstAttach) {
         try {
-          await contents.debugger.sendCommand('Target.setAutoAttach', AUTO_ATTACH);
+          await setUpSession(contents.debugger);
         } catch (error) {
           close(id, false);
           throw error;
@@ -247,6 +267,11 @@ export function createDebuggerSessions(): DebuggerSessions {
         : tab.dbg.sendCommand(method, params);
     },
     session: (relaySessionId) => sessions.get(relaySessionId) ?? null,
+    addOwnContext(relaySessionId, contextId) {
+      const session = sessions.get(relaySessionId);
+      if (session)
+        sessions.set(relaySessionId, { ...session, ownContexts: new Set([...session.ownContexts, contextId]) });
+    },
     detachSession: (relaySessionId) => close(relaySessionId, false),
     prune(keep) {
       for (const s of Array.from(sessions.values())) {

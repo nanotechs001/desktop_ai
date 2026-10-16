@@ -9,8 +9,8 @@ import { createServer, type IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { AgentActionEvent } from '@/common/types/browser';
-import { isSafeUrl } from '@process/services/browserSession/urlSafety';
-import { createDebuggerSessions, type RelayEvent } from './debuggerSessions';
+import { isAgentNavigableUrl } from './agentUrl';
+import { createDebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
 import { POLICY_ERROR_CODE, decideRelayCommand, mayAct } from './relayPolicy';
 import {
   targetIdFor,
@@ -29,6 +29,8 @@ export type RelayServerDeps = {
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
+  /** Loopback ports agents must not navigate to besides the relay's own (e.g. the backend's). */
+  blockedPorts?: () => readonly number[];
 };
 
 export type RelayHandle = { url: string; token: string; clients(): RelayClient[]; close(): Promise<void> };
@@ -108,6 +110,17 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
   const httpServer = createServer((_req, res) => res.writeHead(404).end());
 
+  const blockedPorts = (): ReadonlySet<number> => new Set([port, ...(deps.blockedPorts?.() ?? [])]);
+
+  /** CDP Page.reload on a webview guest reloads the embedder (the AionUi window), so reload the tab directly. */
+  const reload = (session: SessionInfo, params: Params): Params => {
+    const contents = registry.contents(session.webContentsId);
+    if (session.cdpSessionId || !contents) throw new Error('Page.reload is only supported on a tab session');
+    if (params.ignoreCache === true) contents.reloadIgnoringCache();
+    else contents.reload();
+    return {};
+  };
+
   const tabFor = (targetId: unknown): { webContentsId: number; contents: RelayContents } => {
     const webContentsId = typeof targetId === 'string' ? webContentsIdFromTargetId(targetId) : null;
     const contents = webContentsId === null ? null : registry.contents(webContentsId);
@@ -117,7 +130,11 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
 
   const createTarget = async ({ client }: Connection, params: Params): Promise<Params> => {
     const { url } = params;
-    if (typeof url !== 'string' || !isSafeUrl(url)) throw new Error('Target.createTarget only accepts http(s) urls');
+    if (typeof url !== 'string' || !isAgentNavigableUrl(url, blockedPorts())) {
+      throw new Error(
+        'Target.createTarget only accepts web urls outside link-local, metadata and app-internal addresses'
+      );
+    }
     const waiting = deps.waitForTab(url);
     deps.openTab(url);
     const contents = await waiting;
@@ -223,19 +240,24 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     const session = ownSession(conn, sessionId);
     if (method === AUTO_ATTACH_METHOD) return {};
     const { webContentsId, ownContexts } = session;
+    const tab = registry.ownership(webContentsId);
     const decision = decideRelayCommand({
       client: conn.client,
       method,
       params,
-      tab: registry.ownership(webContentsId),
+      tab,
       ownContexts,
+      blockedPorts: blockedPorts(),
     });
     if (decision.allow === false) throw new Error(decision.message);
+    if (method === 'Page.reload') return reload(session, params);
     const endInput = method.startsWith('Input.') ? registry.beginAgentInput(webContentsId) : null;
     try {
       const result = await sessions.send(sessionId, method, params);
       const contextId = asParams(result)?.executionContextId;
-      if (method === 'Page.createIsolatedWorld' && typeof contextId === 'number') ownContexts.add(contextId);
+      if (method === 'Page.createIsolatedWorld' && typeof contextId === 'number') {
+        sessions.addOwnContext(sessionId, contextId);
+      }
       return result ?? {};
     } finally {
       endInput?.();

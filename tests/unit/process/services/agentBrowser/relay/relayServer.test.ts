@@ -158,12 +158,17 @@ describe('relay server: targets', () => {
     expect(registry.ownership(41)?.owner).toMatchObject({ label: 'my agent' });
   });
 
-  it('Target.createTarget refuses non-web urls without opening anything', async () => {
-    const client = await connect(await start());
+  it('Target.createTarget refuses non-web, metadata and app-internal urls without opening anything', async () => {
+    const handle = await start();
+    const client = await connect(handle);
     const replies = await Promise.all(
-      ['javascript:alert(1)', 'file:///etc/passwd', 'chrome://settings'].map((url) =>
-        client.send('Target.createTarget', { url })
-      )
+      [
+        'javascript:alert(1)',
+        'file:///etc/passwd',
+        'chrome://settings',
+        'http://169.254.169.254/latest/meta-data/',
+        `http://127.0.0.1:${new URL(handle.url).port}/`,
+      ].map((url) => client.send('Target.createTarget', { url }))
     );
     for (const reply of replies) expect(reply.error?.message).toMatch(/url/i);
     expect(openTab).not.toHaveBeenCalled();
@@ -341,6 +346,41 @@ describe('relay server: sessions', () => {
     registry.setPaused(12, true);
     expect((await client.send('Input.insertText', { text: 'x' }, session)).error?.message).toContain('user took over');
     expect(tab.debugger.sendCommand).not.toHaveBeenCalledWith('Input.insertText', expect.anything());
+  });
+
+  it('forgets own isolated worlds when the top frame navigates to a new document', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    const tab = ownedTab(16, 'claude');
+    const session = await attach(client, 16);
+    // The relay enables Page itself so it sees navigations even when the client did not.
+    expect(tab.debugger.sendCommand).toHaveBeenCalledWith('Page.enable', {});
+    tab.debugger.handler = (method) => (method === 'Page.createIsolatedWorld' ? { executionContextId: 5 } : {});
+    await client.send('Page.createIsolatedWorld', { frameId: 'F', worldName: 'aion' }, session);
+    const evaluate = { expression: '1', contextId: 5 };
+
+    tab.debugger.message('Page.frameNavigated', { frame: { id: 'SUB', parentId: 'F', url: 'https://x/' } });
+    await client.waitForEvent('Page.frameNavigated');
+    expect((await client.send('Runtime.evaluate', evaluate, session)).error).toBeUndefined();
+
+    tab.debugger.message('Page.frameNavigated', { frame: { id: 'F', url: 'https://example.com/next' } });
+    await vi.waitFor(() => expect(client.events.filter((e) => e.method === 'Page.frameNavigated')).toHaveLength(2));
+    expect((await client.send('Runtime.evaluate', evaluate, session)).error?.message).toMatch(/isolated-world/);
+  });
+
+  it('Page.reload reloads the tab itself, never through CDP (which would reload the AionUi window)', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    const tab = ownedTab(17, 'claude');
+    const session = await attach(client, 17);
+
+    await client.send('Page.reload', {}, session);
+    await client.send('Page.reload', { ignoreCache: true }, session);
+
+    expect(tab.reload).toHaveBeenCalledTimes(1);
+    expect(tab.reloadIgnoringCache).toHaveBeenCalledTimes(1);
+    expect(tab.debugger.sendCommand).not.toHaveBeenCalledWith('Page.reload', expect.anything());
+    expect((await client.send('Page.reload', { scriptToEvaluateOnLoad: 'x' }, session)).error).toBeDefined();
   });
 
   it('marks agent input in flight so its own mouse events do not pause the tab', async () => {

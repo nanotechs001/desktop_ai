@@ -35,6 +35,8 @@ export class FakeDebugger extends EventEmitter {
 /** Stands in for a browser tab's WebContents. */
 export class FakeContents extends EventEmitter {
   readonly debugger = new FakeDebugger();
+  readonly reload = vi.fn();
+  readonly reloadIgnoringCache = vi.fn();
   private destroyed = false;
 
   constructor(

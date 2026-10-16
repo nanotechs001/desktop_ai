@@ -31,6 +31,8 @@ export type RelayContents = {
   getURL(): string;
   getTitle(): string;
   isDestroyed(): boolean;
+  reload(): void;
+  reloadIgnoringCache(): void;
   once(event: 'destroyed', listener: () => void): unknown;
 };
 

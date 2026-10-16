@@ -31,7 +31,10 @@ const unknownTab = { success: false, msg: 'No such browser tab' };
  * Call before the backend spawns (its env carries the relay url/token) and before the renderer
  * loads, so every browser tab is seen as it is created.
  */
-export async function startAgentBrowserServices(): Promise<AgentBrowserServices> {
+export async function startAgentBrowserServices(options: {
+  /** Loopback ports agents must not open besides the relay's own, e.g. the backend's. */
+  blockedPorts: () => readonly number[];
+}): Promise<AgentBrowserServices> {
   const registry = createTargetRegistry();
   const waiter = new CreateTabWaiter();
 
@@ -61,6 +64,7 @@ export async function startAgentBrowserServices(): Promise<AgentBrowserServices>
     waitForTab: (url) => waiter.wait(url, TAB_CREATE_TIMEOUT_MS),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
+    blockedPorts: options.blockedPorts,
   });
   return { url: relay.url, token: relay.token, close: relay.close };
 }

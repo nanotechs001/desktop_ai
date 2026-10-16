@@ -773,7 +773,9 @@ const handleAppReady = async (): Promise<void> => {
   if (cdpStartupEnabled) {
     try {
       const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
-      const agentBrowser = await startAgentBrowserServices();
+      const agentBrowser = await startAgentBrowserServices({
+        blockedPorts: () => (backendManager.port > 0 ? [backendManager.port] : []),
+      });
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;
       process.env.AION_BROWSER_RELAY_TOKEN = agentBrowser.token;
       // The settings page reports agent control as on while this port is set.
