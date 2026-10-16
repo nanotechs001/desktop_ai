@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "{{backend}} 認証が失敗しました：\n\n{{error}}\n\nローカルCLIツールの認証状態を確認してください",
+    "failed": "エンジンにサインインできませんでした：\n\n{{error}}\n\n設定 → エンジンを確認してください。",
     "console_error": "ACP認証エラー詳細:",
-    "failed_confirm": "ACP {{backend}} 認証が失敗しました：\n\n{{error}}\n\n設定ページで設定しますか？"
+    "failed_confirm": "エンジンにサインインできませんでした：\n\n{{error}}\n\n今すぐ設定 → エンジンを開いて確認しますか？"
   },
   "send": {
     "failed": "メッセージの送信に失敗しました：{{error}}"

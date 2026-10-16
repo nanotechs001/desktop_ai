@@ -5,7 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
-import { AgentLogoIcon } from '@/renderer/components/agent/AgentBadge';
+import { AgentLogoIcon } from '@/renderer/components/agent/AgentLogoIcon';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { agentFromPresetInfo } from '@/renderer/utils/ui/agentPresentation';
 import React from 'react';

@@ -17,13 +17,20 @@ export type AgentIdentity = { name?: string; avatar?: string };
 
 export type AgentPresentation = { name: string; avatar: React.ReactNode };
 
-const AVATAR_SIZE_PX = 16;
+const DEFAULT_AVATAR_SIZE_PX = 16;
+/** Emoji glyphs fill less of their box than icons do. */
+const EMOJI_SIZE_RATIO = 0.875;
 
 /**
  * Name and avatar a chat shows for its Agent. Never a vendor or engine name: with no Agent, or an
- * Agent without a name or avatar, it falls back to "Agent" and the robot icon.
+ * Agent without a name or avatar, it falls back to "Agent" and the robot icon. `size` is the avatar
+ * edge in pixels.
  */
-export function getAgentPresentation(agent: AgentIdentity | null | undefined, t: TFunction): AgentPresentation {
+export function getAgentPresentation(
+  agent: AgentIdentity | null | undefined,
+  t: TFunction,
+  size: number = DEFAULT_AVATAR_SIZE_PX
+): AgentPresentation {
   const name = agent?.name?.trim() || t('agent.displayName');
   const avatar = resolveAssistantAvatar(agent?.avatar);
 
@@ -33,16 +40,24 @@ export function getAgentPresentation(agent: AgentIdentity | null | undefined, t:
       avatar: React.createElement(ThemedLogo, {
         src: avatar.value,
         alt: `${name} logo`,
-        className: 'block w-16px h-16px object-contain',
+        className: 'block object-contain',
+        style: { width: size, height: size },
       }),
     };
   }
   if (avatar.kind === 'emoji') {
-    return { name, avatar: React.createElement('span', { className: 'text-14px leading-none' }, avatar.value) };
+    return {
+      name,
+      avatar: React.createElement(
+        'span',
+        { className: 'leading-none', style: { fontSize: Math.round(size * EMOJI_SIZE_RATIO) } },
+        avatar.value
+      ),
+    };
   }
   return {
     name,
-    avatar: React.createElement(Robot, { theme: 'outline', size: AVATAR_SIZE_PX, fill: iconColors.primary }),
+    avatar: React.createElement(Robot, { theme: 'outline', size, fill: iconColors.primary }),
   };
 }
 

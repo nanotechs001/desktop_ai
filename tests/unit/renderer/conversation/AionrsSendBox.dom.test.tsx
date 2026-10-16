@@ -39,6 +39,8 @@ const {
   runtimeViewIsProcessingRef: { current: false },
 }));
 
+const mobileSheet = vi.hoisted(() => ({ isMobile: false, entries: [] as unknown[] }));
+
 vi.mock('@/common', () => ({
   ipcBridge: {
     conversation: {
@@ -125,7 +127,10 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
 vi.mock('@/renderer/components/agent/AgentModeSelector', () => ({ default: () => null }));
 vi.mock('@/renderer/components/chat/CommandQueuePanel', () => ({ default: () => null }));
 vi.mock('@/renderer/components/chat/MobileActionSheet', () => ({
-  default: () => null,
+  default: (props: { entries: unknown[] }) => {
+    mobileSheet.entries = props.entries;
+    return null;
+  },
   useAttachEntry: () => ({ entries: [], hiddenFileInput: null }),
 }));
 vi.mock('@/renderer/components/chat/ThoughtDisplay', () => ({ default: () => null }));
@@ -152,7 +157,7 @@ vi.mock('@/renderer/hooks/context/ConversationContext', () => ({
   }),
 }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false }),
+  useLayoutContext: () => ({ isMobile: mobileSheet.isMobile }),
 }));
 vi.mock('@/renderer/hooks/chat/useAutoTitle', () => ({
   useAutoTitle: () => ({
@@ -309,6 +314,33 @@ describe('AionrsSendBox', () => {
     useTeamPermissionMock.mockReturnValue(null);
     draftContentRef.current = '';
     runtimeViewIsProcessingRef.current = false;
+  });
+
+  it('lists mobile model options without the provider name', () => {
+    mobileSheet.isMobile = true;
+    const provider = { id: 'p1', name: 'Anthropic' };
+    render(
+      <AionrsSendBox
+        conversation_id='conv-1'
+        modelSelection={
+          {
+            ...modelSelection,
+            providers: [provider],
+            getAvailableModels: () => ['claude-sonnet-4'],
+          } as unknown as AionrsModelSelection
+        }
+      />
+    );
+    mobileSheet.isMobile = false;
+
+    const modelEntry = (
+      mobileSheet.entries as Array<{
+        key: string;
+        submenu?: { options: Array<{ label: string; description?: string }> };
+      }>
+    ).find((entry) => entry.key === 'model');
+    expect(modelEntry?.submenu?.options).toEqual([expect.objectContaining({ label: 'claude-sonnet-4' })]);
+    expect(modelEntry?.submenu?.options[0].description).toBeUndefined();
   });
 
   it('does not warm up team session when draft content changes', async () => {

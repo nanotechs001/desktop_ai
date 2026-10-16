@@ -8,7 +8,7 @@
  * renderer and conversation test directories are over the directory-size limit.
  */
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMessageText } from '@/common/chat/chatLib';
@@ -28,6 +28,7 @@ const ENGINE_NAMES: Record<Backend, string> = {
 
 const mocks = vi.hoisted(() => ({
   presetInfo: { current: null as unknown },
+  loading: { current: false },
 }));
 
 vi.mock('react-i18next', async () => {
@@ -78,7 +79,7 @@ vi.mock('swr', () => ({
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 vi.mock('@/renderer/hooks/agent/usePresetAssistantInfo', () => ({
-  usePresetAssistantInfo: () => ({ info: mocks.presetInfo.current, isLoading: false }),
+  usePresetAssistantInfo: () => ({ info: mocks.presetInfo.current, isLoading: mocks.loading.current }),
 }));
 
 // Logos the engine would otherwise contribute (monochrome vendor marks served by the backend).
@@ -173,7 +174,7 @@ vi.mock('@/renderer/components/agent/MarqueePillLabel', () => ({
   default: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 
-import AgentBadge from '@/renderer/components/agent/AgentBadge';
+import { AgentLogoIcon } from '@/renderer/components/agent/AgentLogoIcon';
 import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import { RuntimeSelectorModelList } from '@/renderer/components/agent/runtimeSelectorOptions';
@@ -182,7 +183,9 @@ import { ConversationProvider } from '@/renderer/hooks/context/ConversationConte
 import ChatLayout from '@/renderer/pages/conversation/components/ChatLayout';
 import MessageAgentStatus from '@/renderer/pages/conversation/Messages/components/MessageAgentStatus';
 import MessageText from '@/renderer/pages/conversation/Messages/components/MessageText';
+import GoogleModelSelector from '@/renderer/pages/conversation/platforms/gemini/GoogleModelSelector';
 import AgentCard from '@/renderer/pages/settings/AgentSettings/AgentCard';
+import type { GoogleModelSelection } from '@/renderer/pages/conversation/platforms/gemini/useGoogleModelSelection';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 
 /** The identity usePresetAssistantInfo builds for a chat with no Agent record: the engine's own name and logo. */
@@ -220,16 +223,17 @@ const userFacingText = (container: HTMLElement): string =>
 
 const renderChat = (backend: Backend) =>
   render(
-    <ConversationProvider value={{ conversationId: 'conv-1', workspace: '/workspace', type: 'acp' }}>
+    <ConversationProvider value={{ conversation_id: 'conv-1', workspace: '/workspace', type: 'acp' }}>
       <MessageAgentStatus
         message={{
           id: 's1',
+          conversation_id: 'conv-1',
           type: 'agent_status',
           content: { backend, status: 'connected', agent_name: ENGINE_NAMES[backend] },
         }}
       />
       <MobileConversationBrand conversation_id='conv-1' fallbackTitle='Chat' />
-      <AgentBadge />
+      <AgentLogoIcon />
       <AgentModeSelector backend={backend} compact showLogoInCompact />
       <ChatLayout
         sider={<div />}
@@ -256,6 +260,7 @@ describe('neutral Agent branding', () => {
     cleanup();
     vi.unstubAllGlobals();
     mocks.presetInfo.current = null;
+    mocks.loading.current = false;
   });
 
   it.each(BACKENDS)('a %s chat renders no vendor name outside the model chip', async (backend) => {
@@ -297,6 +302,7 @@ describe('neutral Agent branding', () => {
       <MessageAgentStatus
         message={{
           id: 's1',
+          conversation_id: 'conv-1',
           type: 'agent_status',
           content: { backend: 'codex', status: 'connected', agent_name: 'Codex' },
         }}
@@ -332,5 +338,99 @@ describe('neutral Agent branding', () => {
     );
 
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
+  });
+  describe('while the Agent is loading or named', () => {
+    const named = { name: 'Research Agent', logo: '🔬', isEmoji: true, backend: 'claude', assistantId: 'research' };
+
+    it('shows no vendor and no leading mark in the header while the Agent loads', () => {
+      mocks.presetInfo.current = null;
+      mocks.loading.current = true;
+
+      const { container } = render(
+        <ChatLayout sider={<div />} workspaceEnabled={false} title='Weekly chat'>
+          <div />
+        </ChatLayout>
+      );
+
+      expect(userFacingText(container)).not.toMatch(VENDOR_NAMES);
+      expect(container.querySelector('.i-icon-robot')).toBeNull();
+    });
+
+    it('shows the robot for the sender while the Agent loads', () => {
+      mocks.presetInfo.current = null;
+      mocks.loading.current = true;
+
+      const { container } = render(<MessageText message={teammateMessage('claude')} />);
+
+      expect(container.querySelector('.i-icon-robot')).not.toBeNull();
+      expect(userFacingText(container)).not.toMatch(VENDOR_NAMES);
+    });
+
+    it("shows the named Agent's avatar in the header and for the sender", () => {
+      mocks.presetInfo.current = named;
+
+      const header = render(
+        <ChatLayout
+          sider={<div />}
+          workspaceEnabled={false}
+          title='Weekly chat'
+          backend='claude'
+          presetAssistant={named as PresetAssistantInfo}
+        >
+          <div />
+        </ChatLayout>
+      );
+      expect(header.getByText('🔬')).toBeInTheDocument();
+      header.unmount();
+
+      const sender = render(<MessageText message={teammateMessage('claude')} />);
+      expect(sender.getByText('🔬')).toBeInTheDocument();
+    });
+
+    it("names the chat's Agent on the status line", () => {
+      mocks.presetInfo.current = named;
+
+      render(
+        <ConversationProvider value={{ conversation_id: 'conv-1', workspace: '/workspace', type: 'acp' }}>
+          <MessageAgentStatus
+            message={{
+              id: 's1',
+              conversation_id: 'conv-1',
+              type: 'agent_status',
+              content: { backend: 'claude', status: 'connected', agent_name: 'Claude Code' },
+            }}
+          />
+        </ConversationProvider>
+      );
+
+      expect(screen.getByText('Research Agent')).toBeInTheDocument();
+      expect(screen.getByText('Agent connected')).toBeInTheDocument();
+      expect(screen.queryByText('Claude Code')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('GoogleModelSelector provider titles', () => {
+    const selection = {
+      providers: [{ id: 'p1', name: 'Anthropic' }],
+      getAvailableModels: () => ['claude-sonnet-4'],
+      handleSelectModel: vi.fn(),
+      formatModelLabel: (_provider: unknown, name?: string) => name ?? '',
+      getDisplayModelName: (name?: string) => name ?? '',
+    } as unknown as GoogleModelSelection;
+
+    it('lists models without the provider name in chat', () => {
+      render(<GoogleModelSelector selection={selection} />);
+      fireEvent.click(screen.getByTestId('chat-model-selector'));
+
+      expect(screen.getByText('claude-sonnet-4')).toBeInTheDocument();
+      expect(screen.queryByText('Anthropic')).not.toBeInTheDocument();
+    });
+
+    it('keeps provider titles where the provider is chosen in Settings', () => {
+      render(<GoogleModelSelector selection={selection} showProviderTitles variant='settings' />);
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(screen.getByText('Anthropic')).toBeInTheDocument();
+    });
   });
 });

@@ -48,7 +48,7 @@
     "runNow": "今すぐ実行",
     "description": "説明",
     "agent": "アシスタント",
-    "assistant": "アシスタント",
+    "assistant": "エージェント",
     "instructions": "実行内容",
     "repeats": "繰り返し",
     "history": "実行履歴",

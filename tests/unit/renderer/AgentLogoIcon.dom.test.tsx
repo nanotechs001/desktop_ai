@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // AgentLogoIcon lives in AgentBadge but is a named export consumed by
 // AgentModeSelector, MobileConversationBrand, and ChatLayout.
-import { AgentLogoIcon } from '@/renderer/components/agent/AgentBadge';
+import { AgentLogoIcon } from '@/renderer/components/agent/AgentLogoIcon';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -60,12 +60,6 @@ describe('AgentLogoIcon', () => {
 
   it('renders the Robot fallback when no logo is available', () => {
     render(<AgentLogoIcon />);
-
-    expect(screen.getByTestId('robot-fallback')).toBeInTheDocument();
-  });
-
-  it('renders fallback when agentLogoIsFallback is set', () => {
-    render(<AgentLogoIcon agentLogoIsFallback />);
 
     expect(screen.getByTestId('robot-fallback')).toBeInTheDocument();
   });

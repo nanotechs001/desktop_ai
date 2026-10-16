@@ -8,7 +8,10 @@ import type { IMessageAgentStatus } from '@/common/chat/chatLib';
 import { Badge, Typography } from '@arco-design/web-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
+import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
+import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
+import { agentFromPresetInfo, getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
+import useSWR from 'swr';
 import ButlerDiagnoseButton from '@/renderer/components/base/ButlerDiagnoseButton';
 import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 
@@ -20,12 +23,18 @@ interface MessageAgentStatusProps {
 
 /**
  * Unified agent status message component for all ACP-based agents. The engine behind the
- * agent (`backend`, `agent_name`) is never shown; the status always names "Agent".
+ * agent (`backend`, `agent_name`) is never shown; the status names the chat's Agent, or "Agent".
  */
 const MessageAgentStatus: React.FC<MessageAgentStatusProps> = ({ message }) => {
   const { t } = useTranslation();
   const { status } = message.content;
-  const { name: display_name } = getAgentPresentation(null, t);
+  // Same SWR key as SingleChatEmptyState, so this reuses the cached conversation record.
+  const conversationId = message.conversation_id;
+  const { data: conversation } = useSWR(conversationId ? ['single-conversation', conversationId] : null, () =>
+    getConversationOrNull(conversationId!)
+  );
+  const { info: presetInfo } = usePresetAssistantInfo(conversation ?? undefined);
+  const { name: display_name } = getAgentPresentation(agentFromPresetInfo(presetInfo), t);
 
   // Hide disconnected status from historical messages (no longer emitted but may exist in DB)
   if ((status as string) === 'disconnected') return null;

@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "{{backend}} authentication failed:\n\n{{error}}\n\nPlease check your local CLI tool authentication status",
+    "failed": "The engine couldn't sign in:\n\n{{error}}\n\nCheck Settings → Engine.",
     "console_error": "ACP authentication error details:",
-    "failed_confirm": "ACP {{backend}} authentication failed:\n\n{{error}}\n\nWould you like to go to settings page to configure now?"
+    "failed_confirm": "The engine couldn't sign in:\n\n{{error}}\n\nOpen Settings → Engine to check it now?"
   },
   "send": {
     "failed": "Failed to send message: {{error}}"

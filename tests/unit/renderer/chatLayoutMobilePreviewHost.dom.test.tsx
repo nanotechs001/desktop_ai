@@ -37,7 +37,7 @@ vi.mock('@/renderer/pages/conversation/components/ChatTitleEditor', () => ({
   default: () => <div>title</div>,
 }));
 
-vi.mock('@/renderer/components/agent/AgentBadge', () => ({
+vi.mock('@/renderer/components/agent/AgentLogoIcon', () => ({
   AgentLogoIcon: () => <div>logo</div>,
 }));
 

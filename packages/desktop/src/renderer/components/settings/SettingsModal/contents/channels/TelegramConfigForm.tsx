@@ -456,6 +456,7 @@ const TelegramConfigForm: React.FC<TelegramConfigFormProps> = ({
         )}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

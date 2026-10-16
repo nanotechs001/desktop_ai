@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "{{backend}} 인증 실패:\n\n{{error}}\n\n로컬 CLI 도구 인증 상태를 확인하세요",
+    "failed": "엔진에 로그인하지 못했습니다:\n\n{{error}}\n\n설정 → 엔진을 확인하세요.",
     "console_error": "ACP 인증 오류 세부사항:",
-    "failed_confirm": "ACP {{backend}} 인증 실패:\n\n{{error}}\n\n지금 설정 페이지로 이동하여 구성하시겠습니까?"
+    "failed_confirm": "엔진에 로그인하지 못했습니다:\n\n{{error}}\n\n지금 설정 → 엔진을 열어 확인하시겠습니까?"
   },
   "send": {
     "failed": "메시지 전송에 실패했습니다: {{error}}"

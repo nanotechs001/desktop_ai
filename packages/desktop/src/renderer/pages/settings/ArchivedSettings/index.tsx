@@ -7,7 +7,6 @@
 import { ipcBridge } from '@/common';
 import { scopeToToken } from '@/common/adapter/sidebarMapper';
 import type { SidebarItem } from '@/common/types/sidebar';
-import { useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { emitter } from '@/renderer/utils/emitter';
 import { Button, Checkbox, Empty, Message, Modal, Spin } from '@arco-design/web-react';
 import { DeleteOne, FolderClose, ListCheckbox, MessageOne, Peoples, Robot } from '@icon-park/react';
@@ -77,7 +76,6 @@ type ProjectBlock = {
  */
 const ArchivedSettings: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const logos = useAgentLogos();
   const [selectionMode, setSelectionMode] = React.useState(false);
   const [selectedKeys, setSelectedKeys] = React.useState<ReadonlySet<string>>(() => new Set<string>());
   // Appended "load more" windows, keyed by scope token. Reset on any refetch
@@ -116,7 +114,7 @@ const ArchivedSettings: React.FC = () => {
     const seen = new Set<string>();
 
     const renderConversationIcon = (item: Extract<SidebarItem, { type: 'conversation' }>): React.ReactElement => {
-      const leadingMark = resolveConversationLeadingMark(item.conversation, undefined, logos);
+      const leadingMark = resolveConversationLeadingMark(item.conversation, undefined, t);
       if (leadingMark.kind === 'emoji') {
         return <span className='text-16px leading-none flex-shrink-0'>{leadingMark.value}</span>;
       }
@@ -207,7 +205,7 @@ const ArchivedSettings: React.FC = () => {
       });
     }
     return { archivedBlocks, total: seen.size };
-  }, [data, extraPages, logos, t]);
+  }, [data, extraPages, t]);
 
   const allRows = React.useMemo(() => archivedBlocks.flatMap((block) => block.rows), [archivedBlocks]);
 

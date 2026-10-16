@@ -235,13 +235,7 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
     presetAssistant: presetAssistantInfo ? { ...presetAssistantInfo, id: aionrsAssistantId } : undefined,
   };
 
-  const emptySlot = (
-    <SingleChatEmptyState
-      conversation_id={conversation.id}
-      assistant_name={presetAssistantInfo?.name}
-      assistant_backend={presetAssistantInfo?.backend}
-    />
-  );
+  const emptySlot = <SingleChatEmptyState conversation_id={conversation.id} />;
 
   return (
     <ChatLayout {...chatLayoutProps} conversation_id={conversation.id}>
@@ -293,20 +287,11 @@ const ChatConversation: React.FC<{
   const acpAssistantId = presetAssistantInfo?.assistantId;
   const resolvedConversationBackend = resolveConversationBackend(conversation, presetAssistantInfo?.backend);
 
-  const conversationAgentName = (conversation?.extra as { agent_name?: string } | undefined)?.agent_name;
-  const assistantDisplayName = presetAssistantInfo?.name || conversationAgentName;
-
   const conversationNode = useMemo(() => {
     if (!conversation || isAionrsConversation) return null;
     // Greeting shown while the conversation has no messages yet (freshly created
     // or cloned window). Each *Chat forwards it to MessageList's empty slot.
-    const emptySlot = (
-      <SingleChatEmptyState
-        conversation_id={conversation.id}
-        assistant_name={assistantDisplayName}
-        assistant_backend={resolvedConversationBackend}
-      />
-    );
+    const emptySlot = <SingleChatEmptyState conversation_id={conversation.id} />;
     if (isLegacyReadOnlyConversation) {
       return <LegacyReadOnlyConversation key={conversation.id} conversation={conversation} emptySlot={emptySlot} />;
     }
@@ -346,7 +331,6 @@ const ChatConversation: React.FC<{
     isAionrsConversation,
     isLegacyReadOnlyConversation,
     resolvedConversationBackend,
-    assistantDisplayName,
     cronJobId,
     resolvedHideSendBox,
     acpAssistantId,

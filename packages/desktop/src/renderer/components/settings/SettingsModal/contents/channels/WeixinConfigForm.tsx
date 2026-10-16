@@ -451,6 +451,7 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
         description={t('settings.weixin.defaultModelDesc', 'Model used for WeChat conversations')}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

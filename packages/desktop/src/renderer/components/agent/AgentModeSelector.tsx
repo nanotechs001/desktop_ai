@@ -12,7 +12,7 @@ import {
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
-import { AgentLogoIcon } from './AgentBadge';
+import { AgentLogoIcon } from './AgentLogoIcon';
 import { Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,12 +30,6 @@ const configErrorMessageKey = (error: unknown) => {
 export interface AgentModeSelectorProps {
   /** Agent backend type / 代理后端类型 */
   backend?: string;
-  /** Display name for the agent / 代理显示名称 */
-  agent_name?: string;
-  /** Custom agent logo (SVG path or emoji) / 自定义代理 logo */
-  agentLogo?: string;
-  /** Whether the explicit assistant logo is intentionally empty. */
-  agentLogoIsFallback?: boolean;
   /** Conversation ID for mode switching / 用于切换模式的会话 ID */
   conversation_id?: string;
   /** Compact mode: only show mode label + dropdown, no logo/name / 紧凑模式：仅显示模式标签和下拉 */
@@ -79,9 +73,6 @@ export interface AgentModeSelectorProps {
  */
 const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   backend,
-  agent_name,
-  agentLogo,
-  agentLogoIsFallback,
   conversation_id,
   compact,
   showLogoInCompact = false,
@@ -100,7 +91,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   configOptionsPort,
 }) => {
   const { t } = useTranslation();
-  const agentName = getAgentPresentation({ name: agent_name }, t).name;
+  const agentName = getAgentPresentation(null, t).name;
   const layout = useLayoutContext();
   const isMobile = Boolean(layout?.isMobile);
   const runtimeConfig = useAcpConfigOptions({
@@ -219,10 +210,6 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
     [conversation_id, current_mode, onModeChanged, onModeSelect, runtimeConfig, runtimeMode, t]
   );
 
-  const renderLogo = () => (
-    <AgentLogoIcon agent_name={agent_name} agentLogo={agentLogo} agentLogoIsFallback={agentLogoIsFallback} />
-  );
-
   // Get display label for current mode. When the current value matches no option
   // (e.g. backend mode-vocabulary drift), surface the raw value instead of an empty
   // string so the compact pill never renders a bare "prefix · " with nothing after it.
@@ -296,7 +283,11 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
           leading={
             <>
               {compactLeadingIcon && <span className='shrink-0 inline-flex items-center'>{compactLeadingIcon}</span>}
-              {showLogoInCompact && <span className='shrink-0 inline-flex items-center'>{renderLogo()}</span>}
+              {showLogoInCompact && (
+                <span className='shrink-0 inline-flex items-center'>
+                  <AgentLogoIcon />
+                </span>
+              )}
             </>
           }
           trailing={canInteract ? <Down size={12} className='text-t-tertiary shrink-0' /> : null}
@@ -337,7 +328,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
         transition: 'opacity 0.2s',
       }}
     >
-      {renderLogo()}
+      <AgentLogoIcon />
       <span className='text-sm text-t-primary'>{agentName}</span>
       {canInteract && (
         <>

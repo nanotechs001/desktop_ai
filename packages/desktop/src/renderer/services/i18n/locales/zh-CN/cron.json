@@ -36,7 +36,7 @@
     "runNow": "立即执行",
     "description": "描述",
     "agent": "执行助手",
-    "assistant": "执行助手",
+    "assistant": "代理",
     "instructions": "执行指令",
     "repeats": "重复执行",
     "history": "执行历史",

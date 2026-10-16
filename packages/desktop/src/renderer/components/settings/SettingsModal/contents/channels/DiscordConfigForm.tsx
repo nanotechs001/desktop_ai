@@ -445,6 +445,7 @@ const DiscordConfigForm: React.FC<DiscordConfigFormProps> = ({
         description={t('settings.assistant.defaultModelDescDiscord', 'Model used for Discord conversations')}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

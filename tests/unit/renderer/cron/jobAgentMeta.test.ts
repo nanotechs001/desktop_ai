@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
 import { getJobAgentMeta } from '@/renderer/pages/cron/ScheduledTasksPage/jobAgentMeta';
 
-const LOGOS = { codex: '/api/assets/logos/tools/coding/codex.svg' };
+const t = ((key: string) => (key === 'agent.displayName' ? 'Agent' : key)) as TFunction;
 
 describe('getJobAgentMeta', () => {
   it('prefers assistant catalog metadata for assistant-backed jobs', () => {
@@ -30,7 +31,7 @@ describe('getJobAgentMeta', () => {
           avatar: '🤖',
         }),
       ],
-      LOGOS
+      t
     );
 
     expect(meta).toEqual({
@@ -39,68 +40,46 @@ describe('getJobAgentMeta', () => {
     });
   });
 
-  it('falls back to cron payload metadata for legacy jobs without assistant identity', () => {
+  it('names a legacy job "Agent" with the robot icon, not the engine behind it', () => {
+    for (const agent_type of ['acp', 'codex', 'cli:claude']) {
+      const meta = getJobAgentMeta(
+        cronJob({ metadata: { agent_type, agent_config: { name: 'Codex 助手' } } as ICronJob['metadata'] }),
+        [],
+        t
+      );
+
+      expect(meta).toEqual({ name: 'Agent', assistantFallback: true });
+    }
+  });
+
+  it('ignores legacy custom_agent_id rows without assistant_id', () => {
     const meta = getJobAgentMeta(
       cronJob({
         metadata: {
           agent_type: 'acp',
-          agent_config: {
-            name: 'Codex 助手',
-          },
+          agent_config: { custom_agent_id: 'assistant-1', name: 'Legacy name' },
+        },
+      }),
+      [assistant({ id: 'assistant-1', name: '文件规划助手', avatar: '🤖' })],
+      t
+    );
+
+    expect(meta).toEqual({ name: 'Agent', assistantFallback: true });
+  });
+
+  it('uses the neutral Agent when assistant_id is present but the assistant is missing', () => {
+    const meta = getJobAgentMeta(
+      cronJob({
+        metadata: {
+          agent_type: 'acp',
+          agent_config: { assistant_id: 'missing-assistant', name: 'Legacy name' },
         },
       }),
       [],
-      LOGOS
+      t
     );
 
-    expect(meta.name).toBe('Codex 助手');
-    expect(meta.logo).toBeNull();
-  });
-
-  it('falls back to cron payload metadata for legacy custom_agent_id rows without assistant_id', () => {
-    const meta = getJobAgentMeta(
-      cronJob({
-        metadata: {
-          agent_type: 'acp',
-          agent_config: {
-            custom_agent_id: 'assistant-1',
-            name: 'Legacy name',
-          },
-        },
-      }),
-      [
-        assistant({
-          id: 'assistant-1',
-          name: '文件规划助手',
-          avatar: '🤖',
-        }),
-      ],
-      LOGOS
-    );
-
-    expect(meta.name).toBe('Legacy name');
-    expect(meta.logo).toBeNull();
-  });
-
-  it('uses assistant fallback when assistant_id is present but the assistant is missing', () => {
-    const meta = getJobAgentMeta(
-      cronJob({
-        metadata: {
-          agent_type: 'acp',
-          agent_config: {
-            assistant_id: 'missing-assistant',
-            name: 'Legacy name',
-          },
-        },
-      }),
-      [],
-      LOGOS
-    );
-
-    expect(meta).toEqual({
-      name: 'Legacy name',
-      assistantFallback: true,
-    });
+    expect(meta).toEqual({ name: 'Agent', assistantFallback: true });
   });
 });
 

@@ -647,6 +647,7 @@ const LarkConfigForm: React.FC<LarkConfigFormProps> = ({ pluginStatus, modelSele
         description={t('settings.lark.defaultModelDesc', 'Model used for Lark conversations')}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "{{backend}} 认证失败：\n\n{{error}}\n\n请检查本地CLI工具的认证状态",
+    "failed": "引擎登录失败：\n\n{{error}}\n\n请检查 设置 → 引擎。",
     "console_error": "ACP认证错误详情:",
-    "failed_confirm": "ACP {{backend}} 认证失败：\n\n{{error}}\n\n是否现在前往设置页面配置？"
+    "failed_confirm": "引擎登录失败：\n\n{{error}}\n\n是否现在打开 设置 → 引擎 进行检查？"
   },
   "send": {
     "failed": "发送消息失败：{{error}}"

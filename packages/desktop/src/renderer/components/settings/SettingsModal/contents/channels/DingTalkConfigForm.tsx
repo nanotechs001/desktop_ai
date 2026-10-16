@@ -526,6 +526,7 @@ const DingTalkConfigForm: React.FC<DingTalkConfigFormProps> = ({ pluginStatus, m
         description={t('settings.dingtalk.defaultModelDesc', 'Model used for conversations handled by this assistant')}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

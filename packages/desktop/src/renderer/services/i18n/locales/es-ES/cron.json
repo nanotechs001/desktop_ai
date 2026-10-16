@@ -44,7 +44,7 @@
     "notFound": "Tarea no encontrada",
     "executionModeDescriptionNew": "Cada ejecución inicia una conversación nueva, por lo que el contexto anterior no se lleva. Ideal para informes o verificaciones periódicas que deben ser independientes.",
     "executionModeDescriptionExisting": "Cada ejecución continúa en la misma conversación, por lo que el contexto y los resultados anteriores están disponibles. Ideal para tareas de seguimiento que se basan en ejecuciones previas.",
-    "assistant": "Assistant"
+    "assistant": "Agente"
   },
   "notification": {
     "taskComplete": "Tarea completada",

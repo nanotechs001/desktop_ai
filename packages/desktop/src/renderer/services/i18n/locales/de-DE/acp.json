@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "{{backend}}-Authentifizierung fehlgeschlagen:\n\n{{error}}\n\nBitte überprüfe den Authentifizierungsstatus deines lokalen CLI-Tools",
+    "failed": "Die Engine konnte sich nicht anmelden:\n\n{{error}}\n\nPrüfe Einstellungen → Engine.",
     "console_error": "ACP-Authentifizierungsfehler Details:",
-    "failed_confirm": "ACP {{backend}}-Authentifizierung fehlgeschlagen:\n\n{{error}}\n\nMöchtest du jetzt zur Einstellungsseite wechseln, um es zu konfigurieren?"
+    "failed_confirm": "Die Engine konnte sich nicht anmelden:\n\n{{error}}\n\nEinstellungen → Engine jetzt öffnen und prüfen?"
   },
   "send": {
     "failed": "Nachricht konnte nicht gesendet werden: {{error}}"

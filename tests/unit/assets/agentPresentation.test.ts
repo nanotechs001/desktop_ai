@@ -46,6 +46,18 @@ describe('getAgentPresentation', () => {
 
     expect((presentation.avatar as ReactElement<{ src: string }>).props.src).toBe('https://example.test/writer.png');
   });
+
+  it('sizes the avatar to the requested pixels', () => {
+    const robot = getAgentPresentation(null, t, 32).avatar as ReactElement<{ size: number }>;
+    const emoji = getAgentPresentation({ avatar: '🔬' }, t, 32).avatar as ReactElement<{ style: { fontSize: number } }>;
+    const image = getAgentPresentation({ avatar: 'https://example.test/a.png' }, t, 32).avatar as ReactElement<{
+      style: { width: number; height: number };
+    }>;
+
+    expect(robot.props.size).toBe(32);
+    expect(emoji.props.style.fontSize).toBe(28);
+    expect(image.props.style).toEqual({ width: 32, height: 32 });
+  });
 });
 
 // Shape of the identity usePresetAssistantInfo builds from `extra.agent_name` / `extra.backend`.

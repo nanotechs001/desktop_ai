@@ -1,8 +1,8 @@
 import type { TChatConversation } from '@/common/config/storage';
 import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
-import { resolveAgentLogo } from '@/renderer/utils/model/agentLogo';
-import type { AgentLogoMap } from '@/renderer/utils/model/agentLogo';
+import { agentFromPresetInfo, type AgentIdentity } from '@/renderer/utils/ui/agentPresentation';
+import type { TFunction } from 'i18next';
 
 /**
  * Resolve the effective runtime backend for a conversation.
@@ -53,76 +53,27 @@ export type ConversationLeadingMark =
       label: string;
     }
   | {
-      kind: 'fallback';
-      label: string;
-    }
-  | {
       kind: 'assistant_fallback';
       label: string;
     };
 
+/**
+ * The mark a conversation row shows: its Agent's avatar, or the neutral robot labelled with the
+ * Agent name. Never a logo or name derived from the engine behind the chat.
+ */
 export function resolveConversationLeadingMark(
   conversation: TChatConversation,
-  assistantInfo: PresetAssistantInfo | undefined,
-  logos: AgentLogoMap
+  assistantInfo: PresetAssistantInfo | null | undefined,
+  t: TFunction
 ): ConversationLeadingMark {
-  if (assistantInfo) {
-    if (assistantInfo.isFallback) {
-      return {
-        kind: 'assistant_fallback',
-        label: assistantInfo.name,
-      };
-    }
+  const snapshot = conversation.assistant;
+  const agent: AgentIdentity | null =
+    agentFromPresetInfo(assistantInfo) ??
+    (snapshot ? { name: snapshot.name.trim() || snapshot.id, avatar: snapshot.avatar } : null);
+  const label = agent?.name || t('agent.displayName');
 
-    return assistantInfo.isEmoji
-      ? {
-          kind: 'emoji',
-          value: assistantInfo.logo,
-          label: assistantInfo.name,
-        }
-      : {
-          kind: 'image',
-          value: assistantInfo.logo,
-          label: assistantInfo.name,
-        };
-  }
-
-  if (conversation.assistant) {
-    const assistantLabel = conversation.assistant.name.trim() || conversation.assistant.id;
-    const assistantAvatar = resolveAssistantAvatar(conversation.assistant.avatar);
-    if (assistantAvatar.kind === 'emoji') {
-      return {
-        kind: 'emoji',
-        value: assistantAvatar.value,
-        label: assistantLabel,
-      };
-    }
-    if (assistantAvatar.kind === 'image') {
-      return {
-        kind: 'image',
-        value: assistantAvatar.value,
-        label: assistantLabel,
-      };
-    }
-
-    return {
-      kind: 'assistant_fallback',
-      label: assistantLabel,
-    };
-  }
-
-  const backendKey = resolveConversationBackend(conversation)?.trim() || 'agent';
-  const logo = resolveAgentLogo(logos, { backend: backendKey });
-  if (logo) {
-    return {
-      kind: 'image',
-      value: logo,
-      label: backendKey,
-    };
-  }
-
-  return {
-    kind: 'fallback',
-    label: backendKey,
-  };
+  const avatar = resolveAssistantAvatar(agent?.avatar);
+  if (avatar.kind === 'emoji') return { kind: 'emoji', value: avatar.value, label };
+  if (avatar.kind === 'image') return { kind: 'image', value: avatar.value, label };
+  return { kind: 'assistant_fallback', label };
 }

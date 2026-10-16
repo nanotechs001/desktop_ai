@@ -493,6 +493,7 @@ const WecomConfigForm: React.FC<WecomConfigFormProps> = ({
         description={t('settings.wecom.defaultModelDesc', 'Model used for conversations handled by this assistant')}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

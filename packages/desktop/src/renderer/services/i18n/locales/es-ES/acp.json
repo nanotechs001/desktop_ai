@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "Error de autenticación en {{backend}}:\n\n{{error}}\n\nVerifica el estado de autenticación de tu herramienta CLI local",
+    "failed": "El motor no pudo iniciar sesión:\n\n{{error}}\n\nRevisa Ajustes → Motor.",
     "console_error": "Detalles del error de autenticación ACP:",
-    "failed_confirm": "Error de autenticación ACP en {{backend}}:\n\n{{error}}\n\n¿Deseas ir a la página de configuración ahora?"
+    "failed_confirm": "El motor no pudo iniciar sesión:\n\n{{error}}\n\n¿Abrir Ajustes → Motor para revisarlo ahora?"
   },
   "send": {
     "failed": "Error al enviar mensaje: {{error}}"

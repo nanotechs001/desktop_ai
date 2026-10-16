@@ -512,6 +512,7 @@ const SlackConfigForm: React.FC<SlackConfigFormProps> = ({
         description={t('settings.assistant.defaultModelDescSlack', 'Model used for Slack conversations')}
       >
         <GoogleModelSelector
+          showProviderTitles
           selection={showModelSelector ? modelSelection : undefined}
           disabled={!showModelSelector}
           label={

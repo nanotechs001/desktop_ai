@@ -15,7 +15,9 @@ const GoogleModelSelector: React.FC<{
   disabled?: boolean;
   label?: string;
   variant?: 'header' | 'settings';
-}> = ({ selection, disabled = false, label: customLabel, variant = 'header' }) => {
+  /** Group models under their provider's name. Only Settings may name providers; chats separate groups by a rule. */
+  showProviderTitles?: boolean;
+}> = ({ selection, disabled = false, label: customLabel, variant = 'header', showProviderTitles = false }) => {
   const { t } = useTranslation();
   const { isOpen: isPreviewOpen } = usePreviewContext();
   const layout = useLayoutContext();
@@ -103,25 +105,33 @@ const GoogleModelSelector: React.FC<{
       position={variant === 'settings' ? 'br' : undefined}
       droplist={
         <Menu>
-          {providers.map((provider) => {
-            const models = getAvailableModels(provider);
-            if (!models.length) return null;
-
-            return (
-              <Menu.ItemGroup title={provider.name} key={provider.id}>
-                {models.map((modelName) => (
-                  <Menu.Item
-                    key={`${provider.id}-${modelName}`}
-                    onClick={() => void handleSelectModel(provider, modelName)}
-                  >
-                    <div className='flex items-center gap-8px w-full'>
-                      <span>{modelName}</span>
-                    </div>
-                  </Menu.Item>
-                ))}
-              </Menu.ItemGroup>
-            );
-          })}
+          {providers
+            .filter((provider) => getAvailableModels(provider).length > 0)
+            .map((provider, index) => {
+              const items = getAvailableModels(provider).map((modelName) => (
+                <Menu.Item
+                  key={`${provider.id}-${modelName}`}
+                  onClick={() => void handleSelectModel(provider, modelName)}
+                >
+                  <div className='flex items-center gap-8px w-full'>
+                    <span>{modelName}</span>
+                  </div>
+                </Menu.Item>
+              ));
+              if (showProviderTitles) {
+                return (
+                  <Menu.ItemGroup title={provider.name} key={provider.id}>
+                    {items}
+                  </Menu.ItemGroup>
+                );
+              }
+              return (
+                <React.Fragment key={provider.id}>
+                  {index > 0 ? <div role='separator' className='my-4px h-1px bg-fill-3' /> : null}
+                  {items}
+                </React.Fragment>
+              );
+            })}
         </Menu>
       }
     >

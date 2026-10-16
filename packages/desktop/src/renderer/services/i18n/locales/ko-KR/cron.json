@@ -36,7 +36,7 @@
     "runNow": "지금 실행",
     "description": "설명",
     "agent": "어시스턴트",
-    "assistant": "어시스턴트",
+    "assistant": "에이전트",
     "instructions": "실행 지시",
     "repeats": "반복",
     "history": "실행 기록",

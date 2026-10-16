@@ -1,4 +1,4 @@
-import { AgentLogoIcon } from '@/renderer/components/agent/AgentBadge';
+import { AgentLogoIcon } from '@/renderer/components/agent/AgentLogoIcon';
 import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';

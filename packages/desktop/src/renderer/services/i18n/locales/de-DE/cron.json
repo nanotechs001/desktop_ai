@@ -42,7 +42,7 @@
     "notFound": "Aufgabe nicht gefunden",
     "executionModeDescriptionNew": "Jede Ausführung startet ein neues Gespräch, der vorherige Kontext wird nicht übernommen. Ideal für wiederkehrende Berichte oder Prüfungen, die unabhängig bleiben sollen.",
     "executionModeDescriptionExisting": "Jede Ausführung setzt das gleiche Gespräch fort, frühere Ergebnisse bleiben verfügbar. Ideal für Folgeaufgaben, die auf früheren Ausführungen aufbauen.",
-    "assistant": "Assistant"
+    "assistant": "Agent"
   },
   "notification": {
     "taskComplete": "Aufgabe abgeschlossen",

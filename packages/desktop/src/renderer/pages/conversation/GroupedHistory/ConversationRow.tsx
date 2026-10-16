@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
@@ -48,7 +47,6 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
     dimIcon = false,
     dragHandle,
   } = props;
-  const logos = useAgentLogos();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const {
@@ -90,7 +88,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
     const pinnedHoverFade = isPinned ? 'group-hover:opacity-0 transition-opacity' : '';
     const composedClass = classNames(pinnedHoverFade);
 
-    const leadingMark = resolveConversationLeadingMark(conversation, assistantInfo, logos);
+    const leadingMark = resolveConversationLeadingMark(conversation, assistantInfo, t);
     if (leadingMark.kind === 'emoji') {
       return (
         <span className={classNames('text-16px leading-none flex-shrink-0', composedClass)}>{leadingMark.value}</span>

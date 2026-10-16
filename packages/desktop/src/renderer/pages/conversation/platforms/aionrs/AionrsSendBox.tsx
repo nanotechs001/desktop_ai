@@ -538,7 +538,6 @@ const AionrsSendBox: React.FC<{
       modelSelection.getAvailableModels(provider).map((modelName) => ({
         key: `${provider.id}::${modelName}`,
         label: modelName,
-        description: provider.name,
         active:
           modelSelection.current_model?.id === provider.id && modelSelection.current_model?.use_model === modelName,
       }))

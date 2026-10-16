@@ -35,13 +35,12 @@ vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
   getConversationOrNull: (...args: unknown[]) => getConversationOrNullMock(...args),
 }));
 
-vi.mock('@renderer/utils/model/agentLogo', () => ({
-  useAgentLogos: () => ({}),
-  resolveAgentLogo: () => null,
-  resolveAgentAvatar: () => ({ kind: 'fallback' }),
-}));
-
 import SingleChatEmptyState from '@/renderer/pages/conversation/components/SingleChatEmptyState';
+
+const mockEngineDerivedInfo = () =>
+  usePresetAssistantInfoMock.mockReturnValue({
+    info: { name: 'Claude Code', logo: '/api/assets/logos/claude.svg', isEmoji: false, backend: 'claude' },
+  });
 
 describe('SingleChatEmptyState', () => {
   beforeEach(() => {
@@ -63,50 +62,49 @@ describe('SingleChatEmptyState', () => {
     );
   });
 
-  it('prefers the explicit assistant_name prop over legacy runtime extra metadata', () => {
+  it("shows the chat's Agent name and avatar", () => {
     useSWRMock.mockReturnValue({
-      data: {
-        id: 'conv-1',
-        type: 'acp',
-        name: 'Some chat title',
-        extra: { agent_name: 'Legacy Runtime Name', backend: 'claude' },
-      },
+      data: { id: 'conv-1', type: 'acp', name: 'Some chat title', extra: { backend: 'claude' } },
     });
-    usePresetAssistantInfoMock.mockReturnValue({ info: null });
-
-    render(<SingleChatEmptyState conversation_id='conv-1' assistant_name='Assistant Prop Name' />);
-
-    expect(screen.getByText('Assistant Prop Name')).toBeInTheDocument();
-    expect(screen.queryByText('Legacy Runtime Name')).not.toBeInTheDocument();
-  });
-
-  it('falls back to legacy extra.agent_name when no preset/prop name is given', () => {
-    useSWRMock.mockReturnValue({
-      data: {
-        id: 'conv-1',
-        type: 'acp',
-        name: 'Some chat title',
-        extra: { agent_name: 'Legacy Runtime Name', backend: 'claude' },
-      },
+    usePresetAssistantInfoMock.mockReturnValue({
+      info: { name: 'Research Agent', logo: '🔬', isEmoji: true, backend: 'claude', assistantId: 'research' },
     });
-    usePresetAssistantInfoMock.mockReturnValue({ info: null });
 
     render(<SingleChatEmptyState conversation_id='conv-1' />);
 
-    expect(screen.getByText('Legacy Runtime Name')).toBeInTheDocument();
+    expect(screen.getByText('Research Agent')).toBeInTheDocument();
+    expect(screen.getByText('🔬')).toBeInTheDocument();
+  });
+
+  it('shows the neutral name, never the engine name from the conversation extras', () => {
+    useSWRMock.mockReturnValue({
+      data: {
+        id: 'conv-1',
+        type: 'acp',
+        name: 'Some chat title',
+        extra: { agent_name: 'Claude Code', backend: 'claude' },
+      },
+    });
+    mockEngineDerivedInfo();
+
+    const { container } = render(<SingleChatEmptyState conversation_id='conv-1' />);
+
+    expect(screen.getByText('agent.displayName')).toBeInTheDocument();
+    expect(container.innerHTML).not.toMatch(/Claude/i);
     // The chat title is a summary of the first message, never the assistant identity.
     expect(screen.queryByText('Some chat title')).not.toBeInTheDocument();
   });
 
-  it('uses the generic AI Assistant fallback when nothing else resolves', () => {
+  it('shows the neutral name and robot while the Agent is still loading', () => {
     useSWRMock.mockReturnValue({
       data: { id: 'conv-1', type: 'acp', name: 'Some chat title', extra: { backend: 'claude' } },
     });
-    usePresetAssistantInfoMock.mockReturnValue({ info: null });
+    usePresetAssistantInfoMock.mockReturnValue({ info: null, isLoading: true });
 
     render(<SingleChatEmptyState conversation_id='conv-1' />);
 
-    expect(screen.getByText('AI Assistant')).toBeInTheDocument();
+    expect(screen.getByText('agent.displayName')).toBeInTheDocument();
+    expect(screen.queryByText('AI Assistant')).not.toBeInTheDocument();
   });
 
   it('renders nothing until the conversation record loads', () => {

@@ -349,13 +349,12 @@ const AcpSendBox: React.FC<{
             conversation_id,
             type: 'error',
             data: t('acp.auth.failed', {
-              backend,
               error: errorMsg,
-              defaultValue: `${backend} authentication failed:
+              defaultValue: `The engine couldn't sign in:
 
 {{error}}
 
-Please check your local CLI tool authentication status`,
+Check Settings → Engine.`,
             }),
           };
 

@@ -8,7 +8,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import GuidActionRow from '@/renderer/pages/guid/components/GuidActionRow';
-import type { IMcpServer } from '@/common/config/storage';
+import type { IMcpServer, IProvider } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
 import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 
@@ -37,12 +37,29 @@ vi.mock('@/renderer/components/agent/AgentModeSelector', () => ({
 }));
 
 vi.mock('@/renderer/components/chat/MobileActionSheet', () => ({
-  default: ({ entries }: { entries: Array<{ key: string; label: string; onClick?: () => void }> }) => (
+  default: ({
+    entries,
+  }: {
+    entries: Array<{
+      key: string;
+      label: string;
+      onClick?: () => void;
+      submenu?: { options: Array<{ key: string; label: string; description?: string }> };
+    }>;
+  }) => (
     <div data-testid='mobile-action-sheet'>
       {entries.map((entry) => (
-        <button key={entry.key} type='button' data-testid={entry.key} onClick={entry.onClick}>
-          {entry.label}
-        </button>
+        <React.Fragment key={entry.key}>
+          <button type='button' data-testid={entry.key} onClick={entry.onClick}>
+            {entry.label}
+          </button>
+          {entry.submenu?.options.map((option) => (
+            <span key={option.key} data-testid={`option-${option.key}`}>
+              {option.label}
+              {option.description}
+            </span>
+          ))}
+        </React.Fragment>
       ))}
     </div>
   ),
@@ -198,6 +215,20 @@ describe('GuidActionRow skill/MCP submenu search', () => {
 
     expect(screen.getByTestId('attach-host-files')).toHaveTextContent('Add files');
     expect(screen.getByTestId('attach-my-device')).toHaveTextContent('Upload from device');
+  });
+
+  it('lists mobile model options without the provider name', () => {
+    environment.isMobile = true;
+    environment.isDesktop = false;
+    renderActionRow({
+      allSkills: [],
+      mcpServers: [],
+      isGeminiMode: true,
+      modelList: [{ id: 'p1', name: 'Anthropic', models: ['claude-sonnet-4'] } as unknown as IProvider],
+    });
+
+    expect(screen.getByTestId('option-p1::claude-sonnet-4')).toHaveTextContent(/^claude-sonnet-4$/);
+    expect(screen.queryByText(/Anthropic/)).not.toBeInTheDocument();
   });
 
   it('adds files selected from the host picker in mobile WebUI', async () => {

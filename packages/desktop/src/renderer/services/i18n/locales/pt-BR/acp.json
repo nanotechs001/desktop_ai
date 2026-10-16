@@ -1,8 +1,8 @@
 {
   "auth": {
-    "failed": "A autenticação de {{backend}} falhou:\n\n{{error}}\n\nPor favor, verifique o status de autenticação da sua ferramenta CLI local",
+    "failed": "O motor não conseguiu entrar:\n\n{{error}}\n\nVerifique Configurações → Motor.",
     "console_error": "Detalhes do erro de autenticação ACP:",
-    "failed_confirm": "A autenticação de {{backend}} via ACP falhou:\n\n{{error}}\n\nDeseja ir para a página de configurações para configurar agora?"
+    "failed_confirm": "O motor não conseguiu entrar:\n\n{{error}}\n\nAbrir Configurações → Motor para verificar agora?"
   },
   "send": {
     "failed": "Falha ao enviar mensagem: {{error}}"

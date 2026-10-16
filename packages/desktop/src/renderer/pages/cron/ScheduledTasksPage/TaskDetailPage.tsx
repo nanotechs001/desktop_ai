@@ -17,7 +17,6 @@ import CronStatusTag from './CronStatusTag';
 import CreateTaskDialog from './CreateTaskDialog';
 import { getJobAgentMeta } from './jobAgentMeta';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
-import { useAgentLogos } from '@renderer/utils/model/agentLogo';
 import { formatCronRunConversationTitle, formatSchedule, formatNextRun } from '@renderer/pages/cron/cronUtils';
 import { useCronJobConversations } from '@renderer/pages/cron/useCronJobs';
 import { repairCronJobTimeZone } from '@renderer/pages/cron/repairCronJobTimeZone';
@@ -54,8 +53,7 @@ const TaskDetailPage: React.FC = () => {
   const isManualOnly = job?.schedule.kind === 'cron' && !job.schedule.expr;
   const { conversations, refetch: refetchConversations } = useCronJobConversations(job_id);
   const { presetAssistants } = useConversationAssistants();
-  const logos = useAgentLogos();
-  const assistantIdentity = job ? getJobAgentMeta(job, presetAssistants, logos) : null;
+  const assistantIdentity = job ? getJobAgentMeta(job, presetAssistants, t) : null;
 
   useEffect(() => {
     setSelectedConversationIds((prev) => {

@@ -10,7 +10,6 @@ import AionModal from '@/renderer/components/base/AionModal';
 import { AionSearchInput } from '@/renderer/components/base';
 import { formatDateTime } from '@/renderer/services/i18n/format';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
-import { useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 import { resolveConversationLeadingMark } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
 import { blockMobileInputFocus, blurActiveElement } from '@/renderer/utils/ui/focus';
@@ -103,9 +102,9 @@ interface ConversationSearchPopoverProps {
 }
 
 const ConversationAgentMark: React.FC<{ conversation: IMessageSearchItem['conversation'] }> = ({ conversation }) => {
-  const logos = useAgentLogos();
+  const { t } = useTranslation();
   const { info: assistantInfo } = usePresetAssistantInfo(conversation);
-  const leadingMark = resolveConversationLeadingMark(conversation, assistantInfo, logos);
+  const leadingMark = resolveConversationLeadingMark(conversation, assistantInfo, t);
   if (leadingMark.kind === 'emoji') {
     return (
       <span className='text-18px leading-none flex-shrink-0' title={leadingMark.label}>

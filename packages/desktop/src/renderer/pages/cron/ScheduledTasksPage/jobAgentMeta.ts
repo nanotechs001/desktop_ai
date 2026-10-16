@@ -5,65 +5,30 @@
  */
 
 import type { ICronJob } from '@/common/adapter/ipcBridge';
-import type { AgentLogoMap } from '@renderer/utils/model/agentLogo';
-import { resolveAgentLogo } from '@renderer/utils/model/agentLogo';
 import { resolveAssistantAvatar } from '@renderer/utils/model/assistantAvatar';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
-
-function normalizeAgentBackend(agent: string | undefined): string | undefined {
-  if (!agent) return undefined;
-  return agent.replace(/^cli:/, '').replace(/^preset:/, '');
-}
-
-function resolveCronAssistantId(config: ICronJob['metadata']['agent_config']): string | undefined {
-  return config?.assistant_id;
-}
+import type { TFunction } from 'i18next';
 
 /**
- * Resolve the display name and logo for a cron job's agent.
+ * Resolve the display name and avatar for a cron job's Agent.
  *
- * Assistant-backed jobs display from the assistant catalog. Non-assistant
- * legacy jobs fall back to the derived runtime type.
+ * Assistant-backed jobs display from the assistant catalog. Every other job (legacy rows, or an
+ * assistant that no longer exists) shows the neutral "Agent" with the robot icon: the engine
+ * behind a job (`agent_type`, `agent_config.name`) is never shown.
  */
 export function getJobAgentMeta(
   job: ICronJob,
   presetAssistants: Assistant[],
-  logos: AgentLogoMap
-): { name?: string; logo?: string | null; emoji?: string; assistantFallback?: boolean } {
-  const config = job.metadata.agent_config;
-  const assistantId = resolveCronAssistantId(config);
-  if (assistantId) {
-    const assistant = presetAssistants.find((item) => item.id === assistantId);
-    if (!assistant) {
-      return { name: config?.name || normalizeAgentBackend(job.metadata.agent_type), assistantFallback: true };
-    }
+  t: TFunction
+): { name: string; logo?: string; emoji?: string; assistantFallback?: boolean } {
+  const neutral = { name: t('agent.displayName'), assistantFallback: true };
+  const assistantId = job.metadata.agent_config?.assistant_id;
+  const assistant = assistantId ? presetAssistants.find((item) => item.id === assistantId) : undefined;
+  if (!assistant) return neutral;
 
-    const rawType = normalizeAgentBackend(job.metadata.agent_type);
-    const displayName = assistant.name || rawType;
-    const avatar = resolveAssistantAvatar(assistant.avatar);
-    if (avatar.kind === 'image') {
-      return { name: displayName, logo: avatar.value };
-    }
-    if (avatar.kind === 'emoji') {
-      return { name: displayName, emoji: avatar.value };
-    }
-
-    return { name: displayName, assistantFallback: true };
-  }
-
-  const rawType = normalizeAgentBackend(job.metadata.agent_type);
-  if (!rawType) return {};
-  const logoBackend = rawType;
-
-  if (rawType === 'acp') {
-    return {
-      name: config?.name || rawType,
-      logo: resolveAgentLogo(logos, { backend: logoBackend }),
-    };
-  }
-
-  return {
-    name: config?.name || rawType,
-    logo: resolveAgentLogo(logos, { backend: logoBackend }),
-  };
+  const name = assistant.name || neutral.name;
+  const avatar = resolveAssistantAvatar(assistant.avatar);
+  if (avatar.kind === 'image') return { name, logo: avatar.value };
+  if (avatar.kind === 'emoji') return { name, emoji: avatar.value };
+  return { name, assistantFallback: true };
 }

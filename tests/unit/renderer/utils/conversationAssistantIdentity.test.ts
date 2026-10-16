@@ -4,15 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { TFunction } from 'i18next';
 import type { TChatConversation } from '@/common/config/storage';
-import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { resolveConversationLeadingMark } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
 import { describe, expect, it } from 'vitest';
 
-const TEST_LOGOS = {
-  claude: '/api/assets/logos/claude.svg',
-  gemini: '/api/assets/logos/gemini.svg',
-};
+const t = ((key: string) => (key === 'agent.displayName' ? 'Agent' : key)) as TFunction;
 
 describe('resolveConversationLeadingMark', () => {
   it('prefers the assistant image avatar when assistant info exists', () => {
@@ -25,7 +22,7 @@ describe('resolveConversationLeadingMark', () => {
         backend: 'claude',
         assistantId: 'academic-paper',
       },
-      TEST_LOGOS
+      t
     );
 
     expect(result).toEqual({
@@ -45,7 +42,7 @@ describe('resolveConversationLeadingMark', () => {
         backend: 'claude',
         assistantId: 'academic-paper',
       },
-      TEST_LOGOS
+      t
     );
 
     expect(result).toEqual({
@@ -55,37 +52,33 @@ describe('resolveConversationLeadingMark', () => {
     });
   });
 
-  it('falls back to the backend logo when there is no assistant info', () => {
+  it('uses the conversation assistant snapshot when no assistant info is resolved', () => {
     const result = resolveConversationLeadingMark(
-      makeConversation({
-        type: 'acp',
-        extra: { backend: 'gemini' },
-      }),
+      makeConversation({ assistant: { id: 'writer', name: 'Writer', avatar: '✍️', backend: 'claude' } }),
       undefined,
-      TEST_LOGOS
+      t
     );
 
-    expect(result).toEqual({
-      kind: 'image',
-      value: '/api/assets/logos/gemini.svg',
-      label: 'gemini',
-    });
+    expect(result).toEqual({ kind: 'emoji', value: '✍️', label: 'Writer' });
   });
 
-  it('returns the generic fallback when neither assistant info nor backend logo exists', () => {
+  it.each(['claude', 'codex', 'gemini', 'unknown-agent'])(
+    'shows the neutral Agent mark, never the %s engine logo, when the chat has no Agent record',
+    (backend) => {
+      const result = resolveConversationLeadingMark(makeConversation({}, { backend }), undefined, t);
+
+      expect(result).toEqual({ kind: 'assistant_fallback', label: 'Agent' });
+    }
+  );
+
+  it('ignores an identity derived from the engine instead of an assistant record', () => {
     const result = resolveConversationLeadingMark(
-      makeConversation({
-        type: 'acp',
-        extra: { backend: 'unknown-agent' },
-      }),
-      undefined,
-      TEST_LOGOS
+      makeConversation(),
+      { name: 'Claude Code', logo: '/api/assets/logos/claude.svg', isEmoji: false, backend: 'claude' },
+      t
     );
 
-    expect(result).toEqual({
-      kind: 'fallback',
-      label: 'unknown-agent',
-    });
+    expect(result).toEqual({ kind: 'assistant_fallback', label: 'Agent' });
   });
 });
 
