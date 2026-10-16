@@ -98,6 +98,13 @@ describe('aion-browser server', () => {
     expect(textOf(reply)).toBe('Too many agent sessions are connected to the browser. Close some chats and try again.');
   });
 
+  it('does not mistake an unreachable relay on port 503 for the session cap', async () => {
+    const env = { ...relay.env, AION_BROWSER_RELAY_URL: 'ws://127.0.0.1:503/' };
+    const reply = await callTabs(await connectClient(env), { action: 'list' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toMatch(/^Could not reach the AionUi browser/);
+  });
+
   it('turns an unreachable relay into a tool error instead of throwing', async () => {
     const env = { ...relay.env };
     await relay.stop();

@@ -55,7 +55,7 @@ const describeError = (error: unknown): string => {
   if (message === RELAY_ENV_MISSING) return NOT_AVAILABLE;
   if (message === 'tab-create-timeout') return NO_PANE;
   if (error instanceof RelayConnectError) {
-    if (/\b503\b/.test(message)) return TOO_MANY_SESSIONS; // the relay is at its connection cap
+    if (/response: 503/.test(message)) return TOO_MANY_SESSIONS; // ws "Unexpected server response: 503": the relay's connection cap
     return `Could not reach the AionUi browser (${message}). Make sure AionUi is running, then retry.`;
   }
   if (error instanceof CdpError) return message;

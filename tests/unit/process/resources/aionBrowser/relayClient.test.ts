@@ -112,7 +112,10 @@ describe('RelayClient', () => {
     const client = newClient();
     expect(await client.session('wc-7')).toBe('s-wc-7');
     client.currentTab = 'wc-7';
-    relay.emit('Target.detachedFromTarget', { sessionId: 'other', targetId: 'wc-9' }, 's-wc-7'); // a child session
+    // A child (OOPIF) detach carries the parent session; even with the tab's own session id in its params it is no tab detach.
+    relay.emit('Target.detachedFromTarget', { sessionId: 's-wc-7', targetId: 'FRAME' }, 's-wc-7');
+    await client.session('wc-7');
+    expect(relay.callsTo('Target.attachToTarget')).toHaveLength(1);
     relay.emit('Target.detachedFromTarget', { sessionId: 's-wc-7', targetId: 'wc-7' });
     await vi.waitFor(async () => {
       await client.session('wc-7');
