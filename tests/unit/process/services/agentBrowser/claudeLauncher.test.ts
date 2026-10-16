@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildHookScript,
@@ -172,6 +173,7 @@ describe('buildLauncherScript', () => {
       '--settings',
     ]);
     expect(JSON.parse(args[8])).toEqual({
+      permissions: { allow: [`mcp__${BUILTIN_BROWSER_MCP_NAME}`] },
       hooks: {
         PreToolUse: [
           { matcher: 'Bash', hooks: [{ type: 'command', command: `node "${hookPath.replace('$', '\\$')}"` }] },
