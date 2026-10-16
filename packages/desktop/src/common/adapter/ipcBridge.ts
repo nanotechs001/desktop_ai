@@ -1546,6 +1546,18 @@ export const agentBrowser = {
   ),
 };
 
+// An Agent's notebook, as the user sees it in the Agent editor (agents add notes through the aionui-notes MCP).
+// Every change re-syncs the notes block in that Agent's rule.
+export const agentNotes = {
+  list: bridge.buildProvider<IBridgeResponse<Note[]>, { agentId: string }>('agent-notes.list'),
+  // the user's own instruction (source 'user')
+  add: bridge.buildProvider<IBridgeResponse<Note>, { agentId: string; text: string }>('agent-notes.add'),
+  update: bridge.buildProvider<IBridgeResponse<Note>, { agentId: string; id: string; text: string }>(
+    'agent-notes.update'
+  ),
+  delete: bridge.buildProvider<IBridgeResponse<void>, { agentId: string; id: string }>('agent-notes.delete'),
+};
+
 // ---------------------------------------------------------------------------
 // Window Controls — stays IPC (Electron-native)
 // ---------------------------------------------------------------------------
@@ -2297,6 +2309,7 @@ export const channel = {
 // ---------------------------------------------------------------------------
 
 import type { HubExtensionStatus, IHubAgentItem } from '@/common/types/agent/hub';
+import type { Note } from '@/common/types/agent/artifacts';
 export const hub = {
   getExtensionList: httpGet<IHubAgentItem[], void>('/api/hub/extensions'),
   install: httpPost<void, { name: string }>('/api/hub/install'),

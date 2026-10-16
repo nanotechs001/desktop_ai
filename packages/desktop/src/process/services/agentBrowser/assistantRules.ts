@@ -5,13 +5,17 @@
  */
 
 import { httpRequest } from '@/common/adapter/httpBridge';
+import { notesRoot, readNotes, upsertNotesBlock } from '@process/artifacts/notes';
 import { upsertBrowserRule } from './browserRule';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import type { Note } from '@/common/types/agent/artifacts';
 
 export type AssistantRuleDeps = {
   listAssistants(): Promise<{ id: string; locales: string[] }[]>;
   readRule(id: string, locale: string): Promise<string>;
   writeRule(id: string, locale: string, content: string): Promise<void>;
+  /** The Agent's notebook; without it the notes block is left as it is. */
+  listNotes?(id: string): Promise<Note[]>;
 };
 
 export type AssistantRuleSyncSummary = { updated: number; skipped: number; failed: number };
@@ -44,15 +48,17 @@ export const backendAssistantRuleDeps: AssistantRuleDeps = {
       ...localeBody(locale),
     });
   },
+  listNotes: (id) => readNotes(notesRoot(), id),
 };
 
 type SyncOutcome = 'updated' | 'skipped' | 'failed' | 'unbalanced';
 
-/** Upsert the block into one assistant's rule for one locale. One failure never throws. */
+/** Upsert the browser block and the notes block into one assistant's rule for one locale. One failure never throws. */
 async function syncRule(deps: AssistantRuleDeps, id: string, locale: string): Promise<SyncOutcome> {
   try {
     const current = await deps.readRule(id, locale);
-    const result = upsertBrowserRule(current);
+    const browser = upsertBrowserRule(current);
+    const result = browser.ok && deps.listNotes ? upsertNotesBlock(browser.content, await deps.listNotes(id)) : browser;
     if (result.ok === false) {
       console.warn(`[AionUi] Browser rule left untouched for assistant '${id}': ${result.reason}`);
       return 'unbalanced';
@@ -100,6 +106,15 @@ export async function ensureBrowserRuleForAssistant(
     summary[await syncRule(deps, id, target)] += 1;
   return summary;
 }
+
+/** Write an Agent's notebook into its (default-locale) rule after a note changed; the browser block is kept current too. */
+export const syncNotesToRule = async (
+  agentId: string,
+  deps: AssistantRuleDeps = backendAssistantRuleDeps
+): Promise<void> => {
+  const summary = await ensureBrowserRuleForAssistant(deps, agentId);
+  if (summary.failed + summary.unbalanced > 0) throw new Error(`Rule sync failed for Agent '${agentId}'`);
+};
 
 const MAX_ASSISTANT_ID_LENGTH = 128;
 const LOCALE_PATTERN = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;

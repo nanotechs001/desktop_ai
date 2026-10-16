@@ -12,6 +12,11 @@ import path from 'node:path';
 import { ipcBridge } from '@/common';
 import { getEnvAwareName } from '@/common/config/appEnv';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
+import type { Note } from '@/common/types/agent/artifacts';
+import { DEFAULT_AGENT_ID, DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
+import { syncNotesToRule } from '@process/services/agentBrowser/assistantRules';
+import { backendDefaultAgentDeps } from '@process/services/agentBrowser/defaultAgent';
+import { createAgentResolver, createNotesStore, notesRoot, type NotesApi, type NotesStore } from './notes';
 import { renderArtifactPage } from './pages';
 import { startArtifactServer, type ArtifactServer } from './server';
 import { createArtifactStore, type ArtifactStore } from './store';
@@ -42,7 +47,7 @@ const artifactLibsDir = (): string | null =>
  * without artifacts.
  */
 export async function startArtifacts(
-  opts: { rootDir?: string; port?: number } = {}
+  opts: { rootDir?: string; port?: number; notes?: NotesApi } = {}
 ): Promise<{ server: ArtifactServer; token: string; store: ArtifactStore } | null> {
   try {
     const store = createArtifactStore(opts.rootDir ?? artifactsRoot());
@@ -53,6 +58,7 @@ export async function startArtifacts(
       renderPage: renderArtifactPage,
       libsDir: artifactLibsDir(),
       port: opts.port,
+      notes: opts.notes,
     });
     return { server, token, store };
   } catch (error) {
@@ -136,4 +142,89 @@ export async function cleanupArtifacts(
   } catch (error) {
     console.warn('[artifacts] cleanup skipped', error);
   }
+}
+
+type NotesReply<D = undefined> = { success: boolean; data?: D; msg?: string };
+
+const INVALID_NOTE_REQUEST: NotesReply = { success: false, msg: 'Invalid arguments' };
+
+/** The request's `keys`, in order, when every one is a string; else null. */
+const strings = (request: unknown, keys: string[]): string[] | null => {
+  const fields = typeof request === 'object' && request !== null ? (request as Record<string, unknown>) : {};
+  const values = keys.map((key) => fields[key]);
+  return values.every((v) => typeof v === 'string') ? (values as string[]) : null;
+};
+
+/** Runs a handler, turning a throw into a failed reply. */
+const guardNotes = async <D>(handler: () => Promise<NotesReply<D>>): Promise<NotesReply<D>> => {
+  try {
+    return await handler();
+  } catch (error) {
+    console.error('[notes] IPC handler failed:', error);
+    return { success: false, msg: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+const toNoteReply = (result: Awaited<ReturnType<NotesStore['add']>>): NotesReply<Note> =>
+  'value' in result ? { success: true, data: result.value } : { success: false, msg: result.message };
+
+/**
+ * The renderer's notebook IPC (`agentNotes.*`): the user lists, adds (as instructions), edits and deletes an Agent's
+ * notes. Requests come from the renderer, so every field is checked; the store validates ids and text again.
+ */
+export function createNotesIpcHandlers(store: NotesStore) {
+  return {
+    list: (request: unknown) =>
+      guardNotes<Note[]>(async () => {
+        const [agentId] = strings(request, ['agentId']) ?? [];
+        return agentId === undefined ? INVALID_NOTE_REQUEST : { success: true, data: await store.list(agentId) };
+      }),
+    add: (request: unknown) =>
+      guardNotes<Note>(async () => {
+        const args = strings(request, ['agentId', 'text']);
+        return args ? toNoteReply(await store.add(args[0], args[1], 'user')) : INVALID_NOTE_REQUEST;
+      }),
+    update: (request: unknown) =>
+      guardNotes<Note>(async () => {
+        const args = strings(request, ['agentId', 'id', 'text']);
+        return args ? toNoteReply(await store.update(args[0], args[1], args[2])) : INVALID_NOTE_REQUEST;
+      }),
+    delete: (request: unknown) =>
+      guardNotes(async () => {
+        const args = strings(request, ['agentId', 'id']);
+        if (!args) return INVALID_NOTE_REQUEST;
+        return (await store.remove(args[0], args[1])) ? { success: true } : { success: false, msg: 'Note not found' };
+      }),
+  };
+}
+
+/** The default Agent's id while it exists as a non-built-in assistant. */
+const defaultAgentId = async (): Promise<string | null> => {
+  const id = (await backendDefaultAgentDeps.getSetting(DEFAULT_AGENT_SETTING_KEY)) || DEFAULT_AGENT_ID;
+  const assistants = await backendDefaultAgentDeps.listAssistants();
+  return assistants.some((a) => a.id === id && a.source !== 'builtin') ? id : null;
+};
+
+/** A missing conversation is null; any other backend failure throws (the resolver retries next time). */
+const getConversation = async (id: string): Promise<{ assistant?: { id: string; source: string } } | null> => {
+  try {
+    return await ipcBridge.conversation.get.invoke({ id });
+  } catch (e) {
+    if (isBackendHttpError(e) && e.status === 404) return null;
+    throw e;
+  }
+};
+
+/**
+ * Sets up Agent notebooks: the store (every change re-syncs the Agent's rule), the renderer's `agentNotes` IPC, and
+ * what the artifact server needs for the agents' `notes.add`. Call before `startArtifacts`.
+ */
+export function startAgentNotes(): NotesApi {
+  const store = createNotesStore(notesRoot(), (agentId) => syncNotesToRule(agentId));
+  const handlers = createNotesIpcHandlers(store);
+  ipcBridge.agentNotes.list.provider(handlers.list);
+  ipcBridge.agentNotes.add.provider(handlers.add);
+  ipcBridge.agentNotes.update.provider(handlers.update);
+  ipcBridge.agentNotes.delete.provider(handlers.delete);
+  return { store, resolveAgent: createAgentResolver({ getConversation, getDefaultAgentId: defaultAgentId }) };
 }

@@ -40,3 +40,33 @@ export function stripBrowserRule(text: string): string {
     .filter(Boolean)
     .join('\n\n');
 }
+
+export type UpsertManagedBlockResult = { ok: true; content: string } | { ok: false; reason: 'unbalanced-markers' };
+
+const countOf = (text: string, needle: string): number => text.split(needle).length - 1;
+
+/**
+ * Put the managed block `name` (e.g. `aion-notes`) into an Agent's rule: replace it if present, otherwise append
+ * it. A null `body` removes the block. Text outside the markers is never touched. Refuses (ok: false) unless the
+ * markers are absent or form exactly one start-then-end pair, so a hand-edited rule can never lose text.
+ */
+export function upsertManagedBlock(existing: string, name: string, body: string | null): UpsertManagedBlockResult {
+  const start = `<!-- ${name}:start -->`;
+  const end = `<!-- ${name}:end -->`;
+  const starts = countOf(existing, start);
+  const ends = countOf(existing, end);
+  const block = body === null ? '' : `${start}\n${body}\n${end}`;
+  if (starts === 0 && ends === 0) {
+    if (!block) return { ok: true, content: existing };
+    const separator = !existing ? '' : existing.endsWith('\n\n') ? '' : existing.endsWith('\n') ? '\n' : '\n\n';
+    return { ok: true, content: `${existing}${separator}${block}\n` };
+  }
+  const startAt = existing.indexOf(start);
+  const endAt = existing.indexOf(end);
+  if (starts !== 1 || ends !== 1 || endAt < startAt) return { ok: false, reason: 'unbalanced-markers' };
+  const before = existing.slice(0, startAt);
+  const after = existing.slice(endAt + end.length);
+  if (block) return { ok: true, content: before + block + after };
+  const kept = [before.trimEnd(), after.trim()].filter(Boolean);
+  return { ok: true, content: kept.join('\n\n') };
+}

@@ -10,6 +10,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { ARTIFACT_LIMITS, type ArtifactResult, type ArtifactVersion } from '@/common/types/agent/artifacts';
+import type { NotesApi } from './notes';
 import type { ArtifactStore } from './store';
 
 export type ArtifactServer = {
@@ -27,6 +28,8 @@ export type ArtifactServerOptions = {
   libsDir: string | null;
   /** 0 (the default) picks a free port. */
   port?: number;
+  /** Serves `POST /api/notes/add` when given. */
+  notes?: NotesApi;
 };
 
 const HOST = '127.0.0.1';
@@ -57,6 +60,7 @@ const MAX_DRAIN_BYTES = 4 * MAX_BODY_BYTES;
 const PAGE_RE = /^\/a\/([A-Za-z0-9_-]{22})(?:\/v\/([1-9]\d{0,8}))?$/;
 const LIB_RE = /^\/lib\/([A-Za-z0-9_-][A-Za-z0-9._-]{0,127})$/;
 const API_RE = /^\/api\/artifacts\/(create|update|get)$/;
+const NOTES_RE = /^\/api\/notes\/(add|list|update|delete)$/;
 const LIB_TYPES: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -151,9 +155,19 @@ const callStore = (
   return store.get(b.conversationId, b.id, b.version as number | undefined);
 };
 
+/** Adds a note to the notebook of the chat's Agent; the Agent comes from the conversation, never from the body. */
+const addNote = async (notes: NotesApi, b: ApiBody): Promise<unknown> => {
+  if (typeof b.text !== 'string') return badRequest('text must be a string');
+  if (b.fromPage !== undefined && typeof b.fromPage !== 'boolean') return badRequest('fromPage must be a boolean');
+  const agent = await notes.resolveAgent(b.conversationId);
+  if (agent.ok === false) return { ok: false, error: 'not-found', message: agent.message };
+  return notes.store.add(agent.agentId, b.text, b.fromPage ? 'page' : 'agent');
+};
+
 /**
  * Starts the loopback artifact server: rendered pages at `/a/<id>[/v/<n>]`, allowlisted libraries at
- * `/lib/<file>`, and the bearer-token JSON API at `POST /api/artifacts/{create,update,get}`. Rejects
+ * `/lib/<file>`, and the bearer-token JSON API at `POST /api/artifacts/{create,update,get}` and `POST /api/notes/add`
+ * (list, update and delete answer 403: agents only add notes; the user edits them over IPC). Rejects
  * when the port can't be bound.
  */
 export async function startArtifactServer(opts: ArtifactServerOptions): Promise<ArtifactServer> {
@@ -184,9 +198,21 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     send(res, 200, type, await body, { 'Cross-Origin-Resource-Policy': 'cross-origin' });
   };
 
-  const serveApi = async (req: IncomingMessage, res: ServerResponse, op: string): Promise<void> => {
+  /** Token, then body, then `run`; a null `run` is a route token callers may not use. */
+  const serveApi = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    run: ((b: ApiBody) => Promise<unknown>) | null
+  ): Promise<void> => {
     if (!tokenMatches(token, req.headers.authorization)) {
       return sendJson(res, 401, { ok: false, error: 'unauthorized', message: 'Missing or wrong token' });
+    }
+    if (!run) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'forbidden',
+        message: 'Only the user can list, edit or delete notes',
+      });
     }
     let body: unknown;
     try {
@@ -200,7 +226,7 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
       return sendJson(res, 400, badRequest('Body must be an object with a conversationId'));
     }
     // Store results, failures included, are the API's answer; only malformed requests get a 4xx.
-    sendJson(res, 200, await callStore(store, op, b as ApiBody));
+    sendJson(res, 200, await run(b as ApiBody));
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -218,7 +244,10 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     const libMatch = req.method === 'GET' ? LIB_RE.exec(pathname) : null;
     if (libMatch) return serveLib(res, libMatch[1]);
     const apiMatch = req.method === 'POST' ? API_RE.exec(pathname) : null;
-    if (apiMatch) return serveApi(req, res, apiMatch[1]);
+    if (apiMatch) return serveApi(req, res, async (b) => callStore(store, apiMatch[1], b));
+    const notes = opts.notes;
+    const notesMatch = req.method === 'POST' && notes ? NOTES_RE.exec(pathname) : null;
+    if (notes && notesMatch) return serveApi(req, res, notesMatch[1] === 'add' ? (b) => addNote(notes, b) : null);
     send(res, 404, TEXT_TYPE, 'Not found');
   };
 

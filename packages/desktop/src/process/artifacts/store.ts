@@ -116,14 +116,10 @@ const validateInput = (
   return { title: trimmed };
 };
 
-/** Creates a store that keeps versioned artifacts under `rootDir/<conversationId>/<id>/`. */
-export function createArtifactStore(rootDir: string): ArtifactStore {
+/** Returns a runner that runs each task after every earlier task with the same key, and frees the key once idle. */
+export function createSerialiser(): <T>(key: string, task: () => Promise<T>) => Promise<T> {
   const chains = new Map<string, Promise<unknown>>();
-  const idIndex = new Map<string, string>();
-  let scan: Promise<void> | undefined;
-
-  /** Runs `task` after every earlier task with the same key, and frees the key once idle. */
-  const serialised = <T>(key: string, task: () => Promise<T>): Promise<T> => {
+  return <T>(key: string, task: () => Promise<T>): Promise<T> => {
     const run = (chains.get(key) ?? Promise.resolve()).then(task);
     const tail = run.catch((): void => undefined);
     chains.set(key, tail);
@@ -132,17 +128,25 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
     });
     return run;
   };
+}
 
-  const writeAtomic = async (file: string, data: string): Promise<void> => {
-    const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tmp, data, 'utf8');
-      await fs.rename(tmp, file);
-    } catch (e) {
-      await fs.rm(tmp, { force: true }).catch((): void => undefined);
-      throw e;
-    }
-  };
+/** Writes `data` to a temp file beside `file`, then renames it into place, so readers never see a partial file. */
+export async function writeAtomic(file: string, data: string): Promise<void> {
+  const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmp, data, 'utf8');
+    await fs.rename(tmp, file);
+  } catch (e) {
+    await fs.rm(tmp, { force: true }).catch((): void => undefined);
+    throw e;
+  }
+}
+
+/** Creates a store that keeps versioned artifacts under `rootDir/<conversationId>/<id>/`. */
+export function createArtifactStore(rootDir: string): ArtifactStore {
+  const serialised = createSerialiser();
+  const idIndex = new Map<string, string>();
+  let scan: Promise<void> | undefined;
 
   const artifactDir = (conversationId: string, id: string) => path.join(rootDir, conversationId, id);
 

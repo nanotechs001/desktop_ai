@@ -38,3 +38,16 @@ export type ArtifactError =
   | 'io';
 
 export type ArtifactResult<T> = { ok: true; value: T } | { ok: false; error: ArtifactError; message: string };
+
+/** Where a notebook note came from: the agent itself, the user, or a web page the agent read (unverified). */
+export type NoteSource = 'agent' | 'user' | 'page';
+
+/** One line in an Agent's notebook. */
+export type Note = { id: string; text: string; source: NoteSource; at: number };
+
+export const NOTE_SOURCES: readonly NoteSource[] = ['agent', 'user', 'page'];
+
+export const NOTE_LIMITS = {
+  maxChars: 300,
+  maxPerAgent: 200,
+} as const;

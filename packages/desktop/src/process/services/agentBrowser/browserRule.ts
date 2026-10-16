@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { upsertManagedBlock, type UpsertManagedBlockResult } from '@/common/types/agent/managedRuleBlock';
+
 /** Character cap for the rule block; later tasks add lines and must fit inside it. */
 export const BROWSER_RULE_MAX_CHARS = 1600;
 
@@ -27,11 +29,7 @@ export const BROWSER_RULE_MARKERS = {
   end: '<!-- aion-browser-rule:end -->',
 } as const;
 
-const BLOCK = `${BROWSER_RULE_MARKERS.start}\n${BROWSER_RULE_TEXT}\n${BROWSER_RULE_MARKERS.end}`;
-
-export type UpsertBrowserRuleResult = { ok: true; content: string } | { ok: false; reason: 'unbalanced-markers' };
-
-const countOf = (text: string, needle: string): number => text.split(needle).length - 1;
+export type UpsertBrowserRuleResult = UpsertManagedBlockResult;
 
 /**
  * Put the marked browser-rule block into an assistant rule: replace the existing
@@ -39,16 +37,5 @@ const countOf = (text: string, needle: string): number => text.split(needle).len
  * Refuses (ok: false) unless the markers are absent or form exactly one start-then-end
  * pair, so a hand-edited rule can never lose text.
  */
-export function upsertBrowserRule(existing: string): UpsertBrowserRuleResult {
-  const { start, end } = BROWSER_RULE_MARKERS;
-  const starts = countOf(existing, start);
-  const ends = countOf(existing, end);
-  if (starts === 0 && ends === 0) {
-    const separator = !existing ? '' : existing.endsWith('\n\n') ? '' : existing.endsWith('\n') ? '\n' : '\n\n';
-    return { ok: true, content: `${existing}${separator}${BLOCK}\n` };
-  }
-  const startAt = existing.indexOf(start);
-  const endAt = existing.indexOf(end);
-  if (starts !== 1 || ends !== 1 || endAt < startAt) return { ok: false, reason: 'unbalanced-markers' };
-  return { ok: true, content: existing.slice(0, startAt) + BLOCK + existing.slice(endAt + end.length) };
-}
+export const upsertBrowserRule = (existing: string): UpsertBrowserRuleResult =>
+  upsertManagedBlock(existing, 'aion-browser-rule', BROWSER_RULE_TEXT);

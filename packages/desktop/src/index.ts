@@ -808,8 +808,9 @@ const handleAppReady = async (): Promise<void> => {
   // startBackendOrExit() so the artifacts MCP under aioncore inherits it. Only the url is logged.
   let artifacts: Awaited<ReturnType<typeof import('./process/artifacts').startArtifacts>> = null;
   try {
-    const { startArtifacts } = await import('./process/artifacts');
-    const started = await startArtifacts();
+    const { startAgentNotes, startArtifacts } = await import('./process/artifacts');
+    // Notebooks share the artifact server (agents' notes.add) and answer the editor's IPC.
+    const started = await startArtifacts({ notes: startAgentNotes() });
     if (started) {
       process.env.AION_ARTIFACTS_URL = started.server.origin;
       process.env.AION_ARTIFACTS_TOKEN = started.token;
