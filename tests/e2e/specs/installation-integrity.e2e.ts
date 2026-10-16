@@ -27,7 +27,7 @@ async function resolveMainWindow(electronApp: ElectronApplication): Promise<Page
 }
 
 test.describe('Installation integrity failure dialog', () => {
-  test('shows diagnostics actions and records a user report', async () => {
+  test('shows the download action and no diagnostics button', async () => {
     const projectRoot = path.resolve(__dirname, '../../..');
     const electronApp = await electron.launch({
       args: ['.'],
@@ -49,26 +49,9 @@ test.describe('Installation integrity failure dialog', () => {
 
       await expect(page.getByTestId('installation-integrity-dialog')).toBeVisible();
       await expect(page.getByTestId('installation-integrity-description')).toContainText(/AionUi/);
-      await expect(page.getByTestId('installation-integrity-report')).toBeVisible();
+      // The "send diagnostics" button was removed with the feedback flow (Task 7).
+      await expect(page.getByTestId('installation-integrity-report')).toHaveCount(0);
       await expect(page.getByTestId('installation-integrity-download')).toBeVisible();
-
-      await page.getByTestId('installation-integrity-report').click();
-
-      const reportButton = page.getByTestId('installation-integrity-report');
-      await expect(reportButton).toBeDisabled();
-      await expect(reportButton).toContainText(/Diagnostics sent|诊断报告已发送/);
-
-      await expect
-        .poll(() =>
-          page.evaluate(() => ({
-            count: window.__installationIntegrityReportCount ?? 0,
-            message: window.__lastInstallationIntegrityReportMessage ?? '',
-          }))
-        )
-        .toEqual({
-          count: 1,
-          message: 'installation-integrity-user-report',
-        });
     } finally {
       await electronApp.close();
     }

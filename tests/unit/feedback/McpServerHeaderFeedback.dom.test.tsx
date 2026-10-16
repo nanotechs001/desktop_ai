@@ -3,23 +3,17 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Verifies McpServerHeader only renders the FeedbackButton when the server
- * status is 'error', and that it is wired to module=mcp-tools.
+ * Verifies McpServerHeader renders no FeedbackButton, even when the server status is
+ * 'error' (the feedback flow is removed from this fork).
  */
 
 import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { ConfigProvider } from '@arco-design/web-react';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
-}));
-
-const openFeedbackMock = vi.fn(() => Promise.resolve());
-vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
-  useFeedback: () => ({ openFeedback: openFeedbackMock }),
 }));
 
 import McpServerHeader from '@/renderer/pages/settings/ToolsSettings/McpServerHeader';
@@ -51,39 +45,14 @@ const renderHeader = (last_test_status: IMcpServer['last_test_status']) =>
     </ConfigProvider>
   );
 
-describe('McpServerHeader — FeedbackButton wiring', () => {
-  beforeEach(() => {
-    openFeedbackMock.mockClear();
-  });
-
+describe('McpServerHeader — no FeedbackButton', () => {
   afterEach(() => {
     cleanup();
   });
 
-  it('does not render FeedbackButton on connected status', () => {
-    renderHeader('connected');
+  it.each(['connected', 'testing', 'error'] as const)('renders no feedback link on %s status', (status) => {
+    renderHeader(status);
+    expect(screen.getByText('my-server')).toBeInTheDocument();
     expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-  });
-
-  it('does not render FeedbackButton while testing', () => {
-    renderHeader('testing');
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-  });
-
-  it('renders FeedbackButton when server status is error', () => {
-    renderHeader('error');
-    expect(screen.getByText('settings.oneClickFeedback')).toBeInTheDocument();
-  });
-
-  it('click opens feedback with module=mcp-tools', async () => {
-    const user = userEvent.setup();
-    renderHeader('error');
-    await user.click(screen.getByText('settings.oneClickFeedback'));
-
-    expect(openFeedbackMock).toHaveBeenCalledTimes(1);
-    expect(openFeedbackMock).toHaveBeenCalledWith({
-      module: 'mcp-tools',
-      autoScreenshot: true,
-    });
   });
 });

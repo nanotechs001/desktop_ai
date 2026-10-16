@@ -12,8 +12,6 @@ import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistan
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { agentFromPresetInfo, getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
 import useSWR from 'swr';
-import ButlerDiagnoseButton from '@/renderer/components/base/ButlerDiagnoseButton';
-import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 
 const { Text } = Typography;
 
@@ -78,15 +76,7 @@ const MessageAgentStatus: React.FC<MessageAgentStatusProps> = ({ message }) => {
         </Text>
       </div>
 
-      <div className='flex-1 flex items-center gap-6px'>
-        {getStatusBadge()}
-        {isError && (
-          <>
-            <ButlerDiagnoseButton errorText={`${display_name}: ${t('acp.status.error')}`} />
-            <FeedbackButton module='conversation-session' />
-          </>
-        )}
-      </div>
+      <div className='flex-1 flex items-center gap-6px'>{getStatusBadge()}</div>
     </div>
   );
 };

@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   readSkillFile: vi.fn(),
   assistantsList: vi.fn(),
   assistantsUpdate: vi.fn(),
-  talkToButler: vi.fn(),
   messageError: vi.fn(),
   messageSuccess: vi.fn(),
   navigate: vi.fn(),
@@ -37,10 +36,6 @@ vi.mock('@/common', () => ({
       update: { invoke: mocks.assistantsUpdate },
     },
   },
-}));
-
-vi.mock('@/renderer/hooks/assistant/useTalkToButler', () => ({
-  useTalkToButler: () => mocks.talkToButler,
 }));
 
 vi.mock('@arco-design/web-react', async (importOriginal) => {
@@ -257,15 +252,10 @@ describe('SkillDetailPage', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/settings/skills', { state: { skillsTab: 'official' } });
   });
 
-  it('opens the skill editing flow in chat with the skill name prefilled', async () => {
+  it('offers no edit-via-chat action (the Butler is removed)', async () => {
     render(<SkillDetailPage />);
 
-    const button = await screen.findByTestId('btn-edit-skill-via-chat');
-    fireEvent.click(button);
-
-    expect(mocks.talkToButler).toHaveBeenCalledWith({
-      prompt:
-        "I'd like to improve this Skill: demo-skill\n\nPlease review its content and help me make improvements. My suggestions are:",
-    });
+    await waitFor(() => expect(screen.getByTestId('skill-detail-files')).toBeInTheDocument());
+    expect(screen.queryByTestId('btn-edit-skill-via-chat')).not.toBeInTheDocument();
   });
 });

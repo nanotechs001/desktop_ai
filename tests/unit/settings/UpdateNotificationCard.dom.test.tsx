@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   updateCheckMock: vi.fn(),
   updateDownloadMock: vi.fn(),
   updateCancelDownloadMock: vi.fn(),
-  openFeedbackMock: vi.fn(),
   shellOpenExternalMock: vi.fn(),
   shellOpenFileMock: vi.fn(),
   shellShowItemInFolderMock: vi.fn(),
@@ -39,10 +38,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/renderer/components/Markdown', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
-  useFeedback: () => ({ openFeedback: mocks.openFeedbackMock }),
 }));
 
 vi.mock('@/common', () => ({
@@ -601,7 +596,7 @@ describe('UpdateNotificationCard', () => {
     expect(screen.queryByLabelText('common.close')).not.toBeInTheDocument();
   });
 
-  it('shows consumed silent installer failure marker with retry, log, and feedback actions', async () => {
+  it('shows consumed silent installer failure marker with retry and log actions, and no feedback action', async () => {
     const marker: InstallerLastFailureMarker = {
       schemaVersion: 1,
       kind: 'app-cannot-be-closed',
@@ -621,26 +616,12 @@ describe('UpdateNotificationCard', () => {
     expect(screen.getByText('update.installerLastFailure.description')).toBeInTheDocument();
     expect(screen.getByText('update.installerLastFailure.retryUpdate')).toBeInTheDocument();
     expect(screen.getByText('update.installerLastFailure.viewLog')).toBeInTheDocument();
-    expect(screen.getByText('settings.oneClickFeedback')).toBeInTheDocument();
+    // The one-click feedback action was removed with the feedback flow (Task 7).
+    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('update.installerLastFailure.viewLog'));
     await waitFor(() => {
       expect(mocks.shellShowItemInFolderMock).toHaveBeenCalledWith(marker.logPath);
-    });
-
-    fireEvent.click(screen.getByText('settings.oneClickFeedback'));
-    await waitFor(() => {
-      expect(mocks.openFeedbackMock).toHaveBeenCalledWith({
-        module: 'installer-update',
-        autoScreenshot: true,
-        tags: {
-          kind: 'app-cannot-be-closed',
-          message: 'installer-last-failure',
-        },
-        extra: {
-          installerLastFailure: marker,
-        },
-      });
     });
 
     fireEvent.click(screen.getByText('update.installerLastFailure.retryUpdate'));

@@ -11,6 +11,9 @@
 import { test, expect } from '../../fixtures';
 import { ensureTeam, invokeBridge, navigateTo, TEAM_SUPPORTED_BACKENDS, MODE_SELECTOR } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_NAME = 'E2E Session Mode Team';
 
 /** ACP-capable backends that render the mode selector in team send-box. */

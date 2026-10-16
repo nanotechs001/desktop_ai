@@ -8,6 +8,9 @@
 import { test, expect } from '../../fixtures';
 import { invokeBridge, navigateTo, cleanupTeamsByName, createTeam } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_NAME = 'E2E Case5 Delete Team';
 
 test.describe('Team Delete - Full UI Flow', () => {

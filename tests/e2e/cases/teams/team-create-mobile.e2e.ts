@@ -15,6 +15,9 @@
 import { test, expect } from '../../fixtures';
 import { TEAM_SUPPORTED_BACKENDS, cleanupTeamsByName } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const MOBILE_WIDTH = 430;
 const MOBILE_HEIGHT = 900;
 // Comfortably above the 768px mobile breakpoint so the sidebar entry point and

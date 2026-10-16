@@ -31,7 +31,6 @@ vi.mock('@renderer/components/layout/Sider/SiderNav', () => ({
 vi.mock('@renderer/components/layout/Sider/SiderFooter', () => ({
   default: () => <div data-testid='sider-footer' />,
 }));
-vi.mock('@renderer/components/layout/Sider/TeamSiderSection', () => ({ default: () => null }));
 vi.mock('@renderer/pages/settings/components/SettingsSider', () => ({ default: () => null }));
 import Sider from '@renderer/components/layout/Sider';
 

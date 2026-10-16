@@ -20,6 +20,9 @@
 import { test, expect, type Page } from '../fixtures';
 import { goToSettings } from '../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 // Label comes from i18n key settings.oneClickFeedback.
 const FEEDBACK_PILL = 'button:has-text("反馈问题"), button:has-text("Report Issue")';
 // The app can hold several FeedbackReportModal instances (FeedbackProvider's

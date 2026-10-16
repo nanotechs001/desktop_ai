@@ -8,6 +8,9 @@
 import { test, expect } from '../../fixtures';
 import { TEAM_SUPPORTED_BACKENDS, cleanupTeamsByName } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_NAME = 'E2E Test Team 001';
 
 test.describe('Team Create - Full UI Flow', () => {

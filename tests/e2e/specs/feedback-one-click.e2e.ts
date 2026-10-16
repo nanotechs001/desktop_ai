@@ -13,6 +13,9 @@
 import { test, expect } from '../fixtures';
 import { goToSettings } from '../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 declare global {
   interface Window {
     electronAPI?: {

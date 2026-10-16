@@ -14,6 +14,9 @@ import {
   ensureTeam,
 } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 type TeamAssistantState = {
   role?: string;
   conversation_id?: string;

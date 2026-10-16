@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 import { useSettingsViewMode } from '../settingsViewContext';
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
-import FeedbackReportModal from './FeedbackReportModal';
 import { ipcBridge } from '@/common';
 import { getIncludePrerelease, runUpdateCheck } from '@/renderer/components/settings/checkForUpdatesShared';
 import { UPDATE_AVAILABLE_EVENT } from '@/renderer/components/settings/useUpdateNotificationController';
@@ -41,7 +40,6 @@ const AboutModalContent: React.FC = () => {
   const isElectron = isElectronDesktop();
 
   const [includePrerelease, setIncludePrerelease] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [updateReadyState, setLocalUpdateReadyState] = useState<UpdateReadyState>(() => getUpdateReadyState());
   const [checking, setChecking] = useState(false);
 
@@ -118,11 +116,6 @@ const AboutModalContent: React.FC = () => {
     {
       title: t('settings.updateLog'),
       url: 'https://github.com/iOfficeAI/AionUi/releases',
-      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
-    },
-    {
-      title: t('settings.bugReport'),
-      onClick: () => setShowFeedbackModal(true),
       icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
@@ -225,7 +218,6 @@ const AboutModalContent: React.FC = () => {
           </div>
         </div>
       </div>
-      <FeedbackReportModal visible={showFeedbackModal} onCancel={() => setShowFeedbackModal(false)} />
     </div>
   );
 };

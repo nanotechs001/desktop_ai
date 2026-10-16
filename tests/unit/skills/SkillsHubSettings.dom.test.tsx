@@ -92,12 +92,10 @@ vi.mock('react-i18next', () => ({
 import SkillsHubSettings from '@/renderer/pages/settings/SkillsSettings/SkillsHubSettings';
 
 describe('SkillsHubSettings', () => {
-  // The import action is now a TalkToButlerButton: open the menu, then click
-  // "Import Skills" (the manual item) to run the manual import.
+  // "Add Skill" is a plain button that runs the manual import (the "via chat" menu
+  // item went away with the Butler, Task 7).
   const triggerManualImport = async () => {
     fireEvent.click(screen.getByTestId('btn-add-skill'));
-    const marker = await screen.findByTestId('btn-add-skill-manual');
-    fireEvent.click((marker.closest('[role="menuitem"]') ?? marker) as HTMLElement);
   };
 
   beforeEach(() => {

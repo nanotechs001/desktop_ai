@@ -51,7 +51,6 @@ import type { TFunction } from 'i18next';
 
 // Context providers
 import { AuthProvider } from './hooks/context/AuthContext';
-import { FeedbackProvider } from './hooks/context/FeedbackContext';
 import { ThemeProvider } from './hooks/context/ThemeContext';
 import { PreviewProvider } from './pages/conversation/Preview/context/PreviewContext';
 
@@ -311,15 +310,11 @@ const AppProviders: React.FC<PropsWithChildren> = ({ children }) =>
           PreviewProvider,
           null,
           React.createElement(
-            FeedbackProvider,
+            React.Fragment,
             null,
-            React.createElement(
-              React.Fragment,
-              null,
-              React.createElement(RuntimeFailureDialogs, null),
-              React.createElement(GpuAutoDisableNotice, null),
-              children
-            )
+            React.createElement(RuntimeFailureDialogs, null),
+            React.createElement(GpuAutoDisableNotice, null),
+            children
           )
         )
       )

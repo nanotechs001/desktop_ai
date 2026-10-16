@@ -14,6 +14,9 @@ import { findAssistantIdForBackend, goToGuid } from '../helpers';
 import { httpDelete, httpPost } from '../helpers/httpBridge';
 import { GUID_INPUT } from '../helpers/selectors';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const ENABLED_CONVERSATION_KEY = 'aionui:e2e-message-stream-conversation-id';
 const ERROR_TEXT = 'E2E fabricated failure: provider exploded (code 500)';
 

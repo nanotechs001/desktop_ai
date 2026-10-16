@@ -4,7 +4,6 @@ import AppLoader from '@renderer/components/layout/AppLoader';
 import DocumentTitle from '@renderer/components/layout/DocumentTitle';
 import { useCrossSessionRateLimitNotice } from '@/renderer/hooks/system/useCrossSessionRateLimitNotice';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -17,14 +16,12 @@ const AppearanceSettings = React.lazy(() => import('@renderer/pages/settings/App
 const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSettings'));
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
-const PetSettings = React.lazy(() => import('@renderer/pages/settings/PetSettings'));
 const ArchivedSettings = React.lazy(() => import('@renderer/pages/settings/ArchivedSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
 const LoginPage = React.lazy(() => import('@renderer/pages/login'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
-const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<AppLoader />}>
@@ -75,10 +72,8 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route index element={<Navigate to='/guid' replace />} />
           <Route path='/guid' element={withRouteFallback(Guid)} />
           <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
-          <Route
-            path='/team/:id'
-            element={TEAM_MODE_ENABLED ? withRouteFallback(TeamIndex) : <Navigate to='/guid' replace />}
-          />
+          {/* Teams are removed from this fork; old deep links land on the home page. */}
+          <Route path='/team/:id' element={<Navigate to='/' replace />} />
           <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
           <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
           {/* Assistants moved out of Settings to a top-level entry; keep a redirect
@@ -101,7 +96,8 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
           <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
+          {/* The desktop pet is removed from this fork. */}
+          <Route path='/settings/pet' element={<Navigate to='/settings' replace />} />
           <Route path='/settings/archived' element={withRouteFallback(ArchivedSettings)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />

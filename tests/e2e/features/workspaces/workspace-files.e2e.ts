@@ -13,6 +13,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_NAME = `E2E Workspace Files ${Date.now()}`;
 
 test.describe('Workspace Files — UI panel', () => {

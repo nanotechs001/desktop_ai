@@ -12,6 +12,9 @@
 import { test, expect } from '../fixtures';
 import { createTeam, deleteTeam, navigateTo, cleanupTeamsByName, TEAM_SUPPORTED_BACKENDS } from '../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const SUGGESTION_KEYS = ['debate', 'interview', 'expert_review'] as const;
 const SUGGESTION_CLICK_KEY = 'debate';
 const EXPECTED_DEBATE_VALUE = /Organize a debate|组织.*辩论/;

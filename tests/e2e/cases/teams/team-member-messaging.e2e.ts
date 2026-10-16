@@ -14,6 +14,9 @@
 import { test, expect } from '../../fixtures';
 import { navigateTo, ensureTeam, TEAM_SUPPORTED_BACKENDS } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 test.describe('Team Member Messaging', () => {
   test('send message directly to member via member tab', async ({ page }) => {
     test.setTimeout(300_000);

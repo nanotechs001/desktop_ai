@@ -7,6 +7,9 @@
 import { test, expect } from '../../fixtures';
 import { invokeBridge, navigateTo, createTeam, cleanupTeamsByName } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 async function deleteTeamBySiderMenu(page: Parameters<typeof createTeam>[0], teamName: string) {
   // Scope to the sidebar team row: a `.group` ancestor that contains the three-dot trigger AND
   // the exact team-name text. Exactness avoids "E2E Delete Team" matching "E2E Delete Sidebar Team".

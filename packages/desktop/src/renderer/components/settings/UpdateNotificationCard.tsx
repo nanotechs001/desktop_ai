@@ -5,7 +5,6 @@
  */
 
 import MarkdownView from '@/renderer/components/Markdown';
-import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
 import { Button, Modal, Progress } from '@arco-design/web-react';
 import { CheckOne, Close, Download, Minus } from '@icon-park/react';
 import React from 'react';
@@ -24,7 +23,6 @@ const renderNotificationLayer = (node: React.ReactElement) => {
 const UpdateNotificationCard: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { state, versionLabel, actions } = useUpdateNotificationController();
-  const { openFeedback } = useFeedback();
   const [releaseLogVisible, setReleaseLogVisible] = React.useState(false);
 
   if (!state.visible) return null;
@@ -211,26 +209,6 @@ const UpdateNotificationCard: React.FC = () => {
               {t('update.installerLastFailure.viewLog')}
             </Button>
           )}
-          <Button
-            type='primary'
-            size='small'
-            className={ACTION_BTN_CLASS}
-            onClick={() =>
-              void openFeedback({
-                module: 'installer-update',
-                autoScreenshot: true,
-                tags: {
-                  kind: 'app-cannot-be-closed',
-                  message: 'installer-last-failure',
-                },
-                extra: {
-                  installerLastFailure: state.installerLastFailure,
-                },
-              })
-            }
-          >
-            {t('settings.oneClickFeedback')}
-          </Button>
         </>
       );
     }

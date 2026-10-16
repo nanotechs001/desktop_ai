@@ -19,6 +19,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_NAME = `E2E Migration ${Date.now()}`;
 const LEADER_BACKEND = [...TEAM_SUPPORTED_BACKENDS][0] ?? 'claude';
 

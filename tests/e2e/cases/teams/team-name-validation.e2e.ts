@@ -6,6 +6,9 @@
  */
 import { test, expect } from '../../fixtures';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 type ModalHandles = {
   modal: import('@playwright/test').Locator;
   nameInput: import('@playwright/test').Locator;

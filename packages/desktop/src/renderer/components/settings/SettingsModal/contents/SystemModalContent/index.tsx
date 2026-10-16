@@ -8,7 +8,6 @@ import { ipcBridge } from '@/common';
 import type { IGpuStatus, IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { configService } from '@/common/config/configService';
 import AionScrollArea from '@/renderer/components/base/AionScrollArea';
-import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 import LanguageSwitcher from '@/renderer/components/settings/LanguageSwitcher';
 import { useCrossSessionMessageEnabled } from '@/renderer/hooks/chat/useCrossSessionMessageEnabled';
 import { getClientBusinessSetting, setClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
@@ -558,12 +557,7 @@ const SystemModalContent: React.FC = () => {
                 <Alert
                   className='mt-16px'
                   type='error'
-                  content={
-                    <span>
-                      {typeof error === 'string' ? error : JSON.stringify(error)}
-                      <FeedbackButton module='system-settings' className='ms-6px' />
-                    </span>
-                  }
+                  content={<span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>}
                 />
               )}
             </Form>

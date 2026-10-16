@@ -4,6 +4,9 @@
 import { test, expect } from '../../fixtures';
 import { cleanupTeamsByName, createTeam, findAssistantIdForBackend, invokeBridge, navigateTo } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_NAME = 'E2E-Member-Ops';
 
 test.describe('Team Member Ops', () => {

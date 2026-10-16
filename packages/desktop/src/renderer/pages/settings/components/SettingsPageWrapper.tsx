@@ -9,7 +9,6 @@ import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/pl
 import { type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/system/useExtensionSettingsTabs';
 import {
-  Cat,
   Communication,
   Computer,
   Earth,
@@ -77,7 +76,6 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       icon: isDesktop ? <Earth theme='outline' size='16' /> : <Communication theme='outline' size='16' />,
       path: 'webui',
     },
-    pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat theme='outline' size='16' />, path: 'pet' },
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
     archived: {
       id: 'archived',

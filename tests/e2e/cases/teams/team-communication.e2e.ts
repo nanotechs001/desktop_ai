@@ -6,6 +6,9 @@
 import { test, expect } from '../../fixtures';
 import { ensureTeam, invokeBridge, navigateTo } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 test.describe('Team Communication', () => {
   test('scenario 4: send message to leader via UI input', async ({ page }) => {
     test.setTimeout(120_000);

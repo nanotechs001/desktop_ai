@@ -1,6 +1,9 @@
 import { test, expect } from '../../fixtures';
 import { cleanupTeamsByName, createTeam } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 const TEAM_COLLAPSED = 'E2E Collapsed Team';
 const TEAM_WORKSPACE = 'E2E Workspace Team';
 

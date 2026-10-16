@@ -1,4 +1,3 @@
-import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview/context/PreviewContext';
@@ -9,8 +8,6 @@ import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
 import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry } from './SiderNav';
 import SiderFooter from './SiderFooter';
-import TeamSiderSection from './TeamSiderSection';
-import siderStyles from './Sider.module.css';
 
 const SettingsSider = React.lazy(() => import('@renderer/pages/settings/components/SettingsSider'));
 
@@ -195,15 +192,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleScheduledClick}
             />
-            {/* Chats live in the titlebar history panel; only the Teams section (removed in a later task) scrolls here. */}
-            <div className={classNames('flex-1 min-h-0 overflow-y-auto', siderStyles.scrollArea)}>
-              <TeamSiderSection
-                collapsed={collapsed}
-                pathname={pathname}
-                siderTooltipProps={siderTooltipProps}
-                onSessionClick={onSessionClick}
-              />
-            </div>
+            {/* Chats live in the titlebar history panel; the sider only holds the nav entries above. */}
           </div>
         )}
       </div>

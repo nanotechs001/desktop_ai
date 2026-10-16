@@ -6,6 +6,9 @@
 import { test, expect } from '../../fixtures';
 import { TEAM_SUPPORTED_BACKENDS, cleanupTeamsByName } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 /**
  * UI label patterns for each backend. Used to match the assistant option in
  * the Create Team list. Falls back to a case-insensitive backend name match.

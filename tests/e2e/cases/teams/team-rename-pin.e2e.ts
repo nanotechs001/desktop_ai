@@ -4,6 +4,9 @@
 import { test, expect } from '../../fixtures';
 import { cleanupTeamsByName, createTeam } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 // 三点菜单触发按钮
 const MENU_TRIGGER = '[data-testid="sider-item-menu-trigger"]';
 

@@ -40,12 +40,6 @@ vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => n
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ ...layoutState, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
 }));
-vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
-  useFeedback: () => ({ openFeedback: vi.fn() }),
-}));
-vi.mock('@/renderer/services/feedback/resolveFeedbackModule', () => ({
-  resolveFeedbackModule: () => 'conversation-session',
-}));
 vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true, isMacOS: () => true }));
 
 import Titlebar from '@/renderer/components/layout/Titlebar';

@@ -20,18 +20,12 @@ import {
 import type { PetSize, PetState } from './petTypes';
 
 /**
- * Check whether the current environment can support desktop pet windows.
- * Returns false on Linux headless (ozone-platform=headless) where creating
- * and destroying BrowserWindows triggers fatal D-Bus / shutdown crashes.
+ * The desktop pet is removed from this fork: no environment supports it, so
+ * `createPetWindow()` (and the settings toggle that guards on this) never
+ * creates a window. The rest of the module is kept but unreachable.
  */
 export function isPetSupported(): boolean {
-  if (process.platform === 'linux') {
-    const ozonePlatform = app.commandLine.getSwitchValue('ozone-platform');
-    if (ozonePlatform === 'headless') {
-      return false;
-    }
-  }
-  return true;
+  return false;
 }
 
 // petManager is dynamically imported → rollup places it in out/main/chunks/,

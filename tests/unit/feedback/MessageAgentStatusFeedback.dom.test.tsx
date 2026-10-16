@@ -3,15 +3,13 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Integration test for the FeedbackButton wired into MessageAgentStatus.
- * Ensures the link is shown only on 'error' status and invokes the feedback
- * hook with the 'conversation-session' module.
+ * MessageAgentStatus renders no FeedbackButton / ButlerDiagnoseButton, even on 'error'
+ * status (both are removed from this fork).
  */
 
 import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -21,11 +19,6 @@ vi.mock('react-i18next', () => ({
     },
     i18n: { language: 'en' },
   }),
-}));
-
-const openFeedbackMock = vi.fn(() => Promise.resolve());
-vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
-  useFeedback: () => ({ openFeedback: openFeedbackMock }),
 }));
 
 import MessageAgentStatus from '@/renderer/pages/conversation/Messages/components/MessageAgentStatus';
@@ -42,35 +35,16 @@ const buildMessage = (status: IMessageAgentStatus['content']['status']): IMessag
     },
   }) as IMessageAgentStatus;
 
-describe('MessageAgentStatus — FeedbackButton wiring', () => {
-  beforeEach(() => {
-    openFeedbackMock.mockClear();
-  });
-
+describe('MessageAgentStatus — no feedback or butler chips', () => {
   afterEach(() => {
     cleanup();
   });
 
-  it('does not render FeedbackButton on successful statuses', () => {
-    render(<MessageAgentStatus message={buildMessage('connected')} />);
+  it.each(['connected', 'error'] as const)('renders no feedback link or butler chip on %s status', (status) => {
+    render(<MessageAgentStatus message={buildMessage(status)} />);
+    expect(screen.getByText(`acp.status.${status}`)).toBeInTheDocument();
     expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-  });
-
-  it('renders FeedbackButton when agent status is error', () => {
-    render(<MessageAgentStatus message={buildMessage('error')} />);
-    expect(screen.getByText('settings.oneClickFeedback')).toBeInTheDocument();
-  });
-
-  it('opens feedback with module=conversation-session on click', async () => {
-    const user = userEvent.setup();
-    render(<MessageAgentStatus message={buildMessage('error')} />);
-    await user.click(screen.getByText('settings.oneClickFeedback'));
-
-    expect(openFeedbackMock).toHaveBeenCalledTimes(1);
-    expect(openFeedbackMock).toHaveBeenCalledWith({
-      module: 'conversation-session',
-      autoScreenshot: true,
-    });
+    expect(screen.queryByText('settings.talkToButler.solveWithButler')).not.toBeInTheDocument();
   });
 
   it('names no engine: the status line says "Agent" whatever the backend is', () => {

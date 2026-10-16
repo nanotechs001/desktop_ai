@@ -4,7 +4,6 @@ import { Check, CloseSmall, Info, LoadingOne, Refresh, Write, DeleteFour, Settin
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { McpOAuthStatus } from '@/renderer/hooks/mcp/useMcpOAuth';
-import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 import { iconColors } from '@/renderer/styles/colors';
 import { formatDateTime } from '@/renderer/services/i18n/format';
 
@@ -163,8 +162,6 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
   const statusIcon = getStatusIcon(server.last_test_status, oauthStatus, isTestingConnection);
   const statusPopoverContent = getStatusPopoverContent(server, i18n.language, t);
 
-  const isError = server.last_test_status === 'error';
-
   return (
     <div className='flex items-center justify-between group'>
       <div className='flex items-center gap-2'>
@@ -178,7 +175,6 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
             <span className='flex items-center cursor-default'>{statusIcon}</span>
           </Tooltip>
         )}
-        {isError && <FeedbackButton module='mcp-tools' />}
         {!isReadOnly && needsLogin && onOAuthLogin && (
           <Button
             size='mini'

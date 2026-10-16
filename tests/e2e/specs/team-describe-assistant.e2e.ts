@@ -35,6 +35,9 @@ import { test, expect } from '../fixtures';
 import { createTeam, invokeBridge } from '../helpers';
 import type { ITeamRunAck } from '@/common/types/team/teamTypes';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 type JsonRpcError = { code?: number; message?: string };
 type JsonRpcContent = { type?: string; text?: string };
 type JsonRpcResult = {

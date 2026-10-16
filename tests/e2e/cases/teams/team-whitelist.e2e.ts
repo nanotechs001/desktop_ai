@@ -8,6 +8,9 @@ import { test, expect } from '../../fixtures';
 import { httpDelete, httpGet, httpPost, navigateTo } from '../../helpers';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 type AgentMetadata = {
   id: string;
   name: string;

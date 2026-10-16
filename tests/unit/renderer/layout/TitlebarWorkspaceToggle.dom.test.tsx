@@ -27,12 +27,6 @@ vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
 vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({
   useChatNavHistory: () => ({ canBack: false, canForward: false, back: vi.fn(), forward: vi.fn() }),
 }));
-vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
-  useFeedback: () => ({ openFeedback: vi.fn() }),
-}));
-vi.mock('@/renderer/services/feedback/resolveFeedbackModule', () => ({
-  resolveFeedbackModule: () => 'conversation-session',
-}));
 vi.mock('@/renderer/utils/platform', () => ({
   isElectronDesktop: () => platform.desktop,
   isMacOS: () => platform.mac,
@@ -47,28 +41,29 @@ describe('Titlebar workspace toggle', () => {
     platform.mac = false;
   });
 
-  it('places the Windows workspace toggle directly after Bug Report', () => {
+  // The Bug Report button was removed with the feedback flow (Task 7); the workspace
+  // toggle is now the first toolbar button.
+  it('places the Windows workspace toggle directly before the window controls', () => {
     render(<Titlebar workspaceAvailable />);
 
-    const report = screen.getByRole('button', { name: 'conversation.welcome.quickActionFeedback' });
     const workspace = screen.getByRole('button', { name: 'common.expandMore' });
 
-    expect(report.nextElementSibling).toBe(workspace);
+    expect(screen.queryByRole('button', { name: 'conversation.welcome.quickActionFeedback' })).not.toBeInTheDocument();
     expect(workspace.nextElementSibling).toBe(screen.getByTestId('window-controls'));
   });
 
   it.each([
     { runtime: 'macOS desktop', desktop: true, mac: true },
     { runtime: 'WebUI', desktop: false, mac: false },
-  ])('keeps the workspace toggle after Bug Report on $runtime', ({ desktop, mac }) => {
+  ])('keeps the workspace toggle as the last toolbar button on $runtime', ({ desktop, mac }) => {
     platform.desktop = desktop;
     platform.mac = mac;
     render(<Titlebar workspaceAvailable />);
 
-    const report = screen.getByRole('button', { name: 'conversation.welcome.quickActionFeedback' });
     const workspace = screen.getByRole('button', { name: 'common.expandMore' });
 
-    expect(report.nextElementSibling).toBe(workspace);
+    expect(screen.queryByRole('button', { name: 'conversation.welcome.quickActionFeedback' })).not.toBeInTheDocument();
+    expect(workspace.nextElementSibling).toBeNull();
     expect(screen.queryByTestId('window-controls')).not.toBeInTheDocument();
   });
 

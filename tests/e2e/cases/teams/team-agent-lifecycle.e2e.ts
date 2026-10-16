@@ -10,6 +10,9 @@
 import { test, expect } from '../../fixtures';
 import { invokeBridge, navigateTo, TEAM_SUPPORTED_BACKENDS, findAssistantIdForBackend } from '../../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 // Natural-language team tool calling is not deterministic across every local
 // CLI/auth state. Keep this release-gating smoke on the backend that reliably
 // exercises the path in E2E; deterministic bridge/TCP/UI tests cover the shared

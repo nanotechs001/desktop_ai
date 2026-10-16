@@ -17,8 +17,6 @@ const COPY: Record<string, string> = {
   [`${RDC}.description`]:
     'AionUi detected that the local database is corrupted and cannot continue startup. After confirmation, AionUi will back up the old database and create a new local database to continue startup. Past conversations will no longer be shown, and the old database will be kept as a backup file.',
   [`${RDC}.confirmRebuild`]: 'Back up old DB and rebuild new DB',
-  [`${RDC}.sendDiagnostics`]: 'Send diagnostics',
-  [`${RDC}.diagnosticsSent`]: 'Diagnostics sent',
   [`${RDC}.rebuildFailed`]: 'Failed to back up old DB and rebuild new DB',
   [`${RDC}.confirmDialog.title`]: 'Rebuild the database?',
   [`${RDC}.confirmDialog.content`]:
@@ -34,18 +32,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Keep the installation-integrity module importable in jsdom without a real
-// feedback pipeline.
-vi.mock('@/renderer/services/feedback/submitFeedbackReport', () => ({
-  submitFeedbackReport: vi.fn().mockResolvedValue(undefined),
-}));
-
-import {
-  type InstallationIntegrityDiagnostics,
-  InstallationIntegrityFooter,
-} from '@/renderer/components/layout/InstallationIntegrityDialog';
-
-const diagnostics: InstallationIntegrityDiagnostics = { source: 'backend_startup_failure' };
+import { InstallationIntegrityFooter } from '@/renderer/components/layout/InstallationIntegrityDialog';
 
 type ConfirmConfig = Parameters<typeof Modal.confirm>[0];
 
@@ -58,9 +45,7 @@ function stubModalConfirm() {
 }
 
 function renderFooter() {
-  return render(
-    <InstallationIntegrityFooter diagnostics={diagnostics} diagnosticsKind='recoverable_database_corruption' />
-  );
+  return render(<InstallationIntegrityFooter diagnosticsKind='recoverable_database_corruption' />);
 }
 
 beforeEach(() => {
@@ -114,15 +99,15 @@ describe('InstallationIntegrityDialog — recoverable_database_corruption recove
     expect(recoverMock).not.toHaveBeenCalled();
   });
 
-  it('AC-6: rebuild button is danger secondary (not a primary CTA); report stays neutral', () => {
+  it('AC-6: rebuild button is danger secondary (not a primary CTA) and no diagnostics button is offered', () => {
     renderFooter();
 
     const rebuild = screen.getByTestId('recoverable-database-corruption-rebuild');
     expect(rebuild.className).not.toContain('arco-btn-primary');
     expect(rebuild.className).toContain('arco-btn-status-danger');
 
-    const report = screen.getByTestId('installation-integrity-report');
-    expect(report.className).not.toContain('arco-btn-primary');
+    // The "send diagnostics" button was removed with the feedback flow (Task 7).
+    expect(screen.queryByTestId('installation-integrity-report')).toBeNull();
   });
 
   it('AC-7: confirmDialog copy is wired through i18n (present, non-empty, not raw keys)', () => {

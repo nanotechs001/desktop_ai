@@ -17,7 +17,6 @@ const COPY: Record<string, string> = {
   'common.backendStartup.exited.title': "Startup didn't complete",
   'common.backendStartup.exited.description':
     'AionCore could not finish starting and has exited. Please restart the app; if this keeps happening, please send diagnostics.',
-  'common.backendStartup.exited.sendDiagnostics': 'Send diagnostics',
   'common.backendStartup.incompleteInstallation.description':
     'Your installation is missing required local resources. Please download and reinstall the latest AionUi; if it persists after reinstalling, check whether antivirus quarantined AionCore.',
 };
@@ -29,18 +28,11 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Keep the installation-integrity module importable in jsdom without a real
-// feedback pipeline.
-vi.mock('@/renderer/services/feedback/submitFeedbackReport', () => ({
-  submitFeedbackReport: vi.fn().mockResolvedValue(undefined),
-}));
-
 const FORBIDDEN_PHRASES = ['missing required local resources', 'reinstall', 'antivirus', 'quarantine'];
 
 import BackendStartingView from '@/renderer/components/layout/BackendStartingView';
 import {
   getBackendStartupInstallationDescription,
-  getInstallationIntegrityDiagnosticsSentText,
   getInstallationIntegrityModalActions,
   getInstallationIntegrityTitle,
 } from '@/renderer/components/layout/InstallationIntegrityDialog';
@@ -68,11 +60,11 @@ describe('AC-4: BackendStartingView (pending-slow, process alive)', () => {
 });
 
 describe('AC-5: backend_exited honest-failure wiring', () => {
-  it('uses the exited title and keeps a report action but no download action', () => {
+  it('uses the exited title and offers neither a download nor a diagnostics action', () => {
     expect(getInstallationIntegrityTitle(echoT, 'backend_exited')).toBe('common.backendStartup.exited.title');
 
     const actions = getInstallationIntegrityModalActions(echoT, { diagnosticsKind: 'backend_exited' });
-    expect(actions.reportText).toBe('common.backendStartup.exited.sendDiagnostics');
+    expect(actions).not.toHaveProperty('reportText');
     // No download / reinstall button for a process that was proven to exist.
     expect(actions.downloadText).toBeUndefined();
     expect(actions.recoverText).toBeUndefined();
@@ -92,28 +84,20 @@ describe('AC-5: backend_exited honest-failure wiring', () => {
 // Sentry 136646113 — dedicated port-report-timeout kind plus the neutralized
 // startup_failed fallback kind. Neither may expose the download/reinstall path.
 describe('port_report_timeout and startup_failed dialog wiring (Sentry 136646113)', () => {
-  it('uses the port-report-timeout copy with a report action but no download action', () => {
+  it('uses the port-report-timeout copy with no download action', () => {
     expect(getInstallationIntegrityTitle(echoT, 'port_report_timeout')).toBe(
       'common.backendStartup.portReportTimeout.title'
     );
-    expect(getInstallationIntegrityDiagnosticsSentText(echoT, 'port_report_timeout')).toBe(
-      'common.backendStartup.portReportTimeout.diagnosticsSent'
-    );
 
     const actions = getInstallationIntegrityModalActions(echoT, { diagnosticsKind: 'port_report_timeout' });
-    expect(actions.reportText).toBe('common.backendStartup.portReportTimeout.sendDiagnostics');
     expect(actions.downloadText).toBeUndefined();
     expect(actions.recoverText).toBeUndefined();
   });
 
   it('uses the neutral startup-failed copy for the fallback kind, with no download action', () => {
     expect(getInstallationIntegrityTitle(echoT, 'startup_failed')).toBe('common.backendStartup.startupFailed.title');
-    expect(getInstallationIntegrityDiagnosticsSentText(echoT, 'startup_failed')).toBe(
-      'common.backendStartup.startupFailed.diagnosticsSent'
-    );
 
     const actions = getInstallationIntegrityModalActions(echoT, { diagnosticsKind: 'startup_failed' });
-    expect(actions.reportText).toBe('common.backendStartup.startupFailed.sendDiagnostics');
     expect(actions.downloadText).toBeUndefined();
     expect(actions.recoverText).toBeUndefined();
   });

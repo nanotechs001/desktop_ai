@@ -22,7 +22,6 @@ import GuidActionRow from './components/GuidActionRow';
 import GuidInputCard from './components/GuidInputCard';
 import GuidModelSelector from './components/GuidModelSelector';
 import QuickActionButtons from './components/QuickActionButtons';
-import FeedbackReportModal from '@/renderer/components/settings/SettingsModal/contents/FeedbackReportModal';
 import { useGuidAssistantSelection } from './hooks/useGuidAssistantSelection';
 import { useGuidInput } from './hooks/useGuidInput';
 import { useGuidModelSelection } from './hooks/useGuidModelSelection';
@@ -62,7 +61,6 @@ const GuidPage: React.FC = () => {
   const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
 
   const localeKey = resolveLocaleKey(i18n.language);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Open external link
   const openLink = useCallback(async (url: string) => {
@@ -775,11 +773,9 @@ const GuidPage: React.FC = () => {
 
         <QuickActionButtons
           onOpenLink={openLink}
-          onOpenBugReport={() => setShowFeedbackModal(true)}
           inactiveBorderColor={inactiveBorderColor}
           activeShadow={activeShadow}
         />
-        <FeedbackReportModal visible={showFeedbackModal} onCancel={() => setShowFeedbackModal(false)} />
       </div>
     </ConfigProvider>
   );

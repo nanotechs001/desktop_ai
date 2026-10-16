@@ -368,105 +368,53 @@ describe('detectStartupArchitectureMismatch', () => {
 });
 
 describe('getInstallationIntegrityModalActions', () => {
-  it('exposes diagnostics reporting next to download-latest for blocking dialogs', () => {
-    const t = (key: string) => key;
-    const onReportDiagnostics = vi.fn();
+  const echoT = ((key: string) => key) as unknown as Parameters<typeof getInstallationIntegrityModalActions>[0];
 
-    const actions = getInstallationIntegrityModalActions(t, { onReportDiagnostics });
+  // The "send diagnostics" action was removed with the feedback flow (Task 7), so no
+  // dialog kind offers it; the remaining actions are download-latest and database rebuild.
+  it('offers download-latest and no diagnostics action for blocking dialogs', () => {
+    const t = echoT;
+
+    const actions = getInstallationIntegrityModalActions(t);
 
     expect(actions.downloadText).toBe('common.backendStartup.incompleteInstallation.downloadLatest');
-    expect(actions.reportText).toBe('common.backendStartup.incompleteInstallation.sendDiagnostics');
-
-    actions.onReportDiagnostics();
-    expect(onReportDiagnostics).toHaveBeenCalledOnce();
+    expect(actions).not.toHaveProperty('reportText');
+    expect(actions).not.toHaveProperty('onReportDiagnostics');
   });
 
-  it('uses data migration copy and diagnostics-only actions for local data migration failures', () => {
-    const t = vi.fn((key: string) => key) as any;
-    const failure = {
-      reason: 'backend_data_migration_failed',
-      backendBoundaryCode: 'BOOTSTRAP_DATA_INIT_FAILED',
-      backendBoundaryStage: 'database.migration',
-    };
+  it.each(['data_migration', 'local_data_repair', 'startup_directory'] as const)(
+    'offers no download or rebuild action for %s failures',
+    (diagnosticsKind) => {
+      const t = echoT;
 
-    const actions = getInstallationIntegrityModalActions(t, {
-      diagnosticsKind: 'data_migration',
-    } as any);
+      const actions = getInstallationIntegrityModalActions(t, { diagnosticsKind });
 
-    expect(actions.reportText).toBe('common.backendStartup.dataMigration.sendDiagnostics');
-    expect(actions.downloadText).toBeUndefined();
-    expect(failure.backendBoundaryStage).toBe('database.migration');
-  });
+      expect(actions.downloadText).toBeUndefined();
+      expect(actions.recoverText).toBeUndefined();
+    }
+  );
 
   it('shows download-latest as the only action for the database-newer-than-app downgrade dialog', () => {
-    const t = (key: string) => key;
+    const t = echoT;
 
-    const actions = getInstallationIntegrityModalActions(
-      t as any,
-      {
-        diagnosticsKind: 'database_newer_than_app',
-      } as any
-    );
+    const actions = getInstallationIntegrityModalActions(t, { diagnosticsKind: 'database_newer_than_app' });
 
-    // The root cause is fully understood (database from a newer AionUi), so
-    // no diagnostics button — a single unambiguous "download latest" action.
     expect(actions.downloadText).toBe('common.backendStartup.incompleteInstallation.downloadLatest');
-    expect(actions.reportText).toBeUndefined();
     expect(actions.recoverText).toBeUndefined();
   });
 
-  it('uses local data repair copy and diagnostics-only actions for local cache corruption', () => {
-    const t = vi.fn((key: string) => key) as any;
-
-    const actions = getInstallationIntegrityModalActions(t, {
-      diagnosticsKind: 'local_data_repair',
-    } as any);
-
-    expect(actions.reportText).toBe('common.backendStartup.localDataRepair.sendDiagnostics');
-    expect(actions.downloadText).toBeUndefined();
-  });
-
-  it('uses startup directory copy and diagnostics-only actions for directory failures', () => {
-    const t = vi.fn((key: string) => key) as any;
-
-    const actions = getInstallationIntegrityModalActions(t, {
-      diagnosticsKind: 'startup_directory',
-    } as any);
-
-    expect(actions.reportText).toBe('common.backendStartup.startupDirectory.sendDiagnostics');
-    expect(actions.downloadText).toBeUndefined();
-  });
-
   it('uses recoverable database corruption copy and rebuild action', () => {
-    const t = vi.fn((key: string) => key) as any;
+    const t = echoT;
     const onRecoverCorruptedDatabase = vi.fn();
 
     const actions = getInstallationIntegrityModalActions(t, {
       diagnosticsKind: 'recoverable_database_corruption',
       onRecoverCorruptedDatabase,
-    } as any);
+    });
 
-    expect(actions.reportText).toBe('common.backendStartup.recoverableDatabaseCorruption.sendDiagnostics');
     expect(actions.downloadText).toBeUndefined();
-    expect((actions as any).recoverText).toBe('common.backendStartup.recoverableDatabaseCorruption.confirmRebuild');
-    (actions as any).onRecoverCorruptedDatabase();
+    expect(actions.recoverText).toBe('common.backendStartup.recoverableDatabaseCorruption.confirmRebuild');
+    actions.onRecoverCorruptedDatabase();
     expect(onRecoverCorruptedDatabase).toHaveBeenCalledOnce();
-  });
-
-  it('does not invoke recover corrupted database action from diagnostics reporting', async () => {
-    const t = vi.fn((key: string) => key) as any;
-    const onReportDiagnostics = vi.fn();
-    const onRecoverCorruptedDatabase = vi.fn();
-
-    const actions = getInstallationIntegrityModalActions(t, {
-      diagnosticsKind: 'recoverable_database_corruption',
-      onRecoverCorruptedDatabase,
-      onReportDiagnostics,
-    } as any);
-
-    await actions.onReportDiagnostics();
-
-    expect(onReportDiagnostics).toHaveBeenCalledOnce();
-    expect(onRecoverCorruptedDatabase).not.toHaveBeenCalled();
   });
 });

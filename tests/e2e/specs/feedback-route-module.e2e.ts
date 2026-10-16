@@ -14,6 +14,9 @@
 import { test, expect, type Page } from '../fixtures';
 import { goToSettings, navigateTo } from '../helpers';
 
+// feature removed in this fork (Task 7)
+test.skip(true, 'feature removed in this fork (Task 7)');
+
 // Several FeedbackReportModal instances can coexist in the DOM (the global
 // FeedbackProvider's plus per-page ones like About's), and closed modals stay
 // mounted but hidden — always scope to the *visible* body.

@@ -19,7 +19,7 @@ import CronStatusTag from './CronStatusTag';
 import CreateTaskDialog from './CreateTaskDialog';
 import { getJobAgentMeta } from './jobAgentMeta';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
-import TalkToButlerButton from '@/renderer/components/base/TalkToButlerButton';
+import AddActionButton from '@/renderer/components/base/AddActionButton';
 import { AionSearchInput } from '@/renderer/components/base';
 import SettingsPageHeader from '@/renderer/pages/settings/components/SettingsPageHeader';
 import { Attention, Robot } from '@icon-park/react';
@@ -139,7 +139,7 @@ const ScheduledTasksPage: React.FC = () => {
                     onChange={setSearchQuery}
                   />
                 )}
-                <TalkToButlerButton
+                <AddActionButton
                   label={t('cron.page.newTask')}
                   onChat={handleCreateViaChat}
                   chatLabel={t('cron.page.createViaChat')}
