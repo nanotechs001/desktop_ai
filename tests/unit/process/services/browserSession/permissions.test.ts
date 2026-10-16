@@ -344,6 +344,38 @@ describe('installPermissions', () => {
     );
   });
 
+  it('after 3 dismissals for an origin+permission, denies without prompting until restart', () => {
+    const { request } = setup();
+    for (let i = 0; i < 3; i += 1) {
+      request(contents, 'geolocation', vi.fn(), {});
+      replyPermission(getPermissionRequests()[0].id, false, false);
+    }
+
+    const callback = vi.fn();
+    request(contents, 'geolocation', callback, {});
+
+    expect(callback).toHaveBeenCalledWith(false);
+    expect(getPermissionRequests()).toEqual([]);
+    // Other permissions and other sites still prompt.
+    request(contents, 'notifications', vi.fn(), {});
+    request({ getURL: () => 'https://b.test/' }, 'geolocation', vi.fn(), {});
+    expect(getPermissionRequests().map((r) => `${r.origin} ${r.permission}`)).toEqual([
+      `${ORIGIN} notifications`,
+      'https://b.test geolocation',
+    ]);
+  });
+
+  it('two dismissals still prompt', () => {
+    const { request } = setup();
+    for (let i = 0; i < 2; i += 1) {
+      request(contents, 'media', vi.fn(), {});
+      replyPermission(getPermissionRequests()[0].id, false, false);
+    }
+    request(contents, 'media', vi.fn(), {});
+
+    expect(getPermissionRequests()).toHaveLength(1);
+  });
+
   it('the check handler falls back to requestingOrigin and denies an opaque origin', () => {
     const { check } = setup();
     expect(check(null, 'fullscreen', ORIGIN, {})).toBe(true);

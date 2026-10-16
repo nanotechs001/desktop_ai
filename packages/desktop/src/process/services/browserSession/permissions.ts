@@ -25,6 +25,8 @@ const ASK_PERMISSIONS = new Set<string>([
 ] satisfies PromptPermission[]);
 const ALWAYS_ALLOW_PERMISSIONS = new Set(['fullscreen', 'pointerLock', 'clipboard-sanitized-write']);
 const PROMPT_TIMEOUT_MS = 60_000;
+/** Prompts the user dismissed without remembering, per origin+permission, before the site stops asking. */
+const MAX_PROMPT_DISMISSALS = 3;
 /** Bounds the prompt queue so a page cannot stack prompts (e.g. iframes on endless origins). */
 export const MAX_OPEN_PERMISSION_PROMPTS = 3;
 
@@ -145,6 +147,10 @@ export class PendingPermissions {
 
 const pending = new PendingPermissions();
 let store: PermissionStore | undefined;
+/** `origin permission` -> denials the user did not remember, this app session only. */
+let dismissals = new Map<string, number>();
+
+const dismissalKey = (origin: string, permission: string): string => `${origin} ${permission}`;
 
 const storeFile = (): string => path.join(homedir(), '.aionui', 'browser-permissions.json');
 const currentStore = (): PermissionStore => (store ??= loadPermissionStore(storeFile()));
@@ -176,6 +182,12 @@ export function getPermissionRequests(): PermissionRequest[] {
 export function replyPermission(id: string, allow: boolean, remember: boolean): boolean {
   const request = pending.list().find((r) => r.id === id);
   if (!request || !pending.reply(id, allow)) return false;
+  // Esc, the mask, the close button and Block without "Remember" all land here. After a few, the
+  // site is denied silently until restart so it cannot re-raise the prompt in a loop.
+  if (!allow && !remember) {
+    const key = dismissalKey(request.origin, request.permission);
+    dismissals = new Map(dismissals).set(key, (dismissals.get(key) ?? 0) + 1);
+  }
   if (remember) {
     store = rememberPermission(currentStore(), request.origin, request.permission, allow);
     try {
@@ -197,6 +209,7 @@ export function installPermissions(browserSession: Electron.Session): void {
     if (!origin) return callback(false);
     const decision = decidePermission(permission, origin, currentStore());
     if (decision !== 'ask' || !isPromptPermission(permission)) return callback(decision === 'allow');
+    if ((dismissals.get(dismissalKey(origin, permission)) ?? 0) >= MAX_PROMPT_DISMISSALS) return callback(false);
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes ?? []) : [];
     void pending.request({ origin, permission, mediaTypes }, PROMPT_TIMEOUT_MS).then(callback);
   });
@@ -212,4 +225,5 @@ export function installPermissions(browserSession: Electron.Session): void {
 export function __resetPermissionsForTests(): void {
   pending.list().forEach((r) => pending.reply(r.id, false));
   store = undefined;
+  dismissals = new Map();
 }
