@@ -206,6 +206,8 @@ async function launchApp(): Promise<ElectronApplication> {
     AIONUI_DISABLE_AUTO_UPDATE: '1',
     AIONUI_DISABLE_DEVTOOLS: '1',
     AIONUI_E2E_TEST: '1',
+    // A dev app may be running from this checkout: take the second instance's names (AionUi-Dev-2, ~/.aionui-dev-2).
+    AIONUI_MULTI_INSTANCE: '1',
     AIONUI_E2E_USER_DATA_DIR: process.env.AIONUI_E2E_USER_DATA_DIR || e2eUserDataDir,
     AIONUI_BROWSER_DOWNLOADS_DIR: e2eBrowserDownloadsDir,
     /**

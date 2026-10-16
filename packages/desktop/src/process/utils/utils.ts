@@ -47,6 +47,10 @@ const ensureCliSafeSymlink = (targetPath: string, symlinkName: string): string =
   if (!getPlatformServices().paths.needsCliSafeSymlinks()) {
     return targetPath;
   }
+  // An e2e run uses a temp userData without spaces; re-pointing ~/.aionui-dev would move a running dev app's data dir.
+  if (process.env.AIONUI_E2E_TEST || process.env.AIONUI_E2E_USER_DATA_DIR) {
+    return targetPath;
+  }
 
   const homePath = getElectronPathOrFallback('home');
   const symlinkPath = path.join(homePath, symlinkName);

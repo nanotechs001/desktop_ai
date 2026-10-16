@@ -95,7 +95,8 @@ const AGENT_INPUT_TTL_MS = 5000;
  * top-level point by the frame's offset, so any such point matches.
  * shortcut: a frame whose origin is scrolled above or left of the page reports a point below or right of the agent's,
  * so that agent click pauses its tab (fails safe); compute frame offsets in the relay if builders hit it. A user click
- * during the agent's still pauses: each agent click consumes one report, and its own report always arrives.
+ * up and left of an in-flight agent click is consumed once in its place; the agent's own report then finds nothing
+ * left and pauses the tab, so the take-over is noticed one report late but never missed.
  */
 const isOwnInput = (agent: AgentInput, input: UserInput): boolean => {
   if (input.kind === 'key') return 'key' in agent && agent.key === input.key && agent.code === input.code;

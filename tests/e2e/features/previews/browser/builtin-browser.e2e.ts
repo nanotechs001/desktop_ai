@@ -16,8 +16,8 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import type { ElectronApplication, Page } from '@playwright/test';
-import { test, expect, e2eBrowserDownloadsDir } from '../../fixtures';
-import { findAssistantIdForBackend, goToGuid } from '../../helpers';
+import { test, expect, e2eBrowserDownloadsDir } from '../../../fixtures';
+import { findAssistantIdForBackend, goToGuid } from '../../../helpers';
 
 /** Cmd on macOS, Ctrl elsewhere — the platform's browser shortcut modifier. */
 const MOD = process.platform === 'darwin' ? 'meta' : 'control';
@@ -259,7 +259,8 @@ test.describe('Built-in browser behaves like a regular browser', () => {
 
   test('a real mouse click on the page reaches it (nothing covers the webview)', async ({ electronApp, page }) => {
     const guest = await openBrowserTab(electronApp, page, `${fixture.origin}/click`);
-    const box = await page.locator('webview').boundingBox();
+    // The active tab's webview: the pane may also hold its default blank tab, which is hidden.
+    const box = await page.locator('webview:visible').boundingBox();
     expect(box, 'the webview has no on-screen box').not.toBeNull();
     const { x, y, width, height } = box as NonNullable<typeof box>;
 

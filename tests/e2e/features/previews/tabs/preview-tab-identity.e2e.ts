@@ -27,8 +27,8 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { test, expect } from '../../fixtures';
-import { goToGuid } from '../../helpers';
+import { test, expect } from '../../../fixtures';
+import { goToGuid } from '../../../helpers';
 
 /** The hoisted preview region — verified present at `Layout.tsx:550`. */
 const PREVIEW_PANEL = '[data-project-preview-region]';

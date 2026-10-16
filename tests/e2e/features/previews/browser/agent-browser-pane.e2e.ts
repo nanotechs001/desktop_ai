@@ -13,8 +13,8 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { ElectronApplication, Page } from '@playwright/test';
-import { startFixtureServers, type FixtureServers } from '../../../integration/agentBrowser/helpers/fixtureServer';
-import { test, expect } from '../../fixtures';
+import { startFixtureServers, type FixtureServers } from '../../../../integration/agentBrowser/helpers/fixtureServer';
+import { test, expect } from '../../../fixtures';
 import {
   findAssistantIdForBackend,
   goToGuid,
@@ -22,9 +22,9 @@ import {
   httpInvoke,
   selectAgent,
   sendMessageFromGuid,
-} from '../../helpers';
+} from '../../../helpers';
 
-const MCP_SCRIPT = path.resolve(__dirname, '../../../../out/main/builtin-mcp-browser.js');
+const MCP_SCRIPT = path.resolve(__dirname, '../../../../../out/main/builtin-mcp-browser.js');
 const BRIDGE_EVENT_KEY = 'office-ai-bridge-adapter';
 const OBSERVE_TIMEOUT_MS = 15_000;
 const OBSERVE_RETRY_MS = 250;
@@ -88,6 +88,12 @@ async function evalInFrame(
   );
 }
 
+type Box = { x: number; y: number; width: number; height: number };
+
+/** True when two boxes share some area. */
+const overlaps = (a: Box, b: Box): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
 const webContentsIdOf = (tab: string): number => Number(/^wc-(\d+)$/.exec(tab)?.[1]);
 
 /** Opens a user tab through the same event target=_blank uses; resolves to its webContents id. */
@@ -136,6 +142,9 @@ async function openConversation(page: Page, assistantId: string): Promise<string
 
 /** Spawns the built MCP server exactly as an agent would, with the relay env main exported for AionCore. */
 async function connectAgent(electronApp: ElectronApplication): Promise<Client> {
+  if (!fs.existsSync(MCP_SCRIPT)) {
+    throw new Error(`${MCP_SCRIPT} is missing: run \`node scripts/build-mcp-servers.js\` (the e2e globalSetup does).`);
+  }
   const relay = await electronApp.evaluate(() => ({
     url: process.env.AION_BROWSER_RELAY_URL ?? '',
     token: process.env.AION_BROWSER_RELAY_TOKEN ?? '',
@@ -219,13 +228,32 @@ test.describe('Agents in the browser pane', () => {
     const titleValue = () =>
       evalInFrame(electronApp, webContentsIdOf(builderTab), childUrl, `document.getElementById('title').value`);
 
+    // The highlight lasts 1.5 s, so check it right after the click, and that it sits on the input inside the OOPIF.
+    const clicked = await act(client, [{ op: 'click', target: title }]);
+    expect(clicked.results.map((r) => r.result)).toEqual(['done']);
+    const highlight = page.getByTestId('agent-highlight');
+    await expect(highlight).toBeVisible();
+    const highlightBox = (await highlight.boundingBox()) as Box;
+    const pane = (await page.locator('webview:visible').boundingBox()) as Box;
+    const input = (await evalInFrame(
+      electronApp,
+      webContentsIdOf(builderTab),
+      childUrl,
+      `(() => { const r = document.getElementById('title').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`
+    )) as Box;
+    // The OOPIF sits at (30, 20) in the page; the input's rect is in the OOPIF's own coordinates.
+    const inputOnScreen = { ...input, x: pane.x + 30 + input.x, y: pane.y + 20 + input.y };
+    expect(overlaps(highlightBox, inputOnScreen), JSON.stringify({ highlightBox, inputOnScreen })).toBe(true);
+
     // type is select-all (a keyDown) plus insertText: the agent's own keys must not count as the user taking over.
     const typed = await act(client, [
-      { op: 'click', target: title },
-      { op: 'type', target: title, text: 'Spring Sale' },
+      {
+        op: 'type',
+        target: await observeControl(client, 'textbox', 'Page title', servers.originB),
+        text: 'Spring Sale',
+      },
     ]);
-    expect(typed.results.map((r) => r.result)).toEqual(['done', 'done']);
-    await expect(page.getByTestId('agent-highlight')).toBeVisible();
+    expect(typed.results.map((r) => r.result)).toEqual(['done']);
     await expect.poll(titleValue).toBe('Spring Sale');
 
     // A keyDown that carries text (Space) must not leave a stray Char report that pauses the tab either.

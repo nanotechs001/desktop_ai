@@ -76,6 +76,20 @@ describe('targetRegistry', () => {
     end();
   });
 
+  it('pauses on the agent report when a user click up and left of an in-flight agent click was consumed first', () => {
+    const registry = createTargetRegistry();
+    registry.track(new FakeContents(2));
+    registry.claim(2, agent);
+    const end = registry.beginAgentInput(2, { x: 100, y: 50 });
+
+    // Up and left of the agent's point, so it is taken for the agent's own (frame-local) report.
+    registry.noteUserInput(2, { kind: 'mouse', x: 40, y: 20 });
+    expect(registry.ownership(2)?.paused).toBe(false);
+    registry.noteUserInput(2, { kind: 'mouse', x: 100, y: 50 });
+    expect(registry.ownership(2)?.paused).toBe(true);
+    end();
+  });
+
   it('never suppresses a user keyDown or a click elsewhere during an agent click', () => {
     const registry = createTargetRegistry();
     registry.track(new FakeContents(2));

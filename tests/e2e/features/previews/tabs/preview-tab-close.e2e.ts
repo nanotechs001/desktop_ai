@@ -14,8 +14,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { expect, test } from '../../fixtures';
-import { goToGuid } from '../../helpers';
+import { expect, test } from '../../../fixtures';
+import { goToGuid } from '../../../helpers';
 
 /** Verified present at Layout.tsx:550 rather than guessed. */
 const PREVIEW_PANEL = '[data-project-preview-region]';
