@@ -5,7 +5,6 @@
  */
 
 import { ipcBridge } from '@/common';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import type { IMcpServer, IProvider, TProviderWithModel } from '@/common/config/storage';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import { DROPDOWN_SEARCH_THRESHOLD } from '@/renderer/components/agent/runtimeSelectorOptions';
@@ -17,6 +16,7 @@ import type {
 } from '@/renderer/components/chat/MobileActionSheet/types';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import type { AgentRuntimeDerivedOption } from '@/renderer/utils/model/agentRuntimeCatalog';
+import { isBuiltinBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { getCleanFileNames, FileService } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
@@ -202,7 +202,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
 
   const activeSkillCount = allSkills.filter(isSkillChecked).length;
   // The browser MCP is attached to every conversation (see withBrowserMcp), so its row is locked on.
-  const isBrowserMcp = (server: IMcpServer) => server.name === BUILTIN_BROWSER_MCP_NAME;
+  const isBrowserMcp = isBuiltinBrowserMcp;
   const isMcpChecked = (server: IMcpServer) => isBrowserMcp(server) || selectedMcpServerIds.includes(server.id);
   const activeMcpCount = mcpServers.filter(isMcpChecked).length;
 

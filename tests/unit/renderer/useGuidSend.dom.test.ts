@@ -5,12 +5,18 @@
  */
 
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMcpServer } from '@/common/config/storage';
 import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
 const createConversationInvokeMock = vi.fn();
+const ensureBackendMcpCatalogMock = vi.fn();
+
+vi.mock('@/renderer/hooks/mcp/catalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/hooks/mcp/catalog')>()),
+  ensureBackendMcpCatalog: (...args: unknown[]) => ensureBackendMcpCatalogMock(...args),
+}));
 const swrMutateMock = vi.fn();
 
 vi.mock('@/common', () => ({
@@ -76,8 +82,18 @@ const createDeps = (): GuidSendDeps => ({
 });
 
 describe('useGuidSend', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
   beforeEach(() => {
     createConversationInvokeMock.mockReset();
+    ensureBackendMcpCatalogMock.mockReset();
+    ensureBackendMcpCatalogMock.mockResolvedValue({ allServers: [] });
+    // Most fixtures have no browser record, which warns by design.
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     createConversationInvokeMock.mockResolvedValue({ id: 'conv-1' });
     swrMutateMock.mockReset();
     swrMutateMock.mockResolvedValue(undefined);
@@ -391,17 +407,21 @@ describe('useGuidSend', () => {
       transport: { type: 'stdio', command: 'node' },
     } as IMcpServer;
 
+    const userRecordFor = () => ({ id: 'mcp-user', name: 'User MCP', enabled: true, builtin: false }) as IMcpServer;
+
     const sentSessionServerNames = () =>
       (createConversationInvokeMock.mock.calls[0][0].extra.selected_session_mcp_servers as { name: string }[]).map(
         (s) => s.name
       );
 
+    // The ACP explicit-selection branch has always sent only built-ins in the session list
+    // (user servers travel by id in selected_mcp_server_ids).
     it.each([
-      ['ACP, explicit selection', 'claude', ['mcp-user']],
-      ['ACP, assistant defaults', 'claude', undefined],
-      ['aionrs, explicit selection', 'aionrs', ['mcp-user']],
-      ['aionrs, assistant defaults', 'aionrs', undefined],
-    ])('%s', async (_label, backend, selectedIds) => {
+      ['ACP, explicit selection', 'claude', ['mcp-user'], [BUILTIN_BROWSER_MCP_NAME]],
+      ['ACP, assistant defaults', 'claude', undefined, ['User MCP', BUILTIN_BROWSER_MCP_NAME]],
+      ['aionrs, explicit selection', 'aionrs', ['mcp-user'], ['User MCP', BUILTIN_BROWSER_MCP_NAME]],
+      ['aionrs, assistant defaults', 'aionrs', undefined, ['User MCP', BUILTIN_BROWSER_MCP_NAME]],
+    ])('%s', async (_label, backend, selectedIds, expectedSessionNames) => {
       const deps = createDeps();
       deps.selectedAssistantBackend = backend;
       deps.current_model = { provider_id: 'p', model: 'm', use_model: 'm' } as never;
@@ -414,11 +434,51 @@ describe('useGuidSend', () => {
         await result.current.handleSend();
       });
 
-      expect(sentSessionServerNames()).toContain(BUILTIN_BROWSER_MCP_NAME);
+      // The user's selection survives in order, with the browser server appended.
+      expect(sentSessionServerNames()).toEqual(expectedSessionNames);
       // Built-in ids are ignored by AionCore in selected_mcp_server_ids, so keep them out.
-      expect(createConversationInvokeMock.mock.calls[0][0].extra.selected_mcp_server_ids).not.toContain(
-        browserServer.id
-      );
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.selected_mcp_server_ids).toEqual(['mcp-user']);
+    });
+
+    it('refetches the catalog when the browser record is missing at send time', async () => {
+      const deps = createDeps();
+      deps.availableMcpServers = [];
+      ensureBackendMcpCatalogMock.mockResolvedValue({ allServers: [userRecordFor(), browserServer] });
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(ensureBackendMcpCatalogMock).toHaveBeenCalledTimes(1);
+      expect(sentSessionServerNames()).toEqual([BUILTIN_BROWSER_MCP_NAME]);
+    });
+
+    it('does not refetch when the browser record is already known', async () => {
+      const deps = createDeps();
+      deps.availableMcpServers = [...deps.availableMcpServers, browserServer];
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(ensureBackendMcpCatalogMock).not.toHaveBeenCalled();
+    });
+
+    it('still creates the conversation, warning each time, when the refetch fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      ensureBackendMcpCatalogMock.mockRejectedValue(new Error('offline'));
+
+      const { result } = renderHook(() => useGuidSend(createDeps()));
+      await act(async () => {
+        await result.current.handleSend();
+        await result.current.handleSend();
+      });
+      expect(createConversationInvokeMock).toHaveBeenCalledTimes(2);
+
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+      errorSpy.mockRestore();
     });
   });
 });

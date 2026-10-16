@@ -7,8 +7,8 @@
 import { ipcBridge } from '@/common';
 import { type ChatFileRef, chatFileRefPath } from '@/common/types/chatFile';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
-import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
-import { withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
+import { ensureBackendMcpCatalog, toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
+import { isBuiltinBrowserMcp, withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 import { emitter } from '@/renderer/utils/emitter';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { Message } from '@arco-design/web-react';
@@ -105,6 +105,17 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       return;
     }
 
+    // A send that races the catalog load (or follows a failed load) has no browser record;
+    // refetch so the conversation still gets the browser tools.
+    const mcpCatalog = availableMcpServers.some(isBuiltinBrowserMcp)
+      ? availableMcpServers
+      : await ensureBackendMcpCatalog()
+          .then(({ allServers }) => (allServers.some(isBuiltinBrowserMcp) ? allServers : availableMcpServers))
+          .catch((error: unknown) => {
+            console.error('[useGuidSend] Failed to refetch MCP catalog:', error);
+            return availableMcpServers;
+          });
+
     const isCustomWorkspace = !!dir;
     const finalWorkspace = dir || '';
 
@@ -114,35 +125,32 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     const excludeBuiltinSkills = guidDisabledBuiltinSkills ?? assistantDefaultDisabledBuiltinSkillIds;
     const selectedAllMcpServerIds = selectedMcpServerIds ?? [];
     const selectedMcpServerIdSet = new Set(selectedAllMcpServerIds);
-    const selectedUserMcpServerIds = availableMcpServers
+    const selectedUserMcpServerIds = mcpCatalog
       .filter((server) => selectedMcpServerIdSet.has(server.id) && server.builtin !== true)
       .map((server) => server.id);
-    const selectedAllSessionMcpServers = availableMcpServers
+    const selectedAllSessionMcpServers = mcpCatalog
       .filter((server) => selectedMcpServerIdSet.has(server.id))
       .map((server) => toSessionMcpServer(server));
-    const selectedSessionMcpServers = availableMcpServers
+    const selectedSessionMcpServers = mcpCatalog
       .filter((server) => selectedMcpServerIdSet.has(server.id) && server.builtin === true)
       .map((server) => toSessionMcpServer(server));
     const defaultSelectedMcpServerIds = assistantDefaultMcpIds;
-    const defaultSelectedUserMcpServerIds = availableMcpServers
+    const defaultSelectedUserMcpServerIds = mcpCatalog
       .filter((server) => (defaultSelectedMcpServerIds ?? []).includes(server.id) && server.builtin !== true)
       .map((server) => server.id);
     const assistantOverrideMcpIds =
       selectedMcpServerIds !== undefined ? selectedAllMcpServerIds : defaultSelectedMcpServerIds;
     const selectedUserMcpServerIdsToSend =
       selectedMcpServerIds !== undefined ? selectedUserMcpServerIds : defaultSelectedUserMcpServerIds;
-    const selectedSessionMcpServersToSend = withBrowserMcp(
+    const sessionMcpServersToSend =
       selectedMcpServerIds !== undefined
         ? selectedAllSessionMcpServers
-        : availableMcpServers
+        : mcpCatalog
             .filter((server) => (defaultSelectedMcpServerIds ?? []).includes(server.id))
-            .map((server) => toSessionMcpServer(server)),
-      availableMcpServers
-    );
+            .map((server) => toSessionMcpServer(server));
+    // The ACP branch has always sent only the built-ins of an explicit selection.
     const acpSessionMcpServersToSend =
-      selectedMcpServerIds !== undefined
-        ? withBrowserMcp(selectedSessionMcpServers, availableMcpServers)
-        : selectedSessionMcpServersToSend;
+      selectedMcpServerIds !== undefined ? selectedSessionMcpServers : sessionMcpServersToSend;
 
     // `current_model` is the aionrs provider selection and means nothing to a
     // CLI agent, which owns its own model list. Used as a blanket fallback it
@@ -196,7 +204,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             workspace: finalWorkspace,
             custom_workspace: isCustomWorkspace,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-            selected_session_mcp_servers: selectedSessionMcpServersToSend,
+            selected_session_mcp_servers: withBrowserMcp(sessionMcpServersToSend, mcpCatalog),
           },
         });
 
@@ -250,7 +258,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           custom_workspace: isCustomWorkspace,
           default_files: files.map(chatFileRefPath),
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-          selected_session_mcp_servers: acpSessionMcpServersToSend,
+          selected_session_mcp_servers: withBrowserMcp(acpSessionMcpServersToSend, mcpCatalog),
         },
       });
       if (!conversation || !conversation.id) {

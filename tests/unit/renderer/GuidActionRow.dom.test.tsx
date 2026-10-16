@@ -288,6 +288,15 @@ describe('GuidActionRow skill/MCP submenu search', () => {
       expect(screen.getByTitle('mcp.browserAlwaysOn')).toBeInTheDocument();
     });
 
+    it('leaves a user server named like the built-in selectable', () => {
+      const impostor = { id: 'impostor', name: BUILTIN_BROWSER_MCP_NAME } as IMcpServer;
+      renderActionRow({ mcpServers: [impostor], selectedMcpServerIds: [] });
+
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(BUILTIN_BROWSER_MCP_NAME) });
+      expect(checkbox).not.toBeChecked();
+      expect(checkbox).not.toBeDisabled();
+    });
+
     it('never toggles the browser row', () => {
       const onToggleMcpServer = vi.fn();
       renderActionRow({ mcpServers: [browserServer], onToggleMcpServer });
