@@ -12,7 +12,8 @@ type Impl = {
 };
 
 const mocks = vi.hoisted(() => ({
-  defaultSession: { name: 'default' },
+  defaultSession: { name: 'default', webRequest: { onBeforeRequest: vi.fn() } },
+  setSessionPartitionResolver: vi.fn(),
   constructed: [] as Array<Record<string, unknown>>,
   addTab: vi.fn(),
   selectTab: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
 }));
 
 vi.mock('electron-chrome-extensions', () => ({
+  setSessionPartitionResolver: mocks.setSessionPartitionResolver,
   ElectronChromeExtensions: class {
     static handleCRXProtocol = mocks.handleCRXProtocol;
     addTab = mocks.addTab;
@@ -56,7 +58,7 @@ import {
 } from '@process/services/browserSession/extensions';
 
 const browserSession = { name: 'browser' } as unknown as Electron.Session;
-const mainWindow = { isDestroyed: () => false } as unknown as Electron.BrowserWindow;
+const mainWindow = { isDestroyed: () => false, webContents: { id: 1 } } as unknown as Electron.BrowserWindow;
 const contentsWithId = (id: number) => ({ id }) as unknown as Electron.WebContents;
 
 const setup = async (getMainWindow: () => Electron.BrowserWindow | null = () => mainWindow) => {
@@ -351,5 +353,56 @@ describe('web store install dialog', () => {
     await expect(beforeInstall(installDetails('https://chromewebstore.google.com/detail/x'))).resolves.toEqual({
       action: 'deny',
     });
+  });
+});
+
+describe('crx:// on the default session', () => {
+  type CrxListener = (
+    details: { url: string; webContentsId?: number },
+    callback: (response: { cancel?: boolean }) => void
+  ) => void;
+
+  const crxListener = async (getMainWindow?: () => Electron.BrowserWindow | null) => {
+    await setup(getMainWindow);
+    return mocks.defaultSession.webRequest.onBeforeRequest.mock.calls[0][0] as CrxListener;
+  };
+  const decide = (listener: CrxListener, url: string, webContentsId?: number) => {
+    const callback = vi.fn();
+    listener({ url, webContentsId }, callback);
+    return callback.mock.calls[0][0] as { cancel?: boolean };
+  };
+
+  it('lets the AionUi window load extension icons', async () => {
+    const listener = await crxListener();
+
+    expect(decide(listener, 'crx://extension-icon/abc/32/1?partition=persist:aionui-browser', 1)).toEqual({
+      cancel: false,
+    });
+  });
+
+  it('cancels crx:// from any other page, from no page, and when the main window is gone', async () => {
+    const listener = await crxListener();
+    expect(decide(listener, 'crx://extension-icon/abc/32/1', 2)).toEqual({ cancel: true });
+    expect(decide(listener, 'crx://extension-icon/abc/32/1')).toEqual({ cancel: true });
+
+    vi.clearAllMocks();
+    const orphaned = await crxListener(() => null);
+    expect(decide(orphaned, 'crx://extension-icon/abc/32/1', 1)).toEqual({ cancel: true });
+  });
+
+  it('leaves every other request alone', async () => {
+    const listener = await crxListener();
+
+    expect(decide(listener, 'https://a.test/', 2)).toEqual({});
+    expect(decide(listener, 'http://localhost:5173/main.js', 1)).toEqual({});
+  });
+
+  it('resolves only the browser partition for <browser-action-list>', async () => {
+    await setup();
+    const resolve = mocks.setSessionPartitionResolver.mock.calls[0][0] as (partition: string) => Electron.Session;
+
+    expect(resolve('persist:aionui-browser')).toBe(browserSession);
+    expect(() => resolve('persist:anything-else')).toThrow();
+    expect(() => resolve('')).toThrow();
   });
 });

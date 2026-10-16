@@ -5,8 +5,9 @@
  */
 
 import { dialog, session as electronSession } from 'electron';
-import { ElectronChromeExtensions } from 'electron-chrome-extensions';
+import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-chrome-extensions';
 import { installChromeWebStore } from 'electron-chrome-web-store';
+import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { loadTranslate } from './contextMenuInstall';
 import { isSafeUrl } from './urlSafety';
 
@@ -35,6 +36,7 @@ export type InstallPrompt = InstallSummary & { name: string };
 const TAB_CREATE_TIMEOUT_MS = 10_000;
 const EXTENSION_PAGE_PREFIX = 'chrome-extension://';
 const WEB_STORE_HOST = 'chromewebstore.google.com';
+const CRX_PREFIX = 'crx:';
 const INSTALL_KEY = 'preview.browserChrome.extensions';
 /** Button order in the install dialog; Cancel is also what Esc / closing the dialog returns. */
 const ADD_BUTTON = 0;
@@ -162,8 +164,22 @@ export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<Brows
     removeTab: (tab) => closeTab(tab.id),
   });
 
-  // <browser-action-list> lives in the main window, whose pages use the default session.
+  // <browser-action-list> lives in the main window, whose pages use the default session. Only the
+  // browser partition resolves (no partition is created on request), and only the main window may
+  // load crx:// at all, so other default-session pages cannot probe which extensions are installed.
+  setSessionPartitionResolver((partition) => {
+    if (partition !== BROWSER_SESSION_PARTITION) throw new Error(`unknown extensions partition: ${partition}`);
+    return session;
+  });
   ElectronChromeExtensions.handleCRXProtocol(electronSession.defaultSession);
+  // Unfiltered: webRequest URL patterns reject custom schemes ("Wrong scheme type"), so crx:// is
+  // matched here. This is the default session's only onBeforeRequest listener (Electron keeps one).
+  electronSession.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    if (!details.url.startsWith(CRX_PREFIX)) return callback({});
+    callback({
+      cancel: details.webContentsId === undefined || details.webContentsId !== liveMainWindow()?.webContents.id,
+    });
+  });
 
   // Not awaited: loading installed extensions from disk must not delay tracking tabs.
   const beforeInstall = createBeforeInstall((prompt) => confirmInstall(liveMainWindow(), prompt));
