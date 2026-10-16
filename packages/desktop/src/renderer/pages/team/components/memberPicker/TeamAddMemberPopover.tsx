@@ -86,7 +86,7 @@ const TeamAddMemberPopover: React.FC<Props> = ({ children, disabled = false }) =
       testIdPrefix='team-add-member'
       panelTestId='team-add-member-panel'
       title={t('team.addMember.title', { defaultValue: 'Add member' })}
-      subtitle={t('team.addMember.subtitle', { defaultValue: 'The same assistant can be added repeatedly' })}
+      subtitle={t('team.addMember.subtitle', { defaultValue: 'The same Agent can be added repeatedly' })}
       guidanceFooter={
         leader?.slot_id ? (
           <div className='text-12px leading-18px text-t-tertiary'>

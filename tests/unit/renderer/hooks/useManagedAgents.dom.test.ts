@@ -30,6 +30,7 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/utils/model/agentTypes', () => ({
   MANAGED_AGENTS_SWR_KEY: 'agents.managed',
+  ENGINE_CATALOG_SWR_KEY: 'agents.managed.engines',
   fetchManagedAgents: vi.fn(),
 }));
 
@@ -94,6 +95,8 @@ describe('useManagedAgents', () => {
 
     expect(mutate).toHaveBeenCalledWith('agents.managed');
     expect(mutate).toHaveBeenCalledWith('assistants.list');
+    // The Guid page and the default-engine hooks read this key, so a newly connected engine shows up at once.
+    expect(mutate).toHaveBeenCalledWith('agents.managed.engines');
   });
 
   it('refreshCustomAgents triggers a backend rescan then refreshes management and assistant caches', async () => {
@@ -108,6 +111,8 @@ describe('useManagedAgents', () => {
     expect(ipcBridge.acpConversation.refreshCustomAgents.invoke).toHaveBeenCalled();
     expect(mutate).toHaveBeenCalledWith('agents.managed');
     expect(mutate).toHaveBeenCalledWith('assistants.list');
+    // The Guid page and the default-engine hooks read this key, so a newly connected engine shows up at once.
+    expect(mutate).toHaveBeenCalledWith('agents.managed.engines');
   });
 
   it('getManagedAgents fetches the management catalog without invalidating the detected cache', async () => {

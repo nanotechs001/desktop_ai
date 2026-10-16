@@ -108,7 +108,7 @@ const IdentitySection: React.FC<IdentitySectionProps> = ({
               disabled={!isDescriptionEditable}
               data-testid='input-assistant-desc'
               placeholder={t('settings.assistantDescriptionPlaceholder', {
-                defaultValue: 'What can this assistant help with?',
+                defaultValue: 'What can this Agent help with?',
               })}
               className='rounded-8px border-border-2 bg-bg-0'
             />

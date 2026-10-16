@@ -65,6 +65,9 @@
     "rebindFailed": "{{count}} 件の Agent のエンジンを更新できませんでした。",
     "rebindFailed_one": "{{count}} 件の Agent のエンジンを更新できませんでした。",
     "rebindFailed_other": "{{count}} 件の Agent のエンジンを更新できませんでした。",
-    "rebindListFailed": "エンジンを更新するための Agent を読み込めませんでした。"
-  }
+    "rebindListFailed": "エンジンを更新するための Agent を読み込めませんでした。",
+    "label": "エンジン"
+  },
+  "cannotDeleteDefault": "既定のエージェントは削除できません。",
+  "ruleSyncFailed": "エージェントは保存されましたが、ブラウザールールを更新できませんでした。アプリを再起動して再試行してください。"
 }

@@ -25,6 +25,8 @@ export type ConfigKeyMap = {
   'guid.lastAssistantId': string | undefined;
   /** Managed agent (engine) that Agents run on unless they are pinned elsewhere. */
   'agent.defaultAgentId': string | undefined;
+  /** The undeletable default Agent (an assistant record the main process creates at startup). */
+  'agent.builtinDefaultId': string | undefined;
   /** Agents pinned to one engine: assistant id -> managed agent id. */
   'agent.enginePins': Record<string, string> | undefined;
   /** User-defined order for the enabled assistant picker surfaces. */

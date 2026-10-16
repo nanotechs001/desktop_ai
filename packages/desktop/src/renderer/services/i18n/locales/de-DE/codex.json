@@ -16,7 +16,7 @@
     "retry_count": "Anzahl Versuche",
     "error_details": "Fehlerdetails",
     "quick_switch_title": "💡 **Schnellwechsel-Optionen:**",
-    "quick_switch_content": "Wenn der aktuelle Dienst auf Netzwerkbeschränkungen stößt, kannst du:\n\n1. **Sofort zum KI-Assistenten wechseln**: Wähle andere verfügbare Assistenten im linken Panel\n2. **Dienststatus prüfen**: Die Verfügbarkeit verschiedener KI-Dienste kann je nach Region variieren\n3. **Netzwerk optimieren**: Verwende eine stabile Netzwerkumgebung für bessere Verbindungsqualität\n4. **Später erneut versuchen**: Netzwerkbeschränkungen sind meist vorübergehend\n\n**Tipp**: Es wird empfohlen, mehrere KI-Dienste als Alternativen zu konfigurieren, um die Arbeitskontinuität sicherzustellen.",
+    "quick_switch_content": "Wenn der aktuelle Dienst auf Netzwerkbeschränkungen stößt, kannst du:\n\n1. **Sofort zum KI-Agents wechseln**: Wähle andere verfügbare Agents im linken Panel\n2. **Dienststatus prüfen**: Die Verfügbarkeit verschiedener KI-Dienste kann je nach Region variieren\n3. **Netzwerk optimieren**: Verwende eine stabile Netzwerkumgebung für bessere Verbindungsqualität\n4. **Später erneut versuchen**: Netzwerkbeschränkungen sind meist vorübergehend\n\n**Tipp**: Es wird empfohlen, mehrere KI-Dienste als Alternativen zu konfigurieren, um die Arbeitskontinuität sicherzustellen.",
     "recovery_actions": {
       "cloudflare_blocked": [
         "• VPN oder Proxy-Dienst verwenden",

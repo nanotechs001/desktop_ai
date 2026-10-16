@@ -146,7 +146,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     <>
       {allAssistants.length === 0 ? (
         <div className='flex min-h-112px items-center justify-center rounded-8px border border-dashed border-border-2 bg-fill-1 py-14px text-13px text-t-tertiary'>
-          {t('team.create.noSupportedAgents', { defaultValue: 'No supported assistants available' })}
+          {t('team.create.noSupportedAgents', { defaultValue: 'No supported Agents available' })}
         </div>
       ) : (
         <TeamAssistantPicker
@@ -210,7 +210,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         <div className='mb-12px text-15px font-600 leading-22px text-t-secondary'>
           {t('team.create.allAssistantsWithCount', {
             count: allAssistants.length,
-            defaultValue: `All assistants (${allAssistants.length})`,
+            defaultValue: `All Agents (${allAssistants.length})`,
           })}
         </div>
         {assistantPicker}
@@ -242,7 +242,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       onVisibleChange={setAssistantDropdownOpen}
       testIdPrefix='team-create-agent'
       panelTestId='team-create-assistant-pane'
-      emptyText={t('team.create.noSupportedAgents', { defaultValue: 'No supported assistants available' })}
+      emptyText={t('team.create.noSupportedAgents', { defaultValue: 'No supported Agents available' })}
     >
       <Button
         type='outline'
@@ -295,7 +295,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         title: t('team.create.title', { defaultValue: 'New Team' }),
         subtitle: t('team.create.subtitle', {
           defaultValue:
-            'Let multiple AI assistants team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.',
+            'Let multiple AI Agents team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.',
         }),
         showClose: true,
       }}

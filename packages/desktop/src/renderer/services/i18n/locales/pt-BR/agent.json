@@ -65,6 +65,9 @@
     "rebindFailed": "Não foi possível atualizar o motor de {{count}} Agents.",
     "rebindFailed_one": "Não foi possível atualizar o motor de {{count}} Agent.",
     "rebindFailed_other": "Não foi possível atualizar o motor de {{count}} Agents.",
-    "rebindListFailed": "Não foi possível carregar seus Agents para atualizar o motor."
-  }
+    "rebindListFailed": "Não foi possível carregar seus Agents para atualizar o motor.",
+    "label": "Motor"
+  },
+  "cannotDeleteDefault": "O agente padrão não pode ser excluído.",
+  "ruleSyncFailed": "O agente foi salvo, mas as regras de navegador dele não puderam ser atualizadas. Reinicie o aplicativo para tentar novamente."
 }

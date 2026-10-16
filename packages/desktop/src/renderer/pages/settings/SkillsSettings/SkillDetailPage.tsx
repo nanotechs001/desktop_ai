@@ -153,11 +153,11 @@ const SkillDetailPage: React.FC = () => {
             : (assistant.enabled_skills ?? []).filter((n) => n !== decodedName),
         };
         await ipcBridge.assistants.update.invoke(update);
-        Message.success(t('settings.skillsHub.detailAttachSuccess', { defaultValue: 'Assistants updated' }));
+        Message.success(t('settings.skillsHub.detailAttachSuccess', { defaultValue: 'Agents updated' }));
         await Promise.all([mutateAssistants(), swrMutate('agents.boundAssistants.list')]);
       } catch (error) {
         console.error('Failed to update assistant skills:', error);
-        Message.error(t('settings.skillsHub.detailAttachError', { defaultValue: 'Failed to update assistants' }));
+        Message.error(t('settings.skillsHub.detailAttachError', { defaultValue: 'Failed to update Agents' }));
       } finally {
         setSaving(false);
       }
@@ -263,7 +263,7 @@ const SkillDetailPage: React.FC = () => {
                     data-testid='btn-add-assistant'
                     className='!h-24px !px-8px !text-12px !text-t-secondary hover:!text-t-primary'
                   >
-                    {t('settings.skillsHub.detailAddAssistant', { defaultValue: 'Attach to assistant' })}
+                    {t('settings.skillsHub.detailAddAssistant', { defaultValue: 'Attach to Agent' })}
                   </Button>
                 </Dropdown>
               }
@@ -274,7 +274,7 @@ const SkillDetailPage: React.FC = () => {
                   className='rounded-8px bg-fill-1 px-12px py-16px text-center text-12px text-t-tertiary'
                 >
                   {t('settings.skillsHub.detailUsedByEmpty', {
-                    defaultValue: 'No assistants are using this skill yet.',
+                    defaultValue: 'No Agents are using this skill yet.',
                   })}
                 </div>
               ) : (

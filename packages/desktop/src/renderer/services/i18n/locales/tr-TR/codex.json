@@ -16,7 +16,7 @@
     "retry_count": "Deneme Sayısı",
     "error_details": "Hata Detayları",
     "quick_switch_title": "💡 **Hızlı Geçiş Seçenekleri:**",
-    "quick_switch_content": "Mevcut servis ağ kısıtlamalarıyla karşılaştığında şunları yapabilirsiniz:\n\n1. **AI Asistanını Hemen Değiştir**: Sol panelden diğer mevcut asistanları seçin\n2. **Servis Durumunu Kontrol Et**: Farklı AI servislerinin kullanılabilirliği bölgeye göre değişebilir\n3. **Ağ Optimizasyonu**: Bağlantı başarı oranını artırmak için kararlı bir ağ ortamı kullanın\n4. **Daha Sonra Tekrar Dene**: Ağ kısıtlamaları genellikle geçicidir\n\n**İpucu**: İş sürekliliğini sağlamak için alternatif olarak birden fazla AI servisi yapılandırmanız önerilir.",
+    "quick_switch_content": "Mevcut servis ağ kısıtlamalarıyla karşılaştığında şunları yapabilirsiniz:\n\n1. **AI Agent'ını Hemen Değiştir**: Sol panelden diğer mevcut Agent'ları seçin\n2. **Servis Durumunu Kontrol Et**: Farklı AI servislerinin kullanılabilirliği bölgeye göre değişebilir\n3. **Ağ Optimizasyonu**: Bağlantı başarı oranını artırmak için kararlı bir ağ ortamı kullanın\n4. **Daha Sonra Tekrar Dene**: Ağ kısıtlamaları genellikle geçicidir\n\n**İpucu**: İş sürekliliğini sağlamak için alternatif olarak birden fazla AI servisi yapılandırmanız önerilir.",
     "recovery_actions": {
       "cloudflare_blocked": [
         "• VPN veya proxy servisi kullanın",

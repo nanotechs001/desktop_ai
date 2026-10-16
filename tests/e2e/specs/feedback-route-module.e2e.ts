@@ -67,7 +67,7 @@ test('scheduled tasks list preselects the scheduled-task module', async ({ page 
 test('assistants page preselects the assistant-preset module', async ({ page }) => {
   await navigateTo(page, '#/assistants');
   await openTitlebarFeedback(page);
-  await expectSelectedModule(page, /助手与预设|Assistants & Presets/);
+  await expectSelectedModule(page, /助手与预设|Agent 与预设|Assistants & Presets|Agents & Presets/);
   await closeFeedbackModal(page);
 });
 

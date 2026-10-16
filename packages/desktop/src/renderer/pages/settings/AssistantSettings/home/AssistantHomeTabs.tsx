@@ -100,10 +100,10 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
         <div className='mx-auto w-full max-w-800px'>
           <SettingsPageHeader
             data-testid='assistants-header'
-            title={t('settings.assistants', { defaultValue: 'Assistants' })}
+            title={t('settings.assistants', { defaultValue: 'Agents' })}
             description={t('settings.assistantHomeLeadShort', {
               defaultValue:
-                'Ready-to-work AI experts, preloaded with skills. Enable one and it shows up wherever you pick an assistant.',
+                'Ready-to-work AI experts, preloaded with skills. Enable one and it shows up wherever you pick an Agent.',
             })}
             actions={
               <>
@@ -112,7 +112,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
                     className='shrink-0 w-[200px] hidden md:flex'
                     data-testid='input-search-assistants'
                     placeholder={t('settings.searchAssistants', {
-                      defaultValue: 'Search assistants by name or description',
+                      defaultValue: 'Search Agents by name or description',
                     })}
                     value={searchQuery}
                     onChange={setSearchQuery}
@@ -120,12 +120,12 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
                 )}
                 <TalkToButlerButton
                   className='shrink-0'
-                  label={t('settings.createAssistant', { defaultValue: 'Create Assistant' })}
+                  label={t('settings.createAssistant', { defaultValue: 'Create Agent' })}
                   chatLabel={t('settings.talkToButler.createViaChat', { defaultValue: 'Create via chat' })}
                   onManual={onCreate}
                   manualLabel={t('settings.talkToButler.createManually', { defaultValue: 'Create manually' })}
                   prompt={t('settings.talkToButler.prompt.createAssistant', {
-                    defaultValue: 'Help me create a new assistant and walk me through setting it up.',
+                    defaultValue: 'Help me create a new Agent and walk me through setting it up.',
                   })}
                   data-testid='btn-create-assistant'
                 />
@@ -139,7 +139,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
               },
               {
                 key: 'mine',
-                label: t('settings.assistantTabMine', { defaultValue: 'My Assistants' }),
+                label: t('settings.assistantTabMine', { defaultValue: 'My Agents' }),
                 count: counts.mine,
               },
               {

@@ -57,7 +57,7 @@ const TeamMemberDraftList: React.FC<Props> = ({
       </div>
       <p className='m-0 mb-12px text-12px leading-18px text-t-tertiary'>
         {t('team.create.membersHelper', {
-          defaultValue: 'Choose team members and assign one Leader. The same assistant can be selected multiple times.',
+          defaultValue: 'Choose team members and assign one Leader. The same Agent can be selected multiple times.',
         })}
       </p>
       <div
@@ -68,13 +68,13 @@ const TeamMemberDraftList: React.FC<Props> = ({
           <div className='flex max-w-260px flex-col items-center gap-6px text-center'>
             <span className='text-13px font-500 leading-20px text-t-secondary'>
               {t('team.create.selectAtLeastOneMember', {
-                defaultValue: 'Select at least one assistant as the Team Leader.',
+                defaultValue: 'Select at least one Agent as the Team Leader.',
               })}
             </span>
             <span className='text-12px leading-18px text-t-tertiary'>
               {t('team.create.memberHint', {
                 defaultValue:
-                  'No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.',
+                  'No suitable Agent as a member? After creation, let the Leader create temporary team members in chat.',
               })}
             </span>
           </div>

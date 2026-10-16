@@ -134,7 +134,7 @@ describe('TeamAddMemberPopover', () => {
     const header = screen.getByTestId('team-add-member-panel-header');
     expect(header).toBeInTheDocument();
     expect(header).toHaveTextContent('Add member');
-    expect(header).toHaveTextContent('The same assistant can be added repeatedly');
+    expect(header).toHaveTextContent('The same Agent can be added repeatedly');
     expect(screen.queryByTestId('team-add-member-footer')).not.toBeInTheDocument();
   });
 

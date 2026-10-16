@@ -946,7 +946,7 @@ const ChannelModalContent: React.FC = () => {
       defaultValue: 'Select a channel and configure credentials.',
     }),
     t('settings.channels.enableAfterConfig', {
-      defaultValue: 'Enable it and start chatting with your AI assistant.',
+      defaultValue: 'Enable it and start chatting with your AI Agent.',
     }),
   ];
 

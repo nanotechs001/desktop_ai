@@ -40,7 +40,7 @@
   "export.typeLabel": "Тип",
   "export.noMessages": "Нет сообщений",
   "export.userLabel": "Пользователь",
-  "export.assistantLabel": "Ассистент",
+  "export.assistantLabel": "Агент",
   "export.systemLabel": "Система",
   "export.menuTitle": "Экспорт диалога",
   "export.menuHint": "Выберите способ экспорта текущего диалога",

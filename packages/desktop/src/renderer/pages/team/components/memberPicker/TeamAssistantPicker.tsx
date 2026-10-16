@@ -88,7 +88,7 @@ const TeamAssistantPicker: React.FC<Props> = ({
               const blockReason = rowBlocked
                 ? assistant.team_block_reason ||
                   t('settings.assistantTeamUnsupported', {
-                    defaultValue: 'This assistant cannot be used in team mode right now.',
+                    defaultValue: 'This Agent cannot be used in team mode right now.',
                   })
                 : undefined;
               const rowBaseClassName = isModalDensity

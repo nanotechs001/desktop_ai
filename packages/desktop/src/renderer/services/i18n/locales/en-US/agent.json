@@ -65,6 +65,9 @@
     "rebindFailed": "Could not update the engine for {{count}} Agents.",
     "rebindFailed_one": "Could not update the engine for {{count}} Agent.",
     "rebindFailed_other": "Could not update the engine for {{count}} Agents.",
-    "rebindListFailed": "Could not load your Agents to update their engine."
-  }
+    "rebindListFailed": "Could not load your Agents to update their engine.",
+    "label": "Engine"
+  },
+  "cannotDeleteDefault": "The default Agent can't be deleted.",
+  "ruleSyncFailed": "The Agent was saved, but its browser rules could not be updated. Restart the app to retry."
 }

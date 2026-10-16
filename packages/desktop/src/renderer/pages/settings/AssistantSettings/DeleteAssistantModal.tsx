@@ -24,7 +24,7 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
 
   return (
     <Modal
-      title={t('settings.deleteAssistantTitle', { defaultValue: 'Delete Assistant' })}
+      title={t('settings.deleteAssistantTitle', { defaultValue: 'Delete Agent' })}
       visible={visible}
       onCancel={onCancel}
       onOk={onConfirm}
@@ -39,7 +39,7 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
     >
       <p>
         {t('settings.deleteAssistantConfirm', {
-          defaultValue: 'Are you sure you want to delete this assistant? This action cannot be undone.',
+          defaultValue: 'Are you sure you want to delete this Agent? This action cannot be undone.',
         })}
       </p>
       {activeAssistant && (

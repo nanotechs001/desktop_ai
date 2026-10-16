@@ -385,7 +385,7 @@ const ModelModalContent: React.FC = () => {
           data-testid='model-header'
           title={t('settings.model')}
           description={t('settings.modelDescription', {
-            defaultValue: 'Configure LLM providers and API keys for use across all assistants.',
+            defaultValue: 'Configure LLM providers and API keys for use across all Agents.',
           })}
           actions={headerActions}
         />

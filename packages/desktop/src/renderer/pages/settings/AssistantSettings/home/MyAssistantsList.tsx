@@ -56,7 +56,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   const handleCreateViaChat = () => {
     void talkToButler({
       prompt: t('settings.talkToButler.prompt.createAssistant', {
-        defaultValue: 'Help me create a new assistant and walk me through setting it up.',
+        defaultValue: 'Help me create a new Agent and walk me through setting it up.',
       }),
     });
   };
@@ -106,11 +106,11 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
       data-testid='created-empty'
     >
       <div className='mb-6px text-13px font-600 text-t-primary'>
-        {t('settings.customEmptyTitle', { defaultValue: 'No custom assistants yet' })}
+        {t('settings.customEmptyTitle', { defaultValue: 'No custom Agents yet' })}
       </div>
       <p className='mb-16px max-w-360px text-12px leading-[1.6] text-t-secondary'>
         {t('settings.customEmptyBody', {
-          defaultValue: 'Create one by chatting with the butler, or duplicate an official assistant into your own.',
+          defaultValue: 'Create one by chatting with the butler, or duplicate an official Agent into your own.',
         })}
       </p>
       <div className='flex items-center gap-10px'>
@@ -144,7 +144,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
           />
           <span className='truncate'>
             {t('settings.myAssistantsHintShort', {
-              defaultValue: 'Your own assistants — used wherever you pick one.',
+              defaultValue: 'Your own Agents — used wherever you pick one.',
             })}
           </span>
         </span>
@@ -166,7 +166,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
 
       {searchActive && !hasVisibleAssistants ? (
         <div className='rounded-14px border border-dashed border-border-2 bg-fill-1/40 px-20px py-28px text-center text-13px text-t-secondary'>
-          {t('settings.assistantNoMatch', { defaultValue: 'No assistants match the current filters.' })}
+          {t('settings.assistantNoMatch', { defaultValue: 'No Agents match the current filters.' })}
         </div>
       ) : null}
 

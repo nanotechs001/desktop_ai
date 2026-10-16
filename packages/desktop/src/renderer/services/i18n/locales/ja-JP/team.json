@@ -20,10 +20,10 @@
     "archiveSuccess": "Team archived",
     "archiveFailed": "Failed to archive team"
   },
-  "newAgent": "新しいアシスタント",
+  "newAgent": "新しいエージェント",
   "noMessages": "No messages yet.",
-  "agentNotConfigured": "アシスタントはまだ設定されていません。",
-  "stopAgentFailed": "このアシスタントを停止できませんでした。もう一度お試しください。",
+  "agentNotConfigured": "エージェントはまだ設定されていません。",
+  "stopAgentFailed": "このエージェントを停止できませんでした。もう一度お試しください。",
   "work": {
     "processingWithQueued": "処理中… {{count}} 件待機中",
     "queued": "{{count}} 件待機中",
@@ -34,17 +34,17 @@
     "retryStart": "起動を再試行"
   },
   "sendBox": {
-    "placeholder": "チームリーダーアシスタントにメッセージを送信..."
+    "placeholder": "チームリーダーエージェントにメッセージを送信..."
   },
   "create": {
     "title": "New Team",
     "namePlaceholder": "Team name",
     "dispatchAgentPlaceholder": "チームリーダーを選択",
-    "subAgentsPlaceholder": "チームメンバーのアシスタントを選択",
+    "subAgentsPlaceholder": "チームメンバーのエージェントを選択",
     "confirm": "Confirm Create",
-    "noSupportedAgents": "利用可能なアシスタントが見つかりません",
-    "supportedAgentsHint": "現在 Claude と Aion CLI のアシスタントに対応しています。ほかのアシスタントも順次追加予定です。",
-    "leaderDesc": "目標を理解し、アシスタントを調整してタスクを完了します",
+    "noSupportedAgents": "利用可能なエージェントが見つかりません",
+    "supportedAgentsHint": "現在 Claude と Aion CLI のエージェントに対応しています。ほかのエージェントも順次追加予定です。",
+    "leaderDesc": "目標を理解し、エージェントを調整してタスクを完了します",
     "searchPlaceholder": "Search",
     "noSearchResults": "結果が見つかりません",
     "step": {
@@ -63,17 +63,17 @@
     "currentLeader": "Current Leader",
     "setAsLeader": "Set as Leader",
     "teammate": "Teammate",
-    "selectAtLeastOneMember": "Select at least one assistant as the Team Leader.",
+    "selectAtLeastOneMember": "Select at least one Agent as the Team Leader.",
     "selectOneLeader": "Select one Team Leader",
-    "subtitle": "Let multiple AI assistants team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.",
+    "subtitle": "Let multiple AI Agents team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.",
     "nameLabel": "Team name",
     "workspaceLabel": "Workspace",
-    "allAssistantsWithCount": "All assistants ({{count}})",
+    "allAssistantsWithCount": "All Agents ({{count}})",
     "selectedMembersWithCount": "Selected members {{count}} · ⚑ = Leader",
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
-    "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "membersHelper": "Choose team members and assign one Leader. The same Agent can be selected multiple times.",
+    "memberHint": "No suitable Agent as a member? After creation, let the Leader create temporary team members in chat."
   },
   "removeAgent": {
     "confirmTitle": "チームメンバーを削除",
@@ -83,8 +83,8 @@
   "emptyState": {
     "subtitle": "目標を教えてください。チームを調整してタスクを完了します",
     "suggestions": {
-      "debate": "異なる立場をとるアシスタント同士でディベートを開催する",
-      "interview": "アシスタント同士による深掘りインタビューを企画する",
+      "debate": "異なる立場をとるエージェント同士でディベートを開催する",
+      "interview": "エージェント同士による深掘りインタビューを企画する",
       "expert_review": "複数の専門家が同じ問題を分析する",
       "add_member": "Help me add a member good at ___ to the team"
     },
@@ -93,8 +93,8 @@
   },
   "addMember": {
     "title": "Add member",
-    "subtitle": "The same assistant can be added repeatedly",
-    "searchAssistants": "Search assistants...",
+    "subtitle": "The same Agent can be added repeatedly",
+    "searchAssistants": "Search Agents...",
     "addFailed": "Failed to add member",
     "noSearchResults": "No results found",
     "tellLeaderHint": "Not a good fit? You can also ask the Leader to arrange it.",

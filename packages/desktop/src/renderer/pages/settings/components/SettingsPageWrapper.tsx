@@ -43,7 +43,7 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
     model: { id: 'model', label: t('settings.model'), icon: <LinkCloud theme='outline' size='16' />, path: 'model' },
     assistants: {
       id: 'assistants',
-      label: t('settings.assistants', { defaultValue: 'Assistants' }),
+      label: t('settings.assistants', { defaultValue: 'Agents' }),
       icon: <Robot theme='outline' size='16' />,
       path: 'assistants',
     },

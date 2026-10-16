@@ -355,23 +355,23 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
           <div className={`flex gap-12px ${isMobile ? 'flex-col' : 'items-start justify-between'}`}>
             <div className='min-w-0'>
               <h2 className='m-0 text-16px font-600 leading-[1.2] text-t-primary'>
-                {t('settings.assistants', { defaultValue: 'Assistants' })}
+                {t('settings.assistants', { defaultValue: 'Agents' })}
               </h2>
               <p className='mt-4px text-12px text-t-tertiary'>
                 {t('settings.assistantsListDescription', {
-                  defaultValue: 'Manage your assistants, control visibility, and adjust their order.',
+                  defaultValue: 'Manage your Agents, control visibility, and adjust their order.',
                 })}
               </p>
             </div>
             <div className={`${isMobile ? 'w-full' : 'flex-shrink-0'}`}>
               <TalkToButlerButton
                 className={isMobile ? '!w-full' : undefined}
-                label={t('settings.createAssistant', { defaultValue: 'Create Assistant' })}
+                label={t('settings.createAssistant', { defaultValue: 'Create Agent' })}
                 chatLabel={t('settings.talkToButler.createViaChat', { defaultValue: 'Create via chat' })}
                 onManual={onCreate}
                 manualLabel={t('settings.talkToButler.createManually', { defaultValue: 'Create manually' })}
                 prompt={t('settings.talkToButler.prompt.createAssistant', {
-                  defaultValue: 'Help me create a new assistant and walk me through setting it up.',
+                  defaultValue: 'Help me create a new Agent and walk me through setting it up.',
                 })}
                 data-testid='btn-create-assistant'
               />
@@ -390,7 +390,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
           ) : (
             <div className='py-12px text-center text-t-secondary'>
               {t('settings.assistantNoMatch', {
-                defaultValue: 'No assistants match the current filters.',
+                defaultValue: 'No Agents match the current filters.',
               })}
             </div>
           )}

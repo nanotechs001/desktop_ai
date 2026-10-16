@@ -186,7 +186,7 @@ describe('TeamCreateModal', () => {
     render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
 
     const subtitle =
-      'Let multiple AI assistants team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.';
+      'Let multiple AI Agents team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.';
     expect(screen.getByRole('heading', { name: 'New Team' })).toBeInTheDocument();
     expect(screen.getByText(subtitle)).toBeInTheDocument();
     expect(screen.getByTestId('team-create-modal')).toHaveAttribute('data-width', '900');
@@ -203,8 +203,8 @@ describe('TeamCreateModal', () => {
     expect(layout).toHaveStyle({ height: 'min(54vh, 470px)', minHeight: '390px' });
     expect(assistantPane).toHaveClass('px-20px', 'pt-12px', 'pb-18px');
     expect(detailsPane).toHaveClass('px-20px', 'pt-12px', 'pb-14px');
-    expect(within(assistantPane).getByText('All assistants (3)')).toBeInTheDocument();
-    expect(within(assistantPane).getByText('All assistants (3)')).toHaveClass('text-15px');
+    expect(within(assistantPane).getByText('All Agents (3)')).toBeInTheDocument();
+    expect(within(assistantPane).getByText('All Agents (3)')).toHaveClass('text-15px');
     expect(searchInput.tagName).toBe('INPUT');
     expect(searchInput).toHaveAttribute('placeholder', 'Search');
     expect(within(assistantPane).getByTestId('team-create-agent-picker-body')).not.toHaveClass('bg-fill-1');

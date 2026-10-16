@@ -128,8 +128,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
           icon={<LinkCloud theme='outline' size='14' />}
           label={t('settings.assistantDefaultModelLabel', { defaultValue: 'Model' })}
           hint={t('settings.assistantDefaultConfigHint', {
-            defaultValue:
-              'Remember last used only takes effect after this assistant has recorded a previous selection.',
+            defaultValue: 'Remember last used only takes effect after this Agent has recorded a previous selection.',
           })}
         >
           <Select
@@ -197,7 +196,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
               defaultValue: 'Select a permission mode',
             })}
             notFoundContent={t('settings.assistantNoPermissionModes', {
-              defaultValue: 'This main agent has no switchable permission modes.',
+              defaultValue: 'This engine has no switchable permission modes.',
             })}
             data-testid='select-assistant-default-permission'
           >

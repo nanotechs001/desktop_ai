@@ -83,7 +83,7 @@
       "promptRequired": "Prompt ist erforderlich",
       "promptPlaceholder": "Anweisungen für den Agenten zur Ausführung",
       "queue": "Warteschlangenschutz",
-      "queueHint": "Wenn aktiviert, wird eine neue Auslösung übersprungen, solange die vorherige geplante Unterhaltung noch läuft, ohne den Assistenten zu unterbrechen.",
+      "queueHint": "Wenn aktiviert, wird eine neue Auslösung übersprungen, solange die vorherige geplante Unterhaltung noch läuft, ohne den Agents zu unterbrechen.",
       "frequency": "Häufigkeit",
       "cronExpr": "Cron-Ausdruck",
       "cronExprRequired": "Cron-Ausdruck ist erforderlich",
@@ -107,11 +107,11 @@
       "model": "Modell",
       "aionrsModelRequired": "Bitte wähle ein Modell für Aion CLI",
       "aionrsNoProvider": "Keine verfügbaren Modelle",
-      "assistantLockedExistingConversation": "Aufgaben mit laufendem Gespräch müssen den ursprünglichen Assistenten behalten. Erstelle eine neue Aufgabe, um einen anderen Assistenten zu verwenden.",
+      "assistantLockedExistingConversation": "Aufgaben mit laufendem Gespräch müssen den ursprünglichen Agent behalten. Erstelle eine neue Aufgabe, um einen anderen Agent zu verwenden.",
       "teamTaskExecutionModeLockedReason": "Geplante Team-Aufgaben müssen im zugehörigen Team-Gespräch weiterlaufen, deshalb kann der Ausführungsmodus nicht geändert werden.",
-      "assistant": "Assistant",
-      "assistantRequired": "Please select an assistant",
-      "assistantPlaceholder": "Select the assistant to execute this task"
+      "assistant": "Agent",
+      "assistantRequired": "Please select an Agent",
+      "assistantPlaceholder": "Select the Agent to execute this task"
     },
     "freq": {
       "manual": "Manuell",

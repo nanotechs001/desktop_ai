@@ -16,7 +16,7 @@
     "retry_count": "Número de reintentos",
     "error_details": "Detalles del error",
     "quick_switch_title": "💡 **Opciones de cambio rápido:**",
-    "quick_switch_content": "Cuando el servicio actual tiene restricciones de red, puedes:\n\n1. **Cambiar de asistente IA inmediatamente**: Selecciona otros asistentes disponibles en el panel izquierdo\n2. **Verificar estado del servicio**: La disponibilidad de los servicios de IA puede variar según la región\n3. **Optimización de red**: Usa un entorno de red estable para mejorar la tasa de éxito\n4. **Reintentar más tarde**: Las restricciones de red suelen ser temporales\n\n**Consejo**: Se recomienda configurar múltiples servicios de IA como alternativas para garantizar la continuidad del trabajo.",
+    "quick_switch_content": "Cuando el servicio actual tiene restricciones de red, puedes:\n\n1. **Cambiar de agente IA inmediatamente**: Selecciona otros agentes disponibles en el panel izquierdo\n2. **Verificar estado del servicio**: La disponibilidad de los servicios de IA puede variar según la región\n3. **Optimización de red**: Usa un entorno de red estable para mejorar la tasa de éxito\n4. **Reintentar más tarde**: Las restricciones de red suelen ser temporales\n\n**Consejo**: Se recomienda configurar múltiples servicios de IA como alternativas para garantizar la continuidad del trabajo.",
     "recovery_actions": {
       "cloudflare_blocked": [
         "• Usar VPN o servicio proxy",

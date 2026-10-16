@@ -6,7 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
-import { MANAGED_AGENTS_SWR_KEY, fetchManagedAgents } from '@/renderer/utils/model/agentTypes';
+import { ENGINE_CATALOG_SWR_KEY, MANAGED_AGENTS_SWR_KEY, fetchManagedAgents } from '@/renderer/utils/model/agentTypes';
 import useSWR, { mutate } from 'swr';
 
 export type UseManagedAgentsResult = {
@@ -20,7 +20,12 @@ export type UseManagedAgentsResult = {
 };
 
 export async function refreshManagedAgentCatalogAndAssistants(): Promise<ManagedAgent[] | undefined> {
-  const [agents] = await Promise.all([mutate<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY), mutate('assistants.list')]);
+  // The engine hooks (default engine, Guid page) read their own key, so it refreshes with the catalog.
+  const [agents] = await Promise.all([
+    mutate<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY),
+    mutate('assistants.list'),
+    mutate(ENGINE_CATALOG_SWR_KEY),
+  ]);
   return agents;
 }
 

@@ -9,31 +9,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 
-const resolveAgentLogoMock = vi.fn();
+const mocks = vi.hoisted(() => ({
+  pins: { current: undefined as Record<string, string> | undefined },
+  engines: { current: undefined as unknown },
+  language: { current: 'en-US' },
+}));
+
+const LABELS: Record<string, string> = { 'agent.engine.label': 'Engine', 'agent.engine.useDefault': 'Use default' };
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue || _key,
+    t: (key: string, options?: { defaultValue?: string }) => LABELS[key] ?? options?.defaultValue ?? key,
+    i18n: { language: mocks.language.current },
   }),
 }));
 
-// Isolate the badge from SWR / ipcBridge-backed logo fetching.
-vi.mock('@/renderer/utils/model/agentLogo', () => ({
-  useAgentLogos: () => ({}),
-  resolveAgentLogo: (...args: unknown[]) => resolveAgentLogoMock(...args),
+vi.mock('swr', () => ({ default: () => ({ data: mocks.engines.current }) }));
+vi.mock('@/renderer/hooks/config/useConfig', () => ({ useConfig: () => [mocks.pins.current, vi.fn()] }));
+vi.mock('@/renderer/utils/model/agentTypes', () => ({
+  ENGINE_CATALOG_SWR_KEY: 'agents.managed.engines',
+  fetchManagedAgentsOrThrow: vi.fn(),
 }));
 
 import RuntimeBadge from '@/renderer/pages/settings/AssistantSettings/home/RuntimeBadge';
 
 const makeAssistant = (overrides: Partial<Assistant> = {}): Assistant => ({
   id: 'a1',
-  source: 'generated',
-  name: 'CLI Assistant',
+  source: 'user',
+  name: 'Writer',
   name_i18n: {},
   description_i18n: {},
   enabled: true,
   sort_order: 1,
-  agent_id: 'agent-1',
+  agent_id: 'engine-1',
   agent: { type: 'claude', source: 'internal' },
   enabled_skills: [],
   custom_skill_names: [],
@@ -45,50 +53,48 @@ const makeAssistant = (overrides: Partial<Assistant> = {}): Assistant => ({
 
 describe('RuntimeBadge', () => {
   beforeEach(() => {
-    resolveAgentLogoMock.mockReset();
-    resolveAgentLogoMock.mockReturnValue(null);
+    mocks.pins.current = undefined;
+    mocks.language.current = 'en-US';
+    mocks.engines.current = [
+      { id: 'engine-1', name: 'Engine One', name_i18n: { 'zh-CN': '引擎一' } },
+      { id: 'engine-2', name: 'Engine Two' },
+    ];
   });
 
-  it('renders the runtime label by default and hides it when showLabel is false', () => {
-    const assistant = makeAssistant();
-    const { rerender } = render(<RuntimeBadge assistant={assistant} />);
-    expect(screen.getByText('runtime:')).toBeInTheDocument();
-
-    rerender(<RuntimeBadge assistant={assistant} showLabel={false} />);
-    expect(screen.queryByText('runtime:')).not.toBeInTheDocument();
+  it('shows the pinned engine by name', () => {
+    mocks.pins.current = { a1: 'engine-2' };
+    render(<RuntimeBadge assistant={makeAssistant()} />);
+    expect(screen.getByTestId('assistant-runtime-a1')).toHaveTextContent('Engine: Engine Two');
   });
 
-  it('shows the backend name only when showName is set', () => {
-    const assistant = makeAssistant({ agent: { type: 'gemini', source: 'internal' } });
-    const { rerender } = render(<RuntimeBadge assistant={assistant} />);
-    expect(screen.queryByText('gemini')).not.toBeInTheDocument();
-
-    rerender(<RuntimeBadge assistant={assistant} showName />);
-    expect(screen.getByText('gemini')).toBeInTheDocument();
+  it('shows "Use default" for an Agent without a pin, whatever engine it currently runs on', () => {
+    render(<RuntimeBadge assistant={makeAssistant()} />);
+    expect(screen.getByTestId('assistant-runtime-a1')).toHaveTextContent('Engine: Use default');
   });
 
-  it('prefers acp_backend over agent type for the runtime name', () => {
-    const assistant = makeAssistant({ agent: { type: 'acp', source: 'extension', acp_backend: 'claude-code' } });
-    render(<RuntimeBadge assistant={assistant} showName />);
-    expect(screen.getByText('claude-code')).toBeInTheDocument();
+  it('shows a bare CLI entry on its own engine', () => {
+    render(<RuntimeBadge assistant={makeAssistant({ source: 'generated', agent_id: 'engine-1' })} />);
+    expect(screen.getByTestId('assistant-runtime-a1')).toHaveTextContent('Engine: Engine One');
   });
 
-  it('renders the resolved logo image when a logo is available', () => {
-    resolveAgentLogoMock.mockReturnValue('http://127.0.0.1/logo.png');
-    render(<RuntimeBadge assistant={makeAssistant({ id: 'with-logo' })} />);
-
-    const badge = screen.getByTestId('assistant-runtime-with-logo');
-    const img = badge.querySelector('img');
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute('src')).toBe('http://127.0.0.1/logo.png');
+  it('uses the localized engine name', () => {
+    mocks.language.current = 'zh-CN';
+    render(<RuntimeBadge assistant={makeAssistant({ source: 'generated', agent_id: 'engine-1' })} />);
+    expect(screen.getByTestId('assistant-runtime-a1')).toHaveTextContent('Engine: 引擎一');
   });
 
-  it('falls back to the robot icon when no logo resolves', () => {
-    resolveAgentLogoMock.mockReturnValue(null);
-    render(<RuntimeBadge assistant={makeAssistant({ id: 'no-logo' })} />);
+  it('shows only the label while the engine list is loading or the engine is gone', () => {
+    mocks.pins.current = { a1: 'removed-engine' };
+    const { rerender } = render(<RuntimeBadge assistant={makeAssistant()} />);
+    expect(screen.getByTestId('assistant-runtime-a1').textContent).toBe('Engine');
 
-    const badge = screen.getByTestId('assistant-runtime-no-logo');
-    expect(badge.querySelector('img')).toBeNull();
-    expect(badge.querySelector('svg')).not.toBeNull();
+    mocks.engines.current = undefined;
+    rerender(<RuntimeBadge assistant={makeAssistant()} />);
+    expect(screen.getByTestId('assistant-runtime-a1').textContent).toBe('Engine');
+  });
+
+  it('never renders a logo', () => {
+    const { container } = render(<RuntimeBadge assistant={makeAssistant({ source: 'generated' })} framed />);
+    expect(container.querySelector('img, svg')).toBeNull();
   });
 });

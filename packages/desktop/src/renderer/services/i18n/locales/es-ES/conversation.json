@@ -16,7 +16,7 @@
     "quickActionFeedback": "Reportar problema",
     "quickActionStar": "¿Te gusta? ¡Danos una estrella!",
     "skillsMarket": "Mercado de habilidades de AionUi",
-    "skillsMarketDesc": "Busca y activa habilidades de la comunidad según sea necesario. Configúralo una vez, disponible para todos los asistentes.",
+    "skillsMarketDesc": "Busca y activa habilidades de la comunidad según sea necesario. Configúralo una vez, disponible para todos los agentes.",
     "skillsMarketDetails": "Ver más >>"
   },
   "history": {
@@ -104,7 +104,7 @@
   },
   "dropdown": {
     "cliAgents": "Agentes CLI",
-    "presetAssistants": "Asistentes preconfigurados"
+    "presetAssistants": "Agentes preconfigurados"
   },
   "noAgentsAvailable": "Sin agentes disponibles",
   "noModelConfigured": "Sin modelo configurado. Por favor configura uno en ajustes.",
@@ -114,8 +114,8 @@
       "WORKSPACE_PATH_UNAVAILABLE": "La ruta del área de trabajo seleccionada no está disponible. Asegúrate de que la ruta \"{{workspacePath}}\" exista y sea accesible."
     },
     "codes": {
-      "TEAM_ASSISTANT_ID_REQUIRED": "Please select an assistant before creating the team.",
-      "TEAM_ASSISTANT_NOT_FOUND": "Assistant {{assistantId}} is no longer available. Refresh the assistant list and choose another one.",
+      "TEAM_ASSISTANT_ID_REQUIRED": "Please select an Agent before creating the team.",
+      "TEAM_ASSISTANT_NOT_FOUND": "Agent {{assistantId}} is no longer available. Refresh the Agent list and choose another one.",
       "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "Use assistant_id instead of {{field}}."
     }
   },
@@ -338,12 +338,12 @@
         "body": "The local team session is still starting or has been interrupted. Wait a moment and retry."
       },
       "TEAM_ASSISTANT_ID_REQUIRED": {
-        "title": "A teammate assistant must be selected",
-        "body": "Choose a real assistant from the available assistant catalog before creating or spawning a teammate."
+        "title": "A teammate Agent must be selected",
+        "body": "Choose a real Agent from the available Agent catalog before creating or spawning a teammate."
       },
       "TEAM_ASSISTANT_NOT_FOUND": {
-        "title": "The selected assistant is no longer available",
-        "body": "Refresh the assistant catalog, then choose another assistant for this teammate."
+        "title": "The selected Agent is no longer available",
+        "body": "Refresh the Agent catalog, then choose another Agent for this teammate."
       },
       "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
         "title": "The request used a legacy team identity field",

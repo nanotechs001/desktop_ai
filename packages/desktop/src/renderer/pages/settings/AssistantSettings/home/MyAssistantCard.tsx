@@ -8,6 +8,7 @@ import type { AssistantListItem } from '../types';
 import AssistantAvatar from '../AssistantAvatar';
 import RuntimeBadge from './RuntimeBadge';
 import { Button, Dropdown, Menu, Switch, Tooltip } from '@arco-design/web-react';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { Attention, MoreOne } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +39,8 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
   const { t } = useTranslation();
   const enabled = assistant.enabled !== false;
   const canDelete = assistant.source === 'user';
+  const [defaultAgentId] = useConfig('agent.builtinDefaultId');
+  const isDefaultAgent = assistant.id === defaultAgentId;
 
   const actionMenu = (
     <Menu
@@ -50,10 +53,15 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
         <span data-testid={`menu-edit-${assistant.id}`}>{t('common.settings', { defaultValue: 'Settings' })}</span>
       </Menu.Item>
       {canDelete ? (
-        <Menu.Item key='delete'>
-          <span data-testid={`menu-delete-${assistant.id}`} className='text-[rgb(var(--danger-6))]'>
-            {t('common.delete', { defaultValue: 'Delete' })}
-          </span>
+        <Menu.Item key='delete' disabled={isDefaultAgent}>
+          <Tooltip
+            disabled={!isDefaultAgent}
+            content={t('agent.cannotDeleteDefault', { defaultValue: "The default Agent can't be deleted." })}
+          >
+            <span data-testid={`menu-delete-${assistant.id}`} className='text-[rgb(var(--danger-6))]'>
+              {t('common.delete', { defaultValue: 'Delete' })}
+            </span>
+          </Tooltip>
         </Menu.Item>
       ) : null}
     </Menu>
@@ -87,13 +95,13 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
           <Tooltip
             content={
               assistant.agent_status === 'missing'
-                ? t('settings.assistantAgentMissing', { defaultValue: 'The required agent is not installed.' })
+                ? t('settings.assistantAgentMissing', { defaultValue: 'The required engine is not installed.' })
                 : assistant.agent_status === 'unchecked'
                   ? t('settings.assistantAgentUnchecked', {
-                      defaultValue: 'The required agent has not been checked yet.',
+                      defaultValue: 'The required engine has not been checked yet.',
                     })
                   : t('settings.assistantAgentUnavailable', {
-                      defaultValue: 'The required agent is currently unavailable.',
+                      defaultValue: 'The required engine is currently unavailable.',
                     })
             }
           >

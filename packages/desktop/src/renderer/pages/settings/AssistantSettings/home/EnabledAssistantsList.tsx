@@ -182,7 +182,7 @@ const EnabledAssistantsList: React.FC<EnabledAssistantsListProps> = ({
         {searchActive
           ? t('settings.assistantReorderSearchDisabled', { defaultValue: 'Clear search to reorder.' })
           : t('settings.assistantReorderHint', {
-              defaultValue: 'Drag to reorder. This decides the display order wherever you pick an assistant.',
+              defaultValue: 'Drag to reorder. This decides the display order wherever you pick an Agent.',
             })}
       </p>
 
@@ -190,7 +190,7 @@ const EnabledAssistantsList: React.FC<EnabledAssistantsListProps> = ({
         <div className='rounded-12px border border-dashed border-border-2 bg-base py-28px'>
           <Empty
             description={t('settings.myAssistantsEmpty', {
-              defaultValue: 'No assistants here yet. Enable an official assistant, or connect a local CLI tool.',
+              defaultValue: 'No Agents here yet. Enable an official Agent, or connect a local CLI tool.',
             })}
           />
         </div>

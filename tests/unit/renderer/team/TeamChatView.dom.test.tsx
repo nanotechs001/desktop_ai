@@ -211,9 +211,9 @@ describe('TeamChatView', () => {
   });
 
   it.each([
-    ['runtime_starting', 'Waiting for this assistant to start…', true],
-    ['runtime_failed', 'This assistant failed to start.', false],
-    ['removing', 'Removing this assistant…', false],
+    ['runtime_starting', 'Waiting for this Agent to start…', true],
+    ['runtime_failed', 'This Agent failed to start.', false],
+    ['removing', 'Removing this Agent…', false],
   ] as const)('maps %s to authoritative team runtime status', async (blockedReason, statusText, canSendMessage) => {
     usePresetAssistantInfoMock.mockReturnValue({ info: null });
 

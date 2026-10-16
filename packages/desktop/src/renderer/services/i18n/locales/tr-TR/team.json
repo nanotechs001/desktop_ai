@@ -20,10 +20,10 @@
     "archiveSuccess": "Team archived",
     "archiveFailed": "Failed to archive team"
   },
-  "newAgent": "Yeni Asistan",
+  "newAgent": "Yeni Agent",
   "noMessages": "No messages yet.",
-  "agentNotConfigured": "Asistan henüz yapılandırılmadı.",
-  "stopAgentFailed": "Bu asistan durdurulamadı. Lütfen tekrar deneyin.",
+  "agentNotConfigured": "Agent henüz yapılandırılmadı.",
+  "stopAgentFailed": "Bu Agent durdurulamadı. Lütfen tekrar deneyin.",
   "work": {
     "processingWithQueued": "İşleniyor… {{count}} sırada",
     "queued": "{{count}} sırada",
@@ -34,17 +34,17 @@
     "retryStart": "Başlatmayı yeniden dene"
   },
   "sendBox": {
-    "placeholder": "Takım lideri asistana mesaj gönder..."
+    "placeholder": "Takım lideri Agent'a mesaj gönder..."
   },
   "create": {
     "title": "New Team",
     "namePlaceholder": "Team name",
     "dispatchAgentPlaceholder": "Takım liderini seçin",
-    "subAgentsPlaceholder": "Takım üyesi asistanları seçin",
+    "subAgentsPlaceholder": "Takım üyesi Agent'ları seçin",
     "confirm": "Confirm Create",
-    "noSupportedAgents": "Desteklenen uygun asistan bulunamadı",
-    "supportedAgentsHint": "Şu anda Claude ve Aion CLI asistanları desteklenmektedir. Daha fazla asistan yakında eklenecek.",
-    "leaderDesc": "Hedeflerinizi anlayarak görevleri tamamlamak için asistanları koordine eder",
+    "noSupportedAgents": "Desteklenen uygun Agent bulunamadı",
+    "supportedAgentsHint": "Şu anda Claude ve Aion CLI Agent'ları desteklenmektedir. Daha fazla Agent yakında eklenecek.",
+    "leaderDesc": "Hedeflerinizi anlayarak görevleri tamamlamak için Agent'ları koordine eder",
     "searchPlaceholder": "Search",
     "noSearchResults": "Sonuç bulunamadı",
     "step": {
@@ -63,17 +63,17 @@
     "currentLeader": "Current Leader",
     "setAsLeader": "Set as Leader",
     "teammate": "Teammate",
-    "selectAtLeastOneMember": "Select at least one assistant as the Team Leader.",
+    "selectAtLeastOneMember": "Select at least one Agent as the Team Leader.",
     "selectOneLeader": "Select one Team Leader",
-    "subtitle": "Let multiple AI assistants team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.",
+    "subtitle": "Let multiple AI Agents team up and collaborate. We suggest one team focuses on a single goal — create separate teams for different tasks.",
     "nameLabel": "Team name",
     "workspaceLabel": "Workspace",
-    "allAssistantsWithCount": "All assistants ({{count}})",
+    "allAssistantsWithCount": "All Agents ({{count}})",
     "selectedMembersWithCount": "Selected members {{count}} · ⚑ = Leader",
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
-    "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "membersHelper": "Choose team members and assign one Leader. The same Agent can be selected multiple times.",
+    "memberHint": "No suitable Agent as a member? After creation, let the Leader create temporary team members in chat."
   },
   "removeAgent": {
     "confirmTitle": "Takım Üyesini Kaldır",
@@ -83,8 +83,8 @@
   "emptyState": {
     "subtitle": "Hedefini söyle, ekibi koordine ederek tamamlayayım",
     "suggestions": {
-      "debate": "Farklı tarafları savunan asistanlarla bir tartışma düzenle",
-      "interview": "Asistanlar arasında derinlemesine bir röportaj planla",
+      "debate": "Farklı tarafları savunan Agent'larla bir tartışma düzenle",
+      "interview": "Agent'lar arasında derinlemesine bir röportaj planla",
       "expert_review": "Aynı problemi birden fazla uzmanın analiz etmesini sağla",
       "add_member": "Help me add a member good at ___ to the team"
     },
@@ -93,8 +93,8 @@
   },
   "addMember": {
     "title": "Add member",
-    "subtitle": "The same assistant can be added repeatedly",
-    "searchAssistants": "Search assistants...",
+    "subtitle": "The same Agent can be added repeatedly",
+    "searchAssistants": "Search Agents...",
     "addFailed": "Failed to add member",
     "noSearchResults": "No results found",
     "tellLeaderHint": "Not a good fit? You can also ask the Leader to arrange it.",

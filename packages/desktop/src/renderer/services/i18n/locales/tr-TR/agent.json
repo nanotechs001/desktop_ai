@@ -65,6 +65,9 @@
     "rebindFailed": "{{count}} Agent için motor güncellenemedi.",
     "rebindFailed_one": "{{count}} Agent için motor güncellenemedi.",
     "rebindFailed_other": "{{count}} Agent için motor güncellenemedi.",
-    "rebindListFailed": "Motorlarını güncellemek için Agent'larınız yüklenemedi."
-  }
+    "rebindListFailed": "Motorlarını güncellemek için Agent'larınız yüklenemedi.",
+    "label": "Motor"
+  },
+  "cannotDeleteDefault": "Varsayılan Agent silinemez.",
+  "ruleSyncFailed": "Agent kaydedildi ancak tarayıcı kuralları güncellenemedi. Yeniden denemek için uygulamayı yeniden başlatın."
 }

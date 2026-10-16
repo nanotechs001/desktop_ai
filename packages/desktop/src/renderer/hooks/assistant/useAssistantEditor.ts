@@ -390,27 +390,45 @@ export const useAssistantEditor = ({
     }
   };
 
+  /** Put the AionUi rule block into the Agent's rule now; the next start would only repair it later. */
+  const syncAgentRuleBlock = useCallback(
+    async (assistantId: string) => {
+      try {
+        const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({ assistantId, locale: localeKey });
+        if (reply.success) return;
+        console.error('Failed to add the AionUi rule block to the Agent:', reply.msg);
+      } catch (error) {
+        console.error('Failed to add the AionUi rule block to the Agent:', error);
+      }
+      message.warning(
+        t('agent.ruleSyncFailed', {
+          defaultValue: 'The Agent was saved, but its browser rules could not be updated. Restart the app to retry.',
+        })
+      );
+    },
+    [localeKey, message, t]
+  );
+
   const persistAssistantRules = useCallback(
     async (assistantId: string, rules: string) => {
-      const trimmedRules = rules.trim();
-      if (trimmedRules) {
+      if (rules.trim()) {
         await ipcBridge.fs.writeAssistantRule.invoke({
           assistant_id: assistantId,
           locale: localeKey,
           content: rules,
         });
-        return;
+      } else {
+        await ipcBridge.fs.deleteAssistantRule.invoke({ assistant_id: assistantId });
       }
-
-      await ipcBridge.fs.deleteAssistantRule.invoke({ assistant_id: assistantId });
+      await syncAgentRuleBlock(assistantId);
     },
-    [localeKey]
+    [localeKey, syncAgentRuleBlock]
   );
 
   const handleSave = async () => {
     try {
       if (!editName.trim()) {
-        message.error(t('settings.assistantNameRequired', { defaultValue: 'Assistant name is required' }));
+        message.error(t('settings.assistantNameRequired', { defaultValue: 'Agent name is required' }));
         return;
       }
 
@@ -576,11 +594,18 @@ export const useAssistantEditor = ({
     }
   };
 
+  /** The default Agent always exists; say so instead of opening the confirm dialog. */
+  const refuseDefaultAgentDelete = (assistantId: string): boolean => {
+    if (assistantId !== configService.get('agent.builtinDefaultId')) return false;
+    message.warning(t('agent.cannotDeleteDefault', { defaultValue: "The default Agent can't be deleted." }));
+    return true;
+  };
+
   const handleDeleteClick = () => {
-    if (!activeAssistant) return;
+    if (!activeAssistant || refuseDefaultAgentDelete(activeAssistant.id)) return;
 
     if (activeAssistant?.source !== 'user') {
-      message.warning(t('settings.cannotDeleteBuiltin', { defaultValue: 'Cannot delete builtin assistants' }));
+      message.warning(t('settings.cannotDeleteBuiltin', { defaultValue: 'Cannot delete builtin Agents' }));
       return;
     }
 
@@ -589,9 +614,10 @@ export const useAssistantEditor = ({
 
   const handleDeleteRequest = (assistant: AssistantListItem) => {
     setActiveAssistantId(assistant.id);
+    if (refuseDefaultAgentDelete(assistant.id)) return;
 
     if (assistant.source !== 'user') {
-      message.warning(t('settings.cannotDeleteBuiltin', { defaultValue: 'Cannot delete builtin assistants' }));
+      message.warning(t('settings.cannotDeleteBuiltin', { defaultValue: 'Cannot delete builtin Agents' }));
       return;
     }
 

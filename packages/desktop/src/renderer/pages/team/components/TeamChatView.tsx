@@ -158,9 +158,9 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
             count,
             defaultValue: `Processing… ${count} queued`,
           }),
-        runtimeStarting: () => t('team.work.runtimeStarting', { defaultValue: 'Waiting for this assistant to start…' }),
-        runtimeFailed: () => t('team.work.runtimeFailed', { defaultValue: 'This assistant failed to start.' }),
-        removing: () => t('team.work.removing', { defaultValue: 'Removing this assistant…' }),
+        runtimeStarting: () => t('team.work.runtimeStarting', { defaultValue: 'Waiting for this Agent to start…' }),
+        runtimeFailed: () => t('team.work.runtimeFailed', { defaultValue: 'This Agent failed to start.' }),
+        removing: () => t('team.work.removing', { defaultValue: 'Removing this Agent…' }),
         sessionStopped: () => t('team.work.sessionStopped', { defaultValue: 'The team session has stopped.' }),
       });
   const isRuntimeFailed = slot_id ? slotWork?.blocked_reason === 'runtime_failed' : false;

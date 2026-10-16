@@ -1,5 +1,6 @@
 import type { AssistantEditorViewModel, AssistantListItem } from './types';
-import { Button } from '@arco-design/web-react';
+import { Button, Tooltip } from '@arco-design/web-react';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { ArrowLeft } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,8 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activ
   const { isCreating, actions, profile } = editor;
   const canDelete = !isCreating && activeAssistant?.source === 'user';
   const canSave = isCreating || Boolean(activeAssistant);
+  const [defaultAgentId] = useConfig('agent.builtinDefaultId');
+  const isDefaultAgent = Boolean(activeAssistant) && activeAssistant?.id === defaultAgentId;
 
   return (
     <div data-testid='assistant-editor-page' className='flex h-full min-h-0 flex-col overflow-hidden bg-transparent'>
@@ -31,26 +34,34 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activ
             data-testid='btn-back-assistant-editor'
             className='!flex !items-center !gap-4px !rounded-8px !px-6px !text-t-primary'
           >
-            {t('settings.assistantBackToList', { defaultValue: 'All assistants' })}
+            {t('settings.assistantBackToList', { defaultValue: 'All Agents' })}
           </Button>
           <div className='truncate text-14px font-600 text-t-primary'>
             {profile.name.trim() ||
               (isCreating
-                ? t('settings.createAssistant', { defaultValue: 'Create Assistant' })
-                : t('settings.editAssistant', { defaultValue: 'Assistant Details' }))}
+                ? t('settings.createAssistant', { defaultValue: 'Create Agent' })
+                : t('settings.editAssistant', { defaultValue: 'Agent Details' }))}
           </div>
         </div>
         <div className='ms-auto flex items-center gap-8px'>
           {canDelete && (
-            <Button
-              status='danger'
-              className='!rounded-8px'
-              style={{ backgroundColor: 'rgb(var(--danger-1))' }}
-              onClick={actions.requestDelete}
-              data-testid='btn-delete-assistant'
+            <Tooltip
+              disabled={!isDefaultAgent}
+              content={t('agent.cannotDeleteDefault', { defaultValue: "The default Agent can't be deleted." })}
             >
-              {t('common.delete', { defaultValue: 'Delete' })}
-            </Button>
+              <span>
+                <Button
+                  status='danger'
+                  className='!rounded-8px'
+                  style={{ backgroundColor: 'rgb(var(--danger-1))' }}
+                  onClick={actions.requestDelete}
+                  disabled={isDefaultAgent}
+                  data-testid='btn-delete-assistant'
+                >
+                  {t('common.delete', { defaultValue: 'Delete' })}
+                </Button>
+              </span>
+            </Tooltip>
           )}
           <Button onClick={onBack} className='!rounded-8px bg-fill-1' data-testid='btn-cancel-assistant-editor'>
             {t('common.cancel', { defaultValue: 'Cancel' })}

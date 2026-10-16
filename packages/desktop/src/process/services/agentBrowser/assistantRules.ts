@@ -46,6 +46,33 @@ export const backendAssistantRuleDeps: AssistantRuleDeps = {
   },
 };
 
+/** Upsert the block into one assistant's rule for one locale, counting the outcome. One failure never throws. */
+async function syncRule(
+  deps: AssistantRuleDeps,
+  id: string,
+  locale: string,
+  summary: { updated: number; skipped: number; failed: number }
+): Promise<void> {
+  try {
+    const current = await deps.readRule(id, locale);
+    const result = upsertBrowserRule(current);
+    if (result.ok === false) {
+      summary.failed += 1;
+      console.warn(`[AionUi] Browser rule left untouched for assistant '${id}': ${result.reason}`);
+      return;
+    }
+    if (result.content === current) {
+      summary.skipped += 1;
+      return;
+    }
+    await deps.writeRule(id, locale, result.content);
+    summary.updated += 1;
+  } catch (error) {
+    summary.failed += 1;
+    console.warn(`[AionUi] Browser rule sync failed for assistant '${id}' (${locale || 'default'}):`, error);
+  }
+}
+
 /** Make sure every assistant rule carries the browser-rule block. One failure never stops the rest. */
 export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Promise<AssistantRuleSyncSummary> {
   const summary = { updated: 0, skipped: 0, failed: 0 };
@@ -57,26 +84,21 @@ export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Pr
     return summary;
   }
   for (const { id, locales } of assistants) {
-    for (const locale of locales) {
-      try {
-        const current = await deps.readRule(id, locale);
-        const result = upsertBrowserRule(current);
-        if (result.ok === false) {
-          summary.failed += 1;
-          console.warn(`[AionUi] Browser rule left untouched for assistant '${id}': ${result.reason}`);
-          continue;
-        }
-        if (result.content === current) {
-          summary.skipped += 1;
-          continue;
-        }
-        await deps.writeRule(id, locale, result.content);
-        summary.updated += 1;
-      } catch (error) {
-        summary.failed += 1;
-        console.warn(`[AionUi] Browser rule sync failed for assistant '${id}' (${locale || 'default'}):`, error);
-      }
-    }
+    for (const locale of locales) await syncRule(deps, id, locale, summary);
   }
+  return summary;
+}
+
+/**
+ * Put the block into one Agent's rule right after the app created or edited it: the default
+ * rule plus the locale rule the editor wrote, so neither can lack the block.
+ */
+export async function ensureBrowserRuleForAssistant(
+  deps: AssistantRuleDeps,
+  id: string,
+  locale?: string
+): Promise<AssistantRuleSyncSummary> {
+  const summary = { updated: 0, skipped: 0, failed: 0 };
+  for (const target of new Set([DEFAULT_LOCALE, locale ?? DEFAULT_LOCALE])) await syncRule(deps, id, target, summary);
   return summary;
 }

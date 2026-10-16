@@ -253,7 +253,7 @@ describe('AssistantEditorSections', () => {
     expect(defaultsScope.getByText('MCP')).toBeInTheDocument();
     expect(
       defaultsScope.getByText(
-        'Remember last used only takes effect after this assistant has recorded a previous selection.'
+        'Remember last used only takes effect after this Agent has recorded a previous selection.'
       )
     ).toBeInTheDocument();
   });

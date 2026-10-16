@@ -50,7 +50,9 @@ test.describe('Team Create', () => {
 
     // Verify assistant leader choices render, or the empty-state appears.
     const leaderOptions = modal.locator('[data-testid^="team-create-agent-option-"]');
-    const noAssistantsMsg = page.locator('.arco-modal').getByText(/No supported assistants available|没有支持的助手/i);
+    const noAssistantsMsg = page
+      .locator('.arco-modal')
+      .getByText(/No supported (assistants|Agents) available|没有支持的(助手|Agent)/i);
     const hasOptions = await leaderOptions
       .first()
       .isVisible({ timeout: 3000 })

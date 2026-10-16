@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { BROWSER_RULE_MARKERS, upsertBrowserRule } from '@process/services/agentBrowser/browserRule';
-import { backendAssistantRuleDeps, ensureBrowserRuleInAssistants } from '@process/services/agentBrowser/assistantRules';
+import {
+  backendAssistantRuleDeps,
+  ensureBrowserRuleForAssistant,
+  ensureBrowserRuleInAssistants,
+} from '@process/services/agentBrowser/assistantRules';
 
 vi.mock('@/common/adapter/httpBridge', () => ({ httpRequest: vi.fn() }));
 
@@ -100,6 +104,34 @@ describe('ensureBrowserRuleInAssistants', () => {
     expect(result).toEqual({ updated: 0, skipped: 0, failed: 1 });
     expect(writeRule).not.toHaveBeenCalled();
     expect(warn.mock.calls[0][0]).toContain('broken-one');
+  });
+});
+
+describe('ensureBrowserRuleForAssistant', () => {
+  it('upserts the block into the default rule and the rule of the locale the editor wrote', async () => {
+    const rules: Record<string, string> = { ':': '', 'zh-CN:': 'my notes' };
+    const writeRule = vi.fn(async (id: string, locale: string, content: string) => {
+      rules[`${locale}:`] = content;
+      expect(id).toBe('new-agent');
+    });
+    const result = await ensureBrowserRuleForAssistant(
+      { listAssistants: async () => [], readRule: async (_id, locale) => rules[`${locale}:`] ?? '', writeRule },
+      'new-agent',
+      'zh-CN'
+    );
+    expect(result).toEqual({ updated: 2, skipped: 0, failed: 0 });
+    expect(rules['zh-CN:']).toBe(withBlock('my notes'));
+    expect(rules[':']).toBe(withBlock(''));
+  });
+
+  it('touches only the one assistant, and only the default rule when no locale is given', async () => {
+    const readRule = vi.fn(async () => withBlock('x'));
+    const listAssistants = vi.fn(async () => []);
+    const result = await ensureBrowserRuleForAssistant({ listAssistants, readRule, writeRule: vi.fn() }, 'solo');
+    expect(result).toEqual({ updated: 0, skipped: 1, failed: 0 });
+    expect(readRule).toHaveBeenCalledTimes(1);
+    expect(readRule).toHaveBeenCalledWith('solo', '');
+    expect(listAssistants).not.toHaveBeenCalled();
   });
 });
 

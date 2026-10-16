@@ -44,7 +44,7 @@ const SkillUsedByStack: React.FC<{ assistants: Assistant[]; max?: number }> = ({
       content={t('settings.skillsHub.usedByTooltip', {
         count: assistants.length,
         names,
-        defaultValue: `Used by ${assistants.length} assistant(s): ${names}`,
+        defaultValue: `Used by ${assistants.length} Agent(s): ${names}`,
       })}
     >
       <div className='flex items-center' data-testid='skill-used-by-stack'>

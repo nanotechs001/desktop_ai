@@ -987,7 +987,7 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
         data-testid='skills-header'
         title={t('settings.skills', { defaultValue: 'Skills' })}
         description={t('settings.skillsHub.description', {
-          defaultValue: 'Centrally manage AI skill packs — install once, use across all assistants.',
+          defaultValue: 'Centrally manage AI skill packs — install once, use across all Agents.',
         })}
         actions={
           <>
@@ -1008,7 +1008,7 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
               onManual={handleManualImport}
               manualLabel={t('settings.skillsHub.manualImport', { defaultValue: 'Import Skills' })}
               prompt={t('settings.talkToButler.prompt.addSkill', {
-                defaultValue: 'Help me import a skill and attach it to an assistant.',
+                defaultValue: 'Help me import a skill and attach it to an Agent.',
               })}
               data-testid='btn-add-skill'
             />

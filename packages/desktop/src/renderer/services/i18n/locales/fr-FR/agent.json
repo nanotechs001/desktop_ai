@@ -65,6 +65,9 @@
     "rebindFailed": "Impossible de mettre à jour le moteur de {{count}} Agents.",
     "rebindFailed_one": "Impossible de mettre à jour le moteur de {{count}} Agent.",
     "rebindFailed_other": "Impossible de mettre à jour le moteur de {{count}} Agents.",
-    "rebindListFailed": "Impossible de charger vos Agents pour mettre à jour leur moteur."
-  }
+    "rebindListFailed": "Impossible de charger vos Agents pour mettre à jour leur moteur.",
+    "label": "Moteur"
+  },
+  "cannotDeleteDefault": "L'agent par défaut ne peut pas être supprimé.",
+  "ruleSyncFailed": "L'agent a été enregistré, mais ses règles de navigateur n'ont pas pu être mises à jour. Redémarrez l'application pour réessayer."
 }

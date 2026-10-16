@@ -65,6 +65,9 @@
     "rebindFailed": "Agent {{count}}개의 엔진을 업데이트하지 못했습니다.",
     "rebindFailed_one": "Agent {{count}}개의 엔진을 업데이트하지 못했습니다.",
     "rebindFailed_other": "Agent {{count}}개의 엔진을 업데이트하지 못했습니다.",
-    "rebindListFailed": "엔진을 업데이트할 Agent를 불러오지 못했습니다."
-  }
+    "rebindListFailed": "엔진을 업데이트할 Agent를 불러오지 못했습니다.",
+    "label": "엔진"
+  },
+  "cannotDeleteDefault": "기본 에이전트는 삭제할 수 없습니다.",
+  "ruleSyncFailed": "에이전트가 저장되었지만 브라우저 규칙을 업데이트하지 못했습니다. 앱을 다시 시작해 다시 시도하세요."
 }

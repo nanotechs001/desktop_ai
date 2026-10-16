@@ -84,7 +84,7 @@ const SkillConfirmModals: React.FC<SkillConfirmModalsProps> = ({
       <Modal
         visible={deleteCustomSkillName !== null}
         onCancel={() => setDeleteCustomSkillName(null)}
-        title={t('settings.removeCustomSkillTitle', { defaultValue: 'Remove Skill from Assistant' })}
+        title={t('settings.removeCustomSkillTitle', { defaultValue: 'Remove Skill from Agent' })}
         okButtonProps={{ status: 'danger' }}
         okText={t('common.remove', { defaultValue: 'Remove' })}
         cancelText={t('common.cancel', { defaultValue: 'Cancel' })}
@@ -93,9 +93,7 @@ const SkillConfirmModals: React.FC<SkillConfirmModalsProps> = ({
             setCustomSkills(customSkills.filter((s) => s !== deleteCustomSkillName));
             setSelectedSkills(selectedSkills.filter((s) => s !== deleteCustomSkillName));
             setDeleteCustomSkillName(null);
-            message.success(
-              t('settings.skillRemovedFromAssistant', { defaultValue: 'Skill removed from this assistant' })
-            );
+            message.success(t('settings.skillRemovedFromAssistant', { defaultValue: 'Skill removed from this Agent' }));
           }
         }}
         className='w-[90vw] md:w-[400px]'
@@ -104,13 +102,13 @@ const SkillConfirmModals: React.FC<SkillConfirmModalsProps> = ({
       >
         <p>
           {t('settings.removeCustomSkillConfirm', {
-            defaultValue: `Are you sure you want to remove "${deleteCustomSkillName}" from this assistant?`,
+            defaultValue: `Are you sure you want to remove "${deleteCustomSkillName}" from this Agent?`,
           })}
         </p>
         <div className='mt-12px text-12px text-t-secondary bg-fill-2 p-12px rounded-lg'>
           {t('settings.removeCustomSkillNote', {
             defaultValue:
-              'This will only remove the skill from this assistant. The skill will remain in Builtin Skills and can be re-added later.',
+              'This will only remove the skill from this Agent. The skill will remain in Builtin Skills and can be re-added later.',
           })}
         </div>
       </Modal>

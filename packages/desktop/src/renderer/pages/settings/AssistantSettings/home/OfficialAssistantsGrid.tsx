@@ -96,8 +96,8 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
         {officialAssistants.length === 0 ? (
           <div className='col-span-full rounded-14px border border-dashed border-border-2 bg-fill-1/40 px-20px py-28px text-center text-13px text-t-secondary'>
             {searchActive
-              ? t('settings.assistantNoMatch', { defaultValue: 'No assistants match the current filters.' })
-              : t('settings.assistantsEmpty', { defaultValue: 'No assistants configured.' })}
+              ? t('settings.assistantNoMatch', { defaultValue: 'No Agents match the current filters.' })
+              : t('settings.assistantsEmpty', { defaultValue: 'No Agents configured.' })}
           </div>
         ) : null}
         {officialAssistants.map((assistant) => {
@@ -116,7 +116,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
               </Menu.Item>
               <Menu.Item key='duplicate'>
                 <span data-testid={`menu-duplicate-${assistant.id}`}>
-                  {t('settings.duplicateAssistant', { defaultValue: 'Duplicate as my assistant' })}
+                  {t('settings.duplicateAssistant', { defaultValue: 'Duplicate as my Agent' })}
                 </span>
               </Menu.Item>
             </Menu>

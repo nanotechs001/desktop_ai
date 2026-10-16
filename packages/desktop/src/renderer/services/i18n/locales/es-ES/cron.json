@@ -85,7 +85,7 @@
       "promptRequired": "El prompt es obligatorio",
       "promptPlaceholder": "Instrucciones para que el agente ejecute",
       "queue": "Protección de cola",
-      "queueHint": "Cuando está activada, se omite una nueva ejecución mientras la conversación programada anterior siga en curso, sin interrumpir al asistente.",
+      "queueHint": "Cuando está activada, se omite una nueva ejecución mientras la conversación programada anterior siga en curso, sin interrumpir al agente.",
       "frequency": "Frecuencia",
       "cronExpr": "Expresión Cron",
       "cronExprRequired": "La expresión cron es obligatoria",
@@ -110,10 +110,10 @@
       "model": "Modelo",
       "aionrsModelRequired": "Por favor selecciona un modelo para Aion CLI",
       "aionrsNoProvider": "No hay modelos disponibles",
-      "assistant": "Assistant",
-      "assistantRequired": "Please select an assistant",
-      "assistantPlaceholder": "Select the assistant to execute this task",
-      "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original assistant. Create a new task to use another assistant.",
+      "assistant": "Agent",
+      "assistantRequired": "Please select an Agent",
+      "assistantPlaceholder": "Select the Agent to execute this task",
+      "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original Agent. Create a new task to use another Agent.",
       "teamTaskExecutionModeLockedReason": "Team scheduled tasks must keep running in the owning team conversation, so the execution mode cannot be changed."
     },
     "freq": {

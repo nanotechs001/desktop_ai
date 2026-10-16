@@ -65,6 +65,9 @@
     "rebindFailed": "有 {{count}} 個 Agent 無法更新引擎。",
     "rebindFailed_one": "有 {{count}} 個 Agent 無法更新引擎。",
     "rebindFailed_other": "有 {{count}} 個 Agent 無法更新引擎。",
-    "rebindListFailed": "無法載入你的 Agent 以更新其引擎。"
-  }
+    "rebindListFailed": "無法載入你的 Agent 以更新其引擎。",
+    "label": "引擎"
+  },
+  "cannotDeleteDefault": "預設 Agent 無法刪除。",
+  "ruleSyncFailed": "Agent 已儲存，但無法更新其瀏覽器規則。請重新啟動應用程式後重試。"
 }

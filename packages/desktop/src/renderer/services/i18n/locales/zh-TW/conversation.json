@@ -16,7 +16,7 @@
     "quickActionFeedback": "反饋問題",
     "quickActionStar": "喜歡我們？點個星吧",
     "skillsMarket": "AionUi Skills Market",
-    "skillsMarketDesc": "按需搜尋並啟用社區 Skills，一次設定，所有Agent通用。",
+    "skillsMarketDesc": "按需搜尋並啟用社區 Skills，一次設定，所有 Agent 通用。",
     "skillsMarketDetails": "詳情 >>"
   },
   "history": {
@@ -104,7 +104,7 @@
   },
   "dropdown": {
     "cliAgents": "CLI Agents",
-    "presetAssistants": "預設助手"
+    "presetAssistants": "預設 Agent"
   },
   "noAgentsAvailable": "沒有可用的 Agent",
   "noModelConfigured": "未設定模型，請前往設定頁面設定。",
@@ -114,8 +114,8 @@
       "WORKSPACE_PATH_UNAVAILABLE": "所選工作區路徑不可用。請確認工作區路徑「{{workspacePath}}」確實存在且可存取。"
     },
     "codes": {
-      "TEAM_ASSISTANT_ID_REQUIRED": "建立團隊前請先選擇助手。",
-      "TEAM_ASSISTANT_NOT_FOUND": "助手 {{assistantId}} 已不可用。請重新整理助手列表後再選擇。",
+      "TEAM_ASSISTANT_ID_REQUIRED": "建立團隊前請先選擇 Agent。",
+      "TEAM_ASSISTANT_NOT_FOUND": "Agent {{assistantId}} 已不可用。請重新整理 Agent 列表後再選擇。",
       "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "請使用 assistant_id，不要再傳 {{field}}。"
     }
   },
@@ -338,12 +338,12 @@
         "body": "本地團隊對話仍在啟動中，或剛剛被中斷。請稍候再試。"
       },
       "TEAM_ASSISTANT_ID_REQUIRED": {
-        "title": "必須先選擇隊友助手",
-        "body": "建立或拉起隊友前，請先從可用助手目錄選擇一個真實 assistant。"
+        "title": "必須先選擇隊友 Agent",
+        "body": "建立或拉起隊友前，請先從可用 Agent 目錄選擇一個真實 Agent。"
       },
       "TEAM_ASSISTANT_NOT_FOUND": {
-        "title": "所選助手已不可用",
-        "body": "請重新整理助手目錄，然後為這位隊友重新選擇一個助手。"
+        "title": "所選 Agent 已不可用",
+        "body": "請重新整理 Agent 目錄，然後為這位隊友重新選擇一個 Agent。"
       },
       "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
         "title": "請求仍在使用舊的團隊身份欄位",

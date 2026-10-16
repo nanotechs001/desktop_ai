@@ -1522,6 +1522,10 @@ export const agentBrowser = {
   replyConfirm: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; alwaysForSite: boolean }>(
     'agent-browser.reply-confirm'
   ),
+  // an Agent was just created or edited in the app: put the AionUi rule block into its rule right away (locale = the one the editor wrote)
+  ensureAgentRule: bridge.buildProvider<IBridgeResponse<void>, { assistantId: string; locale?: string }>(
+    'agent-browser.ensure-agent-rule'
+  ),
   // the pane refused an openTabRequested at its tab cap (max); the agent of that chat waiting for that url fails at once
   refuseTab: bridge.buildProvider<IBridgeResponse<void>, { url: string; max: number; conversationId?: string }>(
     'agent-browser.refuse-tab'
