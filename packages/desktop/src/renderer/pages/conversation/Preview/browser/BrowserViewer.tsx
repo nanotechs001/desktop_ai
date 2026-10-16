@@ -200,10 +200,13 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         onResponsive={handleResponsive}
         addressInputRef={addressInputRef}
       />
-      {/* Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}
-      <div className='absolute inset-x-0 bottom-0 top-40px'>
-        <CrashOverlay state={crashState} reloading={reloading} onReload={handleReload} onWait={handleWait} />
-      </div>
+      {/* Mounted only while crashed or hung: any element here covers the webview and eats mouse input.
+          Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}
+      {crashState && (
+        <div className='absolute inset-x-0 bottom-0 top-40px'>
+          <CrashOverlay state={crashState} reloading={reloading} onReload={handleReload} onWait={handleWait} />
+        </div>
+      )}
       {findOpen && webview && (
         <div className='absolute top-48px end-16px z-20'>
           <FindBar webview={webview} onClose={closeFind} focusToken={findFocusToken} />

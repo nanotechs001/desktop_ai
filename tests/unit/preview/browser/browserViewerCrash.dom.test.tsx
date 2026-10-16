@@ -73,6 +73,16 @@ const mount = () => {
 };
 
 describe('BrowserViewer crash recovery', () => {
+  it('renders nothing over the page while it is healthy, so mouse input reaches the webview', () => {
+    const { webview } = mount();
+
+    // Any positioned element over the page that takes pointer events would swallow clicks meant for it.
+    const covering = [...document.querySelectorAll('.absolute')].filter(
+      (el) => el !== webview && !el.classList.contains('pointer-events-none')
+    );
+    expect(covering).toHaveLength(0);
+  });
+
   it('shows the crashed overlay after render-process-gone; Reload keeps it, loading, until did-finish-load', () => {
     const { emit } = mount();
 

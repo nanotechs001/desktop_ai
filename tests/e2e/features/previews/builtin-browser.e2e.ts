@@ -106,6 +106,14 @@ async function startFixtureServer(downloadName: string): Promise<Fixture> {
             'Geo'
           )
         );
+      case '/click':
+        return send(
+          html(
+            `<button id="b" style="position:fixed;inset:0;width:100%;height:100%" onclick="out.textContent='clicked'">click</button>
+             <div id="out">waiting</div>`,
+            'Click'
+          )
+        );
       case '/counter':
         reloads += 1;
         return send(html(`<div id="n">${reloads}</div>`, 'Counter'));
@@ -238,6 +246,18 @@ test.describe('Built-in browser behaves like a regular browser', () => {
 
   test.afterAll(async ({ page }) => {
     if (conversationId) await deleteConversation(page, conversationId);
+  });
+
+  test('a real mouse click on the page reaches it (nothing covers the webview)', async ({ electronApp, page }) => {
+    const guest = await openBrowserTab(electronApp, page, `${fixture.origin}/click`);
+    const box = await page.locator('webview').boundingBox();
+    expect(box, 'the webview has no on-screen box').not.toBeNull();
+    const { x, y, width, height } = box as NonNullable<typeof box>;
+
+    // Mouse input in the AionUi window, at the webview's centre: exactly what a user's click does.
+    await page.mouse.click(x + width / 2, y + height / 2);
+
+    await expect(guest.locator('#out')).toHaveText('clicked');
   });
 
   test('a login form POSTs its body and lands on the logged-in page', async ({ electronApp, page }) => {
