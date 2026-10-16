@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import { type ChatFileRef, chatFileRefPath } from '@/common/types/chatFile';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
+import { withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 import { emitter } from '@/renderer/utils/emitter';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { Message } from '@arco-design/web-react';
@@ -130,12 +131,18 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       selectedMcpServerIds !== undefined ? selectedAllMcpServerIds : defaultSelectedMcpServerIds;
     const selectedUserMcpServerIdsToSend =
       selectedMcpServerIds !== undefined ? selectedUserMcpServerIds : defaultSelectedUserMcpServerIds;
-    const selectedSessionMcpServersToSend =
+    const selectedSessionMcpServersToSend = withBrowserMcp(
       selectedMcpServerIds !== undefined
         ? selectedAllSessionMcpServers
         : availableMcpServers
             .filter((server) => (defaultSelectedMcpServerIds ?? []).includes(server.id))
-            .map((server) => toSessionMcpServer(server));
+            .map((server) => toSessionMcpServer(server)),
+      availableMcpServers
+    );
+    const acpSessionMcpServersToSend =
+      selectedMcpServerIds !== undefined
+        ? withBrowserMcp(selectedSessionMcpServers, availableMcpServers)
+        : selectedSessionMcpServersToSend;
 
     // `current_model` is the aionrs provider selection and means nothing to a
     // CLI agent, which owns its own model list. Used as a blanket fallback it
@@ -243,8 +250,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           custom_workspace: isCustomWorkspace,
           default_files: files.map(chatFileRefPath),
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-          selected_session_mcp_servers:
-            selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
+          selected_session_mcp_servers: acpSessionMcpServersToSend,
         },
       });
       if (!conversation || !conversation.id) {

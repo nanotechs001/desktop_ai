@@ -71,5 +71,6 @@
     "normal": "보통",
     "high": "높음",
     "urgent": "긴급"
-  }
+  },
+  "browserAlwaysOn": "항상 켜짐: 에이전트가 AionUi 브라우저 창을 사용합니다"
 }

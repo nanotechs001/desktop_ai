@@ -71,5 +71,6 @@
     "normal": "一般",
     "high": "高",
     "urgent": "緊急"
-  }
+  },
+  "browserAlwaysOn": "永遠開啟:代理使用 AionUi 瀏覽器面板"
 }

@@ -7,6 +7,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMcpServer } from '@/common/config/storage';
+import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
 const createConversationInvokeMock = vi.fn();
@@ -377,5 +378,47 @@ describe('useGuidSend', () => {
     expect(deps.navigate).toHaveBeenCalledWith('/conversation/conv-1');
     expect(setItemSpy).not.toHaveBeenCalledWith('aionrs_initial_message_conv-1', expect.anything());
     setItemSpy.mockRestore();
+  });
+  // AionCore passes `--strict-mcp-config` to Claude once any session server is injected, so a
+  // non-empty `selected_session_mcp_servers` also keeps the user's global MCPs (Playwright etc.)
+  // out of app-launched sessions. Every create path must therefore send the browser server.
+  describe('always attaches the aionui-browser MCP', () => {
+    const browserServer = {
+      id: 'builtin-browser',
+      name: BUILTIN_BROWSER_MCP_NAME,
+      enabled: true,
+      builtin: true,
+      transport: { type: 'stdio', command: 'node' },
+    } as IMcpServer;
+
+    const sentSessionServerNames = () =>
+      (createConversationInvokeMock.mock.calls[0][0].extra.selected_session_mcp_servers as { name: string }[]).map(
+        (s) => s.name
+      );
+
+    it.each([
+      ['ACP, explicit selection', 'claude', ['mcp-user']],
+      ['ACP, assistant defaults', 'claude', undefined],
+      ['aionrs, explicit selection', 'aionrs', ['mcp-user']],
+      ['aionrs, assistant defaults', 'aionrs', undefined],
+    ])('%s', async (_label, backend, selectedIds) => {
+      const deps = createDeps();
+      deps.selectedAssistantBackend = backend;
+      deps.current_model = { provider_id: 'p', model: 'm', use_model: 'm' } as never;
+      deps.availableMcpServers = [...deps.availableMcpServers, browserServer];
+      deps.selectedMcpServerIds = selectedIds;
+      deps.assistantDefaultMcpIds = ['mcp-user'];
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(sentSessionServerNames()).toContain(BUILTIN_BROWSER_MCP_NAME);
+      // Built-in ids are ignored by AionCore in selected_mcp_server_ids, so keep them out.
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.selected_mcp_server_ids).not.toContain(
+        browserServer.id
+      );
+    });
   });
 });

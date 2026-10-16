@@ -71,5 +71,6 @@
     "normal": "Normal",
     "high": "High",
     "urgent": "Urgent"
-  }
+  },
+  "browserAlwaysOn": "Always on: agents use the AionUi browser pane"
 }

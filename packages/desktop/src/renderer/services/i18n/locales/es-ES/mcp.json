@@ -71,5 +71,6 @@
     "normal": "Normal",
     "high": "Alta",
     "urgent": "Urgente"
-  }
+  },
+  "browserAlwaysOn": "Siempre activo: los agentes usan el panel de navegador de AionUi"
 }

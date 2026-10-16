@@ -1111,6 +1111,7 @@ export type I18nKey =
   | 'mcp.addServer'
   | 'mcp.advancedOptions'
   | 'mcp.approve'
+  | 'mcp.browserAlwaysOn'
   | 'mcp.capabilities'
   | 'mcp.connect'
   | 'mcp.connectedSince'

@@ -71,5 +71,6 @@
     "normal": "普通",
     "high": "高",
     "urgent": "紧急"
-  }
+  },
+  "browserAlwaysOn": "始终开启:智能体使用 AionUi 浏览器面板"
 }

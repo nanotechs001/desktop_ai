@@ -71,5 +71,6 @@
     "normal": "Normal",
     "high": "Élevé",
     "urgent": "Urgent"
-  }
+  },
+  "browserAlwaysOn": "Toujours actif : les agents utilisent le volet navigateur d'AionUi"
 }

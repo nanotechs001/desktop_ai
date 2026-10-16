@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import type { IMcpServer, IProvider, TProviderWithModel } from '@/common/config/storage';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import { DROPDOWN_SEARCH_THRESHOLD } from '@/renderer/components/agent/runtimeSelectorOptions';
@@ -200,7 +201,10 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
     skill.isAuto ? !disabledBuiltinSkills.includes(skill.name) : enabledSkills.includes(skill.name);
 
   const activeSkillCount = allSkills.filter(isSkillChecked).length;
-  const activeMcpCount = selectedMcpServerIds.length;
+  // The browser MCP is attached to every conversation (see withBrowserMcp), so its row is locked on.
+  const isBrowserMcp = (server: IMcpServer) => server.name === BUILTIN_BROWSER_MCP_NAME;
+  const isMcpChecked = (server: IMcpServer) => isBrowserMcp(server) || selectedMcpServerIds.includes(server.id);
+  const activeMcpCount = mcpServers.filter(isMcpChecked).length;
 
   const skillKeyword = skillQuery.trim().toLowerCase();
   const filteredSkills = skillKeyword
@@ -392,10 +396,16 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
           options: mcpServers.map((server) => ({
             key: server.id,
             label: server.name,
-            description: server.tools?.length ? `${server.tools.length} ${t('mcp.tools')}` : undefined,
-            active: selectedMcpServerIds.includes(server.id),
+            description: isBrowserMcp(server)
+              ? t('mcp.browserAlwaysOn')
+              : server.tools?.length
+                ? `${server.tools.length} ${t('mcp.tools')}`
+                : undefined,
+            active: isMcpChecked(server),
           })),
-          onSelect: (id) => onToggleMcpServer(id),
+          onSelect: (id) => {
+            if (!mcpServers.some((server) => server.id === id && isBrowserMcp(server))) onToggleMcpServer(id);
+          },
         },
       });
     }
@@ -536,26 +546,37 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             emptyText={t('mcp.noServersFound', { defaultValue: 'No servers found matching your criteria' })}
             isEmpty={filteredMcpServers.length === 0}
           >
-            {filteredMcpServers.map((server) => (
-              <Menu.Item
-                key={`mcp-${server.id}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleMcpServer(server.id);
-                }}
-              >
-                <Checkbox
-                  checked={selectedMcpServerIds.includes(server.id)}
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  onChange={() => onToggleMcpServer(server.id)}
+            {filteredMcpServers.map((server) => {
+              const locked = isBrowserMcp(server);
+              const row = (
+                <Menu.Item
+                  key={`mcp-${server.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!locked) onToggleMcpServer(server.id);
+                  }}
                 >
-                  <span className='text-13px'>
-                    {server.name}
-                    {server.tools?.length ? ` (${server.tools.length} ${t('mcp.tools')})` : ''}
-                  </span>
-                </Checkbox>
-              </Menu.Item>
-            ))}
+                  <Checkbox
+                    checked={isMcpChecked(server)}
+                    disabled={locked}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onChange={() => onToggleMcpServer(server.id)}
+                  >
+                    <span className='text-13px'>
+                      {server.name}
+                      {server.tools?.length ? ` (${server.tools.length} ${t('mcp.tools')})` : ''}
+                    </span>
+                  </Checkbox>
+                </Menu.Item>
+              );
+              return locked ? (
+                <Tooltip key={`mcp-${server.id}`} content={t('mcp.browserAlwaysOn')}>
+                  {row}
+                </Tooltip>
+              ) : (
+                row
+              );
+            })}
           </SubmenuSearchList>
         </Menu.SubMenu>
       )}

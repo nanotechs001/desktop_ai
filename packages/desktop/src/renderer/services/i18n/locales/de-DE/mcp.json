@@ -71,5 +71,6 @@
     "normal": "Normal",
     "high": "Hoch",
     "urgent": "Dringend"
-  }
+  },
+  "browserAlwaysOn": "Immer aktiv: Agenten nutzen den AionUi-Browserbereich"
 }

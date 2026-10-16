@@ -10,6 +10,7 @@ import React from 'react';
 import GuidActionRow from '@/renderer/pages/guid/components/GuidActionRow';
 import type { IMcpServer } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
+import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 
 const environment = vi.hoisted(() => ({ isMobile: false, isDesktop: true }));
 
@@ -121,14 +122,16 @@ vi.mock('@arco-design/web-react', () => {
     Checkbox: ({
       children,
       checked,
+      disabled,
       onChange,
     }: {
       children?: React.ReactNode;
       checked?: boolean;
+      disabled?: boolean;
       onChange?: () => void;
     }) => (
       <label>
-        <input type='checkbox' checked={checked ?? false} onChange={() => onChange?.()} />
+        <input type='checkbox' checked={checked ?? false} disabled={disabled} onChange={() => onChange?.()} />
         {children}
       </label>
     ),
@@ -140,7 +143,9 @@ vi.mock('@arco-design/web-react', () => {
     ),
     Menu,
     Message: { success: vi.fn(), error: vi.fn() },
-    Tooltip: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Tooltip: ({ children, content }: { children?: React.ReactNode; content?: React.ReactNode }) => (
+      <span title={typeof content === 'string' ? content : undefined}>{children}</span>
+    ),
   };
 });
 
@@ -269,5 +274,27 @@ describe('GuidActionRow skill/MCP submenu search', () => {
     fireEvent.click(screen.getByText('skill-3').closest('[role="menuitem"]')!);
 
     expect(onToggleSkill).toHaveBeenCalledWith('skill-3', false);
+  });
+
+  describe('built-in browser MCP row', () => {
+    const browserServer = { id: 'builtin-browser', name: BUILTIN_BROWSER_MCP_NAME, builtin: true } as IMcpServer;
+
+    it('renders checked and disabled with the always-on tooltip, even when not in the selection', () => {
+      renderActionRow({ mcpServers: [browserServer], selectedMcpServerIds: [] });
+
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(BUILTIN_BROWSER_MCP_NAME) });
+      expect(checkbox).toBeChecked();
+      expect(checkbox).toBeDisabled();
+      expect(screen.getByTitle('mcp.browserAlwaysOn')).toBeInTheDocument();
+    });
+
+    it('never toggles the browser row', () => {
+      const onToggleMcpServer = vi.fn();
+      renderActionRow({ mcpServers: [browserServer], onToggleMcpServer });
+
+      fireEvent.click(screen.getByText(BUILTIN_BROWSER_MCP_NAME).closest('[role="menuitem"]')!);
+
+      expect(onToggleMcpServer).not.toHaveBeenCalled();
+    });
   });
 });
