@@ -91,7 +91,7 @@ export function createWebSocketTransport(ws: WebSocket): CdpTransport {
   ws.on('error', () => {}); // a socket error is followed by 'close'; unhandled it would crash the process
   return {
     send(message) {
-      // Sending on a socket that is not OPEN throws; a closed socket is reported through onClose instead.
+      // ws throws only while CONNECTING and reports CLOSING/CLOSED through a callback; dropping covers all three, and a closed socket is reported through onClose.
       if (ws.readyState === ws.OPEN) ws.send(message);
     },
     onMessage(cb) {

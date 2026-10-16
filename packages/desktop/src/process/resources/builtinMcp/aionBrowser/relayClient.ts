@@ -136,7 +136,7 @@ export class RelayClient {
       tab: targetId,
       title,
       url,
-      owner: owner as TabSummary['owner'],
+      owner,
     }));
   }
 
