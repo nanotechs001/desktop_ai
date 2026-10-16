@@ -61,7 +61,7 @@
     "default": "默认",
     "setDefault": "设为默认",
     "useDefault": "使用默认",
-    "rebindFailed": "无法更新 {{name}} 的引擎。",
+    "rebindFailed": "有 {{count}} 个 Agent 无法更新引擎。",
     "rebindListFailed": "无法加载你的 Agent 以更新其引擎。"
   }
 }

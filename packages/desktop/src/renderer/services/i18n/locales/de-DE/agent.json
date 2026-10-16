@@ -61,7 +61,7 @@
     "default": "Standard",
     "setDefault": "Als Standard festlegen",
     "useDefault": "Standard verwenden",
-    "rebindFailed": "Die Engine für {{name}} konnte nicht aktualisiert werden.",
+    "rebindFailed": "Die Engine von {{count}} Agents konnte nicht aktualisiert werden.",
     "rebindListFailed": "Deine Agents konnten nicht geladen werden, um ihre Engine zu aktualisieren."
   }
 }

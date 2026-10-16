@@ -263,7 +263,8 @@ export const useAssistantEditor = ({
     setEditAvatar(assistant.avatar || '');
     setEditAvatarPreview(undefined);
     setEditAgent(assistant.agent_id || '');
-    setEditUsesDefault(!configService.get('agent.enginePins')?.[assistant.id]);
+    // A generated (bare CLI) Agent is the engine itself: it never follows the default.
+    setEditUsesDefault(!isGeneratedAssistant(assistant) && !configService.get('agent.enginePins')?.[assistant.id]);
     resetDefaultConfigState();
     resetSkillEditorState();
 
@@ -351,9 +352,11 @@ export const useAssistantEditor = ({
     setEditDescription(assistant.description_i18n?.[localeKey] || assistant.description || '');
     setEditAvatar(assistant.avatar || '\u{1F916}');
     setEditAvatarPreview(undefined);
-    const sourceIsPinned = Boolean(configService.get('agent.enginePins')?.[assistant.id]);
-    setEditAgent((!sourceIsPinned && defaultEngineId) || assistant.agent_id || '');
-    setEditUsesDefault(!sourceIsPinned);
+    // A copy of a pinned or bare CLI Agent stays on that engine; any other copy follows the default.
+    const keepsEngine =
+      isGeneratedAssistant(assistant) || Boolean(configService.get('agent.enginePins')?.[assistant.id]);
+    setEditAgent((!keepsEngine && defaultEngineId) || assistant.agent_id || '');
+    setEditUsesDefault(!keepsEngine);
     resetDefaultConfigState();
     resetSkillEditorState();
 

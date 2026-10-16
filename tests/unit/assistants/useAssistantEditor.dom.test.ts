@@ -863,6 +863,40 @@ describe('useAssistantEditor', () => {
       expect(enginePinWrites()).toEqual([]);
     });
 
+    it('opens a generated (bare CLI) assistant on its own engine, not following the default', async () => {
+      const generated: AssistantListItem = { ...userAssistant, id: 'bare:claude', source: 'generated' };
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, activeAssistant: generated, defaultEngineId: 'agent-default' })
+      );
+
+      await act(async () => {
+        await result.current.handleEdit(generated);
+      });
+
+      expect(result.current.editUsesDefault).toBe(false);
+      expect(result.current.editAgent).toBe('agent-claude');
+    });
+
+    it('duplicates a generated (bare CLI) assistant onto its engine and pins the copy there', async () => {
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'copy-id' });
+      const generated: AssistantListItem = { ...userAssistant, id: 'bare:claude', source: 'generated' };
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, defaultEngineId: 'agent-default' }));
+
+      await act(async () => {
+        await result.current.handleDuplicate(generated);
+      });
+      expect(result.current.editUsesDefault).toBe(false);
+      expect(result.current.editAgent).toBe('agent-claude');
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+      expect(ipcBridge.assistants.create.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ agent_id: 'agent-claude' })
+      );
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({ 'copy-id': 'agent-claude' });
+    });
+
     it('leaves a generated (bare CLI) assistant on its own engine', async () => {
       const generated: AssistantListItem = { ...userAssistant, id: 'bare:claude', source: 'generated' };
       (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: generated.id });

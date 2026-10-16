@@ -61,7 +61,7 @@
     "default": "Par défaut",
     "setDefault": "Définir par défaut",
     "useDefault": "Utiliser celui par défaut",
-    "rebindFailed": "Impossible de mettre à jour le moteur de {{name}}.",
+    "rebindFailed": "Impossible de mettre à jour le moteur de {{count}} Agents.",
     "rebindListFailed": "Impossible de charger vos Agents pour mettre à jour leur moteur."
   }
 }

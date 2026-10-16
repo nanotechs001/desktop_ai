@@ -28,6 +28,7 @@ const {
     agentId: 'engine-claude' as string | null,
     setDefault: vi.fn(),
     loading: false,
+    unavailable: false,
   },
   modelSelectionMock: {
     modelList: [],
@@ -325,6 +326,7 @@ describe('GuidPage', () => {
     defaultEngineMock.agent = { id: 'engine-claude', name: 'Claude' };
     defaultEngineMock.agentId = 'engine-claude';
     defaultEngineMock.loading = false;
+    defaultEngineMock.unavailable = false;
     sendMock.isButtonDisabled = false;
     resolveGuidAssistantDefaultsMock.mockReturnValue({
       disabledBuiltinSkillIds: [],
@@ -695,6 +697,17 @@ describe('GuidPage', () => {
     render(<GuidPage />);
 
     expect(screen.queryByTestId('guid-no-engine')).toBeNull();
+  });
+
+  it('shows no "connect an account" notice when the engine list failed to load', () => {
+    defaultEngineMock.agent = null;
+    defaultEngineMock.agentId = null;
+    defaultEngineMock.unavailable = true;
+
+    render(<GuidPage />);
+
+    expect(screen.queryByTestId('guid-no-engine')).toBeNull();
+    expect(capturedGuidActionRowProps.at(-1)?.isButtonDisabled).toBe(false);
   });
 
   it('does not send on Enter when no engine is connected', () => {

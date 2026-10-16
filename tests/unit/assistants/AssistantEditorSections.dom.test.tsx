@@ -1071,6 +1071,36 @@ describe('AssistantEditorSections', () => {
       expect(setValue).toHaveBeenCalledWith('agent-codex');
     });
 
+    it('shows the real engine, never "Use default", for a generated (bare CLI) Agent', () => {
+      const { container } = renderWithProviders(
+        <AssistantEditorSections
+          editor={createEditor({
+            agent: {
+              value: 'agent-codex',
+              setValue: vi.fn(),
+              availableBackends: engines,
+              usesDefault: true,
+              followDefault: vi.fn(),
+              defaultEngineName: 'Claude',
+            },
+          })}
+          activeAssistant={{
+            id: 'bare:codex',
+            name: 'Codex',
+            sort_order: 1,
+            source: 'generated',
+            enabled: true,
+            agent_id: 'agent-codex',
+            agent: { type: 'acp', source: 'builtin', acp_backend: 'codex' },
+          }}
+        />
+      );
+
+      const select = container.querySelector('[data-testid="select-assistant-agent"]');
+      expect(select?.textContent).toContain('Codex');
+      expect(select?.textContent).not.toContain('Use default');
+    });
+
     it('offers no "Use default" row when there is no default engine', async () => {
       renderWithProviders(
         <AssistantEditorSections

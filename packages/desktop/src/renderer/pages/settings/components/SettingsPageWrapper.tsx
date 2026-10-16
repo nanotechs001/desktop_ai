@@ -49,7 +49,7 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
     },
     agent: {
       id: 'agent',
-      label: t('settings.agents', { defaultValue: 'Agents' }),
+      label: t('settings.agents'),
       icon: <Robot theme='outline' size='16' />,
       path: 'agent',
     },

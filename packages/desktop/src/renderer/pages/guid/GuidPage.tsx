@@ -142,7 +142,8 @@ const GuidPage: React.FC = () => {
   // so there is no engine picker here; the default only seeds which Agent is
   // preselected, and with no engine at all there is nothing to send to.
   const defaultEngine = useDefaultEngine();
-  const noEngine = !defaultEngine.loading && defaultEngine.agentId === null;
+  // An engine list that failed to load is not "no engine connected"; stay quiet rather than mislead.
+  const noEngine = !defaultEngine.loading && !defaultEngine.unavailable && defaultEngine.agentId === null;
   const agentSelection = useGuidAssistantSelection({
     defaultEngineId: defaultEngine.agentId,
     resetAssistant: resetAssistantRequested,

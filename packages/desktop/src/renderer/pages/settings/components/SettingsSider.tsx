@@ -88,7 +88,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       model: { id: 'model', label: t('settings.model'), icon: <LinkCloud />, path: 'model' },
       agent: {
         id: 'agent',
-        label: t('settings.agents', { defaultValue: 'Agents' }),
+        label: t('settings.agents'),
         icon: <Speed />,
         path: 'agent',
       },

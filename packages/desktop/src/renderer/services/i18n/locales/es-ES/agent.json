@@ -61,7 +61,7 @@
     "default": "Predeterminado",
     "setDefault": "Establecer como predeterminado",
     "useDefault": "Usar el predeterminado",
-    "rebindFailed": "No se pudo actualizar el motor de {{name}}.",
+    "rebindFailed": "No se pudo actualizar el motor de {{count}} Agents.",
     "rebindListFailed": "No se pudieron cargar tus Agents para actualizar su motor."
   }
 }

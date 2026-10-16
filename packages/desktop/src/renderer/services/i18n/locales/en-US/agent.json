@@ -61,7 +61,7 @@
     "default": "Default",
     "setDefault": "Set as default",
     "useDefault": "Use default",
-    "rebindFailed": "Could not update the engine for {{name}}.",
+    "rebindFailed": "Could not update the engine for {{count}} Agents.",
     "rebindListFailed": "Could not load your Agents to update their engine."
   }
 }

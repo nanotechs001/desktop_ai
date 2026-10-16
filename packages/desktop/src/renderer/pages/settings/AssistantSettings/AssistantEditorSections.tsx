@@ -147,6 +147,8 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
   const isGenerated = activeAssistant?.source === 'generated';
   const isReadOnlyAssistant = isBuiltin;
   const isIdentityLocked = isBuiltin || isGenerated;
+  // A bare CLI Agent is the engine itself, so it has no "follow the default" choice.
+  const showUseDefault = Boolean(agent.defaultEngineName) && !isGenerated;
   const isDescriptionReadOnly = isBuiltin;
   const showSkills = isCreating || activeAssistant !== null;
   const currentBackend = availableBackends.find((option) => option.id === editAgent);
@@ -464,7 +466,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
             <Select
               className='w-full'
               getPopupContainer={getEditorSelectPopupContainer}
-              value={agent.usesDefault && agent.defaultEngineName ? USE_DEFAULT_ENGINE : editAgent}
+              value={showUseDefault && agent.usesDefault ? USE_DEFAULT_ENGINE : editAgent}
               onChange={(value) =>
                 value === USE_DEFAULT_ENGINE ? agent.followDefault() : setEditAgent(value as string)
               }
@@ -509,7 +511,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
                 );
               }}
             >
-              {agent.defaultEngineName ? (
+              {showUseDefault ? (
                 <Select.Option value={USE_DEFAULT_ENGINE}>{renderUseDefaultLabel()}</Select.Option>
               ) : null}
               {filteredBackends.map((option) => (

@@ -61,7 +61,7 @@
     "default": "Varsayılan",
     "setDefault": "Varsayılan yap",
     "useDefault": "Varsayılanı kullan",
-    "rebindFailed": "{{name}} için motor güncellenemedi.",
+    "rebindFailed": "{{count}} Agent için motor güncellenemedi.",
     "rebindListFailed": "Motorlarını güncellemek için Agent'larınız yüklenemedi."
   }
 }
