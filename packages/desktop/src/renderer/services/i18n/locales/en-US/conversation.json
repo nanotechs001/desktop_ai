@@ -141,7 +141,7 @@
       "check_provider_base_url": "Check the model provider Base URL, API path, proxy, and API compatibility.",
       "change_model": "Choose a model that is available for the current account and supports this request.",
       "reduce_context": "Reduce the message content, referenced files, or context size, then retry.",
-      "send_feedback": "Send feedback with logs so the team can investigate."
+      "send_feedback": "Try again, or restart the app."
     },
     "ownership": {
       "aionui": "App",
@@ -152,7 +152,7 @@
     "codes": {
       "AIONUI_STREAM_BROKEN": {
         "title": "Response stream was interrupted",
-        "body": "The app accepted your message but the response stream ended unexpectedly. Please retry; if it happens again, send feedback."
+        "body": "The app accepted your message but the response stream ended unexpectedly. Please retry; if it happens again, restart the app."
       },
       "AIONUI_STATE_INCONSISTENT": {
         "title": "Conversation state is out of sync",
@@ -164,7 +164,7 @@
       },
       "AIONUI_INTERNAL_ERROR": {
         "title": "Request failed in the app",
-        "body": "The request failed while the app was processing it. Please retry once; if it repeats, send feedback."
+        "body": "The request failed while the app was processing it. Please retry once; if it repeats, restart the app."
       },
       "AIONUI_CONVERSATION_BUSY": {
         "title": "Conversation is busy",

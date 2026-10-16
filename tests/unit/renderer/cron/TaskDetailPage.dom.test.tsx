@@ -291,7 +291,7 @@ describe('TaskDetailPage', () => {
     expect(screen.getByAltText('问好助手')).toHaveAttribute('src', 'data:image/svg+xml;base64,assistant-avatar');
   });
 
-  it('opens the owning team from execution history when the conversation belongs to a team', async () => {
+  it('does not link a team conversation in execution history anywhere (teams are removed)', async () => {
     useCronJobConversationsMock.mockReturnValue({
       conversations: [
         conversation({
@@ -316,7 +316,8 @@ describe('TaskDetailPage', () => {
 
     fireEvent.click(await screen.findByText('Team member run'));
 
-    expect(navigateMock).toHaveBeenCalledWith('/team/team-1');
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Team member run').parentElement).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('keeps opening non-team execution history conversations directly', async () => {

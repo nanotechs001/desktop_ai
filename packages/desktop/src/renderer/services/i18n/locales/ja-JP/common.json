@@ -98,7 +98,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "AionUi opened, but AionCore stopped while initializing local data. Reinstalling AionUi may not fix this. Send a diagnostics report or contact support so the local database migration can be inspected.",
+      "description": "AionUi は開きましたが、AionCore はローカルデータの初期化中に停止しました。AionUi を再インストールしても解決しない可能性があります。アプリを再起動してください。繰り返し発生する場合は、ローカルデータベースの確認が必要になることがあります。",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -111,7 +111,7 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "AionUi は開きましたが、AionCore は エージェントまたはエンジンのレコードなどのローカル起動データを準備中に停止しました。AionUi を再インストールしても解決しない可能性があります。ローカルデータベースを確認できるよう、診断レポートを送信するかサポートに連絡してください。",
+      "description": "AionUi は開きましたが、AionCore は エージェントまたはエンジンのレコードなどのローカル起動データを準備中に停止しました。AionUi を再インストールしても解決しない可能性があります。アプリを再起動してください。繰り返し発生する場合は、ローカルデータベースの確認が必要になることがあります。",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -157,7 +157,7 @@
     },
     "exited": {
       "title": "起動が完了しませんでした",
-      "description": "AionCore は起動を完了できずに終了しました。アプリを再起動してください。繰り返し発生する場合は、診断情報を送信してください。",
+      "description": "AionCore は起動を完了できずに終了しました。アプリを再起動してください。繰り返し発生する場合は、AionCore バックエンドがインストールされているか確認してください。",
       "sendDiagnostics": "診断を送信",
       "diagnosticsSent": "診断を送信しました",
       "diagnosticsReportSuccess": "診断情報を送信しました",
@@ -165,7 +165,7 @@
     },
     "portReportTimeout": {
       "title": "起動がタイムアウトしました",
-      "description": "AionCore は想定時間内に起動を完了できませんでした。アプリを再起動してください。繰り返し発生する場合は、診断情報を送信してください。",
+      "description": "AionCore は想定時間内に起動を完了できませんでした。アプリを再起動してください。繰り返し発生する場合は、AionCore バックエンドがインストールされているか確認してください。",
       "sendDiagnostics": "診断を送信",
       "diagnosticsSent": "診断を送信しました",
       "diagnosticsReportSuccess": "診断情報を送信しました",
@@ -173,7 +173,7 @@
     },
     "startupFailed": {
       "title": "起動に失敗しました",
-      "description": "AionCore を起動できませんでした。アプリを再起動してください。繰り返し発生する場合は、診断情報を送信してください。",
+      "description": "AionCore を起動できませんでした。アプリを再起動してください。繰り返し発生する場合は、AionCore バックエンドがインストールされているか確認してください。",
       "sendDiagnostics": "診断を送信",
       "diagnosticsSent": "診断を送信しました",
       "diagnosticsReportSuccess": "診断情報を送信しました",

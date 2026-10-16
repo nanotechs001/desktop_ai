@@ -141,7 +141,7 @@
       "check_provider_base_url": "Check the model provider Base URL, API path, proxy, and API compatibility.",
       "change_model": "Choose a model that is available for the current account and supports this request.",
       "reduce_context": "Reduce the message content, referenced files, or context size, then retry.",
-      "send_feedback": "Send feedback with logs so the team can investigate."
+      "send_feedback": "請重試，或重新啟動應用程式。"
     },
     "ownership": {
       "aionui": "應用",
@@ -152,7 +152,7 @@
     "codes": {
       "AIONUI_STREAM_BROKEN": {
         "title": "回應流異常中斷",
-        "body": "訊息已送出，但回應流異常結束。請先重試；如果反覆出現，可以提交回饋。"
+        "body": "訊息已送出，但回應流異常結束。請先重試；如果反覆出現，請重新啟動應用程式。"
       },
       "AIONUI_STATE_INCONSISTENT": {
         "title": "會話狀態不一致",
@@ -164,7 +164,7 @@
       },
       "AIONUI_INTERNAL_ERROR": {
         "title": "應用處理失敗",
-        "body": "本次請求在應用程式處理過程中失敗。請先重試一次；如果仍然出現，可以提交回饋。"
+        "body": "本次請求在應用程式處理過程中失敗。請先重試一次；如果仍然出現，請重新啟動應用程式。"
       },
       "AIONUI_CONVERSATION_BUSY": {
         "title": "會話正在處理上一則訊息",

@@ -110,7 +110,6 @@ import type { IRuntimeStatusEvent, RuntimeFailureKind } from '@/common/adapter/i
 import {
   InstallationIntegrityContent,
   InstallationIntegrityModalHost,
-  type InstallationIntegrityDiagnostics,
   getBackendStartupInstallationDescription,
   getDownloadLatestModalActionProps,
   getRuntimeComponentInstallationDescription,
@@ -196,25 +195,6 @@ function captureRuntimeInstallationIntegrityFailure(event: IRuntimeStatusEvent):
     .catch(() => {});
 }
 
-function buildRuntimeInstallationDiagnostics(
-  event: IRuntimeStatusEvent,
-  description: string
-): InstallationIntegrityDiagnostics {
-  return {
-    source: 'runtime_status',
-    description,
-    runtime: {
-      failureKind: event.failure_kind,
-      message: event.message,
-      phase: event.phase,
-      resource: event.resource,
-      resourceId: event.resource_id,
-      scopeId: event.scope.id,
-      scopeKind: event.scope.kind,
-    },
-  };
-}
-
 function resolveRuntimeResourceLabel(event: IRuntimeStatusEvent, t: TFunction): string {
   if (event.resource === 'node') {
     return t('settings.runtimeResource.node');
@@ -237,12 +217,7 @@ const RuntimeFailureDialogs: React.FC = () => {
       showDialog: (event) => {
         const resource = resolveRuntimeResourceLabel(event, t);
         const description = getRuntimeComponentInstallationDescription(t, resource);
-        const controller = showInstallationIntegrityModal(
-          modal,
-          t,
-          description,
-          buildRuntimeInstallationDiagnostics(event, description)
-        );
+        const controller = showInstallationIntegrityModal(modal, t, description);
         return { close: () => controller.close() };
       },
       report: (event) => captureRuntimeInstallationIntegrityFailure(event),
@@ -439,11 +414,6 @@ const BackendStartupFailureDialog: React.FC<{ failure: BackendStartupFailureInfo
                               ? 'incomplete_installation'
                               : 'startup_failed'
           }
-          diagnostics={{
-            source: 'backend_startup_failure',
-            description,
-            backendStartupFailure: failure as unknown as Record<string, unknown>,
-          }}
         />
       </div>
     );

@@ -98,7 +98,7 @@
     },
     "dataMigration": {
       "title": "Échec de la migration des données locales",
-      "description": "AionUi s'est ouvert, mais AionCore s'est arrêté lors de l'initialisation des données locales. La réinstallation d'AionUi ne résoudra peut-être pas ce problème. Envoyez un rapport de diagnostic ou contactez le support afin que la migration de la base de données locale puisse être inspectée.",
+      "description": "AionUi s'est ouvert, mais AionCore s'est arrêté lors de l'initialisation des données locales. La réinstallation d'AionUi ne résoudra peut-être pas ce problème. Veuillez redémarrer l'application ; si le problème persiste, la base de données locale devra peut-être être inspectée.",
       "sendDiagnostics": "Envoyer des diagnostics",
       "diagnosticsSent": "Diagnostics envoyés",
       "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
@@ -111,7 +111,7 @@
     },
     "localDataRepair": {
       "title": "La réparation des données locales a échoué",
-      "description": "AionUi s'est ouvert, mais AionCore s'est arrêté lors de la préparation des données locales de démarrage, comme les enregistrements d'agents ou de moteurs. La réinstallation d'AionUi ne résoudra peut-être pas ce problème. Envoyez un rapport de diagnostic ou contactez l'assistance afin que la base de données locale puisse être inspectée.",
+      "description": "AionUi s'est ouvert, mais AionCore s'est arrêté lors de la préparation des données locales de démarrage, comme les enregistrements d'agents ou de moteurs. La réinstallation d'AionUi ne résoudra peut-être pas ce problème. Veuillez redémarrer l'application ; si le problème persiste, la base de données locale devra peut-être être inspectée.",
       "sendDiagnostics": "Envoyer des diagnostics",
       "diagnosticsSent": "Diagnostics envoyés",
       "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
@@ -157,7 +157,7 @@
     },
     "exited": {
       "title": "Le démarrage ne s'est pas terminé",
-      "description": "AionCore n'a pas pu terminer son démarrage et s'est fermé. Veuillez redémarrer l'application ; si le problème persiste, envoyez un diagnostic.",
+      "description": "AionCore n'a pas pu terminer son démarrage et s'est fermé. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend AionCore est installé.",
       "sendDiagnostics": "Envoyer le diagnostic",
       "diagnosticsSent": "Diagnostic envoyé",
       "diagnosticsReportSuccess": "Diagnostic envoyé",
@@ -165,7 +165,7 @@
     },
     "portReportTimeout": {
       "title": "Délai de démarrage dépassé",
-      "description": "AionCore n'a pas terminé son démarrage dans le délai prévu. Veuillez redémarrer l'application ; si le problème persiste, envoyez un diagnostic.",
+      "description": "AionCore n'a pas terminé son démarrage dans le délai prévu. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend AionCore est installé.",
       "sendDiagnostics": "Envoyer le diagnostic",
       "diagnosticsSent": "Diagnostic envoyé",
       "diagnosticsReportSuccess": "Diagnostic envoyé",
@@ -173,7 +173,7 @@
     },
     "startupFailed": {
       "title": "Échec du démarrage",
-      "description": "AionCore n'a pas pu démarrer. Veuillez redémarrer l'application ; si le problème persiste, envoyez un diagnostic.",
+      "description": "AionCore n'a pas pu démarrer. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend AionCore est installé.",
       "sendDiagnostics": "Envoyer le diagnostic",
       "diagnosticsSent": "Diagnostic envoyé",
       "diagnosticsReportSuccess": "Diagnostic envoyé",

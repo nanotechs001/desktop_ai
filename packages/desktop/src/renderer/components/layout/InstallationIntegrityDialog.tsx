@@ -17,21 +17,6 @@ type InstallationIntegrityDialogKind =
   | 'port_report_timeout'
   | 'startup_failed';
 
-export type InstallationIntegrityDiagnostics = {
-  source: 'backend_startup_failure' | 'runtime_status';
-  description?: string;
-  runtime?: {
-    failureKind?: string;
-    message?: string;
-    phase?: string;
-    resource?: string;
-    resourceId?: string;
-    scopeId?: string;
-    scopeKind?: string;
-  };
-  backendStartupFailure?: Record<string, unknown> | null;
-};
-
 export function openDownloadLatest(): void {
   window.open(AIONUI_DOWNLOAD_URL, '_blank', 'noopener,noreferrer');
 }
@@ -195,7 +180,6 @@ export function showInstallationIntegrityModal(
   modal: InstallationIntegrityModalController,
   t: TFunction,
   description: string,
-  diagnostics?: InstallationIntegrityDiagnostics,
   diagnosticsKind: InstallationIntegrityDialogKind = 'incomplete_installation'
 ): ReturnType<InstallationIntegrityModalController['error']> {
   return modal.error({
@@ -209,9 +193,8 @@ export function showInstallationIntegrityModal(
 
 export const InstallationIntegrityModalHost: React.FC<{
   description: string;
-  diagnostics?: InstallationIntegrityDiagnostics;
   diagnosticsKind?: InstallationIntegrityDialogKind;
-}> = ({ description, diagnostics, diagnosticsKind = 'incomplete_installation' }) => {
+}> = ({ description, diagnosticsKind = 'incomplete_installation' }) => {
   const [modal, modalContextHolder] = Modal.useModal();
   const { t } = useTranslation();
   const shownRef = useRef(false);
@@ -219,8 +202,8 @@ export const InstallationIntegrityModalHost: React.FC<{
   useEffect(() => {
     if (shownRef.current) return;
     shownRef.current = true;
-    showInstallationIntegrityModal(modal, t, description, diagnostics, diagnosticsKind);
-  }, [description, diagnostics, diagnosticsKind, modal, t]);
+    showInstallationIntegrityModal(modal, t, description, diagnosticsKind);
+  }, [description, diagnosticsKind, modal, t]);
 
   return <>{modalContextHolder}</>;
 };

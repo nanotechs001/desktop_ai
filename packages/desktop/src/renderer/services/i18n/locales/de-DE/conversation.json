@@ -141,7 +141,7 @@
       "check_provider_base_url": "Überprüfe die Basis-URL des Modellanbieters, den API-Pfad, den Proxy und die API-Kompatibilität.",
       "change_model": "Wähle ein Modell, das für das aktuelle Konto verfügbar ist und diese Anfrage unterstützt.",
       "reduce_context": "Reduziere den Nachrichteninhalt, referenzierte Dateien oder die Kontextgröße und versuche es nochmal.",
-      "send_feedback": "Sende Feedback mit Protokollen, damit das Team das Problem untersuchen kann."
+      "send_feedback": "Versuche es erneut oder starte die App neu."
     },
     "ownership": {
       "aionui": "App",
@@ -152,7 +152,7 @@
     "codes": {
       "AIONUI_STREAM_BROKEN": {
         "title": "Antwortstrom wurde unterbrochen",
-        "body": "Die App hat deine Nachricht akzeptiert, aber der Antwortstrom endete unerwartet. Bitte versuche es erneut; wenn es wieder passiert, sende Feedback."
+        "body": "Die App hat deine Nachricht akzeptiert, aber der Antwortstrom endete unerwartet. Bitte versuche es erneut; wenn es wieder passiert, starte die App neu."
       },
       "AIONUI_STATE_INCONSISTENT": {
         "title": "Unterhaltungszustand ist nicht synchronisiert",
@@ -164,7 +164,7 @@
       },
       "AIONUI_INTERNAL_ERROR": {
         "title": "Anfrage in der App fehlgeschlagen",
-        "body": "Die Anfrage ist fehlgeschlagen, während die App sie verarbeitete. Bitte versuche es einmal erneut; wenn es wiederholt passiert, sende Feedback."
+        "body": "Die Anfrage ist fehlgeschlagen, während die App sie verarbeitete. Bitte versuche es einmal erneut; wenn es wiederholt passiert, starte die App neu."
       },
       "AIONUI_CONVERSATION_BUSY": {
         "title": "Unterhaltung ist beschäftigt",

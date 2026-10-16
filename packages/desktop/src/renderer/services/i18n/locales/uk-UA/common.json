@@ -100,7 +100,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "AionUi opened, but AionCore stopped while initializing local data. Reinstalling AionUi may not fix this. Send a diagnostics report or contact support so the local database migration can be inspected.",
+      "description": "AionUi відкрився, але AionCore зупинився під час ініціалізації локальних даних. Повторне встановлення AionUi може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -113,7 +113,7 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "AionUi відкрився, але AionCore зупинився під час підготовки локальних даних запуску, як-от записи агентів або рушіїв. Повторне встановлення AionUi може не вирішити проблему. Надішліть діагностичний звіт або зверніться до підтримки, щоб можна було перевірити локальну базу даних.",
+      "description": "AionUi відкрився, але AionCore зупинився під час підготовки локальних даних запуску, як-от записи агентів або рушіїв. Повторне встановлення AionUi може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -159,7 +159,7 @@
     },
     "exited": {
       "title": "Запуск не завершено",
-      "description": "AionCore не зміг завершити запуск і закрився. Перезапустіть застосунок; якщо це повторюється, надішліть діагностику.",
+      "description": "AionCore не зміг завершити запуск і закрився. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд AionCore встановлено.",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностику надіслано",
@@ -167,7 +167,7 @@
     },
     "portReportTimeout": {
       "title": "Час запуску вичерпано",
-      "description": "AionCore не завершив запуск за очікуваний час. Перезапустіть застосунок; якщо це повторюється, надішліть діагностику.",
+      "description": "AionCore не завершив запуск за очікуваний час. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд AionCore встановлено.",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностику надіслано",
@@ -175,7 +175,7 @@
     },
     "startupFailed": {
       "title": "Не вдалося запустити",
-      "description": "AionCore не вдалося запустити. Перезапустіть застосунок; якщо це повторюється, надішліть діагностику.",
+      "description": "AionCore не вдалося запустити. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд AionCore встановлено.",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностику надіслано",

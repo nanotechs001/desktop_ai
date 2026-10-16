@@ -12,6 +12,8 @@ import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/c
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
+import { resolveAssistantConfigId } from '@/renderer/hooks/agent/usePresetAssistantInfo';
+import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
 
 const ChatConversationIndex: React.FC = () => {
   const { id } = useParams();
@@ -114,7 +116,13 @@ const ChatConversationIndex: React.FC = () => {
     navigate('/', { replace: true });
   }, [id, isLoading, data, navigate, t]);
 
-  if (isLoading) return <Spin loading></Spin>;
+  // A chat opened for a hidden Agent (the Butler) goes back to the home page.
+  const isHiddenAgentChat = data ? isHiddenAgentId(resolveAssistantConfigId(data)) : false;
+  useEffect(() => {
+    if (isHiddenAgentChat) navigate('/guid', { replace: true });
+  }, [isHiddenAgentChat, navigate]);
+
+  if (isLoading || isHiddenAgentChat) return <Spin loading></Spin>;
   return <ChatConversation conversation={data ?? undefined}></ChatConversation>;
 };
 

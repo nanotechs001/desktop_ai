@@ -98,7 +98,7 @@
     },
     "dataMigration": {
       "title": "本地数据迁移失败",
-      "description": "AionUi 已打开，但 AionCore 在初始化本地数据时停止。重复安装 AionUi 未必能解决此问题。请发送诊断报告或联系支持，以便检查本地数据库迁移状态。",
+      "description": "AionUi 已打开，但 AionCore 在初始化本地数据时停止。重复安装 AionUi 未必能解决此问题。请重启应用；若反复出现，可能需要检查本地数据库迁移状态。",
       "sendDiagnostics": "发送诊断报告",
       "diagnosticsSent": "诊断报告已发送",
       "diagnosticsReportSuccess": "诊断报告已发送",
@@ -111,7 +111,7 @@
     },
     "localDataRepair": {
       "title": "本地数据修复失败",
-      "description": "AionUi 已打开，但 AionCore 在准备本地启动数据时停止，例如 Agent 或引擎记录。重新安装 AionUi 可能无法解决此问题。请发送诊断报告或联系支持，以便检查本地数据库。",
+      "description": "AionUi 已打开，但 AionCore 在准备本地启动数据时停止，例如 Agent 或引擎记录。重新安装 AionUi 可能无法解决此问题。请重启应用；若反复出现，可能需要检查本地数据库。",
       "sendDiagnostics": "发送诊断",
       "diagnosticsSent": "诊断已发送",
       "diagnosticsReportSuccess": "诊断报告已发送",
@@ -157,7 +157,7 @@
     },
     "exited": {
       "title": "启动未完成",
-      "description": "AionCore 未能完成启动并已退出。请重启应用；若反复出现，请上报诊断信息。",
+      "description": "AionCore 未能完成启动并已退出。请重启应用；若反复出现，请检查 AionCore 后端是否已安装。",
       "sendDiagnostics": "发送诊断",
       "diagnosticsSent": "诊断已发送",
       "diagnosticsReportSuccess": "诊断信息已上报",
@@ -165,7 +165,7 @@
     },
     "portReportTimeout": {
       "title": "启动超时",
-      "description": "AionCore 未在预期时间内完成启动。请重启应用；若反复出现，请发送诊断。",
+      "description": "AionCore 未在预期时间内完成启动。请重启应用；若反复出现，请检查 AionCore 后端是否已安装。",
       "sendDiagnostics": "发送诊断",
       "diagnosticsSent": "诊断已发送",
       "diagnosticsReportSuccess": "诊断信息已上报",
@@ -173,7 +173,7 @@
     },
     "startupFailed": {
       "title": "启动失败",
-      "description": "AionCore 启动失败。请重启应用；若反复出现，请发送诊断。",
+      "description": "AionCore 启动失败。请重启应用；若反复出现，请检查 AionCore 后端是否已安装。",
       "sendDiagnostics": "发送诊断",
       "diagnosticsSent": "诊断已发送",
       "diagnosticsReportSuccess": "诊断信息已上报",

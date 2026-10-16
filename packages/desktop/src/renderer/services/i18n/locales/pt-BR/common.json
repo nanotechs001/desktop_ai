@@ -98,7 +98,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "AionUi opened, but AionCore stopped while initializing local data. Reinstalling AionUi may not fix this. Send a diagnostics report or contact support so the local database migration can be inspected.",
+      "description": "O AionUi abriu, mas o AionCore parou ao inicializar os dados locais. Reinstalar o AionUi pode não corrigir o problema. Reinicie o aplicativo; se isso continuar acontecendo, o banco de dados local pode precisar ser inspecionado.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -111,7 +111,7 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "O AionUi abriu, mas o AionCore parou ao preparar dados locais de inicialização, como registros de agentes ou motores. Reinstalar o AionUi pode não corrigir o problema. Envie um relatório de diagnóstico ou entre em contato com o suporte para que o banco de dados local possa ser inspecionado.",
+      "description": "O AionUi abriu, mas o AionCore parou ao preparar dados locais de inicialização, como registros de agentes ou motores. Reinstalar o AionUi pode não corrigir o problema. Reinicie o aplicativo; se isso continuar acontecendo, o banco de dados local pode precisar ser inspecionado.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -157,7 +157,7 @@
     },
     "exited": {
       "title": "A inicialização não foi concluída",
-      "description": "O AionCore não conseguiu concluir a inicialização e foi encerrado. Reinicie o aplicativo; se isso continuar acontecendo, envie o diagnóstico.",
+      "description": "O AionCore não conseguiu concluir a inicialização e foi encerrado. Reinicie o aplicativo; se isso continuar acontecendo, verifique se o backend do AionCore está instalado.",
       "sendDiagnostics": "Enviar diagnóstico",
       "diagnosticsSent": "Diagnóstico enviado",
       "diagnosticsReportSuccess": "Diagnóstico enviado",
@@ -165,7 +165,7 @@
     },
     "portReportTimeout": {
       "title": "Tempo de inicialização esgotado",
-      "description": "O AionCore não concluiu a inicialização dentro do tempo esperado. Reinicie o aplicativo; se isso continuar acontecendo, envie o diagnóstico.",
+      "description": "O AionCore não concluiu a inicialização dentro do tempo esperado. Reinicie o aplicativo; se isso continuar acontecendo, verifique se o backend do AionCore está instalado.",
       "sendDiagnostics": "Enviar diagnóstico",
       "diagnosticsSent": "Diagnóstico enviado",
       "diagnosticsReportSuccess": "Diagnóstico enviado",
@@ -173,7 +173,7 @@
     },
     "startupFailed": {
       "title": "Falha na inicialização",
-      "description": "O AionCore não conseguiu iniciar. Reinicie o aplicativo; se isso continuar acontecendo, envie o diagnóstico.",
+      "description": "O AionCore não conseguiu iniciar. Reinicie o aplicativo; se isso continuar acontecendo, verifique se o backend do AionCore está instalado.",
       "sendDiagnostics": "Enviar diagnóstico",
       "diagnosticsSent": "Diagnóstico enviado",
       "diagnosticsReportSuccess": "Diagnóstico enviado",

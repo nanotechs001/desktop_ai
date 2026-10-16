@@ -124,7 +124,7 @@
       "check_provider_base_url": "Model sağlayıcının Base URL, API yolu, proxy ve API uyumluluğunu kontrol edin.",
       "change_model": "Geçerli hesapta kullanılabilen ve bu isteği destekleyen bir model seçin.",
       "reduce_context": "Mesaj içeriğini, başvurulan dosyaları veya bağlam boyutunu azaltıp yeniden deneyin.",
-      "send_feedback": "Ekibin inceleyebilmesi için günlüklerle birlikte geri bildirim gönderin."
+      "send_feedback": "Yeniden deneyin veya uygulamayı yeniden başlatın."
     },
     "ownership": {
       "aionui": "Uygulama",
@@ -135,7 +135,7 @@
     "codes": {
       "AIONUI_STREAM_BROKEN": {
         "title": "Yanıt akışı kesildi",
-        "body": "Uygulama mesajınızı aldı ancak yanıt akışı beklenmedik şekilde sona erdi. Yeniden deneyin; tekrarlanırsa geri bildirim gönderin."
+        "body": "Uygulama mesajınızı aldı ancak yanıt akışı beklenmedik şekilde sona erdi. Yeniden deneyin; tekrarlanırsa uygulamayı yeniden başlatın."
       },
       "AIONUI_STATE_INCONSISTENT": {
         "title": "Konuşma durumu eşitlenmemiş",
@@ -147,7 +147,7 @@
       },
       "AIONUI_INTERNAL_ERROR": {
         "title": "İstek uygulamada başarısız oldu",
-        "body": "Uygulama isteği işlerken hata oluştu. Bir kez yeniden deneyin; tekrarlanırsa geri bildirim gönderin."
+        "body": "Uygulama isteği işlerken hata oluştu. Bir kez yeniden deneyin; tekrarlanırsa uygulamayı yeniden başlatın."
       },
       "AIONUI_CONVERSATION_BUSY": {
         "title": "Konuşma meşgul",

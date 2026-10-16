@@ -12,6 +12,7 @@
  * native dialogs, auto-update, devtools, zoom, CDP, deep links) remain as IPC.
  */
 
+import { withoutHiddenAgents } from '../types/agent/hiddenAgents';
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type {
   AgentActionEvent,
@@ -174,8 +175,15 @@ export const shell = {
 // Assistants — routed to /api/assistants/*
 // ---------------------------------------------------------------------------
 
+const listAssistantsRaw = httpGet<Assistant[], void>('/api/assistants');
+
 export const assistants = {
-  list: httpGet<Assistant[], void>('/api/assistants'),
+  // Every consumer (pickers, the Agents page, cron, channels) reads this list, so the hidden
+  // built-in assistants are dropped here once.
+  list: {
+    ...listAssistantsRaw,
+    invoke: (async () => withoutHiddenAgents(await listAssistantsRaw.invoke())) as typeof listAssistantsRaw.invoke,
+  },
   get: httpGet<AssistantDetail, { id: string; locale?: string }>(
     ({ id, locale }) =>
       `/api/assistants/${encodeURIComponent(id)}${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`

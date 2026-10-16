@@ -451,34 +451,45 @@ const TaskDetailPage: React.FC = () => {
                     </div>
                   )}
                   <div className='h-1px w-full bg-[var(--color-border-2)]' />
-                  {conversations.map((conv, index) => (
-                    <React.Fragment key={conv.id}>
-                      <div
-                        className='flex cursor-pointer items-center justify-between gap-14px py-15px transition-colors hover:text-t-primary'
-                        onClick={() => {
-                          if (historyBatchMode) {
-                            toggleConversationSelected(conv.id);
-                            return;
-                          }
-                          const teamId = resolveTeamId(conv);
-                          navigate(teamId ? `/team/${teamId}` : `/conversation/${conv.id}`);
-                        }}
-                      >
-                        {historyBatchMode && (
-                          <Checkbox
-                            checked={selectedConversationIds.has(conv.id)}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={() => toggleConversationSelected(conv.id)}
-                          />
+                  {conversations.map((conv, index) => {
+                    // Teams are removed from this fork: a team conversation has no page to open, so its row is
+                    // shown but not clickable (batch selection still works).
+                    const isTeamRow = Boolean(resolveTeamId(conv));
+                    const isOpenable = historyBatchMode || !isTeamRow;
+                    return (
+                      <React.Fragment key={conv.id}>
+                        <div
+                          className={`flex items-center justify-between gap-14px py-15px transition-colors ${isOpenable ? 'cursor-pointer hover:text-t-primary' : 'cursor-default'}`}
+                          aria-disabled={!isOpenable}
+                          onClick={() => {
+                            if (historyBatchMode) {
+                              toggleConversationSelected(conv.id);
+                              return;
+                            }
+                            if (isTeamRow) return;
+                            navigate(`/conversation/${conv.id}`);
+                          }}
+                        >
+                          {historyBatchMode && (
+                            <Checkbox
+                              checked={selectedConversationIds.has(conv.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={() => toggleConversationSelected(conv.id)}
+                            />
+                          )}
+                          <span className='min-w-0 flex-1 truncate text-14px text-t-primary'>
+                            {conv.name || conv.id}
+                          </span>
+                          <span className='shrink-0 text-13px text-t-secondary'>
+                            {formatNextRun(getActivityTime(conv), i18n.language)}
+                          </span>
+                        </div>
+                        {index < conversations.length - 1 && (
+                          <div className='h-1px w-full bg-[var(--color-border-2)]' />
                         )}
-                        <span className='min-w-0 flex-1 truncate text-14px text-t-primary'>{conv.name || conv.id}</span>
-                        <span className='shrink-0 text-13px text-t-secondary'>
-                          {formatNextRun(getActivityTime(conv), i18n.language)}
-                        </span>
-                      </div>
-                      {index < conversations.length - 1 && <div className='h-1px w-full bg-[var(--color-border-2)]' />}
-                    </React.Fragment>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className='text-14px text-t-secondary'>

@@ -141,7 +141,7 @@
       "check_provider_base_url": "请检查模型服务商的 Base URL、接口路径、代理和 API 兼容性。",
       "change_model": "请选择当前账号可用且支持该请求的模型。",
       "reduce_context": "请减少消息内容、引用文件或上下文大小后重试。",
-      "send_feedback": "请提交反馈并附带日志，方便团队排查。"
+      "send_feedback": "请重试，或重启应用。"
     },
     "ownership": {
       "aionui": "应用",
@@ -152,7 +152,7 @@
     "codes": {
       "AIONUI_STREAM_BROKEN": {
         "title": "响应流异常中断",
-        "body": "消息已发送，但响应流异常结束。请先重试；如果反复出现，可以提交反馈。"
+        "body": "消息已发送，但响应流异常结束。请先重试；如果反复出现，请重启应用。"
       },
       "AIONUI_STATE_INCONSISTENT": {
         "title": "会话状态不一致",
@@ -164,7 +164,7 @@
       },
       "AIONUI_INTERNAL_ERROR": {
         "title": "应用处理失败",
-        "body": "本次请求在应用处理过程中失败。请先重试一次；如果仍然出现，可以提交反馈。"
+        "body": "本次请求在应用处理过程中失败。请先重试一次；如果仍然出现，请重启应用。"
       },
       "AIONUI_CONVERSATION_BUSY": {
         "title": "会话正在处理上一条消息",

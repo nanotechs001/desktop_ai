@@ -142,7 +142,7 @@
       "check_provider_base_url": "Verifique a URL Base do provedor de modelos, o caminho da API, o proxy e a compatibilidade da API.",
       "change_model": "Escolha um modelo disponível para a conta atual e que suporte esta solicitação.",
       "reduce_context": "Reduza o conteúdo da mensagem, os arquivos referenciados ou o tamanho do contexto e tente novamente.",
-      "send_feedback": "Envie feedback com logs para que a equipe possa investigar."
+      "send_feedback": "Tente novamente ou reinicie o aplicativo."
     },
     "ownership": {
       "aionui": "Aplicativo",
@@ -153,7 +153,7 @@
     "codes": {
       "AIONUI_STREAM_BROKEN": {
         "title": "O fluxo de resposta foi interrompido",
-        "body": "O aplicativo aceitou sua mensagem, mas o fluxo de resposta terminou inesperadamente. Tente novamente; se acontecer de novo, envie feedback."
+        "body": "O aplicativo aceitou sua mensagem, mas o fluxo de resposta terminou inesperadamente. Tente novamente; se acontecer de novo, reinicie o aplicativo."
       },
       "AIONUI_STATE_INCONSISTENT": {
         "title": "O estado da conversa está fora de sincronia",
@@ -165,7 +165,7 @@
       },
       "AIONUI_INTERNAL_ERROR": {
         "title": "A solicitação falhou no aplicativo",
-        "body": "A solicitação falhou enquanto o aplicativo a estava processando. Tente novamente uma vez; se se repetir, envie feedback."
+        "body": "A solicitação falhou enquanto o aplicativo a estava processando. Tente novamente uma vez; se se repetir, reinicie o aplicativo."
       },
       "AIONUI_CONVERSATION_BUSY": {
         "title": "A conversa está ocupada",
