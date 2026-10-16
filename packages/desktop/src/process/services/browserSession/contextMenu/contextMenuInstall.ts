@@ -7,7 +7,7 @@
 import { BrowserWindow, Menu, clipboard } from 'electron';
 import { ipcBridge } from '@/common';
 import { buildContextMenuEntries, type MenuEntry, type MenuTranslate } from './contextMenu';
-import { isSafeUrl } from './urlSafety';
+import { isSafeUrl } from '../urlSafety';
 
 const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q=';
 const MAX_SEARCH_CHARS = 500;

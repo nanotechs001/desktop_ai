@@ -10,7 +10,7 @@ import {
   buildContextMenuEntries,
   type ContextMenuParams,
   type MenuEntry,
-} from '@process/services/browserSession/contextMenu';
+} from '@process/services/browserSession/contextMenu/contextMenu';
 
 const ALL_FLAGS = { canCut: true, canCopy: true, canPaste: true, canSelectAll: true };
 

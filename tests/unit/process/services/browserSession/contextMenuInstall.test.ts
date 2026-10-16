@@ -25,7 +25,7 @@ vi.mock('@process/services/i18n', () => ({
   i18nReady: Promise.resolve(),
 }));
 
-import { installContextMenu } from '@process/services/browserSession/contextMenuInstall';
+import { installContextMenu } from '@process/services/browserSession/contextMenu/contextMenuInstall';
 
 type Template = { label?: string; type?: string; enabled?: boolean; click?: () => void };
 type Params = Parameters<Parameters<Electron.WebContents['on']>[1]>;

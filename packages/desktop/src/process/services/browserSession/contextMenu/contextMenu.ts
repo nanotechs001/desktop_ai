@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { isSafeUrl } from './urlSafety';
+import { isSafeUrl } from '../urlSafety';
 
 export type MenuAction =
   | 'back'

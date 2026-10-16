@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
   session: { defaultSession: mocks.defaultSession },
   dialog: { showMessageBox: mocks.showMessageBox },
 }));
-vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
+vi.mock('@process/services/browserSession/contextMenu/contextMenuInstall', () => ({
   loadTranslate: () =>
     Promise.resolve((key: string, options?: Record<string, unknown>) =>
       options ? `${key} ${JSON.stringify(options)}` : key

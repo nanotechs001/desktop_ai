@@ -7,8 +7,8 @@
 import { BrowserWindow, dialog, screen } from 'electron';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
-import type { MenuTranslate } from './contextMenu';
-import { loadTranslate } from './contextMenuInstall';
+import type { MenuTranslate } from './contextMenu/contextMenu';
+import { loadTranslate } from './contextMenu/contextMenuInstall';
 import { isSafeUrl } from './urlSafety';
 
 /** What to do with a page's `window.open` / `target=_blank` request. */

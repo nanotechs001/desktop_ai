@@ -8,7 +8,7 @@ import { dialog, session as electronSession } from 'electron';
 import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-chrome-extensions';
 import { installChromeWebStore } from 'electron-chrome-web-store';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
-import { loadTranslate } from './contextMenuInstall';
+import { loadTranslate } from './contextMenu/contextMenuInstall';
 import { CreateTabWaiter, offerNewTab } from '@process/services/agentBrowser/tabWaiter';
 import { isSafeUrl } from './urlSafety';
 

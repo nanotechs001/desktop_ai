@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   fromWebContents: vi.fn((_contents: unknown): unknown => null),
 }));
 
-vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
+vi.mock('@process/services/browserSession/contextMenu/contextMenuInstall', () => ({
   loadTranslate: () => Promise.resolve((key: string) => key),
 }));
 

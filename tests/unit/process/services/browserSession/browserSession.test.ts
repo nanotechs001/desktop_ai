@@ -51,7 +51,7 @@ vi.mock('@process/services/browserSession/downloads', () => ({ installDownloads:
 
 vi.mock('@process/services/browserSession/permissions', () => ({ installPermissions: mocks.installPermissions }));
 
-vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
+vi.mock('@process/services/browserSession/contextMenu/contextMenuInstall', () => ({
   installContextMenu: mocks.installContextMenu,
 }));
 

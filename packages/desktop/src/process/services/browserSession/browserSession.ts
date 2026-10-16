@@ -7,7 +7,7 @@
 import { app, session, webContents } from 'electron';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
-import { installContextMenu } from './contextMenuInstall';
+import { installContextMenu } from './contextMenu/contextMenuInstall';
 import { installDownloads } from './downloads';
 import { initBrowserExtensions, type BrowserExtensions } from './extensions';
 import { installPermissions } from './permissions';
