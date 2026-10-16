@@ -37,6 +37,8 @@ export type DebuggerSessions = {
   /** Ends every top session for which `keep` is false, telling its client. */
   prune(keep: (webContentsId: number, sinkId: string) => boolean): void;
   dropSink(sinkId: string): void;
+  /** Live sessions (tab and OOPIF) of one client. */
+  count(sinkId: string): number;
   dropContents(webContentsId: number): void;
 };
 
@@ -283,6 +285,7 @@ export function createDebuggerSessions(): DebuggerSessions {
         if (s.sinkId === sinkId && s.parent === null) close(s.id, false);
       }
     },
+    count: (sinkId) => Array.from(sessions.values()).filter((s) => s.sinkId === sinkId).length,
     dropContents,
   };
 }

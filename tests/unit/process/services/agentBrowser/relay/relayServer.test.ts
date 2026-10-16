@@ -1,5 +1,7 @@
+import { connect as netConnect } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
+import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
 import type { AgentActionEvent } from '@/common/types/browser';
 import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from '@process/services/agentBrowser/relay/targetRegistry';
@@ -56,13 +58,15 @@ const sockets: WebSocket[] = [];
 const openTab = vi.fn();
 const closeTab = vi.fn();
 const onAgentAction = vi.fn<(event: AgentActionEvent) => void>();
-let nextTab: Promise<FakeContents> = new Promise(() => {});
+let nextTab: () => Promise<FakeContents> = () => new Promise(() => {});
 
-const start = async (): Promise<RelayHandle> => {
+const start = async (limits: Partial<RelayLimits> = {}): Promise<RelayHandle> => {
   registry = createTargetRegistry();
-  relay = await startRelayServer({ registry, openTab, closeTab, onAgentAction, waitForTab: () => nextTab });
+  relay = await startRelayServer({ registry, openTab, closeTab, onAgentAction, waitForTab: () => nextTab(), limits });
   return relay;
 };
+
+const bearer = (token: string): Record<string, string> => ({ Authorization: `Bearer ${token}` });
 
 const wsUrl = (handle: RelayHandle, query: Record<string, string>): string => {
   const url = new URL(handle.url);
@@ -71,7 +75,7 @@ const wsUrl = (handle: RelayHandle, query: Record<string, string>): string => {
 };
 
 const connect = async (handle: RelayHandle, label = 'claude'): Promise<TestClient> => {
-  const ws = new WebSocket(wsUrl(handle, { token: handle.token, client: label }));
+  const ws = new WebSocket(wsUrl(handle, { client: label }), { headers: bearer(handle.token) });
   sockets.push(ws);
   await new Promise((resolve, reject) => {
     ws.once('open', resolve);
@@ -110,16 +114,38 @@ afterEach(async () => {
   await relay?.close();
   relay = null;
   vi.clearAllMocks();
-  nextTab = new Promise(() => {});
+  nextTab = () => new Promise(() => {});
 });
+
+/** Raw HTTP upgrade, for request shapes the ws client cannot produce. */
+const rawUpgradeStatus = (handle: RelayHandle, path: string): Promise<string> =>
+  new Promise((resolve) => {
+    const { port } = new URL(handle.url);
+    const socket = netConnect(Number(port), '127.0.0.1', () => {
+      socket.write(
+        `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+          `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n` +
+          `Authorization: Bearer ${handle.token}\r\n\r\n`
+      );
+    });
+    socket.once('data', (data) => {
+      resolve(data.toString().split('\r\n')[0]);
+      socket.destroy();
+    });
+    socket.on('error', () => resolve('error'));
+  });
 
 describe('relay server: transport security', () => {
   it('401 without token; 403 with Origin; HTTP GET /json/version → 404', async () => {
     const handle = await start();
     expect(await refusedStatus(handle.url)).toBe(401);
-    expect(await refusedStatus(wsUrl(handle, { token: 'wrong' }))).toBe(401);
-    expect(await refusedStatus(wsUrl(handle, { token: handle.token }), { Origin: 'https://evil.example' })).toBe(403);
-    expect(await refusedStatus(wsUrl(handle, { token: handle.token }))).toBe(101);
+    expect(await refusedStatus(handle.url, bearer('wrong'))).toBe(401);
+    // The token travels only in the Authorization header now, never in the url.
+    expect(await refusedStatus(wsUrl(handle, { token: handle.token }))).toBe(401);
+    // Origin is checked first: a page gets 403 whatever else it sends.
+    expect(await refusedStatus(handle.url, { Origin: 'https://evil.example' })).toBe(403);
+    expect(await refusedStatus(handle.url, { ...bearer(handle.token), Origin: 'https://evil.example' })).toBe(403);
+    expect(await refusedStatus(handle.url, bearer(handle.token))).toBe(101);
 
     const httpUrl = new URL(handle.url);
     httpUrl.protocol = 'http:';
@@ -135,6 +161,21 @@ describe('relay server: transport security', () => {
     }
   });
 
+  it('refuses a foreign Host header (DNS rebinding) and an unparsable url', async () => {
+    const handle = await start();
+    expect(
+      await refusedStatus(handle.url, { ...bearer(handle.token), Host: `evil.example:${new URL(handle.url).port}` })
+    ).toBe(403);
+    expect(await rawUpgradeStatus(handle, '//[')).toContain('400');
+    expect(await rawUpgradeStatus(handle, '/?client=ok')).toContain('101');
+  });
+
+  it('accepts at most 8 connections', async () => {
+    const handle = await start();
+    await Promise.all(Array.from({ length: 8 }, (_, i) => connect(handle, `c${i}`)));
+    expect(await refusedStatus(handle.url, bearer(handle.token))).toBe(503);
+  });
+
   it('binds to 127.0.0.1', async () => {
     const handle = await start();
     expect(new URL(handle.url).hostname).toBe('127.0.0.1');
@@ -146,10 +187,10 @@ describe('relay server: targets', () => {
     const handle = await start();
     const client = await connect(handle, 'my agent!');
     const tab = new FakeContents(41);
-    nextTab = Promise.resolve(tab).then((contents) => {
-      registry.track(contents);
-      return contents;
-    });
+    nextTab = () => {
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
 
     const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
 
@@ -457,10 +498,96 @@ describe('relay server: AionRelay methods', () => {
     expect(onAgentAction).not.toHaveBeenCalled();
   });
 
-  it('requestConfirm is allowed until the confirm gate lands', async () => {
+  it('reportAction clamps the label to 120 characters and the rect to non-negative numbers', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    ownedTab(23, 'claude');
+    const rect = { x: -5, y: 2, width: 3, height: -1 };
+    await client.send('AionRelay.reportAction', { webContentsId: 23, op: 'type', label: 'L'.repeat(500), rect });
+    expect(onAgentAction).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'L'.repeat(120), rect: { x: 0, y: 2, width: 3, height: 0 } })
+    );
+    const notFinite = { webContentsId: 23, op: 'type', label: 'x', rect: { x: 1, y: 1, width: null, height: 1 } };
+    expect((await client.send('AionRelay.reportAction', notFinite)).error).toBeDefined();
+  });
+
+  it('requestConfirm fails closed until the confirm gate lands', async () => {
     const client = await connect(await start());
     expect((await client.send('AionRelay.requestConfirm', { webContentsId: 1, summary: 'x' })).result).toEqual({
-      allow: true,
+      allow: false,
     });
+  });
+});
+
+describe('relay server: limits', () => {
+  it('caps sessions per client', async () => {
+    const handle = await start({ maxSessionsPerClient: 2 });
+    const client = await connect(handle);
+    ownedTab(30, 'claude');
+    await attach(client, 30);
+    await attach(client, 30);
+    const third = await client.send('Target.attachToTarget', { targetId: 'wc-30', flatten: true });
+    expect(third.error?.message).toMatch(/at most 2 sessions/);
+  });
+
+  it('runs at most 16 commands per socket at once and queues the rest', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    const tab = ownedTab(31, 'claude');
+    const session = await attach(client, 31);
+    const releases: Array<() => void> = [];
+    tab.debugger.handler = () => new Promise((resolve) => releases.push(() => resolve({})));
+
+    const replies = Promise.all(Array.from({ length: 20 }, () => client.send('Page.getFrameTree', {}, session)));
+    await vi.waitFor(() => expect(releases).toHaveLength(16));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(releases).toHaveLength(16);
+
+    releases.splice(0, 16).forEach((release) => release());
+    await vi.waitFor(() => expect(releases).toHaveLength(4));
+    releases.forEach((release) => release());
+    expect((await replies).every((reply) => reply.error === undefined)).toBe(true);
+  });
+
+  it('closes a socket whose send buffer stays above the limit', async () => {
+    const handle = await start({ maxBufferedBytes: 64 * 1024, bufferedGraceMs: 50 });
+    const client = await connect(handle);
+    const tab = ownedTab(32, 'claude');
+    const session = await attach(client, 32);
+    tab.debugger.handler = () => ({ data: 'x'.repeat(1024 * 1024) });
+
+    client.ws.pause(); // stop reading, as a stuck client would
+    for (let i = 0; i < 24; i += 1)
+      client.ws.send(JSON.stringify({ id: 100 + i, method: 'Page.captureScreenshot', params: {}, sessionId: session }));
+
+    // A paused client never sees the close itself; the relay dropping it is what counts.
+    await vi.waitFor(() => expect(handle.clients()).toEqual([]), { timeout: 5000 });
+  });
+
+  it('caps live relay-created tabs per client', async () => {
+    const handle = await start({ maxTabsPerClient: 2 });
+    const client = await connect(handle);
+    ownedTab(33, 'claude');
+    ownedTab(34, 'claude');
+    const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
+    expect(reply.error?.message).toMatch(/at most 2 tabs/);
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
+  it('allows at most 5 createTarget calls per 10 s per client', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    let id = 40;
+    nextTab = () => {
+      const tab = new FakeContents((id += 1));
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    const replies = await Promise.all(
+      Array.from({ length: 6 }, () => client.send('Target.createTarget', { url: 'https://example.com' }))
+    );
+    expect(replies.slice(0, 5).every((reply) => reply.result?.targetId)).toBe(true);
+    expect(replies[5].error?.message).toMatch(/rate limited/);
+    expect(openTab).toHaveBeenCalledTimes(5);
   });
 });
