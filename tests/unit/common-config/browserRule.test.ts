@@ -57,10 +57,11 @@ describe('BROWSER_RULE_TEXT', () => {
     }
   });
 
-  it('does not name tools that do not exist yet', () => {
-    for (const word of ['tabs', 'observe', 'act']) {
-      expect(BROWSER_RULE_TEXT).not.toMatch(new RegExp(`\\b${word}\\b`));
+  it('names the browser tools and the tabs -> observe -> act workflow', () => {
+    for (const word of ['tabs', 'observe', 'act', 'drag']) {
+      expect(BROWSER_RULE_TEXT).toMatch(new RegExp(`\\b${word}\\b`));
     }
+    expect(BROWSER_RULE_TEXT).toContain('`tabs` (action `open`)');
   });
 
   it('tells the model to report missing browser tools instead of opening another browser', () => {

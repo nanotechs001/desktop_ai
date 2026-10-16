@@ -1,0 +1,211 @@
+/**
+ * @license
+ * Copyright 2026 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+// Runs inside the standalone aion-browser MCP process: no electron imports, and nothing that pulls them in.
+import WebSocket from 'ws';
+import { CdpConnection, createWebSocketTransport } from '@process/services/agentBrowser/cdpConnection';
+
+/** Thrown by {@link RelayClient.connect} when the AionUi relay env vars are absent or unusable. */
+export const RELAY_ENV_MISSING = 'relay-env-missing';
+
+/** The relay could not be reached (AionUi not running, wrong token, ...). */
+export class RelayConnectError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RelayConnectError';
+  }
+}
+
+/** One tab the agent may use. `owner` is 'agent' for tabs it opened and 'shared' for tabs the user shared. */
+export type TabSummary = { tab: string; title: string; url: string; owner: 'agent' | 'shared' };
+
+const MAX_BACKOFF_MS = 5000;
+const BASE_BACKOFF_MS = 250;
+const HANDSHAKE_TIMEOUT_MS = 5000;
+const LABEL_PREFIX = 'aion-browser';
+const MAX_LABEL_LENGTH = 40;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/** Wait before the `failures`-th consecutive reconnect attempt: 250 ms doubling, capped at 5 s. */
+export const retryDelayMs = (failures: number): number =>
+  Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** Math.max(0, failures - 1));
+
+/** `aion-browser-<agent>` reduced to the `[\w .-]{1,40}` alphabet the relay accepts as a client label. */
+const clientLabel = (agentName: string | undefined): string => {
+  const agent = (agentName ?? '').replace(/[^\w .-]/g, '').trim();
+  return (agent ? `${LABEL_PREFIX}-${agent}` : LABEL_PREFIX).slice(0, MAX_LABEL_LENGTH);
+};
+
+/** The relay url and token, or null. Only a loopback ws url is accepted so the token cannot be sent elsewhere. */
+const readRelayEnv = (env: NodeJS.ProcessEnv): { url: URL; token: string } | null => {
+  const token = env.AION_BROWSER_RELAY_TOKEN;
+  if (!env.AION_BROWSER_RELAY_URL || !token) return null;
+  try {
+    const url = new URL(env.AION_BROWSER_RELAY_URL);
+    return url.protocol === 'ws:' && LOOPBACK_HOSTS.has(url.hostname) ? { url, token } : null;
+  } catch {
+    return null;
+  }
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const openSocket = (url: URL, token: string): Promise<WebSocket> =>
+  new Promise((resolve, reject) => {
+    const ws = new WebSocket(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
+    });
+    ws.once('open', () => {
+      ws.removeListener('error', reject);
+      resolve(ws);
+    });
+    ws.once('error', reject);
+  });
+
+const isTabSummary = (value: unknown): value is { targetId: string; title: string; url: string; owner: string } => {
+  const tab = value as Record<string, unknown> | null;
+  return (
+    typeof tab === 'object' &&
+    tab !== null &&
+    typeof tab.targetId === 'string' &&
+    typeof tab.title === 'string' &&
+    typeof tab.url === 'string' &&
+    (tab.owner === 'agent' || tab.owner === 'shared')
+  );
+};
+
+/**
+ * The aion-browser server's link to the AionUi agent relay (a token-guarded loopback WebSocket speaking CDP).
+ * Connects lazily on first use and again after the socket drops, waiting out a capped backoff after failures.
+ * Per-connection state (CDP sessions, the current tab) is forgotten when the connection goes, because the
+ * relay ties tab ownership to the connection.
+ */
+export class RelayClient {
+  /** The tab later calls use when they name none; set by `tabs` open and switch. */
+  currentTab: string | null = null;
+
+  private conn: CdpConnection | null = null;
+  private connecting: Promise<CdpConnection> | null = null;
+  private failures = 0;
+  private retryAt = 0;
+  private sessions = new Map<string, Promise<string>>();
+
+  /**
+   * @param env Source of AION_BROWSER_RELAY_URL / AION_BROWSER_RELAY_TOKEN.
+   * @param agentName The MCP client's name (from `initialize`), read at each connect for the relay's client label.
+   */
+  constructor(
+    private env: NodeJS.ProcessEnv,
+    private readonly agentName: () => string | undefined = () => undefined
+  ) {}
+
+  /** The live connection. Call after another method has connected; throws when the socket is gone. */
+  get connection(): CdpConnection {
+    if (!this.conn || this.conn.closed) throw new Error('The connection to the AionUi browser was lost');
+    return this.conn;
+  }
+
+  /** Connects to the relay named by `env`; no-op while already connected. Throws {@link RELAY_ENV_MISSING}. */
+  async connect(env: NodeJS.ProcessEnv): Promise<void> {
+    this.env = env;
+    await this.ensureConnected();
+  }
+
+  /** Opens a tab at `url` (claimed by this client) and returns its target id. */
+  async openTab(url: string): Promise<string> {
+    const conn = await this.ensureConnected();
+    const { targetId } = await conn.send<{ targetId?: unknown }>('Target.createTarget', { url });
+    if (typeof targetId !== 'string') throw new Error('The AionUi browser returned no tab id');
+    return targetId;
+  }
+
+  /** Tabs this client opened or the user shared. */
+  async listTabs(): Promise<TabSummary[]> {
+    const conn = await this.ensureConnected();
+    const { tabs } = await conn.send<{ tabs?: unknown }>('AionRelay.listTabs');
+    const list = Array.isArray(tabs) ? tabs.filter(isTabSummary) : [];
+    return list.map(({ targetId, title, url, owner }) => ({
+      tab: targetId,
+      title,
+      url,
+      owner: owner as TabSummary['owner'],
+    }));
+  }
+
+  /** Closes a tab this client opened. */
+  async closeTab(targetId: string): Promise<void> {
+    const conn = await this.ensureConnected();
+    await conn.send('Target.closeTarget', { targetId });
+    this.forgetTab(targetId);
+  }
+
+  /** The flattened CDP session id for a tab, attaching once and reusing it afterwards. */
+  async session(targetId: string): Promise<string> {
+    const conn = await this.ensureConnected();
+    const cached = this.sessions.get(targetId);
+    if (cached) return cached;
+    const attach = conn
+      .send<{ sessionId?: unknown }>('Target.attachToTarget', { targetId, flatten: true })
+      .then(({ sessionId }) => {
+        if (typeof sessionId !== 'string') throw new Error('The AionUi browser returned no session id');
+        return sessionId;
+      });
+    this.sessions.set(targetId, attach);
+    attach.catch(() => {
+      if (this.sessions.get(targetId) === attach) this.sessions.delete(targetId);
+    });
+    return attach;
+  }
+
+  /** Drops the connection; a later call reconnects. */
+  close(): void {
+    this.conn?.close();
+  }
+
+  private forgetTab(targetId: string): void {
+    this.sessions.delete(targetId);
+    if (this.currentTab === targetId) this.currentTab = null;
+  }
+
+  private ensureConnected(): Promise<CdpConnection> {
+    if (this.conn && !this.conn.closed) return Promise.resolve(this.conn);
+    this.connecting ??= this.open().finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+
+  private async open(): Promise<CdpConnection> {
+    const relay = readRelayEnv(this.env);
+    if (!relay) throw new Error(RELAY_ENV_MISSING);
+    const backoff = this.retryAt - Date.now();
+    if (backoff > 0) await sleep(backoff);
+    const url = new URL(relay.url);
+    url.searchParams.set('client', clientLabel(this.agentName()));
+    let ws: WebSocket;
+    try {
+      ws = await openSocket(url, relay.token);
+    } catch (error) {
+      this.failures += 1;
+      this.retryAt = Date.now() + retryDelayMs(this.failures);
+      throw new RelayConnectError(error instanceof Error ? error.message : String(error));
+    }
+    this.failures = 0;
+    const conn = new CdpConnection(createWebSocketTransport(ws));
+    conn.on('Target.targetDestroyed', ({ targetId }) => {
+      if (typeof targetId === 'string') this.forgetTab(targetId);
+    });
+    conn.onClose(() => {
+      if (this.conn !== conn) return;
+      this.conn = null;
+      this.sessions = new Map();
+      this.currentTab = null;
+    });
+    this.conn = conn;
+    return conn;
+  }
+}

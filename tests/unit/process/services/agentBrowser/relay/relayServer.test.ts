@@ -476,6 +476,24 @@ describe('relay server: sessions', () => {
 });
 
 describe('relay server: AionRelay methods', () => {
+  it('AionRelay.listTabs lists the tabs this client may act on, labelled agent or shared', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    ownedTab(30, 'claude');
+    registry.track(new FakeContents(31)); // a private user tab
+    registry.track(new FakeContents(32));
+    registry.share(32, true);
+    await connect(handle, 'other'); // another client's tab stays invisible
+    ownedTab(33, 'other');
+
+    const reply = await client.send('AionRelay.listTabs');
+    expect(reply.error).toBeUndefined();
+    expect(reply.result?.tabs).toEqual([
+      { targetId: 'wc-30', title: 'Example', url: 'https://example.com/', owner: 'agent' },
+      { targetId: 'wc-32', title: 'Example', url: 'https://example.com/', owner: 'shared' },
+    ]);
+  });
+
   it('re-emits reportAction as an agent action, rate-limited per client', async () => {
     const handle = await start();
     const client = await connect(handle);

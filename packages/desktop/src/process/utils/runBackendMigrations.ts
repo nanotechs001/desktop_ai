@@ -185,7 +185,7 @@ function buildBuiltinBrowserServer(): McpImportServer {
   return {
     name: BUILTIN_BROWSER_MCP_NAME,
     description:
-      "Control AionUi's built-in browser (the side preview panel): open pages, click, type and read content. " +
+      "Control AionUi's built-in browser (the side preview panel): manage tabs, read pages, click, type and drag. " +
       'Sign-in state is shared across tabs and preserved between sessions.',
     // 默认开启：用户装好即可用，无需任何配置
     // Enabled by default: works out of the box with zero configuration.

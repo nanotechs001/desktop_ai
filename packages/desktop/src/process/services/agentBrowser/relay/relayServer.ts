@@ -223,6 +223,16 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return {};
   };
 
+  /** Tabs this client may act on with who owns each: `Target.getTargets` cannot tell agent from shared. */
+  const listTabs = (conn: Connection): Params => ({
+    tabs: registry.listTargets().flatMap(({ targetId, title, url }) => {
+      const tab = registry.ownership(webContentsIdFromTargetId(targetId) ?? -1);
+      if (!mayAct(tab, conn.client)) return [];
+      const own = tab?.owner !== 'user' && tab?.owner.clientId === conn.client.clientId;
+      return [{ targetId, title, url, owner: own ? 'agent' : 'shared' }];
+    }),
+  });
+
   /** Commands without a sessionId: the browser-level Target domain and the relay's own methods. */
   const browserCommand = async (conn: Connection, method: string, params: Params): Promise<Params> => {
     switch (method) {
@@ -250,6 +260,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       }
       case AUTO_ATTACH_METHOD:
         return {}; // The relay always auto-attaches OOPIFs itself.
+      case 'AionRelay.listTabs':
+        return listTabs(conn);
       case 'AionRelay.reportAction':
         return reportAction(conn, params);
       case 'AionRelay.requestConfirm':

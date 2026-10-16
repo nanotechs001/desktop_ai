@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// No electron imports: this module also runs in plain Node (integration tests).
+// No electron imports: this module also runs in plain Node (integration tests) and in the aion-browser MCP bundle.
+import type { WebSocket } from 'ws';
 
 const MESSAGE_DELIMITER = '\0';
 const CLOSED_MESSAGE = 'CDP connection closed';
@@ -78,6 +79,30 @@ export function createPipeTransport(toChrome: NodeJS.WritableStream, fromChrome:
     close() {
       toChrome.end();
       markClosed();
+    },
+  };
+}
+
+/**
+ * Frame CDP over an open WebSocket: one JSON message per text frame. `ws` is a type-only import, so
+ * this module stays free of runtime dependencies. Closing the transport closes the socket.
+ */
+export function createWebSocketTransport(ws: WebSocket): CdpTransport {
+  return {
+    send(message) {
+      if (ws.readyState === ws.OPEN) ws.send(message);
+    },
+    onMessage(cb) {
+      ws.on('message', (data) => cb(data.toString()));
+    },
+    onClose(cb) {
+      // A socket that is already closed will not emit 'close' again.
+      if (ws.readyState === ws.CLOSED) queueMicrotask(cb);
+      else ws.on('close', () => cb());
+      ws.on('error', () => {}); // a socket error is followed by 'close'; unhandled it would crash the process
+    },
+    close() {
+      ws.close();
     },
   };
 }
