@@ -68,6 +68,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   const [findOpen, setFindOpen] = useState(false);
   const [findFocusToken, setFindFocusToken] = useState(0);
   const [crashState, setCrashState] = useState<CrashState>(null);
+  const [reloading, setReloading] = useState(false);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
@@ -92,21 +93,31 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
    * fresh tab would keep showing the previous page's title.
    */
   const handleDidFinishLoad = useCallback(() => {
+    // A finished load, however it was started (nav bar, address bar, Reload), proves the page is back.
+    setCrashState(null);
+    setReloading(false);
     if (url === BROWSER_BLANK_URL) onTitleChange(tabId, browserTabLabelFromUrl(url));
   }, [url, tabId, onTitleChange]);
 
   // clean-exit is a normal teardown (e.g. the tab is closing), not a crash.
   const handleRenderProcessGone = useCallback((details: { reason: string }) => {
-    if (details.reason !== 'clean-exit') setCrashState('crashed');
+    if (details.reason === 'clean-exit') return;
+    setCrashState('crashed');
+    setReloading(false);
+    setFindOpen(false);
   }, []);
   // A hang never downgrades a crash that is already showing.
   const handleUnresponsive = useCallback(() => setCrashState((state) => state ?? 'unresponsive'), []);
   const handleResponsive = useCallback(() => setCrashState((state) => (state === 'unresponsive' ? null : state)), []);
-  const handleWait = useCallback(() => setCrashState(null), []);
+  const handleWait = useCallback(() => {
+    setCrashState(null);
+    setReloading(false);
+  }, []);
 
   const handleReload = useCallback(() => {
     if (!webview) return;
-    setCrashState(null);
+    // The overlay stays until did-finish-load proves the page is back (or it crashes again).
+    setReloading(true);
     try {
       webview.reload();
     } catch (error) {
@@ -116,6 +127,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         webview.src = url || BROWSER_BLANK_URL;
       } catch (fallbackError) {
         console.error('[BrowserViewer] src re-assignment failed:', fallbackError);
+        setReloading(false);
       }
     }
   }, [webview, url]);
@@ -174,9 +186,9 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         onResponsive={handleResponsive}
         addressInputRef={addressInputRef}
       />
-      {/* Starts below the nav bar so the address bar stays usable. */}
-      <div className='absolute inset-x-0 bottom-0 top-48px'>
-        <CrashOverlay state={crashState} onReload={handleReload} onWait={handleWait} />
+      {/* Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}
+      <div className='absolute inset-x-0 bottom-0 top-40px'>
+        <CrashOverlay state={crashState} reloading={reloading} onReload={handleReload} onWait={handleWait} />
       </div>
       {findOpen && webview && (
         <div className='absolute top-48px end-16px z-20'>
