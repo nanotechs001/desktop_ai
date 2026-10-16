@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSER_RULE_MARKERS, BROWSER_RULE_TEXT, upsertBrowserRule } from '@process/services/agentBrowser/browserRule';
+import {
+  BROWSER_RULE_MARKERS,
+  BROWSER_RULE_MAX_CHARS,
+  BROWSER_RULE_TEXT,
+  upsertBrowserRule,
+} from '@process/services/agentBrowser/browserRule';
 
 const { start, end } = BROWSER_RULE_MARKERS;
 const block = `${start}\n${BROWSER_RULE_TEXT}\n${end}`;
@@ -49,12 +54,18 @@ describe('upsertBrowserRule', () => {
 });
 
 describe('BROWSER_RULE_TEXT', () => {
-  it('is under 1200 chars and contains each required word as a whole word', () => {
-    expect(BROWSER_RULE_TEXT.length).toBeLessThan(1200);
+  it('fits the rule-block cap and contains each required word as a whole word', () => {
+    expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
     for (const word of ['aionui-browser', 'open', 'xdg-open', 'osascript', 'webbrowser', 'untrusted', 'MCP']) {
       const escaped = word.replace(/[-]/g, '\\-');
       expect(BROWSER_RULE_TEXT, word).toMatch(new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`));
     }
+  });
+
+  it('tells the agent to refer to itself as the agent', () => {
+    expect(BROWSER_RULE_TEXT).toContain(
+      "You are the AionUi agent. Refer to yourself as 'the agent'; do not name your vendor, product or model unless the user asks which model is in use."
+    );
   });
 
   it('starts with tabs and only promises tools that are listed', () => {
