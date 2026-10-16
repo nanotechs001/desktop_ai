@@ -6,7 +6,9 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
+import type { BrowserShortcutAction } from '@/common/types/browser';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import { isPlatformPrimaryModifier } from '@/renderer/utils/ui/keyboardShortcuts';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
 import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
@@ -26,6 +28,27 @@ const ownWebContentsId = (webview: Electron.WebviewTag): number | null => {
   } catch {
     return null;
   }
+};
+
+/** Shortcuts typed into the tab's own controls (address bar, find bar); keys the page gets are handled in main. */
+const CONTROL_SHORTCUTS: Record<string, BrowserShortcutAction> = {
+  r: 'reload',
+  l: 'focus-address',
+  t: 'new-tab',
+  w: 'close-tab',
+  f: 'find',
+  '[': 'back',
+  ']': 'forward',
+};
+
+/** The browser shortcut for a key press in the tab's controls, or null. Shift only turns R into a hard reload. */
+const controlShortcut = (event: React.KeyboardEvent): BrowserShortcutAction | null => {
+  if (event.altKey || !isPlatformPrimaryModifier(event)) return null;
+  // Non-Latin layouts send a non-ASCII key; the physical key (KeyR, ...) still says which shortcut it is.
+  const key = /^[\x20-\x7e]$/.test(event.key) ? event.key.toLowerCase() : event.code.replace(/^Key/, '').toLowerCase();
+  const action = CONTROL_SHORTCUTS[key] ?? null;
+  if (!event.shiftKey) return action;
+  return action === 'reload' ? 'hard-reload' : null;
 };
 
 export interface BrowserViewerProps {
@@ -146,11 +169,9 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     webview?.focus();
   }, [webview]);
 
-  // Main reports shortcuts for every browser page; only the webview whose id matches acts on them.
-  useEffect(() => {
-    if (!webview) return;
-    return ipcBridge.browser.shortcut.on(({ webContentsId, action }) => {
-      if (webContentsId !== ownWebContentsId(webview)) return;
+  /** Runs a browser shortcut on this tab, whether it came from the page (via main) or the tab's controls. */
+  const runShortcut = useCallback(
+    (action: BrowserShortcutAction, target: Electron.WebviewTag): void => {
       switch (action) {
         case 'find':
           setFindOpen(true);
@@ -167,13 +188,47 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
           break;
         case 'escape':
           if (findOpen) {
-            webview.stopFindInPage('clearSelection');
+            target.stopFindInPage('clearSelection');
             closeFind();
           }
           break;
+        case 'reload':
+          target.reload();
+          break;
+        case 'hard-reload':
+          target.reloadIgnoringCache();
+          break;
+        case 'back':
+          if (target.canGoBack()) target.goBack();
+          break;
+        case 'forward':
+          if (target.canGoForward()) target.goForward();
+          break;
       }
+    },
+    [tabId, findOpen, preview, onRequestClose, closeFind]
+  );
+
+  // Main reports shortcuts for every browser page; only the webview whose id matches acts on them.
+  useEffect(() => {
+    if (!webview) return;
+    return ipcBridge.browser.shortcut.on(({ webContentsId, action }) => {
+      if (webContentsId === ownWebContentsId(webview)) runShortcut(action, webview);
     });
-  }, [webview, tabId, findOpen, preview, onRequestClose, closeFind]);
+  }, [webview, runShortcut]);
+
+  // With focus in the address bar or find bar the keys never reach the page, so main cannot see them;
+  // handled here and stopped so Cmd+R reloads the page, not the AionUi window (or its app menu).
+  const handleControlKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      const action = webview ? controlShortcut(event) : null;
+      if (!webview || !action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      runShortcut(action, webview);
+    },
+    [webview, runShortcut]
+  );
 
   // Switching to an already-loaded tab fires no dom-ready, so report the active tab here as well:
   // extensions (chrome.tabs active tab) and the agent's CDP bridge follow the tab on screen.
@@ -195,7 +250,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   }, [webview, tabId, onRequestClose]);
 
   return (
-    <div className='relative h-full w-full'>
+    <div className='relative h-full w-full' onKeyDown={handleControlKeyDown}>
       <WebviewHost
         url={url || BROWSER_BLANK_URL}
         partition={BROWSER_SESSION_PARTITION}

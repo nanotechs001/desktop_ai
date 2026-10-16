@@ -51,9 +51,12 @@ const OWN_ID = 7;
 const WEBVIEW_STUBS = {
   executeJavaScript: () => Promise.resolve(),
   getWebContentsId: () => OWN_ID,
-  canGoBack: () => false,
-  canGoForward: () => false,
-  reload: () => {},
+  canGoBack: () => true,
+  canGoForward: () => true,
+  reload: vi.fn(),
+  reloadIgnoringCache: vi.fn(),
+  goBack: vi.fn(),
+  goForward: vi.fn(),
   setZoomFactor: () => {},
   findInPage: vi.fn(),
   stopFindInPage: vi.fn(),
@@ -165,5 +168,74 @@ describe('BrowserViewer closeTabRequested', () => {
 
     act(() => mocks.closeTabRequested?.({ webContentsId: OWN_ID }));
     expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+  });
+});
+
+describe('BrowserViewer shortcuts typed into its own controls', () => {
+  // jsdom's user agent is not macOS, so the platform modifier is Ctrl.
+  const press = (target: Element, key: string, init: Partial<KeyboardEventInit> = {}) => {
+    const event = new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true, ...init });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+    return event;
+  };
+  const addressBar = () => screen.getByPlaceholderText('preview.browser.addressPlaceholder');
+
+  it('Cmd/Ctrl+R in the address bar reloads the page and does not reach the app', () => {
+    mount();
+    const appListener = vi.fn();
+    document.addEventListener('keydown', appListener);
+
+    const event = press(addressBar(), 'r');
+
+    document.removeEventListener('keydown', appListener);
+    expect(WEBVIEW_STUBS.reload).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+    expect(appListener).not.toHaveBeenCalled();
+  });
+
+  it('routes Shift+R, [, ], L, T, W and F to the tab', () => {
+    const { onRequestClose } = mount();
+
+    press(addressBar(), 'R', { shiftKey: true });
+    press(addressBar(), '[');
+    press(addressBar(), ']');
+    press(addressBar(), 't');
+    press(addressBar(), 'w');
+    press(addressBar(), 'f');
+
+    expect(WEBVIEW_STUBS.reloadIgnoringCache).toHaveBeenCalledTimes(1);
+    expect(WEBVIEW_STUBS.goBack).toHaveBeenCalledTimes(1);
+    expect(WEBVIEW_STUBS.goForward).toHaveBeenCalledTimes(1);
+    expect(mocks.openBrowserTab).toHaveBeenCalledWith();
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+    const findInput = screen.getByPlaceholderText('preview.browserChrome.find.placeholder');
+    expect(findInput).toBeTruthy();
+
+    press(findInput, 'l');
+    expect(document.activeElement).toBe(addressBar());
+  });
+
+  it('Cmd/Ctrl+R in the find bar reloads too', () => {
+    const { send } = mount();
+    send('find');
+
+    press(screen.getByPlaceholderText('preview.browserChrome.find.placeholder'), 'r');
+
+    expect(WEBVIEW_STUBS.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves other keys and other chords alone', () => {
+    mount();
+
+    const plain = press(addressBar(), 'r', { ctrlKey: false });
+    const withAlt = press(addressBar(), 'r', { altKey: true });
+    const copy = press(addressBar(), 'c');
+    const shiftT = press(addressBar(), 'T', { shiftKey: true });
+
+    expect([plain, withAlt, copy, shiftT].map((e) => e.defaultPrevented)).toEqual([false, false, false, false]);
+    expect(WEBVIEW_STUBS.reload).not.toHaveBeenCalled();
+    expect(mocks.openBrowserTab).not.toHaveBeenCalled();
   });
 });
