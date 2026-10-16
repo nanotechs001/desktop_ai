@@ -184,7 +184,7 @@ export interface PreviewContextValue {
   clearTabUpdate: (tabId: string) => void;
   findPreviewTab: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => PreviewTab | null; // 查找匹配的 tab
   closePreviewByIdentity: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => void; // 根据内容关闭指定 tab
-  closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey) => void; // 切换隔离 scope(project;见 previewScope.ts):持久化旧 scope、恢复新 scope 的 tabs+可见性(per-project)
+  closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => void; // 切换隔离 scope(project;见 previewScope.ts):持久化旧 scope、恢复新 scope 的 tabs+可见性(per-project)
 
   // 发送框集成 / Sendbox integration
   addToSendBox: (text: string) => void;
@@ -220,7 +220,18 @@ const PreviewContext = createContext<PreviewContextValue | null>(null);
 const MAX_PERSISTED_SCOPES = 12;
 
 /** Persisted per-scope preview state. */
-type PersistedScopeState = { isOpen: boolean; tabs: PreviewTab[]; activeTabId: string | null };
+type PersistedScopeState = {
+  isOpen: boolean;
+  tabs: PreviewTab[];
+  activeTabId: string | null;
+  /** The browser-first default was applied once; a scope that has it is never auto-opened again. */
+  autoOpened?: boolean;
+};
+
+type ScopeChangeOptions = {
+  /** Conversation routes: a scope with nothing saved (and no earlier auto-open) starts with a blank browser tab. */
+  openBrowserIfEmpty?: boolean;
+};
 
 // 仅持久化小体积文本预览，避免大文本导致 localStorage 写入卡顿
 // Persist only lightweight text previews to avoid localStorage jank on large files
@@ -428,7 +439,12 @@ const loadScopeState = (scope: string): PersistedScopeState => {
     const tabs = parsePersistedTabs(parsed.tabs);
     let activeTabId = typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null;
     if (activeTabId && !tabs.some((tab) => tab.id === activeTabId)) activeTabId = tabs[0]?.id || null;
-    return { isOpen: parsed.isOpen === true && tabs.length > 0, tabs, activeTabId };
+    return {
+      isOpen: parsed.isOpen === true && tabs.length > 0,
+      tabs,
+      activeTabId,
+      autoOpened: (parsed as { autoOpened?: unknown }).autoOpened === true,
+    };
   } catch {
     return EMPTY_SCOPE_STATE;
   }
@@ -494,7 +510,7 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
   const write = (): void => {
     const tabs = sanitizeTabsForPersistence(state.tabs);
     const activeTabId = tabs.some((t) => t.id === state.activeTabId) ? state.activeTabId : (tabs[0]?.id ?? null);
-    const payload = { isOpen: state.isOpen, tabs, activeTabId };
+    const payload = { isOpen: state.isOpen, tabs, activeTabId, ...(state.autoOpened ? { autoOpened: true } : {}) };
 
     // `savedAt` drives LRU eviction, so it has to mean "the tabs here last changed",
     // not "this key was last written". Writes also happen for visibility-only changes
@@ -538,6 +554,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // The preview scope currently loaded into state (project id / workspace / null).
   const currentScopeRef = useRef<PreviewScopeKey>(null);
+  // Whether the current scope already got the browser-first default (persisted with the scope).
+  const autoOpenedRef = useRef(false);
   // Mirror activeTabId in a ref so setTabs updaters can read the latest value
   // without adding activeTabId to their dependencies.
   const activeTabIdRef = useRef<string | null>(null);
@@ -625,7 +643,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const scope = currentScopeRef.current;
     if (scope == null) return undefined;
     const timer = setTimeout(() => {
-      persistScopeState(scope, { isOpen, tabs, activeTabId });
+      persistScopeState(scope, { isOpen, tabs, activeTabId, autoOpened: autoOpenedRef.current });
     }, 150);
     return () => clearTimeout(timer);
   }, [tabs, activeTabId, isOpen]);
@@ -947,10 +965,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Same scope is a no-op. `currentScopeRef` lives in the app-root context so it
   // survives conversation-page remounts.
   const closePreviewIfScopeChanged = useCallback(
-    (scopeKey: PreviewScopeKey) => {
+    (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
       const prev = currentScopeRef.current;
       if (prev === scopeKey) return;
-      if (prev != null) persistScopeState(prev, { isOpen, tabs, activeTabId });
+      if (prev != null) persistScopeState(prev, { isOpen, tabs, activeTabId, autoOpened: autoOpenedRef.current });
       // Release the leaving scope's directory subscriptions.
       //
       // Placed before the state updates as a matter of habit, not because the position
@@ -973,8 +991,15 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsOpen(loaded.isOpen);
       setIsMaximized(false);
       setDomSnippets([]);
+      autoOpenedRef.current = loaded.autoOpened === true;
+      if (options?.openBrowserIfEmpty && scopeKey != null && loaded.tabs.length === 0 && !loaded.autoOpened) {
+        autoOpenedRef.current = true;
+        // openPreview decides from tabsRef, which only catches up on the next render.
+        tabsRef.current = loaded.tabs;
+        openBrowserTab();
+      }
     },
-    [isOpen, tabs, activeTabId]
+    [isOpen, tabs, activeTabId, openBrowserTab]
   );
 
   const closeTab = useCallback(

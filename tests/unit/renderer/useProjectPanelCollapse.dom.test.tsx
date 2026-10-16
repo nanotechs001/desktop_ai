@@ -24,15 +24,29 @@ beforeEach(() => localStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe('useProjectPanelCollapse (P3 host collapse)', () => {
-  it('desktop defaults to expanded and toggles + persists per project', () => {
+  it('desktop defaults to collapsed and toggles + persists per project', () => {
     const { result } = renderHook(() => useProjectPanelCollapse({ projectId: 'p1', isMobile: false, active: true }));
-    expect(result.current.collapsed).toBe(false);
-    fireToggle();
     expect(result.current.collapsed).toBe(true);
-    expect(localStorage.getItem('project-panel-collapse:p1')).toBe('collapsed');
     fireToggle();
     expect(result.current.collapsed).toBe(false);
     expect(localStorage.getItem('project-panel-collapse:p1')).toBe('expanded');
+    fireToggle();
+    expect(result.current.collapsed).toBe(true);
+    expect(localStorage.getItem('project-panel-collapse:p1')).toBe('collapsed');
+  });
+
+  it('a stored expanded preference wins over the collapsed default', () => {
+    localStorage.setItem('project-panel-collapse:p5', 'expanded');
+    const { result } = renderHook(() => useProjectPanelCollapse({ projectId: 'p5', isMobile: false, active: true }));
+    expect(result.current.collapsed).toBe(false);
+  });
+
+  it('defaults to collapsed when storage throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    const { result } = renderHook(() => useProjectPanelCollapse({ projectId: 'p6', isMobile: false, active: true }));
+    expect(result.current.collapsed).toBe(true);
   });
 
   it('restores the persisted per-project preference on mount', () => {
@@ -42,19 +56,19 @@ describe('useProjectPanelCollapse (P3 host collapse)', () => {
   });
 
   it('re-reads the preference when the project changes (switch away and back)', () => {
-    localStorage.setItem('project-panel-collapse:pA', 'collapsed'); // pA collapsed
-    // pB has no pref → expanded
+    localStorage.setItem('project-panel-collapse:pA', 'expanded'); // pA expanded
+    // pB has no pref → collapsed (default)
     const { result, rerender } = renderHook(
       ({ id }) => useProjectPanelCollapse({ projectId: id, isMobile: false, active: true }),
       {
         initialProps: { id: 'pA' },
       }
     );
-    expect(result.current.collapsed).toBe(true); // pA restored collapsed
+    expect(result.current.collapsed).toBe(false); // pA restored expanded
     rerender({ id: 'pB' });
-    expect(result.current.collapsed).toBe(false); // pB default expanded
+    expect(result.current.collapsed).toBe(true); // pB default collapsed
     rerender({ id: 'pA' });
-    expect(result.current.collapsed).toBe(true); // pA restored again
+    expect(result.current.collapsed).toBe(false); // pA restored again
   });
 
   it('mobile starts collapsed and does not persist', () => {
@@ -68,7 +82,7 @@ describe('useProjectPanelCollapse (P3 host collapse)', () => {
   it('ignores the toggle when not active (non-project conversation → ChatLayout owns it)', () => {
     const { result } = renderHook(() => useProjectPanelCollapse({ projectId: null, isMobile: false, active: false }));
     fireToggle();
-    expect(result.current.collapsed).toBe(false); // unchanged
+    expect(result.current.collapsed).toBe(true); // unchanged (default)
   });
 
   it('broadcasts WORKSPACE_STATE_EVENT so the mac Titlebar icon syncs', () => {
@@ -79,7 +93,7 @@ describe('useProjectPanelCollapse (P3 host collapse)', () => {
     fireToggle();
     window.removeEventListener(WORKSPACE_STATE_EVENT, listener);
     unmount();
-    // Initial broadcast (expanded=false) + after toggle (collapsed=true).
-    expect(states).toContain(true);
+    // Initial broadcast (collapsed=true) + after toggle (collapsed=false).
+    expect(states).toEqual([true, false]);
   });
 });

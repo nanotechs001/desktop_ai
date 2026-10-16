@@ -19,7 +19,7 @@
  * host handler is the sole actor; for a non-project conversation `active` is
  * false here and ChatLayout owns the event. No double-handling.
  *
- * Scope: desktop persists the collapse preference per project (switch away and
+ * Scope: the panel starts collapsed. Desktop persists the collapse preference per project (switch away and
  * back restores it, consistent with the no-remount principle). Mobile starts
  * collapsed and force-collapses on project change (the overlay must not linger
  * across projects), and does not persist.
@@ -33,13 +33,13 @@ const COLLAPSE_KEY_PREFIX = 'project-panel-collapse:';
 
 const collapseKey = (projectId: string): string => `${COLLAPSE_KEY_PREFIX}${projectId}`;
 
-/** Read the persisted desktop preference for a project (default: expanded). */
+/** Read the persisted desktop preference for a project (default: collapsed). */
 const readStoredCollapsed = (projectId: string | null): boolean => {
-  if (!projectId || typeof window === 'undefined') return false;
+  if (!projectId || typeof window === 'undefined') return true;
   try {
-    return localStorage.getItem(collapseKey(projectId)) === 'collapsed';
+    return localStorage.getItem(collapseKey(projectId)) !== 'expanded';
   } catch {
-    return false;
+    return true;
   }
 };
 

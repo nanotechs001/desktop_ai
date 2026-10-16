@@ -214,7 +214,6 @@ describe('common desktop UI shortcuts', () => {
         workspaceEnabled: true,
         isMobile: false,
         conversation_id: 'temporary-conversation',
-        isTemporaryWorkspace: true,
       });
       useConversationShortcuts({
         navigate: vi.fn() as unknown as NavigateFunction,

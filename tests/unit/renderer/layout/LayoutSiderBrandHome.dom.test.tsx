@@ -97,6 +97,7 @@ describe('Layout sider brand Home button', () => {
     shortcutMocks.params = undefined;
     featureMocks.teamModeEnabled = false;
     sessionStorage.clear();
+    localStorage.clear();
     currentPathname = '/guid';
   });
 
@@ -174,6 +175,8 @@ describe('Layout sider brand Home button', () => {
 
   it('provides common shortcuts with a functional sider toggle', () => {
     currentPathname = '/conversation/xyz';
+    // The sider now defaults to icon-only; a stored '0' starts it full width.
+    localStorage.setItem('sider-collapsed', '0');
     const { container } = renderLayout();
     const sider = container.querySelector('.layout-sider');
 

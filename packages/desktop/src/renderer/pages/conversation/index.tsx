@@ -34,7 +34,7 @@ const ChatConversationIndex: React.FC = () => {
   useEffect(() => {
     if (!data) return;
     const workspace = (data.extra as { workspace?: string } | undefined)?.workspace ?? null;
-    closePreviewIfScopeChanged(previewScopeKey(data.project_id ?? null, workspace));
+    closePreviewIfScopeChanged(previewScopeKey(data.project_id ?? null, workspace), { openBrowserIfEmpty: true });
   }, [data, closePreviewIfScopeChanged]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the

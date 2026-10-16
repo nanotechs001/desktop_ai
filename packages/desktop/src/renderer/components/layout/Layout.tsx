@@ -92,7 +92,18 @@ const useDebug = () => {
 const UpdateModal = React.lazy(() => import('@/renderer/components/settings/UpdateModal'));
 
 const DEFAULT_SIDER_WIDTH = 260;
-const DESKTOP_COLLAPSED_WIDTH = 0;
+// Icon-only rail width: a 40px content area (8px padding each side) fits the 34px Sider rows.
+const DESKTOP_COLLAPSED_WIDTH = 56;
+// '1' = icon-only (default), '0' = full width. Desktop only; mobile never reads or writes it.
+const SIDER_COLLAPSED_STORAGE_KEY = 'sider-collapsed';
+
+const readStoredSiderCollapsed = (): boolean => {
+  try {
+    return localStorage.getItem(SIDER_COLLAPSED_STORAGE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+};
 // 桌面侧栏连续可调：下限 200；低于此值拖拽即吸附收起（消灭旧 130 死区）。
 // 上限 = 窗口宽 50%（动态随窗口）。
 const SIDER_MIN_WIDTH = 200;
@@ -119,7 +130,7 @@ const Layout: React.FC<{
   sider: React.ReactNode;
   onSessionClick?: () => void;
 }> = ({ sider, onSessionClick: _onSessionClick }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(readStoredSiderCollapsed);
   const [isMobile, setIsMobile] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window === 'undefined' ? 390 : window.innerWidth
@@ -234,6 +245,22 @@ const Layout: React.FC<{
   }, [location.pathname, workspaceAvailable, closePreviewOnRouteChange]);
 
   const collapsedRef = useRef(collapsed);
+  const isMobileRef = useRef(isMobile);
+  const persistedCollapsedRef = useRef(collapsed);
+  useEffect(() => {
+    isMobileRef.current = isMobile;
+  }, [isMobile]);
+  // Persist the user's desktop choice. The mobile overlay and the forced collapse when the window shrinks
+  // are transient, so they must not overwrite it.
+  useEffect(() => {
+    if (isMobileRef.current || collapsed === persistedCollapsedRef.current) return;
+    persistedCollapsedRef.current = collapsed;
+    try {
+      localStorage.setItem(SIDER_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+    } catch {
+      // ignore: the preference just won't survive a restart
+    }
+  }, [collapsed]);
 
   // 桌面侧栏连续可调宽 + 记忆宽度 + 收起吸附。复用 useResizableSplit
   // 的 pointer/rAF 拖拽管线：拖到 <200 吸附收起（onCollapsedChange→collapsed），
@@ -381,7 +408,7 @@ const Layout: React.FC<{
 
           <ArcoLayout className={'size-full layout flex-1 min-h-0'}>
             <ArcoLayout.Sider
-              collapsedWidth={isMobile ? 0 : 0}
+              collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
               collapsed={collapsed}
               width={siderWidth}
               className={classNames('!bg-2 layout-sider', {
@@ -391,11 +418,9 @@ const Layout: React.FC<{
             >
               <ArcoLayout.Header
                 className={classNames(
-                  'flex items-center justify-start pt-8px pb-8px ps-18px pe-16px gap-12px layout-sider-header',
-                  isMobile && 'layout-sider-header--mobile',
-                  {
-                    'cursor-pointer group ': collapsed,
-                  }
+                  'flex items-center pt-8px pb-8px layout-sider-header',
+                  collapsed ? 'justify-center px-0 cursor-pointer group' : 'justify-start ps-18px pe-16px gap-12px',
+                  isMobile && 'layout-sider-header--mobile'
                 )}
               >
                 <div

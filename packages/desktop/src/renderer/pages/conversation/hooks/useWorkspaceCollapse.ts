@@ -21,12 +21,6 @@ type UseWorkspaceCollapseParams = {
    * survives agent-tab switches and follows the team as a whole.
    */
   preferenceKey?: string;
-  /**
-   * True when the current workspace is an auto-created temporary one (no folder
-   * picked by the user). Auto-expand on hasFiles is suppressed in that case so
-   * that "send 你好 without picking a folder" leaves the panel collapsed.
-   */
-  isTemporaryWorkspace?: boolean;
 };
 
 type UseWorkspaceCollapseReturn = {
@@ -37,30 +31,22 @@ type UseWorkspaceCollapseReturn = {
 /**
  * Manages workspace panel collapse/expand state.
  *
- * Default: collapsed. Auto-expand fires when WORKSPACE_HAS_FILES_EVENT arrives
- * and either:
- *   - the workspace is user-picked (folder chosen at creation), or
- *   - files appear mid-session in a temporary workspace (e.g. agent writes a
- *     file while the user is here).
+ * Default: collapsed, and it never auto-expands when files appear — the user
+ * opens it with the toggle. WORKSPACE_HAS_FILES_EVENT only enforces a stored
+ * preference and collapses the panel when the workspace has no files.
  *
- * Manual toggle is persisted under `workspace-preference-${preferenceKey}` and
- * overrides auto-expand. The caller decides what `preferenceKey` is — single
- * chats use `conversation_id`, teams use `team_id`.
- *
- * Known limitation: leaving and re-entering a temporary workspace remounts the
- * workspace tree, so files added while away report as initial load. They will
- * not trigger auto-expand on return — the user must open the panel manually
- * that one time.
+ * Manual toggle is persisted under `workspace-preference-${preferenceKey}`. The
+ * caller decides what `preferenceKey` is — single chats use `conversation_id`,
+ * teams use `team_id`.
  */
 export function useWorkspaceCollapse({
   workspaceEnabled,
   isMobile,
   conversation_id,
   preferenceKey,
-  isTemporaryWorkspace,
 }: UseWorkspaceCollapseParams): UseWorkspaceCollapseReturn {
-  // Workspace panel always starts collapsed; preference and hasFiles events
-  // drive expand. See WORKSPACE_HAS_FILES_EVENT handler below.
+  // Workspace panel always starts collapsed; only a stored preference or the
+  // toggle expands it.
   const [rightSiderCollapsed, setRightSiderCollapsed] = useState(true);
 
   // Mirror ref for collapse state
@@ -130,34 +116,21 @@ export function useWorkspaceCollapse({
         }
       }
 
-      // If user has preference, use it; otherwise decide by file state
+      // A stored preference wins; with none, files never expand the panel.
       if (userPreference) {
         const shouldCollapse = userPreference === 'collapsed';
         if (shouldCollapse !== rightSiderCollapsed) {
           setRightSiderCollapsed(shouldCollapse);
         }
-      } else {
-        // No user preference: decide by workspace kind + when the files appeared.
-        // - User-picked workspace: expand on any hasFiles (initial seed is the
-        //   user's own files, worth showing).
-        // - Temporary workspace: ignore the initial seed (backend may inject
-        //   rules/skills the user never asked for) and only expand when files
-        //   show up mid-session.
-        const isUserPicked = !isTemporaryWorkspace;
-        const isMidSession = !detail.isInitial;
-        const allowAutoExpand = isUserPicked || isMidSession;
-        if (allowAutoExpand && detail.hasFiles && rightSiderCollapsed) {
-          setRightSiderCollapsed(false);
-        } else if (!detail.hasFiles && !rightSiderCollapsed) {
-          setRightSiderCollapsed(true);
-        }
+      } else if (!detail.hasFiles && !rightSiderCollapsed) {
+        setRightSiderCollapsed(true);
       }
     };
     window.addEventListener(WORKSPACE_HAS_FILES_EVENT, handleHasFiles);
     return () => {
       window.removeEventListener(WORKSPACE_HAS_FILES_EVENT, handleHasFiles);
     };
-  }, [isMobile, workspaceEnabled, rightSiderCollapsed, isTemporaryWorkspace, preferenceKey]);
+  }, [isMobile, workspaceEnabled, rightSiderCollapsed, preferenceKey]);
 
   // Broadcast workspace state event
   useEffect(() => {
