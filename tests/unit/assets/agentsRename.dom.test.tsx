@@ -690,6 +690,76 @@ describe('the editor hides the AionUi managed rule blocks', () => {
     await waitFor(() => expect(result.current.editContext).toBe(broken));
   });
 
+  /** The settings page as the hook sees it: the active Agent follows the id the hook sets. */
+  const buildLive = () => {
+    const message = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() };
+    const hook = renderHook(() => {
+      const [activeId, setActiveId] = React.useState<string | null>(null);
+      return useAssistantEditor({
+        localeKey: 'en-US',
+        activeAssistant: activeId ? assistant({ id: activeId, name: 'Writer' }) : null,
+        setActiveAssistantId: setActiveId,
+        loadAssistants: vi.fn(async () => {}),
+        assistants: [],
+        assistantOrder: [],
+        setAssistantOrder: vi.fn(async () => {}),
+        message: message as never,
+      });
+    });
+    return { ...hook, message };
+  };
+
+  it('a retry after a failed rule write updates the new Agent instead of creating a second one', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.invoke.create.mockResolvedValue({ id: 'new-agent' });
+    mocks.invoke.update.mockResolvedValue({ id: 'new-agent' });
+    mocks.invoke.ensureRule.mockResolvedValueOnce({ success: false, msg: 'Timed out writing the rule' });
+    const { result, message } = buildLive();
+
+    await act(async () => {
+      await result.current.handleCreate();
+    });
+    act(() => {
+      result.current.setEditName('Writer');
+      result.current.setEditContext('Write well.');
+    });
+    await act(async () => {
+      await result.current.handleSave();
+    });
+    expect(message.error).toHaveBeenCalledWith('Failed');
+    expect(result.current.isCreating).toBe(false);
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+    expect(mocks.invoke.create).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke.update).toHaveBeenCalledWith(expect.objectContaining({ id: 'new-agent' }));
+    expect(mocks.invoke.ensureRule).toHaveBeenLastCalledWith({
+      assistantId: 'new-agent',
+      locale: 'en-US',
+      content: 'Write well.',
+    });
+  });
+
+  it('says the instructions are too long, instead of a bare "Failed"', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.invoke.create.mockResolvedValue({ id: 'new-agent' });
+    mocks.invoke.ensureRule.mockResolvedValue({ success: false, data: { tooLong: true }, msg: 'too long' });
+    const { result, message } = build();
+
+    await act(async () => {
+      await result.current.handleCreate();
+    });
+    act(() => result.current.setEditName('Writer'));
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(message.error).toHaveBeenCalledWith('These instructions are too long');
+    expect(message.error).not.toHaveBeenCalledWith('Failed');
+    expect(message.success).not.toHaveBeenCalled();
+  });
+
   it('asks the user to fix broken markers, instead of offering a restart that cannot help', async () => {
     mocks.invoke.create.mockResolvedValue({ id: 'new-agent' });
     mocks.invoke.ensureRule.mockResolvedValue({ success: false, data: { unbalanced: true }, msg: 'unbalanced' });

@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "Der Standard-Agent kann nicht gelöscht werden.",
   "ruleMarkersBroken": "Korrigiere die AionUi-Blockmarkierungen in den Anweisungen dieses Agents.",
+  "ruleTooLong": "Diese Anweisungen sind zu lang",
   "notebook": {
     "title": "Notizbuch",
     "hint": "Was dieser Agent gelernt hat, und Ihre Anweisungen. Sie werden in neuen Chats zu seinen Anweisungen hinzugefügt.",

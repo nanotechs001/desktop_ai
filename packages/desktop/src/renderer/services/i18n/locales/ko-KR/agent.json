@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "기본 에이전트는 삭제할 수 없습니다.",
   "ruleMarkersBroken": "이 에이전트 지침의 AionUi 블록 마커를 수정하세요.",
+  "ruleTooLong": "이 지시가 너무 깁니다",
   "notebook": {
     "title": "노트",
     "hint": "이 에이전트가 배운 내용과 사용자의 지시입니다. 새 채팅에서 지시에 추가됩니다.",

@@ -68,6 +68,7 @@ export type I18nKey =
   | 'agent.notebook.source.user'
   | 'agent.notebook.title'
   | 'agent.ruleMarkersBroken'
+  | 'agent.ruleTooLong'
   | 'agent.runtimeRestart.confirmContent'
   | 'agent.runtimeRestart.failed'
   | 'agent.runtimeRestart.initializingTooltip'

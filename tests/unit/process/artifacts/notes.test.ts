@@ -20,6 +20,8 @@ import {
   type NotesStore,
 } from '@process/artifacts/notes';
 import {
+  MAX_RULE_CHARS,
+  RULE_WRITE_TIMEOUT_MS,
   ensureBrowserRuleInAssistants,
   handleEnsureAgentRule,
   syncNotesToRule,
@@ -313,6 +315,76 @@ describe('rule writes', () => {
       syncNotesToRule('agent-1', deps),
     ]);
     for (const locale of ['', 'en-US']) expect(stripBrowserRule(rules.get(`agent-1:${locale}`) ?? '')).toBe('new text');
+  });
+
+  it('clearing the instructions deletes every locale rule first, then writes the blocks-only rules', async () => {
+    const { rules, deps } = backend(
+      { 'agent-1:': 'Mine', 'agent-1:en-US': 'Mine', 'agent-1:ja-JP': 'Mine' },
+      async () => [note('lesson')]
+    );
+    const order: string[] = [];
+    const write = deps.writeRule;
+    deps.deleteRule = vi.fn(async (id: string) => {
+      order.push('delete');
+      // Deleting the entry being visited is safe while iterating a Map.
+      for (const key of rules.keys()) if (key.startsWith(`${id}:`)) rules.delete(key);
+    });
+    deps.writeRule = async (id, locale, content) => {
+      order.push(`write ${locale}`);
+      await write(id, locale, content);
+    };
+    expect(await handleEnsureAgentRule({ assistantId: 'agent-1', locale: 'en-US', content: '' }, deps)).toEqual({
+      success: true,
+    });
+    expect(deps.deleteRule).toHaveBeenCalledWith('agent-1');
+    expect(order).toEqual(['delete', 'write ', 'write en-US']);
+    expect(rules.has('agent-1:ja-JP')).toBe(false);
+    for (const locale of ['', 'en-US']) {
+      const rule = rules.get(`agent-1:${locale}`) ?? '';
+      expect(stripBrowserRule(rule)).toBe('');
+      expect(rule).toContain(NOTES_MARKERS.start);
+    }
+    // Non-empty text never deletes.
+    await handleEnsureAgentRule({ assistantId: 'agent-1', locale: 'en-US', content: 'Back again' }, deps);
+    expect(deps.deleteRule).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses instructions over the cap with a specific error and writes nothing', async () => {
+    const { rules, deps } = backend({ 'agent-1:': 'Mine' }, async () => []);
+    expect(
+      await handleEnsureAgentRule({ assistantId: 'agent-1', content: 'x'.repeat(MAX_RULE_CHARS + 1) }, deps)
+    ).toEqual({ success: false, data: { tooLong: true }, msg: 'These instructions are too long' });
+    expect(rules.get('agent-1:')).toBe('Mine');
+    expect(
+      (await handleEnsureAgentRule({ assistantId: 'agent-1', content: 'x'.repeat(MAX_RULE_CHARS) }, deps)).success
+    ).toBe(true);
+  });
+
+  it('a hung rule write times out with a clear error, and the next write for that Agent still runs', async () => {
+    vi.useFakeTimers();
+    try {
+      const written: string[] = [];
+      let hangNext = true;
+      const deps: AssistantRuleDeps = {
+        listAssistants: async () => [],
+        readRule: async () => '',
+        writeRule: async (id, locale) => {
+          if (hangNext) {
+            hangNext = false;
+            await new Promise(() => undefined);
+          }
+          written.push(`${id}:${locale}`);
+        },
+      };
+      const hung = handleEnsureAgentRule({ assistantId: 'agent-hung', content: 'first' }, deps);
+      const next = syncNotesToRule('agent-hung', deps);
+      await vi.advanceTimersByTimeAsync(RULE_WRITE_TIMEOUT_MS);
+      expect(await hung).toEqual({ success: false, msg: expect.stringMatching(/timed out/i) });
+      await next;
+      expect(written).toEqual(['agent-hung:']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a corrupt notebook does not block the browser block', async () => {

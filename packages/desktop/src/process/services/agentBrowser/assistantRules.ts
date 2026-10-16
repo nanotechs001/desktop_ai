@@ -16,6 +16,8 @@ export type AssistantRuleDeps = {
   listAssistants(): Promise<{ id: string; locales: string[] }[]>;
   readRule(id: string, locale: string): Promise<string>;
   writeRule(id: string, locale: string, content: string): Promise<void>;
+  /** Deletes the assistant's rule in every locale (the user cleared the instructions). */
+  deleteRule?(id: string): Promise<void>;
   /** The Agent's notebook; without it the notes block is left as it is. */
   listNotes?(id: string): Promise<Note[]>;
   /** The app's UI locale, the other rule the editor writes besides the default; none means the default only. */
@@ -52,6 +54,9 @@ export const backendAssistantRuleDeps: AssistantRuleDeps = {
       ...localeBody(locale),
     });
   },
+  async deleteRule(id) {
+    await httpRequest<boolean>('DELETE', `/api/skills/assistant-rule/${encodeURIComponent(id)}`);
+  },
   listNotes: (id) => readNotes(notesRoot(), id),
   async currentLocale() {
     // Loaded on use: initStorage pulls in the whole storage layer, which unit tests of these rules don't need.
@@ -70,7 +75,29 @@ type SyncOutcome = 'updated' | 'skipped' | 'failed' | 'unbalanced';
  * Every rule write in main runs in this per-Agent queue: the editor's save, note syncs and the startup sync. So no
  * read-modify-write of one Agent's rule ever interleaves with another.
  */
-const ruleQueue = createSerialiser();
+const serialisedRuleWrites = createSerialiser();
+
+/** How long one queued rule operation may take before it fails and the Agent's queue moves on. */
+export const RULE_WRITE_TIMEOUT_MS = 15_000;
+
+/**
+ * Runs `task` in the Agent's queue, failing it after {@link RULE_WRITE_TIMEOUT_MS}: a hung backend call must not hold
+ * every later write of that Agent. The hung call itself can't be cancelled; its late result is ignored.
+ */
+const ruleQueue = <T>(id: string, task: () => Promise<T>): Promise<T> =>
+  serialisedRuleWrites(
+    id,
+    () =>
+      new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`Timed out writing the rule of Agent '${id}'; try again`)),
+          RULE_WRITE_TIMEOUT_MS
+        );
+        task()
+          .then(resolve, reject)
+          .finally(() => clearTimeout(timer));
+      })
+  );
 
 /** The user's text plus the browser block plus the notes block. A notebook that can't be read is left as it is. */
 async function composeRule(deps: AssistantRuleDeps, id: string, text: string): Promise<UpsertManagedBlockResult> {
@@ -136,6 +163,9 @@ export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Pr
       // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
       for (const locale of new Set([...locales, ...extra])) done.push(await syncRule(deps, id, locale));
       return done;
+    }).catch((error: unknown): SyncOutcome[] => {
+      console.warn(`[AionUi] Browser rule sync gave up on assistant '${id}':`, error);
+      return ['failed'];
     });
     for (const outcome of outcomes) summary[outcome === 'unbalanced' ? 'failed' : outcome] += 1;
   }
@@ -155,6 +185,13 @@ export async function ensureBrowserRuleForAssistant(
 ): Promise<AssistantRuleSyncSummary & { unbalanced: number }> {
   return ruleQueue(id, async () => {
     const summary = { updated: 0, skipped: 0, failed: 0, unbalanced: 0 };
+    // Cleared instructions: drop every locale's rule, as the editor used to, then write the blocks-only rules below.
+    if (content === '' && deps.deleteRule) {
+      await deps.deleteRule(id).catch((error: unknown) => {
+        console.warn(`[AionUi] Could not delete the rules of assistant '${id}':`, error);
+        summary.failed += 1;
+      });
+    }
     // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
     for (const target of await targetLocales(deps, locale)) summary[await syncRule(deps, id, target, content)] += 1;
     return summary;
@@ -172,10 +209,14 @@ export const syncNotesToRule = async (
 
 const MAX_ASSISTANT_ID_LENGTH = 128;
 /** The user's own rule text from the editor; far above any real rule. */
-const MAX_RULE_CHARS = 1_000_000;
+export const MAX_RULE_CHARS = 1_000_000;
 const LOCALE_PATTERN = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 
-export type EnsureAgentRuleReply = { success: boolean; data?: { unbalanced: true }; msg?: string };
+export type EnsureAgentRuleReply = {
+  success: boolean;
+  data?: { unbalanced: true } | { tooLong: true };
+  msg?: string;
+};
 
 /**
  * IPC handler for "an Agent was just created or edited": validates the request (it comes from the
@@ -196,16 +237,23 @@ export async function handleEnsureAgentRule(
   if (locale !== undefined && (typeof locale !== 'string' || !LOCALE_PATTERN.test(locale))) {
     return { success: false, msg: 'Invalid arguments' };
   }
-  if (content !== undefined && (typeof content !== 'string' || content.length > MAX_RULE_CHARS)) {
-    return { success: false, msg: 'Invalid arguments' };
+  if (content !== undefined && typeof content !== 'string') return { success: false, msg: 'Invalid arguments' };
+  if (typeof content === 'string' && content.length > MAX_RULE_CHARS) {
+    return { success: false, data: { tooLong: true }, msg: 'These instructions are too long' };
   }
 
-  const summary = await ensureBrowserRuleForAssistant(
-    deps,
-    assistantId,
-    typeof locale === 'string' ? locale : undefined,
-    typeof content === 'string' ? content : undefined
-  );
+  let summary: Awaited<ReturnType<typeof ensureBrowserRuleForAssistant>>;
+  try {
+    summary = await ensureBrowserRuleForAssistant(
+      deps,
+      assistantId,
+      typeof locale === 'string' ? locale : undefined,
+      typeof content === 'string' ? content : undefined
+    );
+  } catch (error) {
+    // A timeout: the queue has moved on, so the next save can succeed.
+    return { success: false, msg: error instanceof Error ? error.message : String(error) };
+  }
   if (summary.unbalanced > 0) {
     return { success: false, data: { unbalanced: true }, msg: 'The AionUi block markers in this Agent are unbalanced' };
   }

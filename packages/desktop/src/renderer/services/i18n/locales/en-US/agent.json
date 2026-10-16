@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "The default Agent can't be deleted.",
   "ruleMarkersBroken": "Fix the AionUi block markers in this Agent's instructions.",
+  "ruleTooLong": "These instructions are too long",
   "notebook": {
     "title": "Notebook",
     "hint": "What this Agent learned, and your instructions. They are added to its instructions in new chats.",

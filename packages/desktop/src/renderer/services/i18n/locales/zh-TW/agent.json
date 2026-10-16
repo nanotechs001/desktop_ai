@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "預設 Agent 無法刪除。",
   "ruleMarkersBroken": "請修正此 Agent 指令中的 AionUi 區塊標記。",
+  "ruleTooLong": "這些指令太長了",
   "notebook": {
     "title": "筆記本",
     "hint": "此智慧體學到的內容與你的指示。新對話中會加入它的指令。",

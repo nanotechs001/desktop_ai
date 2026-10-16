@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "O agente padrão não pode ser excluído.",
   "ruleMarkersBroken": "Corrija os marcadores de bloco do AionUi nas instruções deste agente.",
+  "ruleTooLong": "Estas instruções são longas demais",
   "notebook": {
     "title": "Caderno",
     "hint": "O que este Agente aprendeu e suas instruções. Elas são adicionadas às instruções dele em novas conversas.",

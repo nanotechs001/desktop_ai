@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "El agente predeterminado no se puede eliminar.",
   "ruleMarkersBroken": "Corrige los marcadores de bloque de AionUi en las instrucciones de este agente.",
+  "ruleTooLong": "Estas instrucciones son demasiado largas",
   "notebook": {
     "title": "Cuaderno",
     "hint": "Lo que este Agente aprendió y tus instrucciones. Se añaden a sus instrucciones en los chats nuevos.",

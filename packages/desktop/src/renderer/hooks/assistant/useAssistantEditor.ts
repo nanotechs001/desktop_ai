@@ -395,20 +395,26 @@ export const useAssistantEditor = ({
   /**
    * Save the user's rule text through main, which adds the AionUi blocks (browser, notebook) and writes the rule in
    * its per-Agent queue, so a note being saved at the same moment can't overwrite the text. Throws when the text
-   * wasn't saved; broken block markers save the text as typed and ask the user to fix them.
+   * wasn't saved; broken block markers save the text as typed and ask the user to fix them. False (with its own
+   * message shown) when the text is over main's size cap and nothing was saved.
    */
   const persistAssistantRules = useCallback(
-    async (assistantId: string, rules: string) => {
+    async (assistantId: string, rules: string): Promise<boolean> => {
       const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({
         assistantId,
         locale: localeKey,
         content: rules.trim() ? rules : '',
       });
-      if (reply.success) return;
-      if (reply.data?.unbalanced !== true) throw new Error(reply.msg ?? 'Could not save the Agent rule');
+      if (reply.success) return true;
+      if (reply.data && 'tooLong' in reply.data) {
+        message.error(t('agent.ruleTooLong', { defaultValue: 'These instructions are too long' }));
+        return false;
+      }
+      if (!reply.data || !('unbalanced' in reply.data)) throw new Error(reply.msg ?? 'Could not save the Agent rule');
       message.warning(
         t('agent.ruleMarkersBroken', { defaultValue: "Fix the AionUi block markers in this Agent's instructions." })
       );
+      return true;
     },
     [localeKey, message, t]
   );
@@ -506,11 +512,12 @@ export const useAssistantEditor = ({
           defaults,
         };
         const created = await ipcBridge.assistants.create.invoke(createRequest);
-        await persistAssistantRules(created.id, editContext);
-        await syncEnginePin(created.id, editUsesDefault, engineId);
-
+        // The Agent exists from here on: if a step below fails, Save again updates it instead of creating another.
+        setIsCreating(false);
         setActiveAssistantId(created.id);
         await refreshAssistantCatalog();
+        if (!(await persistAssistantRules(created.id, editContext))) return;
+        await syncEnginePin(created.id, editUsesDefault, engineId);
         message.success(t('common.createSuccess', { defaultValue: 'Created successfully' }));
       } else {
         if (!activeAssistant) return;
@@ -564,8 +571,8 @@ export const useAssistantEditor = ({
           await syncEnginePin(activeAssistant.id, editUsesDefault, engineId);
         }
 
-        if (!isBuiltinAssistant(activeAssistant)) {
-          await persistAssistantRules(activeAssistant.id, editContext);
+        if (!isBuiltinAssistant(activeAssistant) && !(await persistAssistantRules(activeAssistant.id, editContext))) {
+          return;
         }
 
         await refreshAssistantCatalog();

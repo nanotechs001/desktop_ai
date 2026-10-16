@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "L'agent par défaut ne peut pas être supprimé.",
   "ruleMarkersBroken": "Corrigez les marqueurs de bloc AionUi dans les instructions de cet agent.",
+  "ruleTooLong": "Ces instructions sont trop longues",
   "notebook": {
     "title": "Carnet",
     "hint": "Ce que cet Agent a appris, et vos instructions. Elles sont ajoutées à ses instructions dans les nouvelles discussions.",

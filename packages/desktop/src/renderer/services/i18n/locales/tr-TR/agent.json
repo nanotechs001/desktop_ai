@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "Varsayılan Agent silinemez.",
   "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki AionUi blok işaretlerini düzeltin.",
+  "ruleTooLong": "Bu talimatlar çok uzun",
   "notebook": {
     "title": "Not defteri",
     "hint": "Bu Ajanın öğrendikleri ve talimatlarınız. Yeni sohbetlerde talimatlarına eklenir.",

@@ -1532,9 +1532,10 @@ export const agentBrowser = {
   ),
   // an Agent was just created or edited in the app: main writes its rule (default and editor locale) as `content` (the
   // user's text, managed blocks stripped; empty for none) plus the browser and notebook blocks, in one per-Agent queue.
-  // `data.unbalanced` is set when the rule's block markers are broken and need the user's fix.
+  // `data.unbalanced` is set when the rule's block markers are broken and need the user's fix; `data.tooLong` when
+  // `content` is over main's size cap (nothing saved).
   ensureAgentRule: bridge.buildProvider<
-    IBridgeResponse<{ unbalanced: true } | undefined>,
+    IBridgeResponse<{ unbalanced: true } | { tooLong: true } | undefined>,
     { assistantId: string; locale?: string; content?: string }
   >('agent-browser.ensure-agent-rule'),
   // create the default Agent now if it is missing (an engine may have been connected since the app started)

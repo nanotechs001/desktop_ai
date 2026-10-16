@@ -70,6 +70,7 @@
   },
   "cannotDeleteDefault": "既定のエージェントは削除できません。",
   "ruleMarkersBroken": "このエージェントの指示にある AionUi ブロックのマーカーを修正してください。",
+  "ruleTooLong": "この指示は長すぎます",
   "notebook": {
     "title": "ノート",
     "hint": "このエージェントが学んだことと、あなたの指示です。新しいチャットでその指示に追加されます。",
