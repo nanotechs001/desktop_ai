@@ -6,9 +6,36 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ emit: vi.fn() }));
+type FakeWindow = {
+  options: Electron.BrowserWindowConstructorOptions;
+  webContents: { id: number };
+  handlers: Map<string, (...args: unknown[]) => void>;
+};
+
+const mocks = vi.hoisted(() => ({ emit: vi.fn(), windows: [] as FakeWindow[] }));
 
 vi.mock('@/common', () => ({ ipcBridge: { browser: { openTabRequested: { emit: mocks.emit } } } }));
+vi.mock('electron', () => ({
+  BrowserWindow: class {
+    options: Electron.BrowserWindowConstructorOptions;
+    webContents: { id: number };
+    handlers = new Map<string, (...args: unknown[]) => void>();
+    constructor(options: Electron.BrowserWindowConstructorOptions) {
+      this.options = options;
+      this.webContents = (options.webContents as unknown as { id: number }) ?? { id: 0 };
+      mocks.windows.push(this);
+    }
+    on(event: string, handler: (...args: unknown[]) => void) {
+      this.handlers.set(event, handler);
+      return this;
+    }
+    setTitle = vi.fn();
+  },
+  screen: {
+    getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }),
+    getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }),
+  },
+}));
 
 import {
   classifyWindowOpen,
@@ -21,6 +48,7 @@ const classify = (url: string, disposition: string, features = '') =>
 
 beforeEach(() => {
   mocks.emit.mockClear();
+  mocks.windows.length = 0;
 });
 
 describe('classifyWindowOpen', () => {
@@ -139,82 +167,85 @@ describe('classifyWindowOpen', () => {
 });
 
 describe('popupWindowOptions', () => {
-  const PINNED = {
-    frame: true,
-    alwaysOnTop: false,
-    fullscreen: false,
-    fullscreenable: true,
-    kiosk: false,
-    transparent: false,
-    skipTaskbar: false,
-    resizable: true,
-    movable: true,
-    minimizable: true,
-    closable: true,
-  };
+  const WORK_AREA = { x: 0, y: 0, width: 1920, height: 1080 };
   const makeParent = (bounds = { x: 100, y: 50, width: 1000, height: 800 }) =>
     ({ getBounds: () => bounds }) as unknown as Electron.BrowserWindow;
+  const WEB_PREFERENCES = {
+    partition: 'persist:aionui-browser',
+    contextIsolation: true,
+    sandbox: true,
+    nodeIntegration: false,
+  };
 
   it('clamps 3000x50 to 1400x300, uses the browser partition and centers on the parent', () => {
     const parent = makeParent();
 
-    const options = popupWindowOptions({ width: 3000, height: 50 }, parent);
+    const options = popupWindowOptions({ width: 3000, height: 50 }, parent, WORK_AREA);
 
     expect(options).toEqual({
       parent,
       width: 1400,
       height: 300,
-      x: -100,
+      x: 0,
       y: 300,
       autoHideMenuBar: true,
-      ...PINNED,
-      webPreferences: {
-        partition: 'persist:aionui-browser',
-        contextIsolation: true,
-        sandbox: true,
-        nodeIntegration: false,
-      },
+      webPreferences: WEB_PREFERENCES,
     });
   });
 
-  it('neutralizes hostile page features: Electron spreads them under these options', () => {
-    // Electron turns "left=5,top=7,frame=no,alwaysOnTop=yes,..." into BrowserWindow options and then
-    // spreads ours over them, so every key a page can set must be present here with a safe value.
-    const hostile = { x: 5, y: 7, frame: false, alwaysOnTop: true, fullscreen: true, kiosk: true, transparent: true };
-    const hostileOnly = { skipTaskbar: true, resizable: false, movable: false, minimizable: false, closable: false };
-    const pageParsed = { ...hostile, ...hostileOnly, fullscreenable: false };
+  it('is an allowlist: no other window option is ever set', () => {
+    const options = popupWindowOptions({ width: 500, height: 600 }, makeParent(), WORK_AREA);
 
-    const merged = { ...pageParsed, ...popupWindowOptions({ width: 500, height: 600 }, makeParent()) };
-
-    expect(merged).toMatchObject({ ...PINNED, x: 350, y: 150 });
+    expect(Object.keys(options).sort()).toEqual(
+      ['autoHideMenuBar', 'height', 'parent', 'webPreferences', 'width', 'x', 'y'].sort()
+    );
   });
 
-  it('leaves position to the OS rather than the page without a parent, as own keys that override left/top', () => {
-    const options = popupWindowOptions({ width: 500, height: 600 }, null);
+  it('keeps the popup inside the parent display work area', () => {
+    const workArea = { x: 1920, y: 25, width: 1280, height: 775 };
+    const offscreenParent = makeParent({ x: 3000, y: 700, width: 600, height: 400 });
 
-    expect(Object.keys(options)).toEqual(expect.arrayContaining(['x', 'y']));
+    const options = popupWindowOptions({ width: 1400, height: 1000 }, offscreenParent, workArea);
+
+    expect(options).toMatchObject({ width: 1280, height: 775, x: 1920, y: 25 });
+  });
+
+  it('pins a centred popup to the work area edge when the parent hangs off-screen', () => {
+    const parent = makeParent({ x: -900, y: -500, width: 1000, height: 800 });
+
+    expect(popupWindowOptions({ width: 500, height: 600 }, parent, WORK_AREA)).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it('leaves position to the OS without a parent', () => {
+    const options = popupWindowOptions({ width: 500, height: 600 }, null, WORK_AREA);
+
     expect(options.x).toBeUndefined();
     expect(options.y).toBeUndefined();
-    expect({ x: 5, y: 7, ...options }.x).toBeUndefined();
+    expect(options.parent).toBeUndefined();
   });
 
   it('clamps the small end of width and the large end of height', () => {
-    expect(popupWindowOptions({ width: 10, height: 5000 }, null)).toMatchObject({ width: 400, height: 1000 });
+    expect(popupWindowOptions({ width: 10, height: 5000 }, null, WORK_AREA)).toMatchObject({
+      width: 400,
+      height: 1000,
+    });
   });
 
-  it('keeps an in-range size and leaves parent unset without a parent window', () => {
-    const options = popupWindowOptions({ width: 500, height: 600 }, null);
-
-    expect(options).toMatchObject({ width: 500, height: 600 });
-    expect(options.parent).toBeUndefined();
+  it('keeps an in-range size', () => {
+    expect(popupWindowOptions({ width: 500, height: 600 }, null, WORK_AREA)).toMatchObject({
+      width: 500,
+      height: 600,
+    });
   });
 });
 
 describe('installWindowOpenHandler', () => {
-  type Handler = (details: { url: string; disposition: string; features: string }) => {
+  type PopupResult = {
     action: string;
     overrideBrowserWindowOptions?: Electron.BrowserWindowConstructorOptions;
+    createWindow?: (options: Electron.BrowserWindowConstructorOptions) => Electron.WebContents;
   };
+  type Handler = (details: { url: string; disposition: string; features: string }) => PopupResult;
 
   const install = (parent: { isDestroyed: () => boolean } | null) => {
     const setWindowOpenHandler = vi.fn();
@@ -225,6 +256,7 @@ describe('installWindowOpenHandler', () => {
     expect(setWindowOpenHandler).toHaveBeenCalledTimes(1);
     return setWindowOpenHandler.mock.calls[0][0] as Handler;
   };
+  const liveParent = () => ({ isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }) });
 
   it('asks the renderer for a tab and denies the native window', () => {
     const handler = install(null);
@@ -236,28 +268,46 @@ describe('installWindowOpenHandler', () => {
   });
 
   it('allows a popup as a child window of the parent on the browser partition', () => {
-    const parent = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }) };
+    const parent = liveParent();
     const handler = install(parent);
 
     const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'width=500,height=600' });
 
     expect(result.action).toBe('allow');
-    expect(result.overrideBrowserWindowOptions).toMatchObject({
-      parent,
-      width: 500,
-      height: 600,
-      webPreferences: { partition: 'persist:aionui-browser' },
+    expect(result.overrideBrowserWindowOptions).toEqual({
+      webPreferences: expect.objectContaining({ partition: 'persist:aionui-browser', sandbox: true }),
     });
+    const guest = { id: 9 };
+    result.createWindow?.({ webContents: guest as unknown as Electron.WebContents });
+    expect(mocks.windows.at(-1)?.options).toMatchObject({ parent, width: 500, height: 600, webContents: guest });
     expect(mocks.emit).not.toHaveBeenCalled();
+  });
+
+  it('builds the popup window from our options only: page features never reach it', () => {
+    const handler = install(liveParent());
+    const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'width=500,height=600' });
+    const guest = { id: 9 } as unknown as Electron.WebContents;
+    // What Electron hands createWindow: the page's parsed features merged into the options.
+    const pageFeatures = { show: false, opacity: 0.01, minWidth: 5000, type: 'panel', titleBarStyle: 'hidden' };
+
+    const created = result.createWindow?.({
+      ...pageFeatures,
+      webContents: guest,
+    } as Electron.BrowserWindowConstructorOptions);
+
+    const { options } = mocks.windows.at(-1) as { options: Record<string, unknown> };
+    for (const key of Object.keys(pageFeatures)) expect(options).not.toHaveProperty(key);
+    expect(created).toBe(mocks.windows.at(-1)?.webContents);
   });
 
   it('does not parent a popup to a destroyed window', () => {
     const handler = install({ isDestroyed: () => true });
 
     const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup' });
+    result.createWindow?.({ webContents: { id: 9 } as unknown as Electron.WebContents });
 
     expect(result.action).toBe('allow');
-    expect(result.overrideBrowserWindowOptions?.parent).toBeUndefined();
+    expect(mocks.windows.at(-1)?.options.parent).toBeUndefined();
   });
 
   it('denies an unsafe scheme without opening anything', () => {

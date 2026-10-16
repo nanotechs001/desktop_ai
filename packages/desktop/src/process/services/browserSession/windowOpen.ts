@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { BrowserWindow, screen } from 'electron';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { isSafeUrl } from './urlSafety';
@@ -16,6 +17,9 @@ export type WindowOpenDecision =
 
 type WindowOpenDetails = { url: string; disposition: string; features: string };
 type PopupSize = { width: number; height: number };
+type Area = { x: number; y: number; width: number; height: number };
+/** Electron hands createWindow the new guest as `options.webContents` and takes it back the same way; its types omit the key. */
+type WithGuest = Electron.BrowserWindowConstructorOptions & { webContents: Electron.WebContents };
 
 const DEFAULT_POPUP_SIZE: PopupSize = { width: 600, height: 700 };
 const POPUP_WIDTH_RANGE = { min: 400, max: 1400 };
@@ -72,40 +76,37 @@ export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecisi
   };
 }
 
+/** `value` moved into [min, max]; `min` wins when the range is empty. */
+const clampInto = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
+
 /**
  * Window options for a popup: a child of `parent` on the browser partition, so cookies and
- * `window.opener` are shared with the page that opened it. The size is clamped to a usable range.
+ * `window.opener` are shared with the page that opened it. The size is clamped to a usable range
+ * and to `workArea`; the popup is centred on the parent and kept inside `workArea`.
  *
- * Electron spreads the page's `window.open` features (frame, alwaysOnTop, fullscreen, kiosk,
- * transparent, left/top, ...) into the window options underneath this result, so every option a
- * page could abuse to spoof an overlay is pinned here. Position is set explicitly (centered on the
- * parent) because only an own `x`/`y` key overrides the page's left/top.
+ * This is the complete option set: the popup window is built from it alone (see createWindow in
+ * installWindowOpenHandler), so none of the page's `window.open` features reach the window.
  */
 export function popupWindowOptions(
   size: PopupSize,
-  parent: Electron.BrowserWindow | null
+  parent: Electron.BrowserWindow | null,
+  workArea: Area
 ): Electron.BrowserWindowConstructorOptions {
-  const width = clamp(size.width, POPUP_WIDTH_RANGE);
-  const height = clamp(size.height, POPUP_HEIGHT_RANGE);
+  const width = Math.min(clamp(size.width, POPUP_WIDTH_RANGE), workArea.width);
+  const height = Math.min(clamp(size.height, POPUP_HEIGHT_RANGE), workArea.height);
   const bounds = parent?.getBounds();
+  const centred = (start: number, span: number, inner: number) => Math.round(start + (span - inner) / 2);
   return {
     parent: parent ?? undefined,
     width,
     height,
-    x: bounds ? Math.round(bounds.x + (bounds.width - width) / 2) : undefined,
-    y: bounds ? Math.round(bounds.y + (bounds.height - height) / 2) : undefined,
+    x: bounds
+      ? clampInto(centred(bounds.x, bounds.width, width), workArea.x, workArea.x + workArea.width - width)
+      : undefined,
+    y: bounds
+      ? clampInto(centred(bounds.y, bounds.height, height), workArea.y, workArea.y + workArea.height - height)
+      : undefined,
     autoHideMenuBar: true,
-    frame: true,
-    alwaysOnTop: false,
-    fullscreen: false,
-    fullscreenable: true,
-    kiosk: false,
-    transparent: false,
-    skipTaskbar: false,
-    resizable: true,
-    movable: true,
-    minimizable: true,
-    closable: true,
     webPreferences: {
       partition: BROWSER_SESSION_PARTITION,
       contextIsolation: true,
@@ -133,10 +134,20 @@ export function installWindowOpenHandler(
       return { action: 'deny' };
     }
     if (decision.kind === 'popup') {
-      const parent = getParent();
+      const candidate = getParent();
+      const parent = candidate && !candidate.isDestroyed() ? candidate : null;
+      const workArea = (parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay()).workArea;
+      const options = popupWindowOptions(decision, parent, workArea);
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: popupWindowOptions(decision, parent && !parent.isDestroyed() ? parent : null),
+        // Sets the new page's web preferences; the window itself comes from createWindow.
+        overrideBrowserWindowOptions: { webPreferences: options.webPreferences },
+        // Electron passes the page's features (show, opacity, type, ...) merged into the options
+        // here; only the guest webContents is taken from them, so window.opener keeps working.
+        createWindow: (pageOptions) => {
+          const guestOptions: WithGuest = { ...options, webContents: (pageOptions as WithGuest).webContents };
+          return new BrowserWindow(guestOptions).webContents;
+        },
       };
     }
     return { action: 'deny' };
