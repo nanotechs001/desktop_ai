@@ -77,11 +77,11 @@ const LABELS_OF = `const buttonLike = ['button', 'submit', 'reset', 'image'];
   };`;
 
 /**
- * (node, key) → `{labels, framed, focused}` for a Space or Enter press. The control is the observed `node` or, when
+ * (node, key) → `{labels, framed, focused}` for a gated key press. The control is the observed `node` or, when
  * node is null, the focused element (through open shadow roots). Enter: its labels (a text field's own label too,
  * e.g. a composer) and those of every submit button its form has, `form="id"` buttons and image inputs included.
- * Space: the control's labels, unless it is a text field (a space typed there activates nothing). Arrow, Home, End
- * and Page keys: on a native select, its labels and options (the value changes); elsewhere nothing. `framed`: the
+ * Space: the control's labels, unless it is a text field (a space typed there activates nothing). Arrow (all four),
+ * Home, End and Page keys: on a native select, its labels and options (the value changes); elsewhere nothing. `framed`: the
  * focus is on an iframe element, so the real target is in another frame; `focused`: this document has focus.
  */
 export const ENTER_LABELS = `function (node, key) {
@@ -92,8 +92,10 @@ export const ENTER_LABELS = `function (node, key) {
   const none = { labels: [], framed: false, focused: document.hasFocus() };
   if (!e || e === document.body || e === document.documentElement) return none;
   if (e.tagName === 'IFRAME' || e.tagName === 'FRAME') return { ...none, framed: true };
-  if (e.tagName === 'SELECT' && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(key)) {
-    // These keys change a native select's value: any of its options may be what they land on.
+  if (key !== 'Enter' && key !== 'Space') {
+    // Arrow, Home, End and Page keys only change a native select (left/right too, on Windows and Linux): any of its
+    // options may be what they land on. Elsewhere they scroll or move a caret and activate nothing.
+    if (e.tagName !== 'SELECT') return none;
     const options = [...e.options].slice(0, 100).map((o) => o.label.slice(0, 200));
     return { ...none, labels: [...labelsOf(e), ...options] };
   }

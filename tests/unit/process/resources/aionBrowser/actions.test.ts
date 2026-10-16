@@ -448,7 +448,7 @@ describe('confirm gate', () => {
   });
 
   describe('keys that change a native select', () => {
-    it.each(['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageUp', 'PageDown'])(
+    it.each(['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'])(
       '%s reads the focused control, and asks when an option is risky',
       async (key) => {
         await openAndObserve();
@@ -465,7 +465,7 @@ describe('confirm gate', () => {
     it('does not read the focus for keys that move nothing', async () => {
       await openAndObserve();
       page('Save', ['Delete selected']);
-      const keys = ['Tab', 'Escape', 'Backspace', 'ArrowLeft'];
+      const keys = ['Tab', 'Escape', 'Backspace'];
       const reply = await results(keys.map((key) => ({ op: 'press', key })));
       expect(reply.results.map((r) => r.result)).toEqual(keys.map(() => 'done'));
       expect(relay.requests.some((r) => r.params.functionDeclaration === ENTER_LABELS)).toBe(false);

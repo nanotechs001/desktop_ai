@@ -311,7 +311,18 @@ const need = (value: string | undefined, what: string, op: string): string => {
 /** A label the user would be asked about, and the frame its control sits in. */
 type Labeled = { label: string; frame: FrameHandle };
 /** Keys that act on the focused control (activate it, or change a native select); the gate reads it first. */
-const ACTIVATING_KEYS = new Set(['Enter', 'Space', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+const ACTIVATING_KEYS = new Set([
+  'Enter',
+  'Space',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+]);
 const CHECK_FAILED = 'could not check what this input would activate; observe again';
 const CHANGED_WHILE_ASKING = 'the page changed while the user was asked; observe again';
 
