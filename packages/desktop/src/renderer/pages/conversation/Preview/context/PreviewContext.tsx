@@ -881,10 +881,22 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [openPreview]
   );
 
-  // Main process asked for a new browser tab (target=_blank / window.open from a browser page).
-  // `background` is ignored for now: openBrowserTab always activates the new tab.
+  // Main process asked for a new browser tab (target=_blank / window.open from a page, or an extension).
+  // At the cap it is refused rather than reusing the oldest tab: a page must not replace a tab the user
+  // has open. Only user-initiated opens (openBrowserTab) reuse. `background` is ignored for now.
   // `?.` only tolerates test mocks that omit `browser`; production always defines the namespace.
-  useEffect(() => ipcBridge.browser?.openTabRequested.on(({ url }) => openBrowserTab(url)), [openBrowserTab]);
+  useEffect(
+    () =>
+      ipcBridge.browser?.openTabRequested.on(({ url }) => {
+        const browserTabCount = tabsRef.current.filter((tab) => tab.content_type === 'browser').length;
+        if (browserTabCount >= MAX_BROWSER_TABS) {
+          setBrowserTabLimitHitAt(Date.now());
+          return;
+        }
+        openBrowserTab(url);
+      }),
+    [openBrowserTab]
+  );
 
   /**
    * Hide the preview panel, keeping its tabs.

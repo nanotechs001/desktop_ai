@@ -169,6 +169,21 @@ describe('PreviewContext browser tab requests from the main process', () => {
     expect(ctx.isOpen).toBe(true);
   });
 
+  it('refuses a page-initiated open at the tab cap, keeps every tab, and raises the tab-limit signal', () => {
+    renderProvider();
+    for (let i = 0; i < MAX_BROWSER_TABS; i += 1) {
+      act(() => ctx.openBrowserTab(`https://example.com/${i}`));
+    }
+    const before = browserTabs().map((tab) => tab.content);
+    const activeBefore = ctx.activeTabId;
+
+    requestTab({ url: 'https://popup.example/', background: false });
+
+    expect(browserTabs().map((tab) => tab.content)).toEqual(before);
+    expect(ctx.activeTabId).toBe(activeBefore);
+    expect(ctx.browserTabLimitHitAt).toBeTypeOf('number');
+  });
+
   it('stops listening when the provider unmounts', () => {
     const { unmount } = renderProvider();
     openTabRequested.unsubscribe.mockClear();
