@@ -80,7 +80,11 @@ const ARTIFACT_LIBS = [
   },
   { file: 'recharts.js', code: "window.Recharts = require('recharts');", shared: ALL_SHARED },
   { file: 'lucide.js', code: "window.LucideReact = require('lucide-react');", shared: ALL_SHARED },
-  { file: 'react-markdown.js', code: "window.ReactMarkdown = require('react-markdown').default;", shared: ALL_SHARED },
+  {
+    file: 'react-markdown.js',
+    code: "window.ReactMarkdown = require('react-markdown').default; window.remarkGfm = require('remark-gfm').default;",
+    shared: ALL_SHARED,
+  },
   { file: 'sucrase.js', code: "window.Sucrase = { transform: require('sucrase').transform };" },
   { file: 'mermaid.js', code: "window.mermaid = require('mermaid').default;" },
 ];
@@ -111,6 +115,7 @@ async function buildArtifactLibs() {
   const results = await Promise.all(
     ARTIFACT_LIBS.map(({ file, code, shared }) =>
       esbuild.build({
+        absWorkingDir: ROOT,
         stdin: { contents: code, resolveDir: ROOT, loader: 'js' },
         outfile: path.join(ARTIFACT_LIBS_DIR, file),
         bundle: true,

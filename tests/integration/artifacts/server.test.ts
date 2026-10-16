@@ -9,7 +9,7 @@ import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createArtifactStore } from '@process/artifacts/store';
 import { renderArtifactPage } from '@process/artifacts/pages';
 import { ARTIFACT_CSP, startArtifactServer, type ArtifactServer } from '@process/artifacts/server';
@@ -260,6 +260,32 @@ describe('artifact server', () => {
     expect(await fs.readdir(root)).toEqual([]);
     const { id } = await create({ title: 'T', kind: 'html', content: '<p>still up</p>' });
     expect((await page(`/a/${id}`)).body).toBe('<p>still up</p>');
+  });
+
+  it('/lib/<file> reads each library from disk once', async () => {
+    const libs = await fs.mkdtemp(path.join(os.tmpdir(), 'artifact-libs-'));
+    try {
+      await fs.writeFile(path.join(libs, 'manifest.json'), JSON.stringify({ 'react.js': 'abc' }));
+      await fs.writeFile(path.join(libs, 'react.js'), 'window.React = {};');
+      const withLibs = await startArtifactServer({
+        store: createArtifactStore(root),
+        token: TOKEN,
+        renderPage: renderArtifactPage,
+        libsDir: libs,
+      });
+      const reads = vi.spyOn(fs, 'readFile');
+      try {
+        const first = await request(withLibs.port, { path: '/lib/react.js' });
+        const second = await request(withLibs.port, { path: '/lib/react.js' });
+        expect([first.body, second.body]).toEqual(['window.React = {};', 'window.React = {};']);
+        expect(reads.mock.calls.map(([file]) => file)).toEqual([path.join(libs, 'react.js')]);
+      } finally {
+        reads.mockRestore();
+        await withLibs.close();
+      }
+    } finally {
+      await fs.rm(libs, { recursive: true, force: true });
+    }
   });
 
   it('/lib/<file> serves only files listed in the manifest', async () => {

@@ -58,6 +58,8 @@ try {
 }
 `;
 
+const LIBS_MISSING = 'The artifact libraries are missing. Rebuild the app.';
+
 const MERMAID_INIT = "mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });";
 
 const MARKDOWN_BOOT = `
@@ -85,7 +87,7 @@ const pre = ({ node, children, ...rest }) => {
 };
 try {
   ReactDOM.createRoot(root, { onUncaughtError: showError }).render(
-    React.createElement(ReactMarkdown, { components: { pre } }, source)
+    React.createElement(ReactMarkdown, { components: { pre }, remarkPlugins: [remarkGfm] }, source)
   );
 } catch (e) {
   showError(e);
@@ -102,19 +104,22 @@ ${MERMAID_INIT}
 mermaid.render('mermaid-0', source).then(({ svg }) => { root.innerHTML = svg; }, showError);
 `;
 
-const scriptPage = (v: ArtifactVersion, files: string[], boot: string, style = ''): string =>
-  page(
-    v.title,
-    style,
-    `<div id="root"></div>${sourceBlock(v.content)}${libs(files)}<script>${PRELUDE}${boot}</script>`
-  );
+/**
+ * A page that runs `boot` once the `globals` its libraries set are there. Without them (the libraries weren't
+ * built or served) it says so instead of failing on an undefined name.
+ */
+const scriptPage = (v: ArtifactVersion, files: string[], globals: string[], boot: string, style = ''): string => {
+  const missing = globals.map((g) => `typeof ${g} === 'undefined'`).join(' || ');
+  const script = `${PRELUDE}if (${missing}) showError('${LIBS_MISSING}');\nelse {${boot}}`;
+  return page(v.title, style, `<div id="root"></div>${sourceBlock(v.content)}${libs(files)}<script>${script}</script>`);
+};
 
 /**
  * Renders an artifact version as a page.
  * - html: as written.
  * - svg: inside an `<img>` wrapper (never inline).
  * - react: compiled in the page by Sucrase; may import react, recharts and lucide-react; Tailwind is on.
- * - markdown: react-markdown, with ```mermaid fences drawn as diagrams.
+ * - markdown: react-markdown with GFM (tables, task lists, strikethrough); ```mermaid fences become diagrams.
  * - mermaid: one diagram.
  * Compile and runtime errors show up in the page as a red message.
  */
@@ -133,16 +138,18 @@ export function renderArtifactPage(v: ArtifactVersion): string {
       return scriptPage(
         v,
         ['react.js', 'react-dom.js', 'sucrase.js', 'recharts.js', 'lucide.js', 'tailwind.js'],
+        ['React', 'ReactDOM', 'Sucrase', 'Recharts', 'LucideReact'],
         REACT_BOOT
       );
     case 'markdown':
       return scriptPage(
         v,
         ['react.js', 'react-dom.js', 'react-markdown.js', 'mermaid.js'],
+        ['React', 'ReactDOM', 'ReactMarkdown', 'remarkGfm', 'mermaid'],
         MARKDOWN_BOOT,
         MARKDOWN_STYLE
       );
     case 'mermaid':
-      return scriptPage(v, ['mermaid.js'], MERMAID_BOOT);
+      return scriptPage(v, ['mermaid.js'], ['mermaid'], MERMAID_BOOT);
   }
 }

@@ -79,7 +79,7 @@ describe.skipIf(!chromePath)('artifact pages in headless Chrome', () => {
     );
 
   /** Opens a tab, records its requests from the very first one, and loads the artifact. */
-  const open = async (id: string): Promise<string> => {
+  const open = async (id: string, via: ArtifactServer = server): Promise<string> => {
     const sessionId = await chrome.openPage('about:blank');
     const urls: string[] = [];
     requests.set(sessionId, urls);
@@ -94,7 +94,7 @@ describe.skipIf(!chromePath)('artifact pages in headless Chrome', () => {
         resolve();
       });
     });
-    await chrome.conn.send('Page.navigate', { url: server.url(id) }, sessionId);
+    await chrome.conn.send('Page.navigate', { url: via.url(id) }, sessionId);
     await loaded;
     return sessionId;
   };
@@ -172,6 +172,34 @@ describe.skipIf(!chromePath)('artifact pages in headless Chrome', () => {
     expect(await waitFor(doc, "document.querySelector('h1')?.textContent")).toBe('Weekly notes');
     expect(await evaluate(doc, "document.querySelector('strong')?.textContent")).toBe('bold');
     expect(await waitFor(doc, "document.querySelector('.mermaid svg')?.textContent.includes('Ship')")).toBe(true);
+  });
+
+  it('a markdown table renders as a <table> (GFM)', async () => {
+    const doc = await open(await create('markdown', '| Name | Score |\n| --- | --- |\n| Ada | 3 |\n| Bo | 5 |\n'));
+    expect(await waitFor(doc, "document.querySelectorAll('table tbody tr').length")).toBe(2);
+    expect(await evaluate(doc, "[...document.querySelectorAll('th')].map((th) => th.textContent)")).toEqual([
+      'Name',
+      'Score',
+    ]);
+  });
+
+  it('without the libraries a page says they are missing', async () => {
+    const bare = await startArtifactServer({ store, token: 'unused', renderPage: renderArtifactPage, libsDir: null });
+    try {
+      for (const [kind, content] of [
+        ['react', 'export default () => <p>x</p>;'],
+        ['markdown', '# x'],
+        ['mermaid', 'graph TD; A-->B'],
+      ] as const) {
+        const id = await create(kind, content);
+        const page = await open(id, bare);
+        expect(await waitFor(page, "document.querySelector('#root pre')?.textContent")).toBe(
+          'The artifact libraries are missing. Rebuild the app.'
+        );
+      }
+    } finally {
+      await bare.close();
+    }
   });
 
   describe('each artifact page is its own sandboxed origin', () => {

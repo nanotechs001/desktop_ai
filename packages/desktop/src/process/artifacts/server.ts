@@ -112,6 +112,20 @@ export const readBody = (req: IncomingMessage): Promise<string> =>
     req.on('error', reject);
   });
 
+/** `manifest.json` (file -> sha256) of the bundled libraries; empty, with a warning, when it can't be read. */
+const readManifest = async (libsDir: string): Promise<Record<string, string>> => {
+  try {
+    const manifest: unknown = JSON.parse(await fs.readFile(path.join(libsDir, 'manifest.json'), 'utf8'));
+    if (typeof manifest === 'object' && manifest !== null && !Array.isArray(manifest)) {
+      return manifest as Record<string, string>;
+    }
+    console.warn('[artifacts] the library manifest is malformed; serving no libraries');
+  } catch (error) {
+    console.warn('[artifacts] no library manifest; serving no libraries', error);
+  }
+  return {};
+};
+
 type ApiBody = Record<string, unknown> & { conversationId: string };
 
 const callStore = (
@@ -150,17 +164,21 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     send(res, 500, TEXT_TYPE, "Couldn't load the artifact");
   };
 
+  // Read once: the libraries don't change while the app runs. A missing or broken manifest serves none.
+  const manifest = libsDir ? await readManifest(libsDir) : {};
+  const libCache = new Map<string, Promise<Buffer>>();
+
   const serveLib = async (res: ServerResponse, file: string): Promise<void> => {
     const type = LIB_TYPES[path.extname(file)];
-    if (!libsDir || !type) return send(res, 404, TEXT_TYPE, 'Not found');
-    const manifest: unknown = JSON.parse(await fs.readFile(path.join(libsDir, 'manifest.json'), 'utf8'));
-    if (typeof manifest !== 'object' || manifest === null || !Object.hasOwn(manifest, file)) {
-      return send(res, 404, TEXT_TYPE, 'Not found');
+    if (!libsDir || !type || !Object.hasOwn(manifest, file)) return send(res, 404, TEXT_TYPE, 'Not found');
+    let body = libCache.get(file);
+    if (!body) {
+      body = fs.readFile(path.join(libsDir, file));
+      libCache.set(file, body);
+      body.catch(() => libCache.delete(file)); // a failed read is retried next time
     }
     // Sandboxed pages have opaque origins, so for them every library is a cross-origin load.
-    send(res, 200, type, await fs.readFile(path.join(libsDir, file)), {
-      'Cross-Origin-Resource-Policy': 'cross-origin',
-    });
+    send(res, 200, type, await body, { 'Cross-Origin-Resource-Policy': 'cross-origin' });
   };
 
   const serveApi = async (req: IncomingMessage, res: ServerResponse, op: string): Promise<void> => {

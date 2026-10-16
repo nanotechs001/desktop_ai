@@ -61,7 +61,7 @@ describe('renderArtifactPage', () => {
   it.each(['react', 'markdown', 'mermaid'] as const)(
     'content containing </script> cannot break out of the JSON block (%s)',
     (kind) => {
-      const evil = '</script><script>alert(1)</script><!--<SCRIPT> </Script >';
+      const evil = '</script><script>alert(1)</script><!--<SCRIPT> </Script >\u2028\u2029';
       const html = renderArtifactPage(version(kind, evil, '</title><script>alert(2)</script>'));
       expect(embedded(html)).toEqual([evil]);
       const [block] = [...html.matchAll(JSON_BLOCK_RE)].map((m) => m[1]);
