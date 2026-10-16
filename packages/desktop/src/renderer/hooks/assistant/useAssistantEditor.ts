@@ -1,4 +1,6 @@
 import { ipcBridge } from '@/common';
+import { configService } from '@/common/config/configService';
+import { persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
 import type { IMcpServer } from '@/common/config/storage';
 import type { Assistant, CreateAssistantRequest, UpdateAssistantRequest } from '@/common/types/agent/assistantTypes';
 import type { Message } from '@arco-design/web-react';
@@ -25,6 +27,8 @@ type UseAssistantEditorParams = {
   assistantOrder: readonly string[];
   setAssistantOrder: (nextOrder: readonly string[]) => Promise<void>;
   message: ReturnType<typeof Message.useMessage>[0];
+  /** Default engine id; Agents that follow the default run on it. */
+  defaultEngineId?: string | null;
 };
 
 type AssistantScalarDefaultMode = 'auto' | 'fixed';
@@ -61,6 +65,13 @@ const deriveBuiltinAutoSkills = (skills: SkillInfo[]): BuiltinAutoSkill[] =>
     description: skill.description,
   }));
 
+/** Keep `agent.enginePins` in step with the editor's choice, writing only when it changed. */
+const syncEnginePin = async (assistantId: string, usesDefault: boolean, engineId: string): Promise<void> => {
+  const current = configService.get('agent.enginePins')?.[assistantId];
+  if (usesDefault && current) return persistEnginePin(assistantId, null);
+  if (!usesDefault && engineId && current !== engineId) return persistEnginePin(assistantId, engineId);
+};
+
 /**
  * Manages all assistant editing state and handlers:
  * create, edit, duplicate, save, delete, and toggle enabled.
@@ -74,6 +85,7 @@ export const useAssistantEditor = ({
   assistantOrder,
   setAssistantOrder,
   message,
+  defaultEngineId,
 }: UseAssistantEditorParams) => {
   const { t } = useTranslation();
   const previousLocaleKeyRef = useRef(localeKey);
@@ -85,6 +97,8 @@ export const useAssistantEditor = ({
   const [editAvatar, setEditAvatar] = useState('');
   const [editAvatarPreview, setEditAvatarPreview] = useState<string | undefined>(undefined);
   const [editAgent, setEditAgentState] = useState<string>('');
+  // True while the Agent follows the default engine (no pin); `editAgent` is then the engine it will run on.
+  const [editUsesDefault, setEditUsesDefault] = useState(true);
   const [editRecommendedPromptsText, setEditRecommendedPromptsText] = useState('');
   const [defaultModelMode, setDefaultModelMode] = useState<AssistantScalarDefaultMode>('auto');
   const [defaultModelValue, setDefaultModelValue] = useState('');
@@ -224,6 +238,21 @@ export const useAssistantEditor = ({
     [editAgent, resetModelAndPermissionDefaults]
   );
 
+  /** Pick a specific engine for this Agent (pins it on save). */
+  const chooseEngine = useCallback(
+    (engineId: string) => {
+      setEditAgent(engineId);
+      setEditUsesDefault(false);
+    },
+    [setEditAgent]
+  );
+
+  /** Go back to following the default engine (clears the pin on save). */
+  const followDefaultEngine = useCallback(() => {
+    setEditUsesDefault(true);
+    if (defaultEngineId) setEditAgent(defaultEngineId);
+  }, [defaultEngineId, setEditAgent]);
+
   const handleEdit = async (assistant: AssistantListItem) => {
     setIsCreating(false);
     setActiveAssistantId(assistant.id);
@@ -234,6 +263,7 @@ export const useAssistantEditor = ({
     setEditAvatar(assistant.avatar || '');
     setEditAvatarPreview(undefined);
     setEditAgent(assistant.agent_id || '');
+    setEditUsesDefault(!configService.get('agent.enginePins')?.[assistant.id]);
     resetDefaultConfigState();
     resetSkillEditorState();
 
@@ -291,7 +321,8 @@ export const useAssistantEditor = ({
     setEditContext('');
     setEditAvatar('\u{1F916}');
     setEditAvatarPreview(undefined);
-    setEditAgent('');
+    setEditAgent(defaultEngineId ?? '');
+    setEditUsesDefault(true);
     resetDefaultConfigState();
     resetSkillEditorState();
 
@@ -320,7 +351,9 @@ export const useAssistantEditor = ({
     setEditDescription(assistant.description_i18n?.[localeKey] || assistant.description || '');
     setEditAvatar(assistant.avatar || '\u{1F916}');
     setEditAvatarPreview(undefined);
-    setEditAgent(assistant.agent_id || '');
+    const sourceIsPinned = Boolean(configService.get('agent.enginePins')?.[assistant.id]);
+    setEditAgent((!sourceIsPinned && defaultEngineId) || assistant.agent_id || '');
+    setEditUsesDefault(!sourceIsPinned);
     resetDefaultConfigState();
     resetSkillEditorState();
 
@@ -426,6 +459,8 @@ export const useAssistantEditor = ({
         }
       }
 
+      // An Agent that follows the default runs on the default engine; a pinned one on its own choice.
+      const engineId = editUsesDefault ? defaultEngineId || editAgent : editAgent;
       const pendingSkillNames = pendingSkills.map((skill) => skill.name);
       const finalCustomSkills = Array.from(new Set([...customSkills, ...pendingSkillNames]));
       const recommendedPrompts = editRecommendedPromptsText
@@ -454,7 +489,7 @@ export const useAssistantEditor = ({
           name: editName,
           description: editDescription || undefined,
           avatar: editAvatar || undefined,
-          agent_id: editAgent || undefined,
+          agent_id: engineId || undefined,
           enabled_skills: selectedSkills,
           custom_skill_names: finalCustomSkills,
           disabled_builtin_skills: disabledBuiltinSkills.length > 0 ? disabledBuiltinSkills : undefined,
@@ -463,6 +498,7 @@ export const useAssistantEditor = ({
         };
         const created = await ipcBridge.assistants.create.invoke(createRequest);
         await persistAssistantRules(created.id, editContext);
+        await syncEnginePin(created.id, editUsesDefault, engineId);
 
         setActiveAssistantId(created.id);
         await refreshAssistantCatalog();
@@ -474,7 +510,7 @@ export const useAssistantEditor = ({
         if (isBuiltinAssistant(activeAssistant)) {
           updateRequest = {
             id: activeAssistant.id,
-            agent_id: editAgent || undefined,
+            agent_id: engineId || undefined,
             defaults: {
               model:
                 defaultModelMode === 'fixed'
@@ -506,7 +542,7 @@ export const useAssistantEditor = ({
             name: editName,
             description: editDescription || undefined,
             avatar: editAvatar || undefined,
-            agent_id: editAgent || undefined,
+            agent_id: engineId || undefined,
             enabled_skills: selectedSkills,
             custom_skill_names: finalCustomSkills,
             disabled_builtin_skills: disabledBuiltinSkills.length > 0 ? disabledBuiltinSkills : undefined,
@@ -515,6 +551,9 @@ export const useAssistantEditor = ({
           };
         }
         await ipcBridge.assistants.update.invoke(updateRequest);
+        if (!isGeneratedAssistant(activeAssistant)) {
+          await syncEnginePin(activeAssistant.id, editUsesDefault, engineId);
+        }
 
         if (!isBuiltinAssistant(activeAssistant)) {
           await persistAssistantRules(activeAssistant.id, editContext);
@@ -619,6 +658,9 @@ export const useAssistantEditor = ({
     setEditAvatarPreview,
     editAgent,
     setEditAgent,
+    editUsesDefault,
+    chooseEngine,
+    followDefaultEngine,
     editRecommendedPromptsText,
     setEditRecommendedPromptsText,
     defaultModelMode,

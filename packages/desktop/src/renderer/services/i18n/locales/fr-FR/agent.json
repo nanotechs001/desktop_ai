@@ -56,5 +56,12 @@
     "initializingTooltip": "L'agent est en cours d'initialisation. Reconnectez-le lorsqu'il sera prêt",
     "processingTooltip": "Attendez la fin de la réponse en cours avant de reconnecter"
   },
-  "claudeLauncherSkipped": "Vous avez défini votre propre commande Claude, AionUi n'a donc pas ajouté ses protections de navigateur."
+  "claudeLauncherSkipped": "Vous avez défini votre propre commande Claude, AionUi n'a donc pas ajouté ses protections de navigateur.",
+  "engine": {
+    "default": "Par défaut",
+    "setDefault": "Définir par défaut",
+    "useDefault": "Utiliser celui par défaut",
+    "rebindFailed": "Impossible de mettre à jour le moteur de {{name}}.",
+    "rebindListFailed": "Impossible de charger vos Agents pour mettre à jour leur moteur."
+  }
 }

@@ -56,5 +56,12 @@
     "initializingTooltip": "Der Agent wird initialisiert. Verbinden Sie ihn erneut, sobald er bereit ist",
     "processingTooltip": "Warten Sie auf das Ende der aktuellen Antwort, bevor Sie neu verbinden"
   },
-  "claudeLauncherSkipped": "Du hast einen eigenen Claude-Befehl festgelegt, daher hat AionUi seine Browser-Schutzmaßnahmen nicht hinzugefügt."
+  "claudeLauncherSkipped": "Du hast einen eigenen Claude-Befehl festgelegt, daher hat AionUi seine Browser-Schutzmaßnahmen nicht hinzugefügt.",
+  "engine": {
+    "default": "Standard",
+    "setDefault": "Als Standard festlegen",
+    "useDefault": "Standard verwenden",
+    "rebindFailed": "Die Engine für {{name}} konnte nicht aktualisiert werden.",
+    "rebindListFailed": "Deine Agents konnten nicht geladen werden, um ihre Engine zu aktualisieren."
+  }
 }

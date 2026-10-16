@@ -78,6 +78,12 @@ export type AssistantEditorViewModel = {
     value: string;
     setValue: (value: string) => void;
     availableBackends: AvailableBackend[];
+    /** True while the Agent follows the default engine instead of being pinned to one. */
+    usesDefault: boolean;
+    /** Switch back to following the default engine. */
+    followDefault: () => void;
+    /** Display name of the default engine; absent when no engine is connected. */
+    defaultEngineName?: string;
   };
   prompts: {
     text: string;

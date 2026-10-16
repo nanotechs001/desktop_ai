@@ -26,6 +26,22 @@ describe('guid assistant selection helpers', () => {
     expect(pickDefaultAssistantSelectionKey(assistants)).toBe('bare-aionrs');
   });
 
+  it("defaults to an assistant bound to the default engine, preferring the engine's own bare entry", () => {
+    const onGemini = [
+      ...assistants,
+      assistant({ id: 'bare-gemini', source: 'generated', runtimeKey: 'gemini', sort_order: 40 }),
+    ];
+    expect(pickDefaultAssistantSelectionKey(onGemini, 'agent-gemini')).toBe('bare-gemini');
+    expect(pickDefaultAssistantSelectionKey(assistants, 'agent-gemini')).toBe('user-research');
+  });
+
+  it('ignores disabled assistants and falls back when none is bound to the default engine', () => {
+    const disabled = [assistant({ id: 'off', source: 'user', runtimeKey: 'gemini', enabled: false }), ...assistants];
+    expect(pickDefaultAssistantSelectionKey(disabled, 'agent-gemini')).toBe('user-research');
+    expect(pickDefaultAssistantSelectionKey(assistants, 'agent-unknown')).toBe('bare-aionrs');
+    expect(pickDefaultAssistantSelectionKey(assistants, null)).toBe('bare-aionrs');
+  });
+
   it('returns null when no assistants are available', () => {
     expect(pickDefaultAssistantSelectionKey([])).toBeNull();
   });

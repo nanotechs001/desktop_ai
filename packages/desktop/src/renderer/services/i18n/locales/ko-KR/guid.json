@@ -13,5 +13,9 @@
     "specifyWorkspace": "프로젝트 폴더 선택",
     "searchPlaceholder": "프로젝트 검색…",
     "noProject": "프로젝트 없음"
+  },
+  "noEngine": {
+    "message": "설정 → 엔진에서 AI 계정을 연결하세요.",
+    "action": "엔진 설정 열기"
   }
 }

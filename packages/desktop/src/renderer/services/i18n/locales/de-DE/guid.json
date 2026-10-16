@@ -31,5 +31,9 @@
     "statusTesting": "Latenz wird gemessen...",
     "statusUnreachable": "Nicht erreichbar",
     "statusAvailable": "Verfügbar"
+  },
+  "noEngine": {
+    "message": "Verbinde in Einstellungen → Engine ein KI-Konto.",
+    "action": "Engine-Einstellungen öffnen"
   }
 }

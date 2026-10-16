@@ -19,6 +19,7 @@
  */
 import { Message } from '@arco-design/web-react';
 import { useAssistantEditor, useAssistantList } from '@/renderer/hooks/assistant';
+import { useDefaultEngine } from '@/renderer/hooks/agent/useDefaultEngine';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
 import { buildAssistantEditorBackends, resolveAvatarImageSrc } from './assistantUtils';
 import AssistantEditorPage from './AssistantEditorPage';
@@ -68,6 +69,7 @@ const AssistantSettings: React.FC = () => {
     localeKey,
   } = useAssistantList();
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
+  const defaultEngine = useDefaultEngine();
   const builtinAvatarOptions = useMemo(
     () =>
       assistants
@@ -96,6 +98,7 @@ const AssistantSettings: React.FC = () => {
     assistantOrder,
     setAssistantOrder,
     message,
+    defaultEngineId: defaultEngine.agentId,
   });
   const availableBackends = useMemo(
     () => buildAssistantEditorBackends(managedAgentRuntimeCatalog, localeKey, editor.editAgent),
@@ -120,8 +123,13 @@ const AssistantSettings: React.FC = () => {
     },
     agent: {
       value: editor.editAgent,
-      setValue: editor.setEditAgent,
+      setValue: editor.chooseEngine,
       availableBackends,
+      usesDefault: editor.editUsesDefault,
+      followDefault: editor.followDefaultEngine,
+      defaultEngineName: defaultEngine.agent
+        ? defaultEngine.agent.name_i18n?.[localeKey] || defaultEngine.agent.name
+        : undefined,
     },
     prompts: {
       text: editor.editRecommendedPromptsText,

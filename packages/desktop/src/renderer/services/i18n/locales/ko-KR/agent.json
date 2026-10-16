@@ -56,5 +56,12 @@
     "initializingTooltip": "에이전트를 초기화하는 중입니다. 완료된 후 다시 연결하세요",
     "processingTooltip": "현재 답변이 완료된 후 다시 연결하세요"
   },
-  "claudeLauncherSkipped": "직접 설정한 Claude 명령이 있어 AionUi가 브라우저 보호 장치를 추가하지 않았습니다."
+  "claudeLauncherSkipped": "직접 설정한 Claude 명령이 있어 AionUi가 브라우저 보호 장치를 추가하지 않았습니다.",
+  "engine": {
+    "default": "기본",
+    "setDefault": "기본으로 설정",
+    "useDefault": "기본값 사용",
+    "rebindFailed": "{{name}}의 엔진을 업데이트하지 못했습니다.",
+    "rebindListFailed": "엔진을 업데이트할 Agent를 불러오지 못했습니다."
+  }
 }

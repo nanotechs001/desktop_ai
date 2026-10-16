@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -21,7 +21,14 @@ const {
   resolveGuidAssistantDefaultsMock,
   sendMock,
   navigateMock,
+  defaultEngineMock,
 } = vi.hoisted(() => ({
+  defaultEngineMock: {
+    agent: { id: 'engine-claude', name: 'Claude' } as { id: string; name: string } | null,
+    agentId: 'engine-claude' as string | null,
+    setDefault: vi.fn(),
+    loading: false,
+  },
   modelSelectionMock: {
     modelList: [],
     isGoogleAuth: false,
@@ -169,6 +176,10 @@ vi.mock('@/renderer/pages/guid/hooks/useGuidAssistantSelection', () => ({
   pickDefaultAssistantSelectionKey: vi.fn(),
 }));
 
+vi.mock('@/renderer/hooks/agent/useDefaultEngine', () => ({
+  useDefaultEngine: () => defaultEngineMock,
+}));
+
 vi.mock('@/renderer/pages/guid/hooks/useGuidInput', () => ({
   useGuidInput: () => guidInputMock,
 }));
@@ -311,6 +322,10 @@ describe('GuidPage', () => {
     capturedGuidInputCardProps.length = 0;
     capturedGuidSendDeps.length = 0;
     useGuidAssistantSelectionMock.mockClear();
+    defaultEngineMock.agent = { id: 'engine-claude', name: 'Claude' };
+    defaultEngineMock.agentId = 'engine-claude';
+    defaultEngineMock.loading = false;
+    sendMock.isButtonDisabled = false;
     resolveGuidAssistantDefaultsMock.mockReturnValue({
       disabledBuiltinSkillIds: [],
       skillIds: [],
@@ -645,6 +660,52 @@ describe('GuidPage', () => {
     expect(agentSelectionMock.setSelectedAcpModel).not.toHaveBeenCalledWith('default', {
       persistPreference: false,
     });
+  });
+
+  it('shows no engine picker and sends with the selected Agent on the default engine', () => {
+    render(<GuidPage />);
+
+    expect(screen.queryByTestId('guid-no-engine')).toBeNull();
+    expect(screen.getByTestId('assistant-selection-area')).toBeInTheDocument();
+    expect(useGuidAssistantSelectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultEngineId: 'engine-claude' })
+    );
+    expect(capturedGuidSendDeps.at(-1)?.selectedAssistantId).toBe('bare-aionrs');
+    expect(capturedGuidActionRowProps.at(-1)?.isButtonDisabled).toBe(false);
+  });
+
+  it('points to Settings -> Engine, with a link, when no engine is connected', () => {
+    defaultEngineMock.agent = null;
+    defaultEngineMock.agentId = null;
+
+    render(<GuidPage />);
+
+    expect(screen.getByTestId('guid-no-engine')).toBeInTheDocument();
+    expect(screen.getByText('Connect an AI account in Settings → Engine.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Engine settings' }));
+    expect(navigateMock).toHaveBeenCalledWith('/settings/agent');
+    expect(capturedGuidActionRowProps.at(-1)?.isButtonDisabled).toBe(true);
+  });
+
+  it('does not flash the no-engine notice while the engine list is still loading', () => {
+    defaultEngineMock.agent = null;
+    defaultEngineMock.agentId = null;
+    defaultEngineMock.loading = true;
+
+    render(<GuidPage />);
+
+    expect(screen.queryByTestId('guid-no-engine')).toBeNull();
+  });
+
+  it('does not send on Enter when no engine is connected', () => {
+    defaultEngineMock.agent = null;
+    defaultEngineMock.agentId = null;
+    sendMock.sendMessageHandler.mockClear();
+
+    render(<GuidPage />);
+    capturedGuidInputCardProps.at(-1)?.onKeyDown?.({ key: 'Enter', shiftKey: false, preventDefault: vi.fn() });
+
+    expect(sendMock.sendMessageHandler).not.toHaveBeenCalled();
   });
 
   it('sends on Enter with empty input (empty-input start), matching the button', () => {

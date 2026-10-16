@@ -13,5 +13,9 @@
     "specifyWorkspace": "Proje klasörü seç",
     "searchPlaceholder": "Proje ara…",
     "noProject": "Proje Yok"
+  },
+  "noEngine": {
+    "message": "Ayarlar → Motor bölümünde bir yapay zekâ hesabı bağlayın.",
+    "action": "Motor ayarlarını aç"
   }
 }

@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 
 // t() echoes the key so section labels/buttons are assertable.
@@ -59,6 +59,16 @@ vi.mock('@arco-design/web-react', async () => {
 const useManagedAgents = vi.fn();
 vi.mock('@renderer/hooks/agent/useManagedAgents', () => ({
   useManagedAgents: () => useManagedAgents(),
+}));
+
+const defaultEngine = vi.hoisted(() => ({
+  agent: null,
+  agentId: 'aionrs' as string | null,
+  setDefault: vi.fn().mockResolvedValue(undefined),
+  loading: false,
+}));
+vi.mock('@renderer/hooks/agent/useDefaultEngine', () => ({
+  useDefaultEngine: () => defaultEngine,
 }));
 
 // Bridge is only touched by user-action handlers, not on render — stub the
@@ -148,6 +158,62 @@ const makeAgents = () => [
 ];
 
 describe('LocalAgents', () => {
+  it('marks the default engine and lets another connected engine be set as the default', async () => {
+    defaultEngine.agentId = 'aionrs';
+    defaultEngine.setDefault.mockClear();
+    const agents = [
+      ...makeAgents(),
+      {
+        id: 'acp-gemini',
+        name: 'Gemini CLI',
+        agent_type: 'acp',
+        agent_source: 'builtin',
+        backend: 'gemini',
+        enabled: true,
+        available: true,
+        installed: true,
+        status: 'online',
+      },
+    ];
+    useManagedAgents.mockReturnValue({ agents, revalidate: vi.fn(), refreshCatalog: vi.fn() });
+
+    render(<LocalAgents />);
+
+    // Aion CLI is the default; Gemini (online) offers the action; Claude (missing) and the custom one do not
+    expect(screen.getAllByText('agent.engine.default')).toHaveLength(1);
+    expect(within(screen.getByTestId('agent-row-aionrs')).getByText('agent.engine.default')).toBeTruthy();
+    expect(within(screen.getByTestId('agent-row-aionrs')).queryByText('agent.engine.setDefault')).toBeNull();
+    expect(within(screen.getByTestId('agent-row-acp-claude')).queryByText('agent.engine.setDefault')).toBeNull();
+
+    fireEvent.click(within(screen.getByTestId('agent-row-acp-gemini')).getByText('agent.engine.setDefault'));
+    await waitFor(() => expect(defaultEngine.setDefault).toHaveBeenCalledWith('acp-gemini'));
+  });
+
+  it('warns and keeps the page usable when setting the default fails', async () => {
+    defaultEngine.agentId = 'aionrs';
+    defaultEngine.setDefault.mockRejectedValueOnce(new Error('offline'));
+    const agents = [
+      ...makeAgents(),
+      {
+        id: 'acp-gemini',
+        name: 'Gemini CLI',
+        agent_type: 'acp',
+        agent_source: 'builtin',
+        backend: 'gemini',
+        enabled: true,
+        available: true,
+        installed: true,
+        status: 'online',
+      },
+    ];
+    useManagedAgents.mockReturnValue({ agents, revalidate: vi.fn(), refreshCatalog: vi.fn() });
+
+    render(<LocalAgents />);
+    fireEvent.click(within(screen.getByTestId('agent-row-acp-gemini')).getByText('agent.engine.setDefault'));
+
+    await waitFor(() => expect(messageError).toHaveBeenCalled());
+  });
+
   it('runs the health probe and shows a success toast after an official-agent test connection succeeds', async () => {
     const refreshCatalog = vi.fn().mockResolvedValue(undefined);
     useManagedAgents.mockReturnValue({ agents: makeAgents(), revalidate: vi.fn(), refreshCatalog });

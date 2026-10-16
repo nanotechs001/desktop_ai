@@ -95,6 +95,25 @@ describe('useGuidAssistantSelection', () => {
     });
   });
 
+  it('selects an assistant bound to the default engine when nothing was selected before', async () => {
+    mockAssistants = [
+      assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),
+      assistantFixture({ id: 'assistant-claude', runtimeKey: 'claude', source: 'builtin', sortOrder: 2 }),
+    ];
+
+    const { result } = renderHook(() =>
+      useGuidAssistantSelection({
+        resetAssistant: false,
+        defaultEngineId: 'agent-claude',
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedAssistantId).toBe('assistant-claude');
+    });
+    expect(result.current.defaultAssistantId).toBe('assistant-claude');
+  });
+
   it('restores the last selected guid assistant before falling back to the aionrs default', async () => {
     mockAssistants = [
       assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),

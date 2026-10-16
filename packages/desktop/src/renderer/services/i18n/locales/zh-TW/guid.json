@@ -13,5 +13,9 @@
     "specifyWorkspace": "選擇專案資料夾",
     "searchPlaceholder": "搜尋專案…",
     "noProject": "不使用專案"
+  },
+  "noEngine": {
+    "message": "請先在 設定 → 引擎 中連接 AI 帳號。",
+    "action": "開啟引擎設定"
   }
 }

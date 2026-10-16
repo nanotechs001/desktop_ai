@@ -56,5 +56,12 @@
     "initializingTooltip": "El agente se está inicializando. Reconéctalo cuando esté listo",
     "processingTooltip": "Espera a que termine la respuesta actual antes de reconectar"
   },
-  "claudeLauncherSkipped": "Has definido tu propio comando de Claude, por lo que AionUi no añadió sus protecciones del navegador."
+  "claudeLauncherSkipped": "Has definido tu propio comando de Claude, por lo que AionUi no añadió sus protecciones del navegador.",
+  "engine": {
+    "default": "Predeterminado",
+    "setDefault": "Establecer como predeterminado",
+    "useDefault": "Usar el predeterminado",
+    "rebindFailed": "No se pudo actualizar el motor de {{name}}.",
+    "rebindListFailed": "No se pudieron cargar tus Agents para actualizar su motor."
+  }
 }

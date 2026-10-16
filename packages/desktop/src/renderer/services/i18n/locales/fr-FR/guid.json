@@ -13,5 +13,9 @@
     "specifyWorkspace": "Sélectionnez le dossier du projet",
     "searchPlaceholder": "Rechercher des projets…",
     "noProject": "Aucun projet"
+  },
+  "noEngine": {
+    "message": "Connectez un compte IA dans Paramètres → Moteur.",
+    "action": "Ouvrir les paramètres du moteur"
   }
 }

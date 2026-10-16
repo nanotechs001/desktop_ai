@@ -33,6 +33,20 @@ vi.mock('@/common', () => ({
   },
 }));
 
+const engineConfig = vi.hoisted(() => {
+  const store = new Map<string, unknown>();
+  return {
+    store,
+    configService: {
+      get: (key: string) => store.get(key),
+      set: vi.fn(async (key: string, value: unknown) => {
+        store.set(key, value);
+      }),
+    },
+  };
+});
+vi.mock('@/common/config/configService', () => ({ configService: engineConfig.configService }));
+
 // Mock react-i18next
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -127,6 +141,7 @@ describe('useAssistantEditor', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    engineConfig.store.clear();
     (ipcBridge.assistants.get.invoke as any).mockResolvedValue(mockAssistantDetail);
     (ipcBridge.fs.listAvailableSkills.invoke as any).mockResolvedValue([]);
     (ipcBridge.mcpService.listServers.invoke as any).mockResolvedValue([
@@ -713,5 +728,159 @@ describe('useAssistantEditor', () => {
     expect(ipcBridge.assistants.create.invoke).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+  });
+  describe('engine pinning', () => {
+    const userAssistant: AssistantListItem = {
+      id: 'a1',
+      name: 'Existing',
+      agent_id: 'agent-claude',
+      sort_order: 1,
+      source: 'user',
+      enabled: true,
+    };
+    const enginePinWrites = () =>
+      engineConfig.configService.set.mock.calls.filter(([key]) => key === 'agent.enginePins');
+
+    it('starts a new Agent on the default engine without pinning it', async () => {
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'new-id' });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, defaultEngineId: 'agent-default' }));
+
+      await act(async () => {
+        await result.current.handleCreate();
+      });
+      act(() => result.current.setEditName('Fresh'));
+
+      expect(result.current.editAgent).toBe('agent-default');
+      expect(result.current.editUsesDefault).toBe(true);
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(ipcBridge.assistants.create.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ agent_id: 'agent-default' })
+      );
+      expect(enginePinWrites()).toEqual([]);
+    });
+
+    it('pins a new Agent when a specific engine is chosen', async () => {
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'new-id' });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, defaultEngineId: 'agent-default' }));
+
+      await act(async () => {
+        await result.current.handleCreate();
+      });
+      act(() => {
+        result.current.setEditName('Pinned');
+        result.current.chooseEngine('agent-gemini');
+      });
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(ipcBridge.assistants.create.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ agent_id: 'agent-gemini' })
+      );
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({ 'new-id': 'agent-gemini' });
+    });
+
+    it('opens a pinned Agent as pinned and an unpinned one as following the default', async () => {
+      engineConfig.store.set('agent.enginePins', { a1: 'agent-claude' });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, defaultEngineId: 'agent-default' }));
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      expect(result.current.editUsesDefault).toBe(false);
+      expect(result.current.editAgent).toBe('agent-claude');
+
+      await act(async () => {
+        await result.current.handleEdit({ ...userAssistant, id: 'a2' });
+      });
+      expect(result.current.editUsesDefault).toBe(true);
+    });
+
+    it('re-binds an Agent to the default engine and clears its pin when it goes back to "Use default"', async () => {
+      engineConfig.store.set('agent.enginePins', { a1: 'agent-claude', other: 'agent-gemini' });
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant, defaultEngineId: 'agent-default' })
+      );
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      act(() => result.current.followDefaultEngine());
+      expect(result.current.editAgent).toBe('agent-default');
+      expect(result.current.editUsesDefault).toBe(true);
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(ipcBridge.assistants.update.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a1', agent_id: 'agent-default' })
+      );
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({ other: 'agent-gemini' });
+    });
+
+    it('pins an existing Agent that moves to a specific engine', async () => {
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant, defaultEngineId: 'agent-default' })
+      );
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      act(() => result.current.chooseEngine('agent-gemini'));
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(ipcBridge.assistants.update.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a1', agent_id: 'agent-gemini' })
+      );
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({ a1: 'agent-gemini' });
+    });
+
+    it('does not touch pins when an unpinned Agent keeps following the default', async () => {
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant, defaultEngineId: 'agent-default' })
+      );
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(ipcBridge.assistants.update.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a1', agent_id: 'agent-default' })
+      );
+      expect(enginePinWrites()).toEqual([]);
+    });
+
+    it('leaves a generated (bare CLI) assistant on its own engine', async () => {
+      const generated: AssistantListItem = { ...userAssistant, id: 'bare:claude', source: 'generated' };
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: generated.id });
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, activeAssistant: generated, defaultEngineId: 'agent-default' })
+      );
+
+      await act(async () => {
+        await result.current.handleEdit(generated);
+      });
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(ipcBridge.assistants.update.invoke).toHaveBeenCalledWith(
+        expect.not.objectContaining({ agent_id: expect.anything() })
+      );
+      expect(enginePinWrites()).toEqual([]);
+    });
   });
 });

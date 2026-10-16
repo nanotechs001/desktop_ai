@@ -56,5 +56,12 @@
     "initializingTooltip": "代理正在初始化，請稍後再重新連接",
     "processingTooltip": "請等目前回覆結束後再重新連接"
   },
-  "claudeLauncherSkipped": "你已設定自己的 Claude 指令，因此 AionUi 未加入瀏覽器防護措施。"
+  "claudeLauncherSkipped": "你已設定自己的 Claude 指令，因此 AionUi 未加入瀏覽器防護措施。",
+  "engine": {
+    "default": "預設",
+    "setDefault": "設為預設",
+    "useDefault": "使用預設",
+    "rebindFailed": "無法更新 {{name}} 的引擎。",
+    "rebindListFailed": "無法載入你的 Agent 以更新其引擎。"
+  }
 }

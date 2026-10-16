@@ -13,5 +13,9 @@
     "specifyWorkspace": "Select project folder",
     "searchPlaceholder": "Search projects…",
     "noProject": "No Project"
+  },
+  "noEngine": {
+    "message": "Connect an AI account in Settings → Engine.",
+    "action": "Open Engine settings"
   }
 }

@@ -12,6 +12,7 @@ import { resolveLocaleKey } from '@/common/utils';
 import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
 
 import { useInputFocusRing } from '@/renderer/hooks/chat/useInputFocusRing';
+import { useDefaultEngine } from '@/renderer/hooks/agent/useDefaultEngine';
 import { appendPromptToDraft } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { getFuzzyMatchIndices, useSlashCommandController } from '@/renderer/hooks/chat/useSlashCommandController';
 import { openExternalUrl } from '@/renderer/utils/platform';
@@ -35,7 +36,7 @@ import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
 import { appendSpeechTranscript } from '@/renderer/hooks/system/useSpeechInput';
 import { useLiveTranscriptInsertion } from '@/renderer/hooks/system/useLiveTranscriptInsertion';
 import { ArrowRightUp } from '@icon-park/react';
-import { Button, ConfigProvider } from '@arco-design/web-react';
+import { Alert, Button, ConfigProvider } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -137,7 +138,13 @@ const GuidPage: React.FC = () => {
   const navState = location.state as GuidNavigationState | null;
   const resetAssistantRequested = navState?.resetAssistant === true;
   const preselectAssistantId = navState?.selectedAssistantId;
+  // Agents already run on the default engine (kept bound by useDefaultEngine),
+  // so there is no engine picker here; the default only seeds which Agent is
+  // preselected, and with no engine at all there is nothing to send to.
+  const defaultEngine = useDefaultEngine();
+  const noEngine = !defaultEngine.loading && defaultEngine.agentId === null;
   const agentSelection = useGuidAssistantSelection({
+    defaultEngineId: defaultEngine.agentId,
     resetAssistant: resetAssistantRequested,
     preselectAssistantId,
     locationKey: location.key,
@@ -285,6 +292,8 @@ const GuidPage: React.FC = () => {
     localeKey,
   });
 
+  const sendDisabled = send.isButtonDisabled || noEngine;
+
   // --- Coordinated handlers (depend on multiple hooks) ---
   const handleInputChange = useCallback(
     (value: string) => {
@@ -304,11 +313,11 @@ const GuidPage: React.FC = () => {
         // Empty input is allowed — it creates an empty conversation ("start
         // chat"). Mirror the send button's gate so Enter and click behave
         // identically (blocked only while loading or with no assistant).
-        if (send.isButtonDisabled) return;
+        if (sendDisabled) return;
         send.sendMessageHandler();
       }
     },
-    [send.isButtonDisabled, send.sendMessageHandler, slashController]
+    [sendDisabled, send.sendMessageHandler, slashController]
   );
 
   const handleSelectAssistant = useCallback(
@@ -642,7 +651,7 @@ const GuidPage: React.FC = () => {
         <SpeechInputButton onLiveTranscript={handleLiveTranscript} onTranscript={handleSpeechTranscript} />
       }
       loading={guidInput.loading}
-      isButtonDisabled={send.isButtonDisabled}
+      isButtonDisabled={sendDisabled}
       onSend={send.sendMessageHandler}
     />
   );
@@ -671,6 +680,22 @@ const GuidPage: React.FC = () => {
           <div className={styles.heroHeader}>
             <p className='text-2xl font-semibold mb-0 text-t-primary text-center'>{t('conversation.welcome.title')}</p>
           </div>
+
+          {noEngine ? (
+            <Alert
+              data-testid='guid-no-engine'
+              className='mb-12px w-full'
+              type='warning'
+              content={t('guid.noEngine.message', {
+                defaultValue: 'Connect an AI account in Settings → Engine.',
+              })}
+              action={
+                <Button size='mini' type='primary' onClick={() => navigate('/settings/agent')}>
+                  {t('guid.noEngine.action', { defaultValue: 'Open Engine settings' })}
+                </Button>
+              }
+            />
+          ) : null}
 
           <AssistantSelectionArea
             selectedAssistantId={agentSelection.selectedAssistantId}

@@ -56,5 +56,12 @@
     "initializingTooltip": "Aracı başlatılıyor. Hazır olduğunda yeniden bağlanın",
     "processingTooltip": "Yeniden bağlanmadan önce mevcut yanıtın bitmesini bekleyin"
   },
-  "claudeLauncherSkipped": "Kendi Claude komutunuzu ayarladığınız için AionUi tarayıcı korumalarını eklemedi."
+  "claudeLauncherSkipped": "Kendi Claude komutunuzu ayarladığınız için AionUi tarayıcı korumalarını eklemedi.",
+  "engine": {
+    "default": "Varsayılan",
+    "setDefault": "Varsayılan yap",
+    "useDefault": "Varsayılanı kullan",
+    "rebindFailed": "{{name}} için motor güncellenemedi.",
+    "rebindListFailed": "Motorlarını güncellemek için Agent'larınız yüklenemedi."
+  }
 }

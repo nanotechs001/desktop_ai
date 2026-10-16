@@ -13,5 +13,9 @@
     "specifyWorkspace": "选择项目文件夹",
     "searchPlaceholder": "搜索项目…",
     "noProject": "不使用项目"
+  },
+  "noEngine": {
+    "message": "请先在 设置 → 引擎 中连接一个 AI 账号。",
+    "action": "打开引擎设置"
   }
 }

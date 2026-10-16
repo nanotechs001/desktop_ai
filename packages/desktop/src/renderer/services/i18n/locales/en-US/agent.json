@@ -56,5 +56,12 @@
     "initializingTooltip": "The agent is initializing. Reconnect when it is ready",
     "processingTooltip": "Wait for the current reply to finish before reconnecting"
   },
-  "claudeLauncherSkipped": "You set your own Claude command, so AionUi did not add its browser safeguards."
+  "claudeLauncherSkipped": "You set your own Claude command, so AionUi did not add its browser safeguards.",
+  "engine": {
+    "default": "Default",
+    "setDefault": "Set as default",
+    "useDefault": "Use default",
+    "rebindFailed": "Could not update the engine for {{name}}.",
+    "rebindListFailed": "Could not load your Agents to update their engine."
+  }
 }

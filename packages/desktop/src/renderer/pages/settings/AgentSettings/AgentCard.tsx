@@ -18,26 +18,26 @@ import {
 } from '@/renderer/utils/model/agentTypes';
 import { BoundAssistantStack } from './BoundAssistants';
 
+type AgentCardBaseProps = {
+  agent: ManagedAgent;
+  boundAssistants: Assistant[];
+  onTestConnection: () => void;
+  onConfigure: () => void;
+  isTesting?: boolean;
+  /** This engine is the default one new Agents run on. */
+  isDefault?: boolean;
+  /** Present only when the engine can be made the default. */
+  onSetDefault?: () => void;
+};
+
 type AgentCardProps =
-  | {
-      type: 'official';
-      agent: ManagedAgent;
-      boundAssistants: Assistant[];
-      onTestConnection: () => void;
-      onConfigure: () => void;
-      isTesting?: boolean;
-    }
-  | {
+  | (AgentCardBaseProps & { type: 'official' })
+  | (AgentCardBaseProps & {
       type: 'custom';
-      agent: ManagedAgent;
-      boundAssistants: Assistant[];
-      onTestConnection: () => void;
-      onConfigure: () => void;
-      isTesting?: boolean;
       onEdit: () => void;
       onDelete: () => void;
       onToggle: (enabled: boolean) => void;
-    };
+    });
 
 // Card-facing status, finer-grained than the backend's management status:
 // the probe reaches `session/new`, so an offline agent that returned
@@ -104,7 +104,7 @@ const statusLabelKey = (display: DisplayStatus) => {
 const AgentCard: React.FC<AgentCardProps> = (props) => {
   const { t } = useTranslation();
   const logos = useAgentLogos();
-  const { agent, boundAssistants, onTestConnection, onConfigure, isTesting } = props;
+  const { agent, boundAssistants, onTestConnection, onConfigure, isTesting, isDefault, onSetDefault } = props;
 
   const isCustom = props.type === 'custom';
   const isDisabled = isCustom && agent.enabled === false;
@@ -157,6 +157,16 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
             >
               {t(statusLabelKey(displayStatus))}
             </Tag>
+            {isDefault ? (
+              <Tag
+                data-testid={`agent-row-default-${agent.id}`}
+                size='small'
+                color='arcoblue'
+                className='flex-shrink-0'
+              >
+                {t('agent.engine.default', { defaultValue: 'Default' })}
+              </Tag>
+            ) : null}
             {diagnostics && (
               <Tooltip content={diagnostics}>
                 <Typography.Text className='flex-shrink-0 text-11px text-t-secondary'>ⓘ</Typography.Text>
@@ -168,6 +178,17 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
 
       <div className='ms-12px flex flex-shrink-0 items-center gap-8px' onClick={stop}>
         <BoundAssistantStack assistants={boundAssistants} />
+        {onSetDefault && !isDefault ? (
+          <Button
+            data-testid={`agent-row-set-default-${agent.id}`}
+            size='small'
+            type='outline'
+            onClick={onSetDefault}
+            className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+          >
+            {t('agent.engine.setDefault', { defaultValue: 'Set as default' })}
+          </Button>
+        ) : null}
         <Button
           data-testid={`agent-row-test-${agent.id}`}
           size='small'

@@ -23,6 +23,9 @@ import PromptsSection from './editor/PromptsSection';
 import DefaultsSection from './editor/DefaultsSection';
 import RulesSection from './editor/RulesSection';
 
+/** Select value for "follow the default engine"; never a real engine id. */
+const USE_DEFAULT_ENGINE = '__use_default_engine__';
+
 export type AssistantEditorSectionsProps = {
   editor: AssistantEditorViewModel;
   activeAssistant: AssistantListItem | null;
@@ -98,6 +101,12 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
       </Avatar>
     );
   };
+  const renderUseDefaultLabel = () => (
+    <span className='flex items-center gap-8px'>
+      <span>{t('agent.engine.useDefault', { defaultValue: 'Use default' })}</span>
+      <span className='truncate text-t-tertiary'>{agent.defaultEngineName}</span>
+    </span>
+  );
   const editRecommendedPromptsText = prompts.text;
   const setEditRecommendedPromptsText = prompts.setText;
   const defaultModelMode = defaults.model.mode;
@@ -448,15 +457,17 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
               <span className='inline-flex shrink-0 items-center text-t-tertiary'>
                 <Robot theme='outline' size='14' />
               </span>
-              <span>{t('settings.assistantMainAgent', { defaultValue: 'Agent' })}</span>
+              <span>{t('settings.assistantMainAgent', { defaultValue: 'Engine' })}</span>
             </span>
           </div>
           <div className='min-w-0 flex-1'>
             <Select
               className='w-full'
               getPopupContainer={getEditorSelectPopupContainer}
-              value={editAgent}
-              onChange={(value) => setEditAgent(value as string)}
+              value={agent.usesDefault && agent.defaultEngineName ? USE_DEFAULT_ENGINE : editAgent}
+              onChange={(value) =>
+                value === USE_DEFAULT_ENGINE ? agent.followDefault() : setEditAgent(value as string)
+              }
               disabled={isGenerated}
               data-testid='select-assistant-agent'
               onVisibleChange={(visible) => {
@@ -487,6 +498,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
                 </div>
               }
               renderFormat={(_option, value) => {
+                if (value === USE_DEFAULT_ENGINE) return renderUseDefaultLabel();
                 const selected = availableBackends.find((item) => item.id === value);
                 if (!selected) return (value as string) ?? '';
                 return (
@@ -497,6 +509,9 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
                 );
               }}
             >
+              {agent.defaultEngineName ? (
+                <Select.Option value={USE_DEFAULT_ENGINE}>{renderUseDefaultLabel()}</Select.Option>
+              ) : null}
               {filteredBackends.map((option) => (
                 <Select.Option key={option.id} value={option.id}>
                   <span className='flex items-center gap-8px'>

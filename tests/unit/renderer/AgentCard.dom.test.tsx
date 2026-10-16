@@ -210,3 +210,63 @@ describe('AgentCard (official variant)', () => {
     expect(onConfigure).toHaveBeenCalled();
   });
 });
+
+describe('AgentCard (default engine)', () => {
+  const onlineAgent = {
+    id: 'gemini',
+    name: 'Gemini CLI',
+    agent_type: 'acp',
+    agent_source: 'builtin',
+    backend: 'gemini',
+    enabled: true,
+    installed: true,
+    status: 'online',
+  };
+  const renderWithDefault = (props: { isDefault?: boolean; onSetDefault?: () => void }) =>
+    render(
+      <AgentCard
+        type='official'
+        agent={onlineAgent as never}
+        boundAssistants={[]}
+        onTestConnection={vi.fn()}
+        onConfigure={vi.fn()}
+        {...props}
+      />
+    );
+
+  it('offers "Set as default" on a non-default engine and fires onSetDefault without opening the row', () => {
+    const onSetDefault = vi.fn();
+    const onConfigure = vi.fn();
+    render(
+      <AgentCard
+        type='official'
+        agent={onlineAgent as never}
+        boundAssistants={[]}
+        onTestConnection={vi.fn()}
+        onConfigure={onConfigure}
+        isDefault={false}
+        onSetDefault={onSetDefault}
+      />
+    );
+
+    fireEvent.click(screen.getByText('agent.engine.setDefault'));
+
+    expect(onSetDefault).toHaveBeenCalledTimes(1);
+    expect(onConfigure).not.toHaveBeenCalled();
+    expect(screen.queryByText('agent.engine.default')).toBeNull();
+  });
+
+  it('marks the default engine with a Default tag instead of the action', () => {
+    renderWithDefault({ isDefault: true, onSetDefault: vi.fn() });
+
+    expect(screen.getByText('agent.engine.default')).toBeInTheDocument();
+    expect(screen.queryByText('agent.engine.setDefault')).toBeNull();
+  });
+
+  it('hides the action when the engine cannot be the default', () => {
+    renderWithDefault({ isDefault: false });
+
+    expect(screen.queryByText('agent.engine.setDefault')).toBeNull();
+    expect(screen.queryByText('agent.engine.default')).toBeNull();
+  });
+});

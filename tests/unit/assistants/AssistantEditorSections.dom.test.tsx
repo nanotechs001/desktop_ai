@@ -120,6 +120,8 @@ const createEditor = (overrides: Partial<AssistantEditorViewModel> = {}): Assist
       value: 'claude',
       setValue: vi.fn(),
       availableBackends: [],
+      usesDefault: false,
+      followDefault: vi.fn(),
     },
     prompts: {
       text: '',
@@ -1013,6 +1015,82 @@ describe('AssistantEditorSections', () => {
 
     expect(setDefaultSkillsMode).toHaveBeenCalledWith('fixed');
     expect(setSelectedSkills).toHaveBeenCalledWith(['browse']);
+  });
+
+  describe('engine select', () => {
+    const engines = [backendOption('agent-claude', 'claude', 'Claude'), backendOption('agent-codex', 'codex', 'Codex')];
+
+    it('shows "Use default" with the default engine name while the Agent follows the default', () => {
+      const { container } = renderWithProviders(
+        <AssistantEditorSections
+          editor={createEditor({
+            agent: {
+              value: 'agent-claude',
+              setValue: vi.fn(),
+              availableBackends: engines,
+              usesDefault: true,
+              followDefault: vi.fn(),
+              defaultEngineName: 'Claude',
+            },
+          })}
+          activeAssistant={null}
+        />
+      );
+
+      const select = container.querySelector('[data-testid="select-assistant-agent"]');
+      expect(select?.textContent).toContain('Use default');
+      expect(select?.textContent).toContain('Claude');
+    });
+
+    it('follows the default when "Use default" is chosen and pins when an engine is chosen', async () => {
+      const setValue = vi.fn();
+      const followDefault = vi.fn();
+      renderWithProviders(
+        <AssistantEditorSections
+          editor={createEditor({
+            agent: {
+              value: 'agent-claude',
+              setValue,
+              availableBackends: engines,
+              usesDefault: false,
+              followDefault,
+              defaultEngineName: 'Claude',
+            },
+          })}
+          activeAssistant={null}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('select-assistant-agent'));
+      fireEvent.click(await screen.findByText('Use default'));
+      expect(followDefault).toHaveBeenCalledTimes(1);
+      expect(setValue).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId('select-assistant-agent'));
+      fireEvent.click(await screen.findByText('Codex'));
+      expect(setValue).toHaveBeenCalledWith('agent-codex');
+    });
+
+    it('offers no "Use default" row when there is no default engine', async () => {
+      renderWithProviders(
+        <AssistantEditorSections
+          editor={createEditor({
+            agent: {
+              value: 'agent-claude',
+              setValue: vi.fn(),
+              availableBackends: engines,
+              usesDefault: false,
+              followDefault: vi.fn(),
+            },
+          })}
+          activeAssistant={null}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('select-assistant-agent'));
+      await screen.findByText('Codex');
+      expect(screen.queryByText('Use default')).toBeNull();
+    });
   });
 
   it('uses stronger contrast classes for applies-immediately badges', () => {

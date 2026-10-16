@@ -56,5 +56,12 @@
     "initializingTooltip": "エージェントを初期化中です。完了してから再接続してください",
     "processingTooltip": "現在の返信が完了してから再接続してください"
   },
-  "claudeLauncherSkipped": "独自の Claude コマンドが設定されているため、AionUi はブラウザ保護を追加しませんでした。"
+  "claudeLauncherSkipped": "独自の Claude コマンドが設定されているため、AionUi はブラウザ保護を追加しませんでした。",
+  "engine": {
+    "default": "既定",
+    "setDefault": "既定にする",
+    "useDefault": "既定を使用",
+    "rebindFailed": "{{name}} のエンジンを更新できませんでした。",
+    "rebindListFailed": "エンジンを更新するための Agent を読み込めませんでした。"
+  }
 }

@@ -14,6 +14,7 @@ import {
 import AionModal from '@/renderer/components/base/AionModal';
 import { AionSearchInput } from '@/renderer/components/base';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useDefaultEngine } from '@/renderer/hooks/agent/useDefaultEngine';
 import { useManagedAgents } from '@/renderer/hooks/agent/useManagedAgents';
 import { openExternalUrl } from '@/renderer/utils/platform';
 import { Button, Message, Typography } from '@arco-design/web-react';
@@ -43,6 +44,7 @@ const LocalAgents: React.FC = () => {
   const [agentFilter, setAgentFilter] = useState<AgentAvailabilityFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { assistants } = useAssistantsForAgents();
+  const defaultEngine = useDefaultEngine();
 
   // Management view: includes user-disabled custom agents so they stay
   // listed (greyed) with a working re-enable toggle. `refreshCatalog`
@@ -153,6 +155,24 @@ const LocalAgents: React.FC = () => {
     setEditorVisible(true);
   }, []);
 
+  // A not-yet-installed or disabled engine cannot run anything, so it is not offered as the default.
+  const handleSetDefaultEngine = useCallback(
+    async (agentId: string) => {
+      try {
+        await defaultEngine.setDefault(agentId);
+      } catch (err) {
+        console.error('set default engine failed:', err);
+        Message.error(parseError(err));
+      }
+    },
+    [defaultEngine]
+  );
+  const defaultEngineProps = (agent: ManagedAgent): { isDefault: boolean; onSetDefault?: () => void } => ({
+    isDefault: defaultEngine.agentId === agent.id,
+    onSetDefault:
+      agent.enabled !== false && agent.status !== 'missing' ? () => void handleSetDefaultEngine(agent.id) : undefined,
+  });
+
   const openAgentConfig = useCallback(
     (agentId: string) => {
       navigate(`/settings/agent/${agentId}/repair`);
@@ -204,7 +224,7 @@ const LocalAgents: React.FC = () => {
     <div data-testid='agent-management-page' className='flex flex-col gap-16px'>
       <SettingsPageHeader
         data-testid='agent-management-header'
-        title={t('settings.agents', { defaultValue: 'Agents' })}
+        title={t('settings.agents', { defaultValue: 'Engine' })}
         description={
           <>
             <span>{t('settings.agentManagement.localAgentsDescription')} </span>
@@ -277,6 +297,7 @@ const LocalAgents: React.FC = () => {
               type='official'
               agent={agent}
               boundAssistants={getBoundAssistants(agent, assistants)}
+              {...defaultEngineProps(agent)}
               onTestConnection={() => void handleTestConnection(agent.id)}
               onConfigure={() => openAgentConfig(agent.id)}
               isTesting={testingAgentId === agent.id}
@@ -349,6 +370,7 @@ const LocalAgents: React.FC = () => {
               type='custom'
               agent={agent}
               boundAssistants={getBoundAssistants(agent, assistants)}
+              {...defaultEngineProps(agent)}
               onTestConnection={() => void handleTestConnection(agent.id)}
               onConfigure={() => openAgentConfig(agent.id)}
               isTesting={testingAgentId === agent.id}
