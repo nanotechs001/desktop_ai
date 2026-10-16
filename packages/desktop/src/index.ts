@@ -354,6 +354,12 @@ const scheduleBackendMigrations = (): void => {
       const { runBackendMigrations } = await import('./process/utils/runBackendMigrations');
       await runBackendMigrations(ProcessConfig);
       console.info('[AionUi] runBackendMigrations completed');
+      void import('./process/services/agentBrowser/assistantRules')
+        .then(({ ensureBrowserRuleInAssistants, backendAssistantRuleDeps }) =>
+          ensureBrowserRuleInAssistants(backendAssistantRuleDeps)
+        )
+        .then((summary) => console.info('[AionUi] Browser rule sync:', summary))
+        .catch((error) => console.error('[AionUi] Browser rule sync failed:', error));
     } catch (error) {
       console.error('[AionUi] Backend migration hook threw:', error);
     }
