@@ -12,6 +12,8 @@ export class FakeRelay {
   readonly requests: Array<{ method: string; params: Params; sessionId?: string }> = [];
   /** `?client=` label of each accepted connection, in order. */
   readonly labels: string[] = [];
+  /** `X-Aion-Conversation` header of each accepted connection, in order. */
+  readonly conversations: Array<string | undefined> = [];
   /** Authorization headers of refused upgrades. */
   readonly refused: Array<string | undefined> = [];
   readonly sockets = new Set<WebSocket>();
@@ -30,7 +32,11 @@ export class FakeRelay {
         return ok;
       },
     });
-    relay.server.on('connection', (ws, req) => relay.onConnection(ws, req.url ?? '/'));
+    relay.server.on('connection', (ws, req) => {
+      const conversation = req.headers['x-aion-conversation'];
+      relay.conversations.push(typeof conversation === 'string' ? conversation : undefined);
+      relay.onConnection(ws, req.url ?? '/');
+    });
     await once(relay.server, 'listening');
     return relay;
   }

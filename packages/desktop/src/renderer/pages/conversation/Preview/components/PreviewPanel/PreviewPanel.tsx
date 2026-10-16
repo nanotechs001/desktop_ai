@@ -41,7 +41,7 @@ import OfficeDocPreview from '../viewers/OfficeDocViewer';
 import PptViewer from '../viewers/PptViewer';
 import CodeEditor from '../editors/CodeEditor';
 import URLViewer from '../viewers/URLViewer';
-import BrowserTabLayer from '../../browser/BrowserTabLayer';
+import { BrowserSlot } from '../../browser/BrowserTabLayer';
 import { MAX_BROWSER_TABS } from '../../browser/constants';
 import {
   PreviewTabs,
@@ -102,7 +102,6 @@ const PreviewPanel: React.FC = () => {
     tabsWithUpdate,
     clearTabUpdate,
     addDomSnippet,
-    updateTab,
     openBrowserTab,
     browserTabLimitHitAt,
     persistQuotaExceededAt,
@@ -1182,9 +1181,6 @@ const PreviewPanel: React.FC = () => {
     };
   });
 
-  // 浏览器 tab 常驻挂载，切 tab 不销毁 webview / Browser tabs stay mounted across switches
-  const browserTabs = tabs.filter((tab) => tab.content_type === 'browser');
-
   return (
     <PreviewToolbarExtrasProvider value={toolbarExtrasContextValue}>
       {/* bg-1 是必需的：面板必须自己铺满底色，不能依赖外层容器
@@ -1271,9 +1267,9 @@ const PreviewPanel: React.FC = () => {
         {/* 预览内容 / Preview content */}
         {renderContent()}
 
-        {/* 浏览器层：常驻挂载，切 tab 不重新加载页面
-            Browser layer: always mounted so tab switches don't reload pages */}
-        <BrowserTabLayer browserTabs={browserTabs} activeTabId={activeTabId} updateTab={updateTab} />
+        {/* 浏览器 tab 的位置：webview 常驻在 app 布局的 BrowserTabLayer 里，覆盖在这里
+            Where the browser tab goes: its webview lives, always mounted, in the layout's BrowserTabLayer */}
+        {content_type === 'browser' && <BrowserSlot />}
 
         {/* Tab 右键菜单 / Tab context menu */}
         {/* eslint-disable-next-line max-len */}

@@ -290,6 +290,52 @@ describe('conversation scopes open the browser pane by default', () => {
     expect(ctx.activeTabId).toBe(docId);
   });
 
+  it('drops only the auto-opened blank tab on the carry, never an agent-owned or user-opened blank tab', () => {
+    localStorage.setItem(
+      previewScopeStorageKey('proj-1'),
+      JSON.stringify({
+        isOpen: true,
+        activeTabId: 'a',
+        tabs: [{ id: 'a', title: 'a.md', content: '# a', content_type: 'markdown', metadata: { title: 'a.md' } }],
+      })
+    );
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    const [autoOpened] = ctx.tabs.map((tab) => tab.id);
+    act(() => ctx.openBrowserTab());
+    const userBlank = ctx.activeTabId;
+    act(() => ctx.openBrowserTab());
+    const agentBlank = ctx.activeTabId as string;
+    act(() => ctx.updateTab(agentBlank, { metadata: { agentOwned: true } }));
+
+    act(() => ctx.closePreviewIfScopeChanged('proj-1', { ...OPEN_BROWSER, carryFromScope: '/ws/a' }));
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(['a', userBlank, agentBlank]);
+    expect(ctx.tabs.map((tab) => tab.id)).not.toContain(autoOpened);
+  });
+
+  it("keeps the workspace's user close on the carry when the project's saved state has none", () => {
+    localStorage.setItem(
+      previewScopeStorageKey('proj-1'),
+      JSON.stringify({
+        isOpen: true,
+        activeTabId: 'a',
+        tabs: [{ id: 'a', title: 'a.md', content: '# a', content_type: 'markdown', metadata: { title: 'a.md' } }],
+      })
+    );
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.collapsePreview());
+
+    act(() => ctx.closePreviewIfScopeChanged('proj-1', { ...OPEN_BROWSER, carryFromScope: '/ws/a' }));
+
+    expect(ctx.isOpen).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedScope('proj-1')).toMatchObject({ isOpen: false, userClosed: true });
+  });
+
   it('carries a user close across the workspace to project switch', () => {
     mount();
     enterScope('/ws/a', OPEN_BROWSER);

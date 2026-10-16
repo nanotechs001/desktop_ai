@@ -57,12 +57,18 @@ export const sanitizeClientLabel = (raw: string | null): string =>
 const tokensMatch = (expected: string, given: string): boolean =>
   timingSafeEqual(createHash('sha256').update(expected).digest(), createHash('sha256').update(given).digest());
 
-export type UpgradeVerdict = { ok: true; label: string } | { ok: false; status: string };
+const CONVERSATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** A chat id as the MCP sends it in `X-Aion-Conversation`; undefined unless it matches `[A-Za-z0-9_-]{1,64}`. */
+export const parseConversationId = (raw: unknown): string | undefined =>
+  typeof raw === 'string' && CONVERSATION_ID.test(raw) ? raw : undefined;
+
+export type UpgradeVerdict = { ok: true; label: string; conversationId?: string } | { ok: false; status: string };
 
 /**
  * Vets a WebSocket upgrade, cheapest and most important check first: any `Origin` (a web page) is
  * refused, then a `Host` other than the relay's own address (DNS rebinding), then an unparsable url,
- * then a missing or wrong `Authorization: Bearer <token>`.
+ * then a missing or wrong `Authorization: Bearer <token>`. A malformed `X-Aion-Conversation` is ignored, not refused.
  */
 export function checkUpgrade(req: IncomingMessage, token: string, port: number): UpgradeVerdict {
   if (req.headers.origin !== undefined) return { ok: false, status: '403 Forbidden' };
@@ -76,7 +82,11 @@ export function checkUpgrade(req: IncomingMessage, token: string, port: number):
   const auth = req.headers.authorization ?? '';
   const given = auth.startsWith(BEARER_PREFIX) ? auth.slice(BEARER_PREFIX.length) : '';
   if (!tokensMatch(token, given)) return { ok: false, status: '401 Unauthorized' };
-  return { ok: true, label: sanitizeClientLabel(url.searchParams.get('client')) };
+  return {
+    ok: true,
+    label: sanitizeClientLabel(url.searchParams.get('client')),
+    conversationId: parseConversationId(req.headers['x-aion-conversation']),
+  };
 }
 
 /** Logs instead of crashing on errors of a raw upgrade socket (e.g. the peer reset it mid-handshake). */

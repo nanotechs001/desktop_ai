@@ -37,9 +37,9 @@ import {
 
 export type RelayServerDeps = {
   registry: TargetRegistry;
-  /** Asks the pane to open a browser tab (ipcBridge.browser.openTabRequested). */
-  openTab(url: string): void;
-  /** Resolves with the next browser tab that attaches, in request order; rejects on timeout. */
+  /** Asks the pane to open a browser tab (ipcBridge.browser.openTabRequested) in the agent's chat, when known. */
+  openTab(url: string, conversationId?: string): void;
+  /** Resolves with the next browser tab that attaches, in request order; rejects on timeout or a pane refusal. */
   waitForTab(url: string): Promise<RelayContents>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
@@ -55,6 +55,8 @@ export type RelayHandle = { url: string; token: string; clients(): RelayClient[]
 
 type Connection = {
   client: RelayClient;
+  /** The chat the client's MCP runs for (`X-Aion-Conversation`); undefined for older MCPs and other engines. */
+  conversationId?: string;
   ws: WebSocket;
   actionTimes: number[];
   createTimes: number[];
@@ -171,7 +173,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     let contents: RelayContents;
     try {
       const waiting = deps.waitForTab(url);
-      deps.openTab(url);
+      deps.openTab(url, conn.conversationId);
       contents = await waiting;
     } finally {
       conn.pendingCreates -= 1;
@@ -479,9 +481,10 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     if (request) refuseBusy(conn, request.id);
   };
 
-  const onConnection = (ws: WebSocket, label: string): void => {
+  const onConnection = (ws: WebSocket, label: string, conversationId?: string): void => {
     const conn: Connection = {
       client: { clientId: randomUUID(), label },
+      conversationId,
       ws,
       actionTimes: [],
       createTimes: [],
@@ -513,7 +516,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     const verdict = checkUpgrade(req, token, port);
     if (verdict.ok === false) return refuseUpgrade(socket, verdict.status);
     if (connections.size >= limits.maxConnections) return refuseUpgrade(socket, '503 Service Unavailable');
-    wss.handleUpgrade(req, socket, head, (ws) => onConnection(ws, verdict.label));
+    wss.handleUpgrade(req, socket, head, (ws) => onConnection(ws, verdict.label, verdict.conversationId));
   });
 
   const unsubscribe = [

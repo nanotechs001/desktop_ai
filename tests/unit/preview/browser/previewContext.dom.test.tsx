@@ -246,7 +246,7 @@ describe('PreviewContext browser tab persistence', () => {
 
   it('never restores the agent-owned badge as set', () => {
     // Ownership is a live relay fact; a stored true would show an Agent badge on a user tab after restart.
-    renderProvider();
+    const { unmount } = renderProvider();
     act(() => ctx.closePreviewIfScopeChanged('project-a'));
     act(() => ctx.openBrowserTab('https://example.com'));
     const tabId = browserTabs()[0].id;
@@ -256,6 +256,13 @@ describe('PreviewContext browser tab persistence', () => {
     act(() => ctx.closePreviewIfScopeChanged('project-b'));
 
     expect(readScope('project-a').tabs[0].metadata.agentOwned).toBe(false);
+    // Within the session the tab never died (it stayed mounted in the background), so it is still the agent's.
+    act(() => ctx.closePreviewIfScopeChanged('project-a'));
+    expect(browserTabs()[0].metadata?.agentOwned).toBe(true);
+
+    act(() => ctx.closePreviewIfScopeChanged('project-b'));
+    unmount(); // a restart: only the stored copy remains
+    renderProvider();
     act(() => ctx.closePreviewIfScopeChanged('project-a'));
     expect(browserTabs()[0].metadata?.agentOwned).toBe(false);
   });

@@ -27,6 +27,7 @@ import { useProjectPanelCollapse } from '@renderer/hooks/ui/useProjectPanelColla
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
+import BrowserTabLayer from '@renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHistoryContext';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
@@ -401,6 +402,9 @@ const Layout: React.FC<{
       <NavigationHistoryProvider>
         <div className='app-shell flex flex-col size-full min-h-0'>
           <Titlebar workspaceAvailable={workspaceAvailable} />
+          {/* Every chat's browser tabs, mounted once for the app's lifetime: closing the panel, leaving
+              for settings or another chat only hides them (an agent may be working in one). */}
+          <BrowserTabLayer />
           {/* 移动端左侧边栏蒙板 / Mobile left sider backdrop */}
           {isMobile && !collapsed && (
             <div className='fixed inset-0 bg-black/30 z-90' onClick={() => setCollapsed(true)} aria-hidden='true' />

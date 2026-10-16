@@ -22,6 +22,7 @@ const h = vi.hoisted(() => {
         confirmRequested: emitter(),
         getConfirmRequests: provider('getConfirmRequests'),
         replyConfirm: provider('replyConfirm'),
+        refuseTab: provider('refuseTab'),
       },
       browser: { openTabRequested: emitter(), closeTabRequested: emitter() },
     },
@@ -74,10 +75,10 @@ const call = (name: string, args: Record<string, unknown> = {}) => {
 const ownership = async (id: number): Promise<TabOwnership | undefined> =>
   ((await call('getOwnership')).data as TabOwnership[]).find((t) => t.webContentsId === id);
 
-const connect = async (relay: Services, label: string) => {
+const connect = async (relay: Services, label: string, headers: Record<string, string> = {}) => {
   const url = new URL(relay.url);
   url.searchParams.set('client', label);
-  const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${relay.token}` } });
+  const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${relay.token}`, ...headers } });
   sockets.push(ws);
   await new Promise((resolve, reject) => {
     ws.once('open', resolve);
@@ -155,6 +156,32 @@ describe('agent browser services: tabs', () => {
     expect((await created).result).toEqual({ targetId: 'wc-7' });
     const latest = (emits.at(-1)?.[0] ?? []) as TabOwnership[];
     expect(latest[0]?.owner).toMatchObject({ label: 'claude' });
+  });
+
+  it("asks the pane for the tab in the agent's chat; a tab-cap refusal fails createTarget at once with the specific error", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: 'https://a.test/' });
+    await vi.waitFor(() =>
+      expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledWith({
+        url: 'https://a.test/',
+        background: false,
+        conversationId: 'conv-1',
+      })
+    );
+
+    expect(await call('refuseTab', { url: 'https://a.test/', max: 10 })).toEqual({ success: true });
+
+    expect((await created).error?.message).toBe(
+      'The browser has too many tabs open (max 10). Close some tabs and try again.'
+    );
+  });
+
+  it('validates a tab refusal and ignores one nobody is waiting for', async () => {
+    await start();
+    expect(await call('refuseTab', { url: 5, max: 10 })).toMatchObject({ success: false, msg: 'Invalid arguments' });
+    expect(await call('refuseTab', { url: 'https://a.test/', max: 0 })).toMatchObject({ success: false });
+    expect(await call('refuseTab', { url: 'https://nobody.test/', max: 10 })).toEqual({ success: true });
   });
 
   it('never claims a user tab opened during the wait, and pairs two agents by url', async () => {

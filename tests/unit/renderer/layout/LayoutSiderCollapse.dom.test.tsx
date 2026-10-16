@@ -41,6 +41,7 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
   },
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
+vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
 }));

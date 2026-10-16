@@ -89,8 +89,12 @@ const wsUrl = (handle: RelayHandle, query: Record<string, string>): string => {
   return url.toString();
 };
 
-const connect = async (handle: RelayHandle, label = 'claude'): Promise<TestClient> => {
-  const ws = new WebSocket(wsUrl(handle, { client: label }), { headers: bearer(handle.token) });
+const connect = async (
+  handle: RelayHandle,
+  label = 'claude',
+  headers: Record<string, string> = {}
+): Promise<TestClient> => {
+  const ws = new WebSocket(wsUrl(handle, { client: label }), { headers: { ...bearer(handle.token), ...headers } });
   sockets.push(ws);
   await new Promise((resolve, reject) => {
     ws.once('open', resolve);
@@ -209,9 +213,33 @@ describe('relay server: targets', () => {
 
     const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
 
-    expect(openTab).toHaveBeenCalledWith('https://example.com');
+    expect(openTab).toHaveBeenCalledWith('https://example.com', undefined);
     expect(reply.result).toEqual({ targetId: 'wc-41' });
     expect(registry.ownership(41)?.owner).toMatchObject({ label: 'my agent' });
+  });
+
+  it("Target.createTarget names the client's chat (X-Aion-Conversation) to the pane; none when absent or malformed", async () => {
+    const handle = await start();
+    let nextId = 50;
+    nextTab = () => {
+      const tab = new FakeContents(nextId++);
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    const named = await connect(handle, 'a', { 'X-Aion-Conversation': 'conv_A-1' });
+    const plain = await connect(handle, 'b');
+    const malformed = await connect(handle, 'c', { 'X-Aion-Conversation': 'conv/../x' });
+
+    const create = (client: TestClient) => client.send('Target.createTarget', { url: 'https://example.com' });
+    expect((await create(named)).error).toBeUndefined();
+    expect((await create(plain)).error).toBeUndefined();
+    expect((await create(malformed)).error).toBeUndefined();
+
+    expect(openTab.mock.calls).toEqual([
+      ['https://example.com', 'conv_A-1'],
+      ['https://example.com', undefined],
+      ['https://example.com', undefined],
+    ]);
   });
 
   it('Target.createTarget refuses non-web, metadata and app-internal urls without opening anything', async () => {

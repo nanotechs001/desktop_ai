@@ -13,7 +13,14 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from '../browser/constants';
 import { isBrowserMcpActivity, isBrowserMcpSettled } from '../browser/agentActivity';
 import { maybeNotifyFirstAgentBrowserUse } from '../browser/firstUseNotice';
-import { listPersistedPreviewScopeKeys, previewScopeStorageKey, type PreviewScopeKey } from './previewScope';
+import {
+  listPersistedPreviewScopeKeys,
+  previewScopeOfConversation,
+  previewScopeStorageKey,
+  type PreviewScopeKey,
+} from './previewScope';
+import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
+import { enterScope, leaveScope, liveBrowserTabs, type BackgroundTab } from './backgroundTabs';
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { onPreviewWatchChange, reconcilePreviewWatch, resetPreviewWatch } from './previewWatchStore';
@@ -117,6 +124,12 @@ export interface PreviewContextValue {
   isMaximized: boolean;
   tabs: PreviewTab[]; // 所有打开的 tabs
   activeTabId: string | null; // 当前激活的 tab ID
+  /**
+   * Browser tabs whose webviews stay mounted, hidden unless on screen: this scope's, plus other
+   * scopes' up to a total cap (so closing the panel or switching chats never kills a page or an
+   * agent's work in it). In a stable order; see `backgroundTabs.ts`.
+   */
+  liveBrowserTabs: PreviewTab[];
 
   // 获取当前激活的 tab / Get active tab
   activeTab: PreviewTab | null;
@@ -559,6 +572,29 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
   }
 };
 
+/** A fresh tab id; browser ids sort by creation time, which keeps their webviews' DOM order stable. */
+const createTabId = (type: PreviewContentType): string =>
+  `${type}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+/** `tab` with an {@link PreviewTabPatch} applied: an empty title never erases a good one. */
+const patchTab = (tab: PreviewTab, patch: PreviewTabPatch): PreviewTab => ({
+  ...tab,
+  ...(typeof patch.title === 'string' && patch.title ? { title: patch.title } : {}),
+  ...(typeof patch.content === 'string' ? { content: patch.content } : {}),
+  ...(patch.metadata ? { metadata: { ...tab.metadata, ...patch.metadata } } : {}),
+});
+
+/** The scope a chat's tabs live in; null when it cannot be told (unknown chat, failed lookup). */
+const scopeOfConversation = async (conversationId: string): Promise<PreviewScopeKey> => {
+  try {
+    const conversation = await getConversationOrNull(conversationId);
+    return conversation ? previewScopeOfConversation(conversation) : null;
+  } catch (error) {
+    console.warn('[PreviewContext] could not look up the chat of an agent tab:', error);
+    return null;
+  }
+};
+
 export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // State starts empty; the active scope's persisted state is loaded on the first
   // `closePreviewIfScopeChanged` (per-project restore, see switchScope below).
@@ -568,6 +604,15 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // The preview scope currently loaded into state (project id / workspace / null).
   const currentScopeRef = useRef<PreviewScopeKey>(null);
+  // Other scopes' browser tabs, kept mounted (hidden); the ref is always the latest value.
+  const [backgroundTabs, setBackgroundTabs] = useState<BackgroundTab[]>([]);
+  const backgroundRef = useRef<BackgroundTab[]>([]);
+  const setBackground = useCallback((next: BackgroundTab[]) => {
+    backgroundRef.current = next;
+    setBackgroundTabs(next);
+  }, []);
+  // The blank tab a conversation route opened only because its scope was empty (see the scope carry).
+  const autoOpenedTabIdRef = useRef<string | null>(null);
   // Whether the user closed the current scope's panel (persisted with the scope).
   const userClosedRef = useRef(false);
   // Mirror activeTabId in a ref so setTabs updaters can read the latest value
@@ -765,7 +810,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const openPreview = useCallback(
-    (new_content: string, type: PreviewContentType, meta?: PreviewMetadata, options?: OpenPreviewOptions) => {
+    (new_content: string, type: PreviewContentType, meta?: PreviewMetadata, options?: OpenPreviewOptions): string => {
       /**
        * 所有决策都在调用 setTabs 之前基于 tabsRef 做完，updater 只负责按决策产出
        * 新数组。
@@ -842,7 +887,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         : null;
 
       // 生成唯一 ID / Generate unique ID
-      const newTabId = `${type}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const newTabId = createTabId(type);
       const targetTabId = existingTab?.id ?? replaceTarget?.id ?? cappedTarget?.id ?? newTabId;
 
       setTabs((prevTabs) => {
@@ -891,6 +936,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setActiveTabId(targetTabId);
       setIsOpen(true);
       userClosedRef.current = false;
+      return targetTabId;
     },
     [extractFileName, findPreviewTabInList]
   );
@@ -908,27 +954,71 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
    * points, and they must agree on the blank address and fallback title.
    */
   const openBrowserTab = useCallback(
-    (url?: string) => {
-      openPreview(url?.trim() || BROWSER_BLANK_URL, 'browser');
+    (url?: string): string => openPreview(url?.trim() || BROWSER_BLANK_URL, 'browser'),
+    [openPreview]
+  );
+
+  /** Opens a requested tab in the scope on screen; false at the tab cap. An agent's tab is marked as its own. */
+  const openRequestedTabOnScreen = useCallback(
+    (url: string, fromAgent: boolean): boolean => {
+      if (tabsRef.current.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) {
+        setBrowserTabLimitHitAt(Date.now());
+        return false;
+      }
+      openPreview(url.trim() || BROWSER_BLANK_URL, 'browser', fromAgent ? { agentOwned: true } : undefined);
+      return true;
     },
     [openPreview]
   );
 
-  // Main process asked for a new browser tab (target=_blank / window.open from a page, or an extension).
-  // At the cap it is refused rather than reusing the oldest tab: a page must not replace a tab the user
-  // has open. Only user-initiated opens (openBrowserTab) reuse. `background` is ignored for now.
-  // `?.` only tolerates test mocks that omit `browser`; production always defines the namespace.
+  /**
+   * Opens an agent's tab in a scope that is not on screen: stored there (shown, and the panel reopened,
+   * when the user opens that chat) and mounted hidden meanwhile so the agent can work in it. False at
+   * that scope's tab cap.
+   */
+  const openAgentTabInBackground = useCallback(
+    (scope: string, url: string): boolean => {
+      const stored = loadScopeState(scope);
+      const scopeTabs = enterScope(backgroundRef.current, scope, stored.tabs).tabs;
+      if (scopeTabs.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) return false;
+      const tab: PreviewTab = {
+        id: createTabId('browser'),
+        content: url,
+        content_type: 'browser',
+        title: BROWSER_TAB_FALLBACK_TITLE,
+        metadata: { agentOwned: true },
+        isDirty: false,
+        originalContent: url,
+      };
+      persistScopeState(scope, { isOpen: true, tabs: [...scopeTabs, tab], activeTabId: tab.id });
+      setBackground([...backgroundRef.current, { scope, tab, since: Date.now() }]);
+      return true;
+    },
+    [setBackground]
+  );
+
+  // Main process asked for a new browser tab (target=_blank / window.open from a page, an extension, or an
+  // agent's Target.createTarget). At the cap it is refused rather than reusing the oldest tab: a page must
+  // not replace a tab the user has open (only user-initiated opens reuse), and a waiting agent is told at
+  // once. An agent's tab opens in its own chat's scope, whichever chat is on screen; a request without a
+  // chat (pages, older MCPs) opens on screen. `background` is ignored for now.
+  // `?.` only tolerates test mocks that omit `browser`/`agentBrowser`; production always defines them.
   useEffect(
     () =>
-      ipcBridge.browser?.openTabRequested.on(({ url }) => {
-        const browserTabCount = tabsRef.current.filter((tab) => tab.content_type === 'browser').length;
-        if (browserTabCount >= MAX_BROWSER_TABS) {
-          setBrowserTabLimitHitAt(Date.now());
-          return;
-        }
-        openBrowserTab(url);
+      ipcBridge.browser?.openTabRequested.on(({ url, conversationId }) => {
+        void (async () => {
+          const scope = conversationId ? await scopeOfConversation(conversationId) : null;
+          const opened =
+            scope != null && scope !== currentScopeRef.current
+              ? openAgentTabInBackground(scope, url)
+              : openRequestedTabOnScreen(url, Boolean(conversationId));
+          if (opened) return;
+          ipcBridge.agentBrowser?.refuseTab
+            .invoke({ url, max: MAX_BROWSER_TABS })
+            .catch((error: unknown) => console.warn('[PreviewContext] could not refuse a tab request:', error));
+        })();
       }),
-    [openBrowserTab]
+    [openAgentTabInBackground, openRequestedTabOnScreen]
   );
 
   /**
@@ -978,7 +1068,9 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTabs([]);
     setActiveTabId(null);
     setDomSnippets([]);
-  }, []);
+    // Other chats' live tabs go too: the only caller is logout, and they belong to the same account.
+    setBackground([]);
+  }, [setBackground]);
 
   // Switch the preview scope (project id / workspace fallback / null). Persists
   // the leaving scope's state, then restores the entering scope's persisted open
@@ -993,7 +1085,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const reopenUnlessUserClosed = () => {
         if (!options?.openBrowserIfEmpty || scopeKey == null || isOpen || userClosedRef.current) return;
         if (tabsRef.current.length > 0) setIsOpen(true);
-        else openBrowserTab();
+        else autoOpenedTabIdRef.current = openBrowserTab();
       };
       if (prev === scopeKey) {
         reopenUnlessUserClosed();
@@ -1003,21 +1095,27 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Same conversation, new scope key: merge the live tabs into the project's saved ones, never over them.
         currentScopeRef.current = scopeKey;
         const saved = loadScopeState(scopeKey);
-        const hasSaved = saved !== EMPTY_SCOPE_STATE; // loadScopeState returns it exactly when nothing is stored
-        // The untouched blank browser tab only exists because the workspace scope was empty.
+        const { tabs: savedTabs, rest } = enterScope(backgroundRef.current, scopeKey, saved.tabs);
+        // The untouched blank tab the route opened only because the workspace scope was empty; never a
+        // blank tab the user or an agent opened.
         const isFiller = (tab: PreviewTab) =>
-          saved.tabs.length > 0 && tab.content_type === 'browser' && tab.content === BROWSER_BLANK_URL;
+          savedTabs.length > 0 &&
+          tab.id === autoOpenedTabIdRef.current &&
+          tab.content === BROWSER_BLANK_URL &&
+          !tab.metadata?.agentOwned;
         const liveTabs = tabs.filter(
           (tab) =>
             !isFiller(tab) &&
-            !saved.tabs.some((savedTab) => savedTab.id === tab.id) &&
-            !findPreviewTabInList(saved.tabs, tab.content_type, tab.content, tab.metadata)
+            !savedTabs.some((savedTab) => savedTab.id === tab.id) &&
+            !findPreviewTabInList(savedTabs, tab.content_type, tab.content, tab.metadata)
         );
-        const merged = [...saved.tabs, ...liveTabs];
+        const merged = [...savedTabs, ...liveTabs];
         const nextActive = merged.some((tab) => tab.id === activeTabId)
           ? activeTabId
           : (saved.activeTabId ?? merged[0]?.id ?? null);
-        const userClosed = hasSaved ? saved.userClosed === true : userClosedRef.current;
+        // A user close in either scope holds; the project's saved state only ever stores `true`.
+        const userClosed = saved.userClosed === true || userClosedRef.current;
+        setBackground(rest);
         setTabs(merged);
         setActiveTabId(nextActive);
         activeTabIdRef.current = nextActive;
@@ -1042,30 +1140,44 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       resetPreviewWatch();
       currentScopeRef.current = scopeKey;
       const loaded = scopeKey != null ? loadScopeState(scopeKey) : EMPTY_SCOPE_STATE;
+      // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return.
+      const background =
+        prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
+      const entered = scopeKey != null ? enterScope(background, scopeKey, loaded.tabs) : { tabs: [], rest: background };
+      const activeId = loaded.activeTabId ?? entered.tabs[0]?.id ?? null;
+      setBackground(entered.rest);
       // Subscriptions for these tabs come from the tabs effect, which this setTabs
       // triggers — restored tabs are subscribed exactly like freshly opened ones.
-      setTabs(loaded.tabs);
-      setActiveTabId(loaded.activeTabId);
-      activeTabIdRef.current = loaded.activeTabId;
+      setTabs(entered.tabs);
+      setActiveTabId(activeId);
+      activeTabIdRef.current = activeId;
       setIsOpen(loaded.isOpen);
       setIsMaximized(false);
       setDomSnippets([]);
       userClosedRef.current = loaded.userClosed === true;
       if (options?.openBrowserIfEmpty && scopeKey != null && !userClosedRef.current) {
-        if (loaded.tabs.length > 0) {
+        if (entered.tabs.length > 0) {
           setIsOpen(true);
         } else {
           // openPreview decides from tabsRef, which only catches up on the next render.
-          tabsRef.current = loaded.tabs;
-          openBrowserTab();
+          tabsRef.current = entered.tabs;
+          autoOpenedTabIdRef.current = openBrowserTab();
         }
       }
     },
-    [isOpen, tabs, activeTabId, openBrowserTab, findPreviewTabInList]
+    [isOpen, tabs, activeTabId, openBrowserTab, findPreviewTabInList, setBackground]
   );
 
   const closeTab = useCallback(
     (tabId: string) => {
+      // A background tab (another chat's; closed by its agent or an extension) leaves that scope too.
+      const parked = backgroundRef.current.find((entry) => entry.tab.id === tabId);
+      if (parked) {
+        setBackground(backgroundRef.current.filter((entry) => entry !== parked));
+        const stored = loadScopeState(parked.scope);
+        persistScopeState(parked.scope, { ...stored, tabs: stored.tabs.filter((tab) => tab.id !== tabId) });
+        return;
+      }
       setTabs((prevTabs) => {
         // Clean up mtime record for the closed tab (keyed by ChatFileRef identity)
         const tabToClose = prevTabs.find((tab) => tab.id === tabId);
@@ -1091,7 +1203,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return newTabs;
       });
     },
-    [activeTabId]
+    [activeTabId, setBackground]
   );
 
   const closePreviewByIdentity = useCallback(
@@ -1134,21 +1246,22 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [activeTabId]
   );
 
-  const updateTab = useCallback((tabId: string, patch: PreviewTabPatch) => {
-    if (!tabId) return;
+  const updateTab = useCallback(
+    (tabId: string, patch: PreviewTabPatch) => {
+      if (!tabId) return;
 
-    setTabs((prevTabs) =>
-      prevTabs.map((tab) => {
-        if (tab.id !== tabId) return tab;
-
-        const next: PreviewTab = { ...tab };
-        if (typeof patch.title === 'string' && patch.title) next.title = patch.title;
-        if (typeof patch.content === 'string') next.content = patch.content;
-        if (patch.metadata) next.metadata = { ...tab.metadata, ...patch.metadata };
-        return next;
-      })
-    );
-  }, []);
+      // Background tabs keep reporting (title, address, agent badge) while another chat is on screen.
+      if (backgroundRef.current.some((entry) => entry.tab.id === tabId)) {
+        setBackground(
+          backgroundRef.current.map((entry) =>
+            entry.tab.id === tabId ? { ...entry, tab: patchTab(entry.tab, patch) } : entry
+          )
+        );
+      }
+      setTabs((prevTabs) => prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab)));
+    },
+    [setBackground]
+  );
 
   /**
    * Re-read a tab's content from disk, replacing what is on screen.
@@ -1458,11 +1571,14 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return unsubscribe;
   }, []);
 
+  const liveTabs = useMemo(() => liveBrowserTabs(tabs, backgroundTabs), [tabs, backgroundTabs]);
+
   const previewContextValue = useMemo(() => {
     return {
       isOpen,
       isMaximized,
       tabs,
+      liveBrowserTabs: liveTabs,
       activeTabId,
       activeTab,
       openPreview,
@@ -1495,6 +1611,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     isOpen,
     isMaximized,
     tabs,
+    liveTabs,
     activeTabId,
     activeTab,
     openPreview,

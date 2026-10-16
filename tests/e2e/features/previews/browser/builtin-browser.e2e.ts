@@ -244,12 +244,20 @@ test.describe('Built-in browser behaves like a regular browser', () => {
   });
 
   test.afterEach(async ({ electronApp, page }) => {
-    // Close every tab with the browser's own Cmd/Ctrl+W so tabs do not pile up across tests.
-    await Promise.all(
-      guestPages(electronApp, page).map((guest) =>
-        guest.isClosed() ? undefined : pressShortcut(electronApp, guest.url(), 'w').catch(() => undefined)
-      )
-    );
+    // Close every tab with the browser's own Cmd/Ctrl+W so tabs do not pile up across tests. Addressed by
+    // webContents, not url: other chats' tabs stay mounted in the background, and several may be about:blank.
+    // One at a time and focused first, like a user: a key sent while another guest holds focus lands there.
+    await electronApp.evaluate(async ({ webContents }, modifier) => {
+      for (const tab of webContents.getAllWebContents().filter((wc) => wc.getType() === 'webview')) {
+        tab.focus();
+        for (const type of ['rawKeyDown', 'keyUp'] as const) {
+          tab.sendInputEvent({ type, keyCode: 'w', modifiers: [modifier] });
+        }
+        for (let waited = 0; !tab.isDestroyed() && waited < 2000; waited += 50) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+    }, MOD);
     await expect.poll(() => page.locator('webview').count(), { timeout: 10_000 }).toBe(0);
   });
 

@@ -117,6 +117,22 @@ describe('logging out leaves nothing behind for the next account', () => {
     expect(ctx.tabs).toHaveLength(0);
   });
 
+  it("discards other chats' browser tabs too, which stay mounted in the background", () => {
+    render(
+      <PreviewProvider>
+        <Probe />
+      </PreviewProvider>
+    );
+    act(() => ctx.closePreviewIfScopeChanged(SCOPE));
+    act(() => ctx.openBrowserTab('https://mail.example/inbox'));
+    act(() => ctx.closePreviewIfScopeChanged('/ws/other'));
+    expect(ctx.liveBrowserTabs).toHaveLength(1);
+
+    simulateLogout();
+
+    expect(ctx.liveBrowserTabs).toHaveLength(0);
+  });
+
   // The half that matters: the provider outlives logout, so if it still holds tabs
   // its persist effect writes them back and the sweep is undone.
   it('does not write the tabs back to storage afterwards', () => {

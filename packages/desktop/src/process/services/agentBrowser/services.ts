@@ -29,6 +29,12 @@ const OFF: Reply = { success: false, msg: 'Agent browser control is off' };
 const UNKNOWN_TAB: Reply = { success: false, msg: 'No such browser tab' };
 const INVALID: Reply = { success: false, msg: 'Invalid arguments' };
 const UNKNOWN_CONFIRM: Reply = { success: false, msg: 'No such confirmation' };
+/** The pane's per-chat tab cap is small; a bigger `max` means a broken caller. */
+const MAX_REPORTED_TAB_CAP = 100;
+
+/** What an agent is told when the pane refuses its new tab at the tab cap. */
+const tabCapMessage = (max: number): string =>
+  `The browser has too many tabs open (max ${max}). Close some tabs and try again.`;
 
 /** Pauses agent input on a tab the user types or clicks in (agent-owned or shared tabs only). */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
@@ -55,7 +61,11 @@ const guard = async <D>(handler: () => Reply<D>): Promise<Reply<D>> => {
 };
 
 /** The pane's IPC: answered always, with an error while the relay is off. WebUI clients count as the owner. */
-const registerProviders = (getRegistry: () => TargetRegistry | null, confirms: PendingConfirms): void => {
+const registerProviders = (
+  getRegistry: () => TargetRegistry | null,
+  confirms: PendingConfirms,
+  getWaiter: () => CreateTabWaiter<Electron.WebContents> | null
+): void => {
   ipcBridge.agentBrowser.getOwnership.provider(() =>
     guard(() => {
       const registry = getRegistry();
@@ -89,6 +99,14 @@ const registerProviders = (getRegistry: () => TargetRegistry | null, confirms: P
       return confirms.reply(id, allow, alwaysForSite) ? { success: true } : UNKNOWN_CONFIRM;
     })
   );
+  // The pane refused a requested tab at its cap: the agent waiting for it gets the reason now, not a 15 s timeout.
+  ipcBridge.agentBrowser.refuseTab.provider(({ url, max }) =>
+    guard(() => {
+      if (typeof url !== 'string' || !Number.isInteger(max) || max < 1 || max > MAX_REPORTED_TAB_CAP) return INVALID;
+      getWaiter()?.refuse(url, new Error(tabCapMessage(max)));
+      return { success: true };
+    })
+  );
 };
 
 /**
@@ -98,8 +116,13 @@ const registerProviders = (getRegistry: () => TargetRegistry | null, confirms: P
  */
 export async function startAgentBrowserServices(options: AgentBrowserOptions): Promise<AgentBrowserServices | null> {
   let active: TargetRegistry | null = null;
+  let activeWaiter: CreateTabWaiter<Electron.WebContents> | null = null;
   const confirms = new PendingConfirms();
-  registerProviders(() => active, confirms);
+  registerProviders(
+    () => active,
+    confirms,
+    () => activeWaiter
+  );
   if (!options.enabled) return null;
 
   const registry = createTargetRegistry();
@@ -115,7 +138,12 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
 
   const relay = await startRelayServer({
     registry,
-    openTab: (url) => ipcBridge.browser.openTabRequested.emit({ url, background: false }),
+    openTab: (url, conversationId) =>
+      ipcBridge.browser.openTabRequested.emit({
+        url,
+        background: false,
+        ...(conversationId ? { conversationId } : {}),
+      }),
     waitForTab: (url) => waiter.wait(url, TAB_CREATE_TIMEOUT_MS),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
@@ -123,5 +151,6 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     blockedPorts: options.blockedPorts,
   });
   active = registry;
+  activeWaiter = waiter;
   return { url: relay.url, token: relay.token, close: relay.close };
 }

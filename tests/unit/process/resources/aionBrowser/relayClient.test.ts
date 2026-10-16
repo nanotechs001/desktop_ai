@@ -35,6 +35,15 @@ describe('RelayClient', () => {
     expect(relay.refused).toEqual([]);
   });
 
+  it('names its chat to the relay (X-Aion-Conversation from AIONUI_CONVERSATION_ID), only when the id is well formed', async () => {
+    const named = { ...relay.env, AIONUI_CONVERSATION_ID: 'conv_A-1' };
+    await newClient(named).connect(named);
+    await newClient().connect(relay.env);
+    const malformed = { ...relay.env, AIONUI_CONVERSATION_ID: 'a\nb' };
+    await newClient(malformed).connect(malformed);
+    expect(relay.conversations).toEqual(['conv_A-1', undefined, undefined]);
+  });
+
   it('falls back to the plain label and caps the label at 40 characters', async () => {
     await newClient().connect(relay.env);
     await newClient(relay.env, () => 'a'.repeat(100)).connect(relay.env);

@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 import ChatConversation from './components/ChatConversation';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
-import { previewScopeKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
+import { previewScopeOfConversation } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { setCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
@@ -36,8 +36,7 @@ const ChatConversationIndex: React.FC = () => {
   enterScopeRef.current = closePreviewIfScopeChanged;
   const lastEnteredRef = useRef<{ conversationId: string; scope: string | null } | null>(null);
   const conversationId = data?.id;
-  const workspace = (data?.extra as { workspace?: string } | undefined)?.workspace ?? null;
-  const scope = data ? previewScopeKey(data.project_id ?? null, workspace) : null;
+  const scope = data ? previewScopeOfConversation(data) : null;
   useEffect(() => {
     if (!conversationId) return;
     const last = lastEnteredRef.current;

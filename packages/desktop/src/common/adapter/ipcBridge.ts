@@ -1477,8 +1477,11 @@ export const deepLink = {
 // ---------------------------------------------------------------------------
 
 export const browser = {
-  // main → renderer: a browser page asked for a new tab (target=_blank, window.open)
-  openTabRequested: bridge.buildEmitter<{ url: string; background: boolean }>('browser.open-tab-requested'),
+  // main → renderer: a browser page or an agent asked for a new tab (target=_blank, window.open, Target.createTarget).
+  // conversationId: the agent's chat; its tab opens in that chat's pane, even when another chat is on screen.
+  openTabRequested: bridge.buildEmitter<{ url: string; background: boolean; conversationId?: string }>(
+    'browser.open-tab-requested'
+  ),
   getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
   openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),
   showDownloadInFolder: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.show-download-in-folder'),
@@ -1519,6 +1522,8 @@ export const agentBrowser = {
   replyConfirm: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; alwaysForSite: boolean }>(
     'agent-browser.reply-confirm'
   ),
+  // the pane refused an openTabRequested at its tab cap (max); an agent waiting for that url fails at once
+  refuseTab: bridge.buildProvider<IBridgeResponse<void>, { url: string; max: number }>('agent-browser.refuse-tab'),
 };
 
 // ---------------------------------------------------------------------------

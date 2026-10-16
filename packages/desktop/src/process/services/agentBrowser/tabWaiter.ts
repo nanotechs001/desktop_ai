@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-type Waiter<T> = { url: string; resolve: (contents: T) => void };
+type Waiter<T> = { url: string; resolve: (contents: T) => void; reject: (error: Error) => void };
 
 /** A new tab that reports its navigations; Electron's WebContents satisfies it. */
 export type NavigatingContents = {
@@ -37,7 +37,7 @@ export class CreateTabWaiter<T> {
     return this.pending.length > 0;
   }
 
-  /** Resolves with the tab that first navigates to `url`, or rejects with 'tab-create-timeout'. */
+  /** Resolves with the tab that first navigates to `url`; rejects with 'tab-create-timeout' or a {@link refuse} error. */
   wait(url: string, timeoutMs: number): Promise<T> {
     return new Promise((resolve, reject) => {
       const waiter: Waiter<T> = {
@@ -45,6 +45,10 @@ export class CreateTabWaiter<T> {
         resolve: (contents) => {
           clearTimeout(timer);
           resolve(contents);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
         },
       };
       const timer = setTimeout(() => {
@@ -54,6 +58,16 @@ export class CreateTabWaiter<T> {
       }, timeoutMs);
       this.pending = [...this.pending, waiter];
     });
+  }
+
+  /** The pane will not open `url` (e.g. its tab cap): the oldest request for it fails now with `error`. */
+  refuse(url: string, error: Error): boolean {
+    const normalized = normalizeTabUrl(url);
+    const match = this.pending.find((entry) => entry.url === normalized);
+    if (!match) return false;
+    this.pending = this.pending.filter((entry) => entry !== match);
+    match.reject(error);
+    return true;
   }
 
   /** Offers a new tab whose first main-frame navigation went to `url`; true when a waiter took it. */

@@ -32,6 +32,15 @@ export function previewScopeKey(
   return projectId || workspace || null;
 }
 
+/** The preview scope a conversation's tabs live in: its project, else its workspace (see {@link previewScopeKey}). */
+export function previewScopeOfConversation(conversation: {
+  project_id?: string | null;
+  extra?: unknown;
+}): PreviewScopeKey {
+  const workspace = (conversation.extra as { workspace?: string } | undefined)?.workspace ?? null;
+  return previewScopeKey(conversation.project_id ?? null, workspace);
+}
+
 /**
  * localStorage key prefix for a scope's persisted preview state.
  *

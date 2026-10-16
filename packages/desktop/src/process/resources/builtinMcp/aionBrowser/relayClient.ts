@@ -7,6 +7,7 @@
 // Runs inside the standalone aion-browser MCP process: no electron imports, and nothing that pulls them in.
 import WebSocket from 'ws';
 import { CdpConnection, createWebSocketTransport } from '@process/services/agentBrowser/cdpConnection';
+import { parseConversationId } from '@process/services/agentBrowser/relay/relayTransport';
 import type { ReportedAction } from './actions';
 import { watchFrames } from './frames';
 
@@ -57,10 +58,14 @@ const readRelayEnv = (env: NodeJS.ProcessEnv): { url: URL; token: string } | nul
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-const openSocket = (url: URL, token: string): Promise<WebSocket> =>
+const openSocket = (url: URL, token: string, conversationId: string | undefined): Promise<WebSocket> =>
   new Promise((resolve, reject) => {
     const ws = new WebSocket(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      // X-Aion-Conversation lets the pane open this agent's tabs in its own chat.
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(conversationId ? { 'X-Aion-Conversation': conversationId } : {}),
+      },
       handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
     });
     ws.once('open', () => {
@@ -105,7 +110,7 @@ export class RelayClient {
   private sessionIds = new Map<string, string>();
 
   /**
-   * @param env Source of AION_BROWSER_RELAY_URL / AION_BROWSER_RELAY_TOKEN.
+   * @param env Source of AION_BROWSER_RELAY_URL / AION_BROWSER_RELAY_TOKEN and AIONUI_CONVERSATION_ID (the agent's chat).
    * @param agentName The MCP client's name (from `initialize`), read at each connect for the relay's client label.
    */
   constructor(
@@ -246,7 +251,7 @@ export class RelayClient {
     url.searchParams.set('client', clientLabel(this.agentName()));
     let ws: WebSocket;
     try {
-      ws = await openSocket(url, relay.token);
+      ws = await openSocket(url, relay.token, parseConversationId(this.env.AIONUI_CONVERSATION_ID));
     } catch (error) {
       this.failures += 1;
       this.retryAt = Date.now() + retryDelayMs(this.failures);
