@@ -9,7 +9,7 @@ import { migrateConfigStorage, migrateLegacyMcpConfigToDb, migrateProviders } fr
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { mcpService } from '@/common/adapter/ipcBridge';
 import type { ImageGenerationModelSetting } from '@/common/config/clientSettings';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import {
   removeImageGenerationEnvKeys,
   resolveImageGenerationMcpEnv,
@@ -38,6 +38,9 @@ const BUILTIN_CHROME_DEVTOOLS_NAME = 'chrome-devtools';
  * happens in the side preview panel where the user can watch it.
  */
 const BUILTIN_BROWSER_SCRIPT = 'builtin-mcp-browser';
+
+/** The built-in artifacts MCP: lets every Agent create and revise artifacts the user opens at a local link. */
+const BUILTIN_ARTIFACTS_SCRIPT = 'builtin-mcp-artifacts';
 
 const LEGACY_BACKEND_CLIENT_PREFERENCE_KEYS = [
   'assistants',
@@ -175,18 +178,16 @@ function isSameStdioTransport(left: IMcpServer['transport'], right: IMcpServer['
   );
 }
 
-function buildBuiltinBrowserServer(): McpImportServer {
-  const scriptPath = getBuiltinMcpScriptPath(BUILTIN_BROWSER_SCRIPT);
+function buildBuiltinNodeServer(name: string, script: string, description: string): McpImportServer {
+  const scriptPath = getBuiltinMcpScriptPath(script);
   const serverConfig = {
     command: 'node',
     args: [scriptPath],
   };
 
   return {
-    name: BUILTIN_BROWSER_MCP_NAME,
-    description:
-      "Use AionUi's built-in browser pane: open and manage tabs, and read and act on pages with the tools listed. " +
-      'Sign-in state is shared across tabs and preserved between sessions.',
+    name,
+    description,
     // 默认开启：用户装好即可用，无需任何配置
     // Enabled by default: works out of the box with zero configuration.
     enabled: true,
@@ -196,8 +197,25 @@ function buildBuiltinBrowserServer(): McpImportServer {
       command: serverConfig.command,
       args: serverConfig.args,
     },
-    original_json: JSON.stringify({ mcpServers: { [BUILTIN_BROWSER_MCP_NAME]: serverConfig } }, null, 2),
+    original_json: JSON.stringify({ mcpServers: { [name]: serverConfig } }, null, 2),
   };
+}
+
+function buildBuiltinBrowserServer(): McpImportServer {
+  return buildBuiltinNodeServer(
+    BUILTIN_BROWSER_MCP_NAME,
+    BUILTIN_BROWSER_SCRIPT,
+    "Use AionUi's built-in browser pane: open and manage tabs, and read and act on pages with the tools listed. " +
+      'Sign-in state is shared across tabs and preserved between sessions.'
+  );
+}
+
+function buildBuiltinArtifactsServer(): McpImportServer {
+  return buildBuiltinNodeServer(
+    BUILTIN_ARTIFACTS_MCP_NAME,
+    BUILTIN_ARTIFACTS_SCRIPT,
+    'Create, update and read artifacts (pages, apps, documents, diagrams) the user opens at a local link.'
+  );
 }
 
 function buildDefaultMcpServers(): McpImportServer[] {
@@ -220,6 +238,7 @@ function buildDefaultMcpServers(): McpImportServer[] {
       original_json: JSON.stringify({ mcpServers: { [BUILTIN_CHROME_DEVTOOLS_NAME]: chromeConfig } }, null, 2),
     },
     buildBuiltinBrowserServer(),
+    buildBuiltinArtifactsServer(),
   ];
 }
 
@@ -407,38 +426,32 @@ async function ensureBootstrapMcpServersInDb(configFile: ConfigFile): Promise<vo
    * is decided by name, it is never re-inserted, leaving the browser tools broken with
    * no self-heal. Reconcile against the real path on every startup instead.
    */
-  const existingBrowserServer = existing.find((server) => server.name === BUILTIN_BROWSER_MCP_NAME);
-  let browserServerUpdated = false;
-  if (existingBrowserServer) {
-    const desiredBrowserServer = buildBuiltinBrowserServer();
-    const browserTransportChanged = !isSameStdioTransport(
-      existingBrowserServer.transport,
-      desiredBrowserServer.transport
+  const updatedPathServers: string[] = [];
+  for (const desiredServer of [buildBuiltinBrowserServer(), buildBuiltinArtifactsServer()]) {
+    const existingServer = existing.find((server) => server.name === desiredServer.name);
+    if (!existingServer) continue;
+    const transportChanged = !isSameStdioTransport(existingServer.transport, desiredServer.transport);
+    const jsonChanged = existingServer.original_json !== desiredServer.original_json;
+    if (!transportChanged && !jsonChanged) continue;
+    console.info(
+      '[Migration] %s MCP path drifted, server id: %s, transport changed: %s, json changed: %s',
+      desiredServer.name,
+      existingServer.id,
+      transportChanged ? 'yes' : 'no',
+      jsonChanged ? 'yes' : 'no'
     );
-    const browserJsonChanged = existingBrowserServer.original_json !== desiredBrowserServer.original_json;
-    if (browserTransportChanged || browserJsonChanged) {
-      console.info(
-        '[Migration] browser MCP path drifted, server id: %s, transport changed: %s, json changed: %s',
-        existingBrowserServer.id,
-        browserTransportChanged ? 'yes' : 'no',
-        browserJsonChanged ? 'yes' : 'no'
-      );
-      await mcpService.updateServer.invoke({
-        id: existingBrowserServer.id,
-        data: {
-          transport: desiredBrowserServer.transport,
-          original_json: desiredBrowserServer.original_json,
-        },
-      });
-      browserServerUpdated = true;
-    }
+    await mcpService.updateServer.invoke({
+      id: existingServer.id,
+      data: { transport: desiredServer.transport, original_json: desiredServer.original_json },
+    });
+    updatedPathServers.push(desiredServer.name);
   }
 
   console.info(
-    '[Migration] MCP bootstrap completed, imported %d missing defaults, updated image server: %s, updated browser server: %s, image config source: %s, image enabled: %s',
+    '[Migration] MCP bootstrap completed, imported %d missing defaults, updated image server: %s, updated path-drifted servers: %s, image config source: %s, image enabled: %s',
     missing.length,
     imageServerUpdated ? 'yes' : 'no',
-    browserServerUpdated ? 'yes' : 'no',
+    updatedPathServers.join(',') || 'none',
     imageConfigSource,
     imageConfig?.switch === true ? 'yes' : 'no'
   );
