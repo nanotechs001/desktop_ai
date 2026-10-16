@@ -13,7 +13,7 @@
  */
 
 import type { IConfirmation } from '@/common/chat/chatLib';
-import type { DownloadItem } from '@/common/types/browser';
+import type { DownloadItem, PermissionRequest } from '@/common/types/browser';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import { buildListTasksPath } from './teamTaskPath';
@@ -1488,6 +1488,14 @@ export const browser = {
   cancelDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.cancel-download'),
   // main → renderer: the full download list, on every change (progress is throttled in main)
   downloadsChanged: bridge.buildEmitter<DownloadItem[]>('browser.downloads-changed'),
+  getPermissionRequests: bridge.buildProvider<IBridgeResponse<PermissionRequest[]>, void>(
+    'browser.get-permission-requests'
+  ),
+  replyPermission: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; remember: boolean }>(
+    'browser.reply-permission'
+  ),
+  // main → renderer: every open site-permission prompt, on every change
+  permissionRequested: bridge.buildEmitter<PermissionRequest[]>('browser.permission-requested'),
 };
 
 // ---------------------------------------------------------------------------

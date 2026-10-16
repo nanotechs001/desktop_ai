@@ -6,6 +6,7 @@
 
 import React, { useCallback } from 'react';
 import type { PreviewTab, PreviewTabPatch } from '../context/PreviewContext';
+import PermissionPrompt from './BrowserChrome/PermissionPrompt';
 import BrowserViewer from './BrowserViewer';
 
 export interface BrowserTabLayerProps {
@@ -79,6 +80,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
           </div>
         );
       })}
+      <PermissionPrompt />
     </div>
   );
 };

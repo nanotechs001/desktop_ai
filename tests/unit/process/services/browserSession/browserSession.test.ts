@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     fromPartition: vi.fn(() => browserSession),
     installWindowOpenHandler: vi.fn(),
     installDownloads: vi.fn(),
+    installPermissions: vi.fn(),
   };
 });
 
@@ -30,6 +31,8 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('@process/services/browserSession/downloads', () => ({ installDownloads: mocks.installDownloads }));
+
+vi.mock('@process/services/browserSession/permissions', () => ({ installPermissions: mocks.installPermissions }));
 
 vi.mock('@process/services/browserSession/windowOpen', () => ({
   installWindowOpenHandler: mocks.installWindowOpenHandler,
@@ -75,6 +78,7 @@ beforeEach(() => {
   mocks.browserSession.webRequest.onBeforeSendHeaders.mockClear();
   mocks.installWindowOpenHandler.mockClear();
   mocks.installDownloads.mockClear();
+  mocks.installPermissions.mockClear();
 });
 
 afterEach(() => {
@@ -139,6 +143,8 @@ describe('initBrowserSession', () => {
     expect(mocks.browserSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads).toHaveBeenCalledWith(mocks.browserSession);
+    expect(mocks.installPermissions).toHaveBeenCalledTimes(1);
+    expect(mocks.installPermissions).toHaveBeenCalledWith(mocks.browserSession);
     expect(mocks.app.on.mock.calls.filter(([name]) => name === 'web-contents-created')).toHaveLength(1);
   });
 

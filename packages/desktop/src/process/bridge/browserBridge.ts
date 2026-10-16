@@ -11,6 +11,7 @@ import {
   openDownload,
   showDownloadInFolder,
 } from '@process/services/browserSession/downloads';
+import { getPermissionRequests, replyPermission } from '@process/services/browserSession/permissions';
 
 /** Registers the in-app browser's IPC providers. The download actions return failures instead of throwing. */
 export function initBrowserBridge(): void {
@@ -18,4 +19,8 @@ export function initBrowserBridge(): void {
   ipcBridge.browser.openDownload.provider(({ id }) => openDownload(id));
   ipcBridge.browser.showDownloadInFolder.provider(async ({ id }) => showDownloadInFolder(id));
   ipcBridge.browser.cancelDownload.provider(async ({ id }) => cancelDownload(id));
+  ipcBridge.browser.getPermissionRequests.provider(async () => ({ success: true, data: getPermissionRequests() }));
+  ipcBridge.browser.replyPermission.provider(async ({ id, allow, remember }) =>
+    replyPermission(id, allow, remember) ? { success: true } : { success: false, msg: 'Unknown or expired request' }
+  );
 }

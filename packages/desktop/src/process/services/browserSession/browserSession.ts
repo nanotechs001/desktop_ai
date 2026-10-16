@@ -7,6 +7,7 @@
 import { app, session } from 'electron';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { installDownloads } from './downloads';
+import { installPermissions } from './permissions';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
 import { installWindowOpenHandler } from './windowOpen';
 
@@ -69,6 +70,7 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
   const browserSession = getBrowserSession();
   browserSession.setUserAgent(toChromeUserAgent(app.userAgentFallback));
   installDownloads(browserSession);
+  installPermissions(browserSession);
   browserSession.webRequest.onBeforeSendHeaders({ urls: GOOGLE_URL_FILTER }, (details, callback) => {
     if (!isGoogleHost(details.url)) {
       callback({ requestHeaders: details.requestHeaders });

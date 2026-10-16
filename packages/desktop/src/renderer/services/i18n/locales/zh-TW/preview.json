@@ -186,6 +186,20 @@
       "cancel": "Cancel",
       "failed": "Failed",
       "actionFailed": "Couldn't complete that action"
+    },
+    "permission": {
+      "title": "Site permission",
+      "media": "{{origin}} wants to use your camera and microphone",
+      "mediaCamera": "{{origin}} wants to use your camera",
+      "mediaMicrophone": "{{origin}} wants to use your microphone",
+      "geolocation": "{{origin}} wants to know your location",
+      "notifications": "{{origin}} wants to show notifications",
+      "clipboard": "{{origin}} wants to see text and images copied to the clipboard",
+      "midi": "{{origin}} wants to use your MIDI devices",
+      "other": "{{origin}} wants the \"{{permission}}\" permission",
+      "allow": "Allow",
+      "block": "Block",
+      "remember": "Remember for this site"
     }
   }
 }

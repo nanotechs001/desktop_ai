@@ -15,3 +15,12 @@ export type DownloadItem = {
   /** 0 when the server did not announce a length. */
   totalBytes: number;
 };
+
+/** A site permission prompt waiting for the user's answer. */
+export type PermissionRequest = {
+  id: string;
+  origin: string;
+  permission: string;
+  /** `'video'` / `'audio'` for `media` requests; empty otherwise. */
+  mediaTypes: string[];
+};
