@@ -78,6 +78,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
               onTitleChange={handleTitleChange}
               onFaviconChange={handleFaviconChange}
               onRequestClose={closeTab}
+              active={isActive}
             />
           </div>
         );

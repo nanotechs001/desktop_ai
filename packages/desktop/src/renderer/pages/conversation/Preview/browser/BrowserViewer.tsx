@@ -41,6 +41,8 @@ export interface BrowserViewerProps {
   onFaviconChange: (tabId: string, favicon: string) => void;
   /** 页面内按 Cmd/Ctrl+W 时请求关闭该 tab / The page asked to close this tab (Cmd/Ctrl+W) */
   onRequestClose?: (tabId: string) => void;
+  /** 是否为当前显示的浏览器 tab / Whether this is the browser tab on screen */
+  active?: boolean;
 }
 
 /**
@@ -63,6 +65,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   onTitleChange,
   onFaviconChange,
   onRequestClose,
+  active = false,
 }) => {
   const preview = useOptionalPreviewContext();
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
@@ -171,6 +174,17 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
       }
     });
   }, [webview, tabId, findOpen, preview, onRequestClose, closeFind]);
+
+  // Switching to an already-loaded tab fires no dom-ready, so report the active tab here as well:
+  // extensions (chrome.tabs active tab) and the agent's CDP bridge follow the tab on screen.
+  useEffect(() => {
+    if (!active || !webview) return;
+    const webContentsId = ownWebContentsId(webview);
+    if (webContentsId === null) return;
+    ipcBridge.application.reportBrowserWebContentsId.invoke({ webContentsId }).catch((error: unknown) => {
+      console.warn('[BrowserViewer] could not report the active tab:', error);
+    });
+  }, [active, webview]);
 
   // An extension closed a tab (chrome.tabs.remove); only the webview it names closes.
   useEffect(() => {
