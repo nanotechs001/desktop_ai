@@ -179,6 +179,11 @@ async function main() {
       entryPoints: [path.join(ROOT, 'packages/desktop/src/process/resources/builtinMcp/aionArtifacts/server.ts')],
       outfile: path.join(ROOT, 'out/main/builtin-mcp-artifacts.js'),
     }),
+    esbuild.build({
+      ...SHARED_OPTIONS,
+      entryPoints: [path.join(ROOT, 'packages/desktop/src/process/resources/builtinMcp/aionNotes/server.ts')],
+      outfile: path.join(ROOT, 'out/main/builtin-mcp-notes.js'),
+    }),
   ]);
 }
 

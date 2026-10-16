@@ -7,7 +7,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMcpServer } from '@/common/config/storage';
-import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import {
+  BUILTIN_ARTIFACTS_MCP_NAME,
+  BUILTIN_BROWSER_MCP_NAME,
+  BUILTIN_NOTES_MCP_NAME,
+} from '@/common/config/constants';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
 const createConversationInvokeMock = vi.fn();
@@ -415,6 +419,14 @@ describe('useGuidSend', () => {
       transport: { type: 'stdio', command: 'node' },
     } as IMcpServer;
 
+    const notesServer = {
+      id: 'builtin-notes',
+      name: BUILTIN_NOTES_MCP_NAME,
+      enabled: true,
+      builtin: true,
+      transport: { type: 'stdio', command: 'node' },
+    } as IMcpServer;
+
     const userRecordFor = () => ({ id: 'mcp-user', name: 'User MCP', enabled: true, builtin: false }) as IMcpServer;
 
     const sentSessionServerNames = () =>
@@ -480,7 +492,7 @@ describe('useGuidSend', () => {
 
     it('does not refetch when every built-in session record is already known', async () => {
       const deps = createDeps();
-      deps.availableMcpServers = [...deps.availableMcpServers, browserServer, artifactsServer];
+      deps.availableMcpServers = [...deps.availableMcpServers, browserServer, artifactsServer, notesServer];
 
       const { result } = renderHook(() => useGuidSend(deps));
       await act(async () => {

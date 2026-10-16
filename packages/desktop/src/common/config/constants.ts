@@ -50,6 +50,9 @@ export const BUILTIN_BROWSER_MCP_NAME = 'aionui-browser';
 /** Registered name of the built-in artifacts MCP (create, update and read the user's artifacts). */
 export const BUILTIN_ARTIFACTS_MCP_NAME = 'aionui-artifacts';
 
+/** Registered name of the built-in notes MCP (an Agent saves lessons in its notebook). */
+export const BUILTIN_NOTES_MCP_NAME = 'aionui-notes';
+
 // ===== 文件处理相关常量 =====
 
 /** 临时文件时间戳分隔符 */

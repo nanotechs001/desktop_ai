@@ -69,6 +69,13 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });
 
+  it('tells the agent to save lessons with notes.add and stays within the cap', () => {
+    expect(BROWSER_RULE_TEXT).toContain(
+      'Use `notes.add` to save a short lesson when you learn how the user likes something done or how a site works.'
+    );
+    expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+  });
+
   it('tells the agent to refer to itself as the agent', () => {
     expect(BROWSER_RULE_TEXT).toContain(
       "You are the AionUi agent. Refer to yourself as 'the agent'; do not name your vendor, product or model unless the user asks which model is in use."

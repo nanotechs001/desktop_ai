@@ -9,7 +9,11 @@ import { migrateConfigStorage, migrateLegacyMcpConfigToDb, migrateProviders } fr
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { mcpService } from '@/common/adapter/ipcBridge';
 import type { ImageGenerationModelSetting } from '@/common/config/clientSettings';
-import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import {
+  BUILTIN_ARTIFACTS_MCP_NAME,
+  BUILTIN_BROWSER_MCP_NAME,
+  BUILTIN_NOTES_MCP_NAME,
+} from '@/common/config/constants';
 import {
   removeImageGenerationEnvKeys,
   resolveImageGenerationMcpEnv,
@@ -41,6 +45,9 @@ const BUILTIN_BROWSER_SCRIPT = 'builtin-mcp-browser';
 
 /** The built-in artifacts MCP: lets every Agent create and revise artifacts the user opens at a local link. */
 const BUILTIN_ARTIFACTS_SCRIPT = 'builtin-mcp-artifacts';
+
+/** The built-in notes MCP: lets every Agent save lessons in its notebook. */
+const BUILTIN_NOTES_SCRIPT = 'builtin-mcp-notes';
 
 const LEGACY_BACKEND_CLIENT_PREFERENCE_KEYS = [
   'assistants',
@@ -218,6 +225,14 @@ function buildBuiltinArtifactsServer(): McpImportServer {
   );
 }
 
+function buildBuiltinNotesServer(): McpImportServer {
+  return buildBuiltinNodeServer(
+    BUILTIN_NOTES_MCP_NAME,
+    BUILTIN_NOTES_SCRIPT,
+    "Save short lessons in the Agent's notebook; they are added to the Agent's instructions in new chats."
+  );
+}
+
 function buildDefaultMcpServers(): McpImportServer[] {
   const chromeConfig = {
     command: 'npx',
@@ -239,6 +254,7 @@ function buildDefaultMcpServers(): McpImportServer[] {
     },
     buildBuiltinBrowserServer(),
     buildBuiltinArtifactsServer(),
+    buildBuiltinNotesServer(),
   ];
 }
 
@@ -427,7 +443,7 @@ async function ensureBootstrapMcpServersInDb(configFile: ConfigFile): Promise<vo
    * no self-heal. Reconcile against the real path on every startup instead.
    */
   const updatedPathServers: string[] = [];
-  for (const desiredServer of [buildBuiltinBrowserServer(), buildBuiltinArtifactsServer()]) {
+  for (const desiredServer of [buildBuiltinBrowserServer(), buildBuiltinArtifactsServer(), buildBuiltinNotesServer()]) {
     const existingServer = existing.find((server) => server.name === desiredServer.name);
     if (!existingServer) continue;
     const transportChanged = !isSameStdioTransport(existingServer.transport, desiredServer.transport);

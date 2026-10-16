@@ -6,7 +6,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { IMcpServer, ISessionMcpServer } from '@/common/config/storage';
-import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import {
+  BUILTIN_ARTIFACTS_MCP_NAME,
+  BUILTIN_BROWSER_MCP_NAME,
+  BUILTIN_NOTES_MCP_NAME,
+} from '@/common/config/constants';
 
 const { getClientBusinessSettingMock, mcpServiceMock } = vi.hoisted(() => ({
   getClientBusinessSettingMock: vi.fn(),
@@ -119,6 +123,18 @@ describe('withBrowserMcp', () => {
     name: artifactsRecord.name,
     transport: artifactsRecord.transport,
   };
+  const notesRecord = {
+    id: 'builtin-notes-id',
+    name: BUILTIN_NOTES_MCP_NAME,
+    enabled: true,
+    builtin: true,
+    transport: { type: 'stdio', command: 'node', args: ['notes-mcp.js'] },
+  } as IMcpServer;
+  const notesSession: ISessionMcpServer = {
+    id: notesRecord.id,
+    name: notesRecord.name,
+    transport: notesRecord.transport,
+  };
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -134,14 +150,15 @@ describe('withBrowserMcp', () => {
     expect(result).toEqual([userSession, browserSession]);
   });
 
-  it('new conversations get both aionui-browser and aionui-artifacts', () => {
-    const available = [userRecord, browserRecord, artifactsRecord];
+  it('new conversations get aionui-browser, aionui-artifacts and aionui-notes', () => {
+    const available = [userRecord, browserRecord, artifactsRecord, notesRecord];
     const result = withBrowserMcp([userSession], available);
-    expect(result).toEqual([userSession, browserSession, artifactsSession]);
+    expect(result).toEqual([userSession, browserSession, artifactsSession, notesSession]);
     expect(withBrowserMcp(result, available)).toBe(result);
     expect(warnSpy).not.toHaveBeenCalled();
     expect(isBuiltinSessionMcp(artifactsRecord)).toBe(true);
     expect(isBuiltinSessionMcp({ ...artifactsRecord, builtin: false })).toBe(false);
+    expect(isBuiltinSessionMcp(notesRecord)).toBe(true);
   });
 
   it('does not duplicate it when already selected', () => {
@@ -170,10 +187,11 @@ describe('withBrowserMcp', () => {
       name: impostor.name,
       transport: browserRecord.transport,
     };
-    expect(withBrowserMcp([impostorSession], [impostor, browserRecord, artifactsRecord])).toEqual([
+    expect(withBrowserMcp([impostorSession], [impostor, browserRecord, artifactsRecord, notesRecord])).toEqual([
       impostorSession,
       browserSession,
       artifactsSession,
+      notesSession,
     ]);
     expect(withBrowserMcp([], [impostor])).toEqual([]);
     expect(warnSpy).toHaveBeenCalledTimes(1);

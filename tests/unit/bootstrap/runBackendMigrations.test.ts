@@ -273,5 +273,27 @@ describe('runBackendMigrations', () => {
       expect(updateServerMock.mock.calls.some(([arg]) => arg.id === 'artifacts-server-id')).toBe(false);
       expect(importedNames()).not.toContain('aionui-artifacts');
     });
+
+    it('registers the notes MCP on a fresh install and repairs its drifted path', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      listServersMock.mockResolvedValue([]);
+      await runBackendMigrations(configFile as never);
+      const imported = batchImportServersMock.mock.calls
+        .flatMap(([arg]) => arg.servers as IMcpServer[])
+        .find((server) => server.name === 'aionui-notes');
+      expect(imported).toMatchObject({
+        enabled: true,
+        builtin: true,
+        transport: { type: 'stdio', command: 'node', args: ['/mock/builtin-mcp-notes.js'] },
+      });
+
+      const stale = { type: 'stdio' as const, command: 'node', args: ['/old/builtin-mcp-notes.js'] };
+      listServersMock.mockResolvedValue([
+        artifactsServer({ id: 'notes-server-id', name: 'aionui-notes', transport: stale }),
+      ]);
+      await runBackendMigrations(configFile as never);
+      const call = updateServerMock.mock.calls.find(([arg]) => arg.id === 'notes-server-id');
+      expect(call?.[0].data.transport.args).toEqual(['/mock/builtin-mcp-notes.js']);
+    });
   });
 });

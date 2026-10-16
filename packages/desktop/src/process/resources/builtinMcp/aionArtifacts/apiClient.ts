@@ -9,7 +9,10 @@
  * global fetch, so the standalone MCP bundle needs no Electron.
  */
 
-export const ARTIFACTS_UNAVAILABLE = 'Artifacts are unavailable (local server not running)';
+/** What every call answers while the local server is out of reach; `label` names the service, e.g. `Notes`. */
+export const unavailableMessage = (label: string): string => `${label} are unavailable (local server not running)`;
+
+export const ARTIFACTS_UNAVAILABLE = unavailableMessage('Artifacts');
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -27,15 +30,20 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 
 /**
  * Reads AION_ARTIFACTS_URL, AION_ARTIFACTS_TOKEN and AIONUI_CONVERSATION_ID. With any of them missing every call
- * answers {@link ARTIFACTS_UNAVAILABLE}. Store failures come back as HTTP 200 with `ok:false` and are passed on with
+ * answers {@link unavailableMessage} (for `label`, `Artifacts` by default). Store failures come back as HTTP 200 with `ok:false` and are passed on with
  * the store's message; transport and 4xx failures become short readable messages, never stacks.
  */
-export function createArtifactsApi(env: NodeJS.ProcessEnv, fetchImpl: typeof fetch = fetch): ArtifactsApi {
+export function createArtifactsApi(
+  env: NodeJS.ProcessEnv,
+  fetchImpl: typeof fetch = fetch,
+  label = 'Artifacts'
+): ArtifactsApi {
+  const unavailable = unavailableMessage(label);
   const origin = env.AION_ARTIFACTS_URL?.replace(/\/+$/, '') || null;
   const token = env.AION_ARTIFACTS_TOKEN;
   const conversationId = env.AIONUI_CONVERSATION_ID;
   if (!origin || !token || !conversationId) {
-    return { origin: null, post: async () => ({ ok: false, message: ARTIFACTS_UNAVAILABLE }) };
+    return { origin: null, post: async () => ({ ok: false, message: unavailable }) };
   }
 
   return {
@@ -50,17 +58,17 @@ export function createArtifactsApi(env: NodeJS.ProcessEnv, fetchImpl: typeof fet
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
       } catch {
-        return { ok: false, message: ARTIFACTS_UNAVAILABLE };
+        return { ok: false, message: unavailable };
       }
       const payload = asRecord(await response.json().catch((): unknown => null));
       const message = typeof payload?.message === 'string' ? payload.message : null;
-      if (response.status === 401) return { ok: false, message: 'Artifacts rejected this session (bad token)' };
+      if (response.status === 401) return { ok: false, message: `${label} rejected this session (bad token)` };
       if (response.status === 413) return { ok: false, message: message ?? 'The artifact is too large' };
       if (response.status !== 200 || !payload) {
-        return { ok: false, message: message ?? `Artifacts request failed (HTTP ${response.status})` };
+        return { ok: false, message: message ?? `${label} request failed (HTTP ${response.status})` };
       }
-      if (payload.ok !== true) return { ok: false, message: message ?? 'Artifacts request failed' };
-      if (!asRecord(payload.value)) return { ok: false, message: 'Artifacts returned an unexpected reply' };
+      if (payload.ok !== true) return { ok: false, message: message ?? `${label} request failed` };
+      if (!asRecord(payload.value)) return { ok: false, message: `${label} returned an unexpected reply` };
       return { ok: true, value: payload.value as T };
     },
   };
