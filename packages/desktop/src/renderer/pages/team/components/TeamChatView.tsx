@@ -41,39 +41,16 @@ const EMPTY_TEAM_RUN_VIEW: TeamRunViewState = {
   sessionStopped: false,
 };
 
-const resolveAssistantDisplayName = (
-  conversation: TChatConversation,
-  presetAssistantName: string | null,
-  explicitAssistantName?: string
-): string | undefined => {
-  if (presetAssistantName) return presetAssistantName;
-  const trimmedExplicitAssistantName = explicitAssistantName?.trim();
-  if (trimmedExplicitAssistantName) return trimmedExplicitAssistantName;
-  const extraAgentName = (conversation.extra as { agent_name?: string } | undefined)?.agent_name;
-  if (extraAgentName?.trim()) return extraAgentName.trim();
-  return undefined;
-};
-
 /** Aionrs sub-component manages model selection state without adding a ChatLayout wrapper */
 const AionrsTeamChat: React.FC<{
   conversation: AionrsConversation;
   emptySlot?: React.ReactNode;
-  assistant_name?: string;
   teamSendMessage?: TeamSendOverride;
   teamRuntime?: ReturnType<typeof buildTeamSendRuntime>;
   loadedSkills?: string[];
   loadedMcpServers?: string[];
   loadedMcpStatuses?: IConversationMcpStatus[];
-}> = ({
-  conversation,
-  emptySlot,
-  assistant_name,
-  teamSendMessage,
-  teamRuntime,
-  loadedSkills,
-  loadedMcpServers,
-  loadedMcpStatuses,
-}) => {
+}> = ({ conversation, emptySlot, teamSendMessage, teamRuntime, loadedSkills, loadedMcpServers, loadedMcpStatuses }) => {
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, use_model: modelName } as TProviderWithModel;
@@ -91,7 +68,6 @@ const AionrsTeamChat: React.FC<{
       workspace={conversation.extra.workspace}
       modelSelection={modelSelection}
       emptySlot={emptySlot}
-      agent_name={assistant_name}
       teamSendMessage={teamSendMessage}
       teamRuntime={teamRuntime}
       loadedSkills={loadedSkills}
@@ -170,11 +146,6 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
   const teamSendMessageOverride = team_id ? teamSendMessage : undefined;
   const resolvedAssistantBackend =
     resolveConversationBackend(conversation, assistant_backend || presetAssistantInfo?.backend) || 'claude';
-  const resolvedAssistantName = resolveAssistantDisplayName(
-    conversation,
-    presetAssistantInfo?.name ?? null,
-    assistant_name
-  );
   const slotWork = slot_id ? teamRunView.slotWorkBySlot[slot_id] : undefined;
   // Prefer the event-driven stopped flag so the prompt shows even when the stale
   // slot has no `blocked_reason`; fall back to slot-derived status text otherwise.
@@ -263,7 +234,6 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
             workspace={conversation.extra?.workspace}
             backend={resolvedAssistantBackend}
             session_mode={conversation.extra?.session_mode}
-            agent_name={resolvedAssistantName}
             hideSendBox={resolvedHideSendBox}
             emptySlot={emptySlot}
             teamSendMessage={teamSendMessageOverride}
@@ -279,7 +249,6 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
             key={conversation.id}
             conversation={conversation as AionrsConversation}
             emptySlot={emptySlot}
-            assistant_name={resolvedAssistantName}
             teamSendMessage={teamSendMessageOverride}
             teamRuntime={teamRuntime}
             loadedSkills={capabilitySnapshot?.skills}

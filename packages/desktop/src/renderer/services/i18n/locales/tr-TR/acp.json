@@ -8,7 +8,7 @@
     "failed": "Mesaj gönderilemedi: {{error}}"
   },
   "sendbox": {
-    "placeholder": "{{backend}}'a mesaj gönder..."
+    "placeholder": "Araca mesaj gönder…"
   },
   "image": {
     "download": "İndir",
@@ -18,10 +18,10 @@
     "generated_alt": "Oluşturulan görsel"
   },
   "status": {
-    "connecting": "{{agent}} ajanına bağlanılıyor...",
-    "connected": "{{agent}} ajanına bağlanıldı",
-    "authenticated": "{{agent}} ile kimlik doğrulandı",
-    "session_active": "{{agent}} ile oturum aktif",
+    "connecting": "Araca bağlanılıyor...",
+    "connected": "Aracı bağlandı",
+    "authenticated": "Aracı kimliği doğrulandı",
+    "session_active": "Aracı oturumu etkin",
     "error": "Bağlantı hatası",
     "unknown": "Bilinmeyen durum"
   },

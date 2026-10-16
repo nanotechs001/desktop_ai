@@ -5,61 +5,37 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 import { usePresetAssistantInfo } from '@renderer/hooks/agent/usePresetAssistantInfo';
-import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { Robot } from '@icon-park/react';
+import { agentFromPresetInfo, getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
 
 type Props = {
   senderName: string;
-  /** Sender teammate's conversation id — enables preset-aware avatar resolution via conversation extras. */
+  /** Sender teammate's conversation id — enables Agent avatar resolution via conversation extras. */
   senderConversationId?: string;
-  /** Precomputed backend logo URL (fallback when no preset avatar is found). */
-  backendLogo: string | null;
 };
 
 /**
- * Avatar shown next to a teammate's message bubble. Prefers the sender's preset
- * assistant icon (emoji or svg) over the generic backend logo so preset-backed
- * teammates keep their persona when messaging others.
+ * Avatar shown next to a teammate's message bubble: the sender's Agent avatar, or the robot icon
+ * when it has none. Never the engine's vendor logo.
  */
-const TeammateMessageAvatar: React.FC<Props> = ({ senderName, senderConversationId, backendLogo }) => {
+const TeammateMessageAvatar: React.FC<Props> = ({ senderName, senderConversationId }) => {
+  const { t } = useTranslation();
   // Share the SWR key with AgentChatSlot / TeamAgentIdentity so this hits cache
   // instead of firing another fetch for the same conversation.
   const { data: conversation } = useSWR(senderConversationId ? ['team-conversation', senderConversationId] : null, () =>
     getConversationOrNull(senderConversationId!)
   );
   const { info: presetInfo } = usePresetAssistantInfo(conversation ?? undefined);
-
-  if (presetInfo) {
-    if (presetInfo.isFallback) {
-      return (
-        <span className='w-20px h-20px rounded-full flex items-center justify-center text-12px leading-none bg-fill-2'>
-          <Robot theme='outline' size={12} />
-        </span>
-      );
-    }
-    if (presetInfo.isEmoji) {
-      return (
-        <span className='w-20px h-20px rounded-full flex items-center justify-center text-14px leading-none bg-fill-2'>
-          {presetInfo.logo}
-        </span>
-      );
-    }
-    return (
-      <ThemedLogo src={presetInfo.logo} alt={presetInfo.name} className='w-20px h-20px rounded-full object-contain' />
-    );
-  }
-
-  if (backendLogo) {
-    return <ThemedLogo src={backendLogo} alt={senderName} className='w-20px h-20px rounded-full object-contain' />;
-  }
+  const agent = agentFromPresetInfo(presetInfo);
+  const { avatar } = getAgentPresentation({ name: agent?.name ?? senderName, avatar: agent?.avatar }, t);
 
   return (
-    <div className='w-20px h-20px rounded-full bg-fill-3 flex items-center justify-center text-10px text-t-secondary font-medium'>
-      <Robot theme='outline' size={12} />
-    </div>
+    <span className='w-20px h-20px rounded-full flex items-center justify-center bg-fill-2 text-t-secondary'>
+      {avatar}
+    </span>
   );
 };
 

@@ -8,7 +8,7 @@
     "failed": "发送消息失败：{{error}}"
   },
   "sendbox": {
-    "placeholder": "发送消息到 {{backend}}..."
+    "placeholder": "给代理发送消息…"
   },
   "image": {
     "download": "下载",
@@ -18,10 +18,10 @@
     "generated_alt": "生成的图片"
   },
   "status": {
-    "connecting": "正在连接 {{agent}}...",
-    "connected": "已连接到 {{agent}}",
-    "authenticated": "已通过 {{agent}} 身份验证",
-    "session_active": "{{agent}} 会话活跃中",
+    "connecting": "正在连接代理...",
+    "connected": "代理已连接",
+    "authenticated": "代理已通过身份验证",
+    "session_active": "代理会话活跃中",
     "error": "连接错误",
     "unknown": "未知状态"
   },

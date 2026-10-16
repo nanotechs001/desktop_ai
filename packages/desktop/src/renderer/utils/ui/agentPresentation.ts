@@ -1,0 +1,57 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
+import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
+import { iconColors } from '@/renderer/styles/colors';
+import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
+import { Robot } from '@icon-park/react';
+import type { TFunction } from 'i18next';
+import React from 'react';
+
+/** The user-made Agent a chat belongs to. */
+export type AgentIdentity = { name?: string; avatar?: string };
+
+export type AgentPresentation = { name: string; avatar: React.ReactNode };
+
+const AVATAR_SIZE_PX = 16;
+
+/**
+ * Name and avatar a chat shows for its Agent. Never a vendor or engine name: with no Agent, or an
+ * Agent without a name or avatar, it falls back to "Agent" and the robot icon.
+ */
+export function getAgentPresentation(agent: AgentIdentity | null | undefined, t: TFunction): AgentPresentation {
+  const name = agent?.name?.trim() || t('agent.displayName');
+  const avatar = resolveAssistantAvatar(agent?.avatar);
+
+  if (avatar.kind === 'image') {
+    return {
+      name,
+      avatar: React.createElement(ThemedLogo, {
+        src: avatar.value,
+        alt: `${name} logo`,
+        className: 'block w-16px h-16px object-contain',
+      }),
+    };
+  }
+  if (avatar.kind === 'emoji') {
+    return { name, avatar: React.createElement('span', { className: 'text-14px leading-none' }, avatar.value) };
+  }
+  return {
+    name,
+    avatar: React.createElement(Robot, { theme: 'outline', size: AVATAR_SIZE_PX, fill: iconColors.primary }),
+  };
+}
+
+/**
+ * The Agent a resolved conversation identity names. Only assistant records are Agents; identities
+ * usePresetAssistantInfo derives from `extra.agent_name` / `extra.backend` carry the engine's vendor
+ * name and logo, so they yield null.
+ */
+export function agentFromPresetInfo(info: PresetAssistantInfo | null | undefined): AgentIdentity | null {
+  if (!info?.assistantId) return null;
+  return { name: info.name, avatar: info.logo };
+}

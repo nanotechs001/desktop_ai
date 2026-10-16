@@ -4,59 +4,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
-import { iconColors } from '@/renderer/styles/colors';
-import { Robot } from '@icon-park/react';
+import { getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
 import React, { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import ThemedLogo from './ThemedLogo';
 
 export type AgentBadgeProps = {
-  /** Agent backend type */
-  backend?: string;
-  /** Display name for the agent */
+  /** Display name of the user-made Agent */
   agent_name?: string;
   /** Custom agent logo (SVG path or emoji string) */
   agentLogo?: string;
-  /** Whether the logo is an emoji */
-  agentLogoIsEmoji?: boolean;
   /** Whether the explicit assistant logo is intentionally empty. */
   agentLogoIsFallback?: boolean;
   /** Assistant ID — when provided, clicking the badge navigates to AssistantSettings */
   assistantId?: string;
 };
 
-/** Render agent logo from custom logo, backend logo, or fallback Robot icon */
-export const AgentLogoIcon: React.FC<
-  Pick<AgentBadgeProps, 'backend' | 'agentLogo' | 'agentLogoIsEmoji' | 'agentLogoIsFallback' | 'agent_name'>
-> = ({ backend, agentLogo, agentLogoIsEmoji, agentLogoIsFallback, agent_name }) => {
-  const logos = useAgentLogos();
-  const logoContent = (() => {
-    if (agentLogoIsFallback) {
-      return <Robot theme='outline' size={16} fill={iconColors.primary} />;
-    }
-    if (agentLogo) {
-      if (agentLogoIsEmoji) {
-        return <span className='text-14px leading-none'>{agentLogo}</span>;
-      }
-      return (
-        <ThemedLogo
-          src={agentLogo}
-          alt={`${agent_name || 'agent'} logo`}
-          className='block w-16px h-16px object-contain'
-        />
-      );
-    }
-    const logo = resolveAgentLogo(logos, { backend });
-    if (logo) {
-      return <ThemedLogo src={logo} alt={`${backend} logo`} className='block w-16px h-16px object-contain' />;
-    }
-    return <Robot theme='outline' size={16} fill={iconColors.primary} />;
-  })();
+/** Render the Agent's avatar, or the robot icon when it has none. Never a vendor logo. */
+export const AgentLogoIcon: React.FC<Pick<AgentBadgeProps, 'agentLogo' | 'agentLogoIsFallback' | 'agent_name'>> = ({
+  agentLogo,
+  agentLogoIsFallback,
+  agent_name,
+}) => {
+  const { t } = useTranslation();
+  const { avatar } = getAgentPresentation({ name: agent_name, avatar: agentLogoIsFallback ? undefined : agentLogo }, t);
 
-  return (
-    <span className='inline-flex w-16px h-16px items-center justify-center shrink-0 leading-none'>{logoContent}</span>
-  );
+  return <span className='inline-flex w-16px h-16px items-center justify-center shrink-0 leading-none'>{avatar}</span>;
 };
 
 /**
@@ -65,14 +38,8 @@ export const AgentLogoIcon: React.FC<
  * When `assistantId` is provided, clicking navigates to AssistantSettings editor.
  * Otherwise renders as a static display badge.
  */
-const AgentBadge: React.FC<AgentBadgeProps> = ({
-  backend,
-  agent_name,
-  agentLogo,
-  agentLogoIsEmoji,
-  agentLogoIsFallback,
-  assistantId,
-}) => {
+const AgentBadge: React.FC<AgentBadgeProps> = ({ agent_name, agentLogo, agentLogoIsFallback, assistantId }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const handleClick = useCallback(() => {
     if (!assistantId) return;
@@ -85,14 +52,8 @@ const AgentBadge: React.FC<AgentBadgeProps> = ({
       data-testid='agent-badge'
       onClick={handleClick}
     >
-      <AgentLogoIcon
-        backend={backend}
-        agent_name={agent_name}
-        agentLogo={agentLogo}
-        agentLogoIsEmoji={agentLogoIsEmoji}
-        agentLogoIsFallback={agentLogoIsFallback}
-      />
-      <span className='text-sm text-t-primary'>{agent_name || backend}</span>
+      <AgentLogoIcon agent_name={agent_name} agentLogo={agentLogo} agentLogoIsFallback={agentLogoIsFallback} />
+      <span className='text-sm text-t-primary'>{getAgentPresentation({ name: agent_name }, t).name}</span>
     </div>
   );
 };

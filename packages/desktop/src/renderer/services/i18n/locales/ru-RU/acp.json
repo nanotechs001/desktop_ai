@@ -8,7 +8,7 @@
     "failed": "Не удалось отправить сообщение: {{error}}"
   },
   "sendbox": {
-    "placeholder": "Отправить сообщение {{backend}}..."
+    "placeholder": "Отправить сообщение агенту…"
   },
   "image": {
     "download": "Скачать",
@@ -18,10 +18,10 @@
     "generated_alt": "Созданное изображение"
   },
   "status": {
-    "connecting": "Подключение к {{agent}}...",
-    "connected": "Подключено к {{agent}}",
-    "authenticated": "Аутентифицировано с {{agent}}",
-    "session_active": "Активная сессия с {{agent}}",
+    "connecting": "Подключение к агенту...",
+    "connected": "Агент подключён",
+    "authenticated": "Агент аутентифицирован",
+    "session_active": "Сессия агента активна",
     "error": "Ошибка подключения",
     "unknown": "Неизвестный статус"
   },

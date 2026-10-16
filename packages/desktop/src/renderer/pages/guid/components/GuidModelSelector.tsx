@@ -122,7 +122,6 @@ const GuidModelSelector: React.FC<GuidModelSelectorProps> = ({
       if (available_models.length === 0) continue;
       providerModelGroups.push({
         key: provider.id,
-        title: provider.name,
         models: available_models.map((modelName) => {
           const id = providerCompositeId(provider.id, modelName);
           providerModelLookup.set(id, { provider, modelName });

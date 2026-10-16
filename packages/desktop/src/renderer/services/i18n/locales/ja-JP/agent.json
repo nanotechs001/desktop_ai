@@ -1,4 +1,5 @@
 {
+  "displayName": "エージェント",
   "health": {
     "detectedError": "現在のエージェント ({{agent}}) の応答エラーを検出しました",
     "autoSwitching": "。システムは自動的に切り替えを試みます。",

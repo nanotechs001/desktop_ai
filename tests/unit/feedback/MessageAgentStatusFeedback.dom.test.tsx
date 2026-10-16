@@ -73,7 +73,7 @@ describe('MessageAgentStatus — FeedbackButton wiring', () => {
     });
   });
 
-  it('falls back to a capitalized backend name without consulting runtime agent catalogs', () => {
+  it('names no engine: the status line says "Agent" whatever the backend is', () => {
     render(
       <MessageAgentStatus
         message={
@@ -89,7 +89,8 @@ describe('MessageAgentStatus — FeedbackButton wiring', () => {
       />
     );
 
-    expect(screen.getByText('Codex')).toBeInTheDocument();
-    expect(screen.getByText('acp.status.connected:Codex')).toBeInTheDocument();
+    expect(screen.getByText('agent.displayName')).toBeInTheDocument();
+    expect(screen.getByText('acp.status.connected')).toBeInTheDocument();
+    expect(screen.queryByText(/Codex/)).not.toBeInTheDocument();
   });
 });

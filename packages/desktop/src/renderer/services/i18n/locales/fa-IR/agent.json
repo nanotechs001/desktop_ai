@@ -1,4 +1,5 @@
 {
+  "displayName": "عامل",
   "health": {
     "detectedError": "خطایی در عامل فعلی ({{agent}}) شناسایی شد",
     "autoSwitching": ". سیستم تلاش می‌کند به‌صورت خودکار جابه‌جا شود.",

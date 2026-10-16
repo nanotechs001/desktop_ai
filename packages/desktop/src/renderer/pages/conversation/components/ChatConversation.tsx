@@ -257,7 +257,6 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
         loadedMcpStatuses={
           (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
         }
-        agent_name={presetAssistantInfo?.name}
         assistantId={aionrsAssistantId}
         forkCapability={conversation.fork_capability}
       />
@@ -326,7 +325,6 @@ const ChatConversation: React.FC<{
             workspace={conversation.extra?.workspace}
             backend={resolvedConversationBackend || 'claude'}
             session_mode={conversation.extra?.session_mode}
-            agent_name={assistantDisplayName}
             cron_job_id={cronJobId}
             hideSendBox={resolvedHideSendBox}
             emptySlot={emptySlot}
@@ -402,7 +400,6 @@ const ChatConversation: React.FC<{
       ? {} // Still loading custom agents — avoid showing backend logo prematurely
       : {
           backend: resolvedConversationBackend,
-          agent_name: conversationAgentName,
         };
 
   const headerExtraNode = (

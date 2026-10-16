@@ -1,4 +1,5 @@
 {
+  "displayName": "代理",
   "health": {
     "detectedError": "检测到当前 Agent ({{agent}}) 响应异常",
     "autoSwitching": "。系统将自动尝试切换线路。",

@@ -8,7 +8,7 @@
     "failed": "ارسال پیام ناموفق بود: {{error}}"
   },
   "sendbox": {
-    "placeholder": "ارسال پیام به {{backend}}..."
+    "placeholder": "ارسال پیام به عامل…"
   },
   "image": {
     "download": "دانلود",
@@ -18,10 +18,10 @@
     "generated_alt": "تصویر ساخته‌شده"
   },
   "status": {
-    "connecting": "در حال اتصال به {{agent}}...",
-    "connected": "متصل به {{agent}}",
-    "authenticated": "احراز هویت شده با {{agent}}",
-    "session_active": "جلسه فعال با {{agent}}",
+    "connecting": "در حال اتصال به عامل...",
+    "connected": "عامل متصل شد",
+    "authenticated": "عامل احراز هویت شد",
+    "session_active": "جلسه عامل فعال است",
     "error": "خطای اتصال",
     "unknown": "وضعیت نامشخص"
   },

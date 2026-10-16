@@ -84,7 +84,7 @@ describe('TeamChatView', () => {
     );
   });
 
-  it('prefers preset assistant name over legacy conversation extra agent_name', async () => {
+  it('does not hand the engine name from the conversation extras to the chat', async () => {
     usePresetAssistantInfoMock.mockReturnValue({
       info: {
         name: 'Planner Assistant',
@@ -113,11 +113,7 @@ describe('TeamChatView', () => {
 
     expect(await screen.findByTestId('mock-acp-chat')).toBeInTheDocument();
     expect(acpChatMock).toHaveBeenCalled();
-    expect(acpChatMock.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        agent_name: 'Planner Assistant',
-      })
-    );
+    expect(acpChatMock.mock.calls[0]?.[0]).not.toHaveProperty('agent_name');
   });
 
   it('does not inject a Team orchestration clear command into the agent slash catalog', async () => {

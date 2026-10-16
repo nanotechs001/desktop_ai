@@ -33,7 +33,6 @@ const AcpChat: React.FC<{
   workspace?: string;
   backend: string;
   session_mode?: string;
-  agent_name?: string;
   cron_job_id?: string;
   hideSendBox?: boolean;
   emptySlot?: React.ReactNode;
@@ -50,7 +49,6 @@ const AcpChat: React.FC<{
   workspace,
   backend,
   session_mode,
-  agent_name,
   cron_job_id,
   hideSendBox,
   emptySlot,
@@ -100,7 +98,6 @@ const AcpChat: React.FC<{
               conversation_id={conversation_id}
               backend={backend}
               session_mode={session_mode}
-              agent_name={agent_name}
               messageState={messageState}
               teamSendMessage={teamSendMessage}
               teamRuntime={teamRuntime}

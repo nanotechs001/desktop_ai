@@ -11,6 +11,7 @@ import {
 } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
 import { AgentLogoIcon } from './AgentBadge';
 import { Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
@@ -33,8 +34,6 @@ export interface AgentModeSelectorProps {
   agent_name?: string;
   /** Custom agent logo (SVG path or emoji) / 自定义代理 logo */
   agentLogo?: string;
-  /** Whether the logo is an emoji / logo 是否为 emoji */
-  agentLogoIsEmoji?: boolean;
   /** Whether the explicit assistant logo is intentionally empty. */
   agentLogoIsFallback?: boolean;
   /** Conversation ID for mode switching / 用于切换模式的会话 ID */
@@ -82,7 +81,6 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   backend,
   agent_name,
   agentLogo,
-  agentLogoIsEmoji,
   agentLogoIsFallback,
   conversation_id,
   compact,
@@ -102,6 +100,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   configOptionsPort,
 }) => {
   const { t } = useTranslation();
+  const agentName = getAgentPresentation({ name: agent_name }, t).name;
   const layout = useLayoutContext();
   const isMobile = Boolean(layout?.isMobile);
   const runtimeConfig = useAcpConfigOptions({
@@ -221,13 +220,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   );
 
   const renderLogo = () => (
-    <AgentLogoIcon
-      backend={backend}
-      agent_name={agent_name}
-      agentLogo={agentLogo}
-      agentLogoIsEmoji={agentLogoIsEmoji}
-      agentLogoIsFallback={agentLogoIsFallback}
-    />
+    <AgentLogoIcon agent_name={agent_name} agentLogo={agentLogo} agentLogoIsFallback={agentLogoIsFallback} />
   );
 
   // Get display label for current mode. When the current value matches no option
@@ -276,11 +269,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
     const isSetting = isLoading || runtimeConfig.setStatus.state === 'setting';
     const legacyCompactBehavior = !showLogoInCompact && compactLabelType === 'mode';
     const baseCompactLabel =
-      compactLabelType === 'agent'
-        ? agent_name || backend || 'Agent'
-        : can_switchMode
-          ? getCurrentModeLabel()
-          : agent_name || backend || 'Agent';
+      compactLabelType === 'agent' ? agentName : can_switchMode ? getCurrentModeLabel() : agentName;
     // With a pending target the pill has to say two things in the width of one. The
     // "权限 · " prefix is what gives: the shield icon already marks this as the
     // permission pill, so the prefix is the least informative part at that moment, and
@@ -349,7 +338,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
       }}
     >
       {renderLogo()}
-      <span className='text-sm text-t-primary'>{agent_name || backend}</span>
+      <span className='text-sm text-t-primary'>{agentName}</span>
       {canInteract && (
         <>
           {current_mode !== defaultMode && <span className='text-xs text-t-tertiary'>({getCurrentModeLabel()})</span>}

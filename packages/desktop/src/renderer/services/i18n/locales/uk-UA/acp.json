@@ -8,7 +8,7 @@
     "failed": "Не вдалося надіслати повідомлення: {{error}}"
   },
   "sendbox": {
-    "placeholder": "Надіслати повідомлення до {{backend}}..."
+    "placeholder": "Надіслати повідомлення агенту…"
   },
   "image": {
     "download": "Завантажити",
@@ -18,10 +18,10 @@
     "generated_alt": "Згенероване зображення"
   },
   "status": {
-    "connecting": "Підключення до {{agent}}...",
-    "connected": "Підключено до {{agent}}",
-    "authenticated": "Автентифіковано з {{agent}}",
-    "session_active": "Активна сесія з {{agent}}",
+    "connecting": "Підключення до агента...",
+    "connected": "Агента підключено",
+    "authenticated": "Агента автентифіковано",
+    "session_active": "Сесія агента активна",
     "error": "Помилка підключення",
     "unknown": "Невідомий статус"
   },

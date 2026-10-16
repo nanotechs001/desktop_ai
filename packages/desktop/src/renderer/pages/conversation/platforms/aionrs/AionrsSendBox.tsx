@@ -120,10 +120,9 @@ const AionrsSendBox: React.FC<{
   conversation_id: string;
   modelSelection: AionrsModelSelection;
   session_mode?: string;
-  agent_name?: string;
   teamSendMessage?: (payload: { input: string; files: ChatFileRef[] }) => Promise<void>;
   teamRuntime?: TeamSendBoxRuntime;
-}> = ({ conversation_id, modelSelection, session_mode, agent_name, teamSendMessage, teamRuntime }) => {
+}> = ({ conversation_id, modelSelection, session_mode, teamSendMessage, teamRuntime }) => {
   const [dynamicModes, setDynamicModes] = useState<AgentModeOption[]>([]);
   const [currentMode, setCurrentMode] = useState<string | undefined>(session_mode);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
@@ -781,10 +780,7 @@ const AionrsSendBox: React.FC<{
         }
         placeholder={
           current_model?.use_model
-            ? t('acp.sendbox.placeholder', {
-                backend: agent_name || 'AionCLI',
-                defaultValue: `Send message to {{backend}}...`,
-              })
+            ? t('acp.sendbox.placeholder', { defaultValue: 'Message the agent…' })
             : t('conversation.chat.noModelSelected')
         }
         onStop={effectiveHandleStop}

@@ -1,4 +1,5 @@
 {
+  "displayName": "Agente",
   "health": {
     "detectedError": "Erro detectado com o agente atual ({{agent}})",
     "autoSwitching": ". O sistema tentará alternar automaticamente.",

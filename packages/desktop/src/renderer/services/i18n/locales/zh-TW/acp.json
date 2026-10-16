@@ -8,7 +8,7 @@
     "failed": "發送訊息失敗：{{error}}"
   },
   "sendbox": {
-    "placeholder": "發送訊息到 {{backend}}..."
+    "placeholder": "傳送訊息給代理…"
   },
   "image": {
     "download": "下載",
@@ -18,10 +18,10 @@
     "generated_alt": "生成的圖片"
   },
   "status": {
-    "connecting": "正在連線至 {{agent}}...",
-    "connected": "已連線至 {{agent}}",
-    "authenticated": "已通過 {{agent}} 身份驗證",
-    "session_active": "{{agent}} 工作階段進行中",
+    "connecting": "正在連線至代理...",
+    "connected": "代理已連線",
+    "authenticated": "代理已通過身份驗證",
+    "session_active": "代理工作階段進行中",
     "error": "連線錯誤",
     "unknown": "未知狀態"
   },

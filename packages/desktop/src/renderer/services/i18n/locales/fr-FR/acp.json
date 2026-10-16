@@ -8,7 +8,7 @@
     "failed": "Échec de l'envoi du message : {{error}}"
   },
   "sendbox": {
-    "placeholder": "Envoyer un message à {{backend}}..."
+    "placeholder": "Envoyer un message à l'agent…"
   },
   "image": {
     "download": "Télécharger",
@@ -18,10 +18,10 @@
     "generated_alt": "Image générée"
   },
   "status": {
-    "connecting": "Connexion à {{agent}}...",
-    "connected": "Connecté à {{agent}}",
-    "authenticated": "Authentifié avec {{agent}}",
-    "session_active": "Session active avec {{agent}}",
+    "connecting": "Connexion à l'agent...",
+    "connected": "Agent connecté",
+    "authenticated": "Agent authentifié",
+    "session_active": "Session de l'agent active",
     "error": "Erreur de connexion",
     "unknown": "Statut inconnu"
   },

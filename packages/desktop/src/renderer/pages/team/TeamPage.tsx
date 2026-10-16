@@ -808,7 +808,6 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
           previewHosted={Boolean(teamProjectId)}
           tabsSlot={tabsSlot}
           conversation_id={activeAssistant?.conversation_id}
-          agent_name={undefined}
           workspacePath={effectiveWorkspace}
           isTemporaryWorkspace={isTeamWorkspaceTemporary}
           workspacePreferenceKey={team.id}

@@ -11,16 +11,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // AgentLogoIcon lives in AgentBadge but is a named export consumed by
 // AgentModeSelector, MobileConversationBrand, and ChatLayout.
 import { AgentLogoIcon } from '@/renderer/components/agent/AgentBadge';
-import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 
-const { useAgentLogosMock } = vi.hoisted(() => ({
-  useAgentLogosMock: vi.fn(),
-}));
-
-vi.mock('@/renderer/utils/model/agentLogo', () => ({
-  useAgentLogos: (...args: unknown[]) => useAgentLogosMock(...args),
-  resolveAgentLogo: (_logos: unknown, opts: { backend?: string | null }) =>
-    opts.backend ? `http://127.0.0.1:1/api/assets/logos/ai-major/${opts.backend}.svg` : null,
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@icon-park/react', () => ({
@@ -42,10 +35,10 @@ describe('AgentLogoIcon', () => {
     vi.clearAllMocks();
   });
 
-  it('passes backend logo through ThemedLogo when resolved', async () => {
-    useAgentLogosMock.mockReturnValue({});
-
-    const { container } = render(<AgentLogoIcon backend='openai' />);
+  it('passes the agent logo through ThemedLogo', async () => {
+    const { container } = render(
+      <AgentLogoIcon agent_name='Writer' agentLogo='http://127.0.0.1:1/api/assets/logos/writer.svg' />
+    );
 
     // Wait for ThemedLogo's detection fetch to settle
     await act(async () => {
@@ -55,29 +48,23 @@ describe('AgentLogoIcon', () => {
     // Non-tintable SVG (no currentColor in stub) → renders as <img>
     const img = container.querySelector('img');
     expect(img).not.toBeNull();
-    expect(img?.getAttribute('alt')).toBe('openai logo');
-    expect(img?.getAttribute('src')).toContain('openai.svg');
+    expect(img?.getAttribute('alt')).toBe('Writer logo');
+    expect(img?.getAttribute('src')).toContain('writer.svg');
   });
 
-  it('renders emoji when agentLogoIsEmoji is set', () => {
-    useAgentLogosMock.mockReturnValue({});
-
-    render(<AgentLogoIcon agentLogo='🤖' agentLogoIsEmoji />);
+  it('renders an emoji avatar', () => {
+    render(<AgentLogoIcon agentLogo='🤖' />);
 
     expect(screen.getByText('🤖')).toBeInTheDocument();
   });
 
-  it('renders the Robot fallback when no logo or backend is available', () => {
-    useAgentLogosMock.mockReturnValue({});
-
+  it('renders the Robot fallback when no logo is available', () => {
     render(<AgentLogoIcon />);
 
     expect(screen.getByTestId('robot-fallback')).toBeInTheDocument();
   });
 
   it('renders fallback when agentLogoIsFallback is set', () => {
-    useAgentLogosMock.mockReturnValue({});
-
     render(<AgentLogoIcon agentLogoIsFallback />);
 
     expect(screen.getByTestId('robot-fallback')).toBeInTheDocument();

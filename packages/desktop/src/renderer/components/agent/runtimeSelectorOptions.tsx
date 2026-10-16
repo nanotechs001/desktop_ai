@@ -18,8 +18,8 @@ export const RUNTIME_SUBMENU_TRIGGER_PROPS = { position: 'lt', autoFitPosition: 
 
 type RuntimeSelectorModel = { id: string; label?: string; description?: string };
 
-/** A titled group of models (e.g. one provider), used by the grouped model list. */
-export type RuntimeSelectorModelGroup = { key: string; title: string; models: RuntimeSelectorModel[] };
+/** A group of models (e.g. one provider), used by the grouped model list. Groups are not titled: a provider's vendor name is not shown outside Settings. */
+export type RuntimeSelectorModelGroup = { key: string; models: RuntimeSelectorModel[] };
 
 const matchesModelQuery = (model: RuntimeSelectorModel, keyword: string): boolean =>
   (model.label || model.id).toLowerCase().includes(keyword);
@@ -85,7 +85,7 @@ export const RuntimeSelectorSubMenuTitle: React.FC<{ label: string; value: strin
 /**
  * Model options with search + fixed-height scroll. Reused by:
  * - the direct dropdown (no thought level) and the model submenu — flat via `models`;
- * - the aionrs selector — provider-grouped via `groups`.
+ * - the aionrs selector — provider-grouped via `groups`, separated by a rule instead of a vendor title.
  * Search box shows only when the total model count exceeds DROPDOWN_SEARCH_THRESHOLD;
  * filtering is client-side, case-insensitive on label/id, and spans all groups.
  */
@@ -139,8 +139,7 @@ export const RuntimeSelectorModelList: React.FC<{
   // container below for the list (`.dropdown-search-scroll`). The host Arco popup's
   // own scroll/height cap is disabled via a CSS override keyed off
   // `:has(.dropdown-search-scroll)`, so there is exactly one scrollbar — this one.
-  // The search box lives outside it, so it never moves or leaves a gap, and
-  // provider group titles pin to the top of the scroll container cleanly.
+  // The search box lives outside it, so it never moves or leaves a gap.
   return (
     <>
       {showSearch ? (
@@ -159,10 +158,11 @@ export const RuntimeSelectorModelList: React.FC<{
             {t('agent.model.noResults', { defaultValue: 'No matching models' })}
           </div>
         ) : groups ? (
-          filteredGroups.map((group) => (
-            <Menu.ItemGroup key={group.key} title={group.title}>
+          filteredGroups.map((group, index) => (
+            <React.Fragment key={group.key}>
+              {index > 0 ? <div role='separator' className='my-4px h-1px bg-fill-3' /> : null}
               {group.models.map(renderRow)}
-            </Menu.ItemGroup>
+            </React.Fragment>
           ))
         ) : (
           filteredModels.map(renderRow)

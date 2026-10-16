@@ -8,7 +8,7 @@
     "failed": "メッセージの送信に失敗しました：{{error}}"
   },
   "sendbox": {
-    "placeholder": "{{backend}}にメッセージを送信..."
+    "placeholder": "エージェントにメッセージを送信…"
   },
   "image": {
     "download": "ダウンロード",
@@ -18,10 +18,10 @@
     "generated_alt": "生成された画像"
   },
   "status": {
-    "connecting": "{{agent}} に接続中...",
-    "connected": "{{agent}} に接続しました",
-    "authenticated": "{{agent}} 認証が完了しました",
-    "session_active": "{{agent}} セッション実行中",
+    "connecting": "エージェントに接続中...",
+    "connected": "エージェントに接続しました",
+    "authenticated": "エージェントの認証が完了しました",
+    "session_active": "エージェントのセッション実行中",
     "error": "接続エラー",
     "unknown": "不明な状態"
   },

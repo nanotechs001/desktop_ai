@@ -1,4 +1,5 @@
 {
+  "displayName": "Agent",
   "health": {
     "detectedError": "Erreur détectée avec l'agent actuel ({{agent}})",
     "autoSwitching": ". Le système va tenter de basculer automatiquement.",

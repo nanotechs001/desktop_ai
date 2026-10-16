@@ -52,7 +52,6 @@ export const formatMessageTime = (timestamp: number): string => {
   return time;
 };
 import MessageCronBadge from './MessageCronBadge';
-import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import TeammateMessageAvatar from './TeammateMessageAvatar';
 import { useTeammateColor } from '@/renderer/pages/team/identity/TeamIdentityContext';
 
@@ -104,7 +103,6 @@ const MessageText: React.FC<{
    * copies the whole reply, not just the segment it happens to sit on. */
   turnTexts?: string[];
 }> = ({ message, showCopyRow = true, isLastMessage = false, hasForkAnchor = false, turnTexts }) => {
-  const logos = useAgentLogos();
   // Filter think tags from content before rendering
   // 在渲染前过滤 think 标签
   const contentToRender = useMemo(() => {
@@ -132,7 +130,6 @@ const MessageText: React.FC<{
   const isPendingDelivery = isUserMessage && message.status === 'pending';
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
   const senderName = message.content.senderName;
-  const senderAgentType = message.content.senderAgentType;
   const senderConversationId = message.content.senderConversationId;
   const { text, files } = useMemo(
     () => parseFileMarker(contentToRender, isUserMessage),
@@ -229,7 +226,6 @@ const MessageText: React.FC<{
 
   const cronMeta = message.content.cronMeta;
   const displaySenderName = senderName === 'team_system' ? t('team.systemNotice.sender') : senderName;
-  const fallbackBackendLogo = senderAgentType ? resolveAgentLogo(logos, { backend: senderAgentType }) : null;
   // 团队 teammate 消息：按发送者会话取身份色，做气泡左色条 + 彩色发送者名；非团队场景为 undefined。
   const teammateColor = useTeammateColor(isTeammateMessage ? senderConversationId : undefined);
 
@@ -239,11 +235,7 @@ const MessageText: React.FC<{
         {cronMeta && <MessageCronBadge meta={cronMeta} />}
         {isTeammateMessage && displaySenderName && (
           <div className='flex items-center gap-6px mb-4px'>
-            <TeammateMessageAvatar
-              senderName={displaySenderName}
-              senderConversationId={senderConversationId}
-              backendLogo={fallbackBackendLogo}
-            />
+            <TeammateMessageAvatar senderName={displaySenderName} senderConversationId={senderConversationId} />
             <span
               className='text-12px'
               style={teammateColor ? { color: teammateColor } : { color: 'var(--text-secondary)' }}

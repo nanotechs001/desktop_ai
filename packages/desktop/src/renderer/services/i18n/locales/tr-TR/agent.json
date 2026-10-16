@@ -1,4 +1,5 @@
 {
+  "displayName": "Aracı",
   "health": {
     "detectedError": "Detected error with current agent ({{agent}})",
     "autoSwitching": ". System will attempt to switch automatically.",

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import AionrsModelSelector from '@/renderer/pages/conversation/platforms/aionrs/AionrsModelSelector';
@@ -178,7 +178,7 @@ describe('AionrsModelSelector runtime options', () => {
     expect(titles[1]).toHaveTextContent('High');
   });
 
-  it('keeps provider grouping inside the model submenu', () => {
+  it('lists provider models inside the model submenu without a vendor group title', () => {
     render(
       <AionrsModelSelector
         selection={makeSelection()}
@@ -188,8 +188,10 @@ describe('AionrsModelSelector runtime options', () => {
       />
     );
 
-    // The provider group title (OpenAI) is rendered inside the model submenu.
-    expect(screen.getByRole('group', { name: 'OpenAI' })).toBeInTheDocument();
+    // The provider's name (OpenAI) is not shown outside Settings; only its models are.
+    expect(screen.getByRole('menuitem', { name: 'gpt-5.2' })).toBeInTheDocument();
+    expect(screen.queryByText('OpenAI')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'OpenAI' })).not.toBeInTheDocument();
   });
 
   it('marks the current model with the leading check indicator', () => {
@@ -202,9 +204,8 @@ describe('AionrsModelSelector runtime options', () => {
       />
     );
 
-    const providerGroup = screen.getByRole('group', { name: 'OpenAI' });
-    const currentModelItem = within(providerGroup).getByText('gpt-5.2').closest('[role="menuitem"]');
-    const otherModelItem = within(providerGroup).getByText('gpt-5.2-mini').closest('[role="menuitem"]');
+    const currentModelItem = screen.getByRole('menuitem', { name: 'gpt-5.2' });
+    const otherModelItem = screen.getByRole('menuitem', { name: 'gpt-5.2-mini' });
 
     expect(currentModelItem?.textContent?.trim().startsWith('✓')).toBe(true);
     expect(otherModelItem).not.toHaveTextContent('✓');
@@ -231,8 +232,8 @@ describe('AionrsModelSelector runtime options', () => {
 
     expect(screen.getByTestId('aionrs-model-selector')).toHaveTextContent('gpt-5.2');
     expect(screen.queryAllByTestId('submenu-title')).toHaveLength(0);
-    // Still grouped by provider even without a submenu wrapper.
-    expect(screen.getByRole('group', { name: 'OpenAI' })).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.2-mini')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'OpenAI' })).not.toBeInTheDocument();
   });
 
   it('sets thought level through the optional runtime callback', async () => {

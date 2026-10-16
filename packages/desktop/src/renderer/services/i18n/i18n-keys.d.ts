@@ -29,6 +29,7 @@ export type I18nKey =
   | 'agent.config.failed'
   | 'agent.config.setting'
   | 'agent.config.timeout'
+  | 'agent.displayName'
   | 'agent.engine.default'
   | 'agent.engine.rebindFailed'
   | 'agent.engine.rebindFailed_one'

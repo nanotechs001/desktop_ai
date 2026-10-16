@@ -11,6 +11,7 @@ import { useLayoutConstraints } from '@/renderer/pages/conversation/hooks/useLay
 import { useTitleRename } from '@/renderer/pages/conversation/hooks/useTitleRename';
 import { useWorkspaceCollapse } from '@/renderer/pages/conversation/hooks/useWorkspaceCollapse';
 import { PreviewPanel, usePreviewContext } from '@/renderer/pages/conversation/Preview';
+import { agentFromPresetInfo } from '@/renderer/utils/ui/agentPresentation';
 import { dispatchWorkspaceToggleEvent } from '@/renderer/utils/workspace/workspaceEvents';
 import classNames from 'classnames';
 import {
@@ -31,11 +32,10 @@ const ChatLayout: React.FC<{
   title?: React.ReactNode;
   sider: React.ReactNode;
   siderTitle?: React.ReactNode;
+  /** Internal engine id; only marks that the chat has an Agent, never rendered. */
   backend?: string;
-  /** Preset assistant info — when provided, badge shows assistant identity instead of backend */
+  /** Preset assistant info — the header shows this Agent's avatar, or the robot icon when it has none */
   presetAssistant?: PresetAssistantInfo & { id?: string };
-  /** Fallback agent name (used when no presetAssistant, e.g. from conversation.extra.agent_name) */
-  agent_name?: string;
   headerExtra?: React.ReactNode;
   workspaceEnabled?: boolean;
   /**
@@ -65,7 +65,7 @@ const ChatLayout: React.FC<{
   headerLeading?: React.ReactNode;
 }> = (props) => {
   const { conversation_id, workspacePath, isTemporaryWorkspace } = props;
-  const { backend, presetAssistant, agent_name, workspaceEnabled = true, workspacePreferenceKey } = props;
+  const { backend, presetAssistant, workspaceEnabled = true, workspacePreferenceKey } = props;
   const layout = useLayoutContext();
   const isDesktop = !layout?.isMobile;
   const isMobile = Boolean(layout?.isMobile);
@@ -111,10 +111,8 @@ const ChatLayout: React.FC<{
       onRename: props.onRenameTitle,
     });
 
-  const capitalizedBackend = backend ? backend.charAt(0).toUpperCase() + backend.slice(1) : backend;
-
-  // Compute display name with fallback chain
-  const display_name = presetAssistant?.name || agent_name || capitalizedBackend;
+  // The chat's Agent; the engine behind it (backend, agent_name) is never shown.
+  const agent = agentFromPresetInfo(presetAssistant);
 
   const {
     splitRatio: workspaceWidthPxPref,
@@ -215,15 +213,7 @@ const ChatLayout: React.FC<{
           conversation_id={conversation_id}
           leading={
             props.headerLeading ??
-            ((backend || presetAssistant) && (
-              <AgentLogoIcon
-                backend={backend}
-                agent_name={display_name}
-                agentLogo={presetAssistant?.logo}
-                agentLogoIsEmoji={presetAssistant?.isEmoji}
-                agentLogoIsFallback={presetAssistant?.isFallback}
-              />
-            ))
+            ((backend || presetAssistant) && <AgentLogoIcon agent_name={agent?.name} agentLogo={agent?.avatar} />)
           }
         />
       </FlexFullContainer>

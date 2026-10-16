@@ -8,6 +8,7 @@ import type { IMessageAgentStatus } from '@/common/chat/chatLib';
 import { Badge, Typography } from '@arco-design/web-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
 import ButlerDiagnoseButton from '@/renderer/components/base/ButlerDiagnoseButton';
 import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 
@@ -18,14 +19,13 @@ interface MessageAgentStatusProps {
 }
 
 /**
- * Unified agent status message component for all ACP-based agents (Claude, Qwen, Codex, etc.)
+ * Unified agent status message component for all ACP-based agents. The engine behind the
+ * agent (`backend`, `agent_name`) is never shown; the status always names "Agent".
  */
 const MessageAgentStatus: React.FC<MessageAgentStatusProps> = ({ message }) => {
   const { t } = useTranslation();
-  const { backend, status, agent_name } = message.content;
-
-  // Resolve display name: explicit agent_name > capitalized backend.
-  const display_name = agent_name || backend.charAt(0).toUpperCase() + backend.slice(1);
+  const { status } = message.content;
+  const { name: display_name } = getAgentPresentation(null, t);
 
   // Hide disconnected status from historical messages (no longer emitted but may exist in DB)
   if ((status as string) === 'disconnected') return null;
@@ -33,13 +33,13 @@ const MessageAgentStatus: React.FC<MessageAgentStatusProps> = ({ message }) => {
   const getStatusBadge = () => {
     switch (status) {
       case 'connecting':
-        return <Badge status='processing' text={t('acp.status.connecting', { agent: display_name })} />;
+        return <Badge status='processing' text={t('acp.status.connecting')} />;
       case 'connected':
-        return <Badge status='success' text={t('acp.status.connected', { agent: display_name })} />;
+        return <Badge status='success' text={t('acp.status.connected')} />;
       case 'authenticated':
-        return <Badge status='success' text={t('acp.status.authenticated', { agent: display_name })} />;
+        return <Badge status='success' text={t('acp.status.authenticated')} />;
       case 'session_active':
-        return <Badge status='success' text={t('acp.status.session_active', { agent: display_name })} />;
+        return <Badge status='success' text={t('acp.status.session_active')} />;
       case 'error':
         return <Badge status='error' text={t('acp.status.error')} />;
       default:

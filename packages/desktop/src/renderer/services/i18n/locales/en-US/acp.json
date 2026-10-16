@@ -8,7 +8,7 @@
     "failed": "Failed to send message: {{error}}"
   },
   "sendbox": {
-    "placeholder": "Send message to {{backend}}..."
+    "placeholder": "Message the agent…"
   },
   "image": {
     "download": "Download",
@@ -18,10 +18,10 @@
     "generated_alt": "Generated image"
   },
   "status": {
-    "connecting": "Connecting to {{agent}}...",
-    "connected": "Connected to {{agent}}",
-    "authenticated": "Authenticated with {{agent}}",
-    "session_active": "Active session with {{agent}}",
+    "connecting": "Connecting to the agent...",
+    "connected": "Agent connected",
+    "authenticated": "Agent authenticated",
+    "session_active": "Agent session active",
     "error": "Connection error",
     "unknown": "Unknown status"
   },
