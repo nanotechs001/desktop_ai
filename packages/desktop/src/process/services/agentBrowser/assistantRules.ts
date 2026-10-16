@@ -21,7 +21,10 @@ const DEFAULT_LOCALE = '';
 
 const localeBody = (locale: string) => (locale ? { locale } : {});
 
-/** Backend-wired deps. Built-in assistants are skipped: the backend rejects writes to their ids. */
+/**
+ * Backend-wired deps. Built-in assistants are skipped: the backend rejects writes to their ids.
+ * They are covered by the aionui-browser MCP server instructions instead (Task 6).
+ */
 export const backendAssistantRuleDeps: AssistantRuleDeps = {
   async listAssistants() {
     const all = await httpRequest<Assistant[]>('GET', '/api/assistants');
@@ -46,17 +49,28 @@ export const backendAssistantRuleDeps: AssistantRuleDeps = {
 /** Make sure every assistant rule carries the browser-rule block. One failure never stops the rest. */
 export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Promise<AssistantRuleSyncSummary> {
   const summary = { updated: 0, skipped: 0, failed: 0 };
-  const assistants = await deps.listAssistants();
+  let assistants: Awaited<ReturnType<AssistantRuleDeps['listAssistants']>>;
+  try {
+    assistants = await deps.listAssistants();
+  } catch (error) {
+    console.error('[AionUi] Browser rule sync could not list assistants:', error);
+    return summary;
+  }
   for (const { id, locales } of assistants) {
     for (const locale of locales) {
       try {
         const current = await deps.readRule(id, locale);
-        const next = upsertBrowserRule(current);
-        if (next === current) {
+        const result = upsertBrowserRule(current);
+        if (result.ok === false) {
+          summary.failed += 1;
+          console.warn(`[AionUi] Browser rule left untouched for assistant '${id}': ${result.reason}`);
+          continue;
+        }
+        if (result.content === current) {
           summary.skipped += 1;
           continue;
         }
-        await deps.writeRule(id, locale, next);
+        await deps.writeRule(id, locale, result.content);
         summary.updated += 1;
       } catch (error) {
         summary.failed += 1;
