@@ -218,6 +218,13 @@
       "searchSelection": "Найти в Google: «{{text}}»",
       "addToDictionary": "Добавить в словарь",
       "inspect": "Исследовать"
+    },
+    "find": {
+      "placeholder": "Найти на странице",
+      "noMatches": "Совпадений нет",
+      "previous": "Предыдущее совпадение",
+      "next": "Следующее совпадение",
+      "close": "Закрыть"
     }
   }
 }

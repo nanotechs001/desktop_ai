@@ -9,6 +9,7 @@ import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { installContextMenu } from './contextMenuInstall';
 import { installDownloads } from './downloads';
 import { installPermissions } from './permissions';
+import { installBrowserShortcuts } from './shortcuts';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
 import { installWindowOpenHandler } from './windowOpen';
 
@@ -89,6 +90,7 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
   // Popups are browser contents too, so they get the same window-open rules as the webview that opened them.
   onBrowserContentsCreated((contents) => installWindowOpenHandler(contents, deps.getMainWindow));
   onBrowserContentsCreated((contents) => installContextMenu(contents, deps.getMainWindow));
+  onBrowserContentsCreated((contents) => installBrowserShortcuts(contents));
 
   app.on('web-contents-created', (_event, contents) => {
     if (!isBrowserContents(contents, deps.getMainWindow())) return;

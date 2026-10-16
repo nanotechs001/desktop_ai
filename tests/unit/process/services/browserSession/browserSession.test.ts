@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     fromPartition: vi.fn(() => browserSession),
     installWindowOpenHandler: vi.fn(),
     installContextMenu: vi.fn(),
+    installBrowserShortcuts: vi.fn(),
     installDownloads: vi.fn(),
     installPermissions: vi.fn(),
   };
@@ -37,6 +38,10 @@ vi.mock('@process/services/browserSession/permissions', () => ({ installPermissi
 
 vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
   installContextMenu: mocks.installContextMenu,
+}));
+
+vi.mock('@process/services/browserSession/shortcuts', () => ({
+  installBrowserShortcuts: mocks.installBrowserShortcuts,
 }));
 
 vi.mock('@process/services/browserSession/windowOpen', () => ({
@@ -83,6 +88,7 @@ beforeEach(() => {
   mocks.browserSession.webRequest.onBeforeSendHeaders.mockClear();
   mocks.installWindowOpenHandler.mockClear();
   mocks.installContextMenu.mockClear();
+  mocks.installBrowserShortcuts.mockClear();
   mocks.installDownloads.mockClear();
   mocks.installPermissions.mockClear();
 });
@@ -250,6 +256,7 @@ describe('initBrowserSession', () => {
 
       expect(mocks.installContextMenu.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
       expect(mocks.installContextMenu.mock.calls[0][1]()).toBe(main);
+      expect(mocks.installBrowserShortcuts.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
     });
 
     it('stops notifying a listener once it is unsubscribed', async () => {

@@ -216,6 +216,13 @@
       "searchSelection": "Google'da \"{{text}}\" ara",
       "addToDictionary": "Sözlüğe ekle",
       "inspect": "İncele"
+    },
+    "find": {
+      "placeholder": "Sayfada bul",
+      "noMatches": "Eşleşme yok",
+      "previous": "Önceki eşleşme",
+      "next": "Sonraki eşleşme",
+      "close": "Kapat"
     }
   }
 }

@@ -216,6 +216,13 @@
       "searchSelection": "Google에서 \"{{text}}\" 검색",
       "addToDictionary": "사전에 추가",
       "inspect": "검사"
+    },
+    "find": {
+      "placeholder": "페이지에서 찾기",
+      "noMatches": "일치하는 항목 없음",
+      "previous": "이전 일치 항목",
+      "next": "다음 일치 항목",
+      "close": "닫기"
     }
   }
 }

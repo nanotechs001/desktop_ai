@@ -216,6 +216,13 @@
       "searchSelection": "جستجوی «{{text}}» در Google",
       "addToDictionary": "افزودن به فرهنگ لغت",
       "inspect": "بازرسی"
+    },
+    "find": {
+      "placeholder": "جستجو در صفحه",
+      "noMatches": "موردی یافت نشد",
+      "previous": "مورد قبلی",
+      "next": "مورد بعدی",
+      "close": "بستن"
     }
   }
 }

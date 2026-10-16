@@ -216,6 +216,13 @@
       "searchSelection": "Mit Google nach „{{text}}“ suchen",
       "addToDictionary": "Zum Wörterbuch hinzufügen",
       "inspect": "Untersuchen"
+    },
+    "find": {
+      "placeholder": "Auf Seite suchen",
+      "noMatches": "Keine Treffer",
+      "previous": "Vorheriger Treffer",
+      "next": "Nächster Treffer",
+      "close": "Schließen"
     }
   }
 }

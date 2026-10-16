@@ -4,9 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ipcBridge } from '@/common';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import { useOptionalPreviewContext } from '../context/PreviewContext';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
+import FindBar from './BrowserChrome/FindBar';
 import {
   BROWSER_BLANK_URL,
   BROWSER_SESSION_PARTITION,
@@ -25,6 +28,8 @@ export interface BrowserViewerProps {
   onTitleChange: (tabId: string, title: string) => void;
   /** 站点图标变化时回写 tab / Persist the site favicon back onto the tab */
   onFaviconChange: (tabId: string, favicon: string) => void;
+  /** 页面内按 Cmd/Ctrl+W 时请求关闭该 tab / The page asked to close this tab (Cmd/Ctrl+W) */
+  onRequestClose?: (tabId: string) => void;
 }
 
 /**
@@ -40,7 +45,20 @@ export interface BrowserViewerProps {
  * the address bar, and writing address/title/favicon back onto the owning tab so
  * the browser can be restored after a restart.
  */
-const BrowserViewer: React.FC<BrowserViewerProps> = ({ url, tabId, onUrlChange, onTitleChange, onFaviconChange }) => {
+const BrowserViewer: React.FC<BrowserViewerProps> = ({
+  url,
+  tabId,
+  onUrlChange,
+  onTitleChange,
+  onFaviconChange,
+  onRequestClose,
+}) => {
+  const preview = useOptionalPreviewContext();
+  const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findFocusToken, setFindFocusToken] = useState(0);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
+
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
 
   const handleTitleChange = useCallback(
@@ -66,20 +84,63 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({ url, tabId, onUrlChange, 
     if (url === BROWSER_BLANK_URL) onTitleChange(tabId, browserTabLabelFromUrl(url));
   }, [url, tabId, onTitleChange]);
 
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    webview?.focus();
+  }, [webview]);
+
+  // Main reports shortcuts for every browser page; only the webview whose id matches acts on them.
+  useEffect(() => {
+    if (!webview) return;
+    return ipcBridge.browser.shortcut.on(({ webContentsId, action }) => {
+      if (webContentsId !== webview.getWebContentsId()) return;
+      switch (action) {
+        case 'find':
+          setFindOpen(true);
+          setFindFocusToken((token) => token + 1);
+          break;
+        case 'focus-address':
+          addressInputRef.current?.focus();
+          break;
+        case 'new-tab':
+          preview?.openBrowserTab();
+          break;
+        case 'close-tab':
+          onRequestClose?.(tabId);
+          break;
+        case 'escape':
+          if (findOpen) {
+            webview.stopFindInPage('clearSelection');
+            closeFind();
+          }
+          break;
+      }
+    });
+  }, [webview, tabId, findOpen, preview, onRequestClose, closeFind]);
+
   return (
-    <WebviewHost
-      url={url || BROWSER_BLANK_URL}
-      partition={BROWSER_SESSION_PARTITION}
-      showNavBar
-      interceptNavigation={false}
-      navBarExtra={<DownloadsButton />}
-      className='bg-bg-1'
-      resolveUrlInput={resolveAddressBarInput}
-      onUrlChange={handleUrlChange}
-      onTitleChange={handleTitleChange}
-      onFaviconChange={handleFaviconChange}
-      onDidFinishLoad={handleDidFinishLoad}
-    />
+    <div className='relative h-full w-full'>
+      <WebviewHost
+        url={url || BROWSER_BLANK_URL}
+        partition={BROWSER_SESSION_PARTITION}
+        showNavBar
+        interceptNavigation={false}
+        navBarExtra={<DownloadsButton />}
+        className='bg-bg-1'
+        resolveUrlInput={resolveAddressBarInput}
+        onUrlChange={handleUrlChange}
+        onTitleChange={handleTitleChange}
+        onFaviconChange={handleFaviconChange}
+        onDidFinishLoad={handleDidFinishLoad}
+        onWebviewReady={setWebview}
+        addressInputRef={addressInputRef}
+      />
+      {findOpen && webview && (
+        <div className='absolute top-48px end-16px z-20'>
+          <FindBar webview={webview} onClose={closeFind} focusToken={findFocusToken} />
+        </div>
+      )}
+    </div>
   );
 };
 

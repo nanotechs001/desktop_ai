@@ -218,6 +218,13 @@
       "searchSelection": "Шукати в Google: «{{text}}»",
       "addToDictionary": "Додати до словника",
       "inspect": "Дослідити"
+    },
+    "find": {
+      "placeholder": "Знайти на сторінці",
+      "noMatches": "Збігів немає",
+      "previous": "Попередній збіг",
+      "next": "Наступний збіг",
+      "close": "Закрити"
     }
   }
 }

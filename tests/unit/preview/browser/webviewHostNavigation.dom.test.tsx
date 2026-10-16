@@ -24,6 +24,7 @@ vi.mock('@/common', () => ({
     browser: {
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },
+      shortcut: { on: () => () => {} },
     },
   },
 }));

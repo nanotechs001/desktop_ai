@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback } from 'react';
-import type { PreviewTab, PreviewTabPatch } from '../context/PreviewContext';
+import { useOptionalPreviewContext, type PreviewTab, type PreviewTabPatch } from '../context/PreviewContext';
 import PermissionPrompt from './BrowserChrome/PermissionPrompt';
 import BrowserViewer from './BrowserViewer';
 
@@ -37,6 +37,7 @@ export interface BrowserTabLayerProps {
  * so they retain real dimensions and need no relayout when shown again.
  */
 const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTabId, updateTab }) => {
+  const closeTab = useOptionalPreviewContext()?.closeTab;
   const handleUrlChange = useCallback(
     (tabId: string, url: string) => {
       // 地址存在 content 里，与其他 tab 类型保持一致 / Address lives in content, like other tab types
@@ -76,6 +77,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
               onUrlChange={handleUrlChange}
               onTitleChange={handleTitleChange}
               onFaviconChange={handleFaviconChange}
+              onRequestClose={closeTab}
             />
           </div>
         );

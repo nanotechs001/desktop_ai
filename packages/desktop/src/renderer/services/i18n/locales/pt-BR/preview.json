@@ -216,6 +216,13 @@
       "searchSelection": "Pesquisar \"{{text}}\" no Google",
       "addToDictionary": "Adicionar ao dicionário",
       "inspect": "Inspecionar"
+    },
+    "find": {
+      "placeholder": "Localizar na página",
+      "noMatches": "Nenhuma correspondência",
+      "previous": "Correspondência anterior",
+      "next": "Próxima correspondência",
+      "close": "Fechar"
     }
   }
 }

@@ -61,6 +61,10 @@ export interface WebviewHostProps {
   onUnresponsive?: () => void;
   /** Called when a previously unresponsive page responds again */
   onResponsive?: () => void;
+  /** Called on every `dom-ready` with the webview element, once its methods (findInPage, getWebContentsId) work */
+  onWebviewReady?: (webview: Electron.WebviewTag) => void;
+  /** Receives the address bar's input element, so the owner can focus it (needs `showNavBar`) */
+  addressInputRef?: React.Ref<HTMLInputElement>;
 }
 
 const MIN_ZOOM_FACTOR = 0.75;
@@ -94,6 +98,8 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onRenderProcessGone,
   onUnresponsive,
   onResponsive,
+  onWebviewReady,
+  addressInputRef,
 }) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -115,6 +121,8 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onUnresponsiveRef.current = onUnresponsive;
   const onResponsiveRef = useRef(onResponsive);
   onResponsiveRef.current = onResponsive;
+  const onWebviewReadyRef = useRef(onWebviewReady);
+  onWebviewReadyRef.current = onWebviewReady;
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(url);
@@ -333,6 +341,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
 
     const handleDomReady = () => {
       setWebviewReady(true);
+      onWebviewReadyRef.current?.(webviewEl);
       syncNavState();
       if (interceptNavigation) injectClickInterceptor();
 
@@ -811,6 +820,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
           )}
           <form onSubmit={handleUrlSubmit} className='flex-1 ms-2px'>
             <input
+              ref={addressInputRef}
               type='text'
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}

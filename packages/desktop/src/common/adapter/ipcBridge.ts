@@ -13,7 +13,7 @@
  */
 
 import type { IConfirmation } from '@/common/chat/chatLib';
-import type { DownloadItem, PermissionRequest } from '@/common/types/browser';
+import type { BrowserShortcutRequest, DownloadItem, PermissionRequest } from '@/common/types/browser';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import { buildListTasksPath } from './teamTaskPath';
@@ -1496,6 +1496,8 @@ export const browser = {
   ),
   // main → renderer: every open site-permission prompt, on every change
   permissionRequested: bridge.buildEmitter<PermissionRequest[]>('browser.permission-requested'),
+  // main → renderer: a browser shortcut (find, address bar, new/close tab, escape) pressed while a page has focus
+  shortcut: bridge.buildEmitter<BrowserShortcutRequest>('browser.shortcut'),
 };
 
 // ---------------------------------------------------------------------------

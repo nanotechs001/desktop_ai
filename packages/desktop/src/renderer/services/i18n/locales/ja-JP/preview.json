@@ -216,6 +216,13 @@
       "searchSelection": "Google で「{{text}}」を検索",
       "addToDictionary": "辞書に追加",
       "inspect": "検証"
+    },
+    "find": {
+      "placeholder": "ページ内を検索",
+      "noMatches": "一致なし",
+      "previous": "前の一致",
+      "next": "次の一致",
+      "close": "閉じる"
     }
   }
 }

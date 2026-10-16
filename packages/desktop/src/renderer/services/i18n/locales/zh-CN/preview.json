@@ -216,6 +216,13 @@
       "searchSelection": "使用 Google 搜索“{{text}}”",
       "addToDictionary": "添加到字典",
       "inspect": "检查"
+    },
+    "find": {
+      "placeholder": "在页面中查找",
+      "noMatches": "无匹配项",
+      "previous": "上一个匹配项",
+      "next": "下一个匹配项",
+      "close": "关闭"
     }
   }
 }

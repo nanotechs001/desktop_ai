@@ -27,3 +27,25 @@ export type PermissionRequest = {
   /** `'video'` / `'audio'` for `media` requests; empty otherwise. */
   mediaTypes: string[];
 };
+
+/** A keyboard shortcut the in-app browser recognises on a page. */
+export type BrowserShortcutAction =
+  | 'find'
+  | 'focus-address'
+  | 'new-tab'
+  | 'close-tab'
+  | 'reload'
+  | 'hard-reload'
+  | 'back'
+  | 'forward'
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'zoom-reset'
+  | 'print'
+  | 'escape';
+
+/** The shortcuts main cannot finish itself; the renderer acts on the tab whose webContents id matches. */
+export type BrowserShortcutRequest = {
+  webContentsId: number;
+  action: Extract<BrowserShortcutAction, 'find' | 'focus-address' | 'new-tab' | 'close-tab' | 'escape'>;
+};
