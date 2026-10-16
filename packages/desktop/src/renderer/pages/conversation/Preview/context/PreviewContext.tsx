@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import type { PreviewContentType } from '@/common/types/office/preview';
+import type { BrowserTabProfile } from '@/common/types/browser';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import { chatFileRefKey, isChatFileRef } from '@/common/types/chatFile';
 import { emitter } from '@/renderer/utils/emitter';
@@ -71,6 +72,7 @@ export interface PreviewMetadata {
   favicon?: string; // 浏览器 tab 的站点图标 URL / Site icon URL for browser tabs
   agentActive?: boolean; // Agent 正在操作该浏览器 tab / Agent is currently driving this browser tab
   agentOwned?: boolean; // An agent opened this browser tab / Agent 打开了该浏览器 tab
+  profile?: BrowserTabProfile; // The Agent browser profile of this tab; Personal when absent. Fixed for the tab's life
 }
 
 export interface PreviewTab {
@@ -143,9 +145,9 @@ export interface PreviewContextValue {
   ) => void;
   /**
    * 打开浏览器 tab，省略 url 则开空白页。
-   * Open a browser tab; blank page when url is omitted.
+   * Open a browser tab; blank page when url is omitted, in Personal unless another profile is given.
    */
-  openBrowserTab: (url?: string) => void;
+  openBrowserTab: (url?: string, profile?: BrowserTabProfile) => void;
   /** Hide the panel without recording a user choice (route changes, "new chat"). */
   closePreview: () => void;
   /** Hide the panel because the user closed it: the scope then stays closed until a tab is opened again. */
@@ -572,6 +574,10 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
   }
 };
 
+/** A browser tab's metadata for `profile`; none for Personal, the default, which is not stored. */
+const profileMetadata = (profile?: BrowserTabProfile): PreviewMetadata | undefined =>
+  profile?.kind === 'agent' ? { profile: { kind: 'agent', agentId: profile.agentId } } : undefined;
+
 /** A fresh tab id; browser ids sort by creation time, which keeps their webviews' DOM order stable. */
 const createTabId = (type: PreviewContentType): string =>
   `${type}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -956,18 +962,23 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
    * points, and they must agree on the blank address and fallback title.
    */
   const openBrowserTab = useCallback(
-    (url?: string): string => openPreview(url?.trim() || BROWSER_BLANK_URL, 'browser'),
+    (url?: string, profile?: BrowserTabProfile): string =>
+      openPreview(url?.trim() || BROWSER_BLANK_URL, 'browser', profileMetadata(profile)),
     [openPreview]
   );
 
-  /** Opens a requested tab in the scope on screen; false at the tab cap. An agent's tab is marked as its own. */
+  /**
+   * Opens a requested tab in the scope on screen, in `profile`; false at the tab cap. An agent's tab is marked as
+   * its own.
+   */
   const openRequestedTabOnScreen = useCallback(
-    (url: string, fromAgent: boolean): boolean => {
+    (url: string, fromAgent: boolean, profile?: BrowserTabProfile): boolean => {
       if (tabsRef.current.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) {
         setBrowserTabLimitHitAt(Date.now());
         return false;
       }
-      openPreview(url.trim() || BROWSER_BLANK_URL, 'browser', fromAgent ? { agentOwned: true } : undefined);
+      const metadata = fromAgent ? { agentOwned: true, ...profileMetadata(profile) } : profileMetadata(profile);
+      openPreview(url.trim() || BROWSER_BLANK_URL, 'browser', metadata);
       return true;
     },
     [openPreview]
@@ -979,7 +990,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
    * that scope's tab cap.
    */
   const openAgentTabInBackground = useCallback(
-    (scope: string, url: string): boolean => {
+    (scope: string, url: string, profile?: BrowserTabProfile): boolean => {
       const stored = loadScopeState(scope);
       const scopeTabs = enterScope(backgroundRef.current, scope, stored.tabs).tabs;
       if (scopeTabs.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) return false;
@@ -988,7 +999,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         content: url,
         content_type: 'browser',
         title: BROWSER_TAB_FALLBACK_TITLE,
-        metadata: { agentOwned: true },
+        metadata: { agentOwned: true, ...profileMetadata(profile) },
         isDirty: false,
         originalContent: url,
       };
@@ -1003,19 +1014,20 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // agent's Target.createTarget). At the cap it is refused rather than reusing the oldest tab: a page must
   // not replace a tab the user has open (only user-initiated opens reuse), and a waiting agent is told at
   // once. An agent's tab opens in its own chat's scope, whichever chat is on screen; a request without a
-  // chat (pages, older MCPs) opens on screen. `background` is ignored for now.
+  // chat (pages, older MCPs) opens on screen, each in the profile main names (Personal when none). `background` is
+  // ignored for now.
   // `?.` only tolerates test mocks that omit `browser`/`agentBrowser`; production always defines them.
   useEffect(
     () =>
-      ipcBridge.browser?.openTabRequested.on(({ url, conversationId }) => {
+      ipcBridge.browser?.openTabRequested.on(({ url, conversationId, profile }) => {
         void (async () => {
           const session = accountSessionRef.current;
           const scope = conversationId ? await scopeOfConversation(conversationId) : null;
           if (accountSessionRef.current !== session) return;
           const opened =
             scope != null && scope !== currentScopeRef.current
-              ? openAgentTabInBackground(scope, url)
-              : openRequestedTabOnScreen(url, Boolean(conversationId));
+              ? openAgentTabInBackground(scope, url, profile)
+              : openRequestedTabOnScreen(url, Boolean(conversationId), profile);
           if (opened) return;
           ipcBridge.agentBrowser?.refuseTab
             .invoke({ url, max: MAX_BROWSER_TABS, ...(conversationId ? { conversationId } : {}) })

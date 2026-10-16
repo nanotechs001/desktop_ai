@@ -50,6 +50,9 @@ export type BrowserShortcutRequest = {
   action: Extract<BrowserShortcutAction, 'find' | 'focus-address' | 'new-tab' | 'close-tab' | 'escape'>;
 };
 
+/** Which browser profile (Electron session) a tab lives in: the user's own, or one Agent's. */
+export type BrowserTabProfile = { kind: 'personal' } | { kind: 'agent'; agentId: string };
+
 /** Who may drive a browser tab through the agent relay. */
 export type TabOwnership = {
   webContentsId: number;

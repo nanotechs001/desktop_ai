@@ -4,13 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import path from 'node:path';
 import { app, session, webContents } from 'electron';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { installContextMenu } from './contextMenu/contextMenuInstall';
 import { installDownloads } from './downloads';
-import { initBrowserExtensions, type BrowserExtensions } from './extensions';
+import { initBrowserExtensions, installExtensionProtocols, type BrowserExtensions } from './extensions';
 import { installPermissions } from './permissions';
+import { partitionOfSession, profileOfPartition, rememberBrowserSession } from './profiles/browserProfiles';
 import { installBrowserShortcuts } from './shortcuts';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
@@ -23,27 +25,31 @@ type BrowserContentsListener = (contents: Electron.WebContents) => void | Promis
 /** Requests whose client-hint headers get a "Google Chrome" brand. Mirrors `isGoogleHost`. */
 const GOOGLE_URL_FILTER = ['*://*.google.com/*', '*://google.com/*', '*://*.googleusercontent.com/*'];
 const BRAND_HEADERS = new Set(['sec-ch-ua', 'sec-ch-ua-full-version-list']);
+/** An Agent profile's Web Store extensions live in its own partition folder, so deleting the profile removes them. */
+const AGENT_EXTENSIONS_DIR = 'WebStoreExtensions';
 
 const listeners = new Set<BrowserContentsListener>();
-let initialized = false;
-/** Set once extensions start; stays null if they fail, and the browser works without them. */
-let extensions: BrowserExtensions | null = null;
-
-const getBrowserSession = (): Electron.Session => session.fromPartition(BROWSER_SESSION_PARTITION);
+let initDeps: BrowserSessionDeps | null = null;
+/** Every browser session set up so far, by partition. */
+const sessions = new Map<string, Electron.Session>();
+/** Set per session once its extensions start; missing if they fail, and that profile works without them. */
+const extensionsBySession = new Map<Electron.Session, BrowserExtensions>();
+/** Per partition: settles once its extensions started or failed to. */
+const extensionsSettled = new Map<string, Promise<void>>();
 
 const logListenerError = (error: unknown): void => {
   console.error('[BrowserSession] onBrowserContentsCreated listener failed:', error);
 };
 
 /**
- * True for webviews and popup windows living in the in-app browser's session. The
- * AionUi main window and every other webview (e.g. HTML preview) are excluded.
+ * True for webviews and popup windows living in a browser session: Personal or an Agent profile (see
+ * {@link ensureBrowserSession}). The AionUi main window and every other webview (e.g. HTML preview) are excluded.
  */
 export function isBrowserContents(contents: Electron.WebContents, mainWindow: Electron.BrowserWindow | null): boolean {
   const type = contents.getType();
   if (type !== 'webview' && type !== 'window') return false;
   if (mainWindow && !mainWindow.isDestroyed() && contents === mainWindow.webContents) return false;
-  return contents.session === getBrowserSession();
+  return partitionOfSession(contents.session) !== null;
 }
 
 /**
@@ -62,18 +68,56 @@ export function onBrowserContentsCreated(listener: BrowserContentsListener): () 
   };
 }
 
-/**
- * Makes the in-app browser's session look like Chrome and starts dispatching
- * `onBrowserContentsCreated` listeners. Idempotent: only the first call has an effect.
- *
- * Electron keeps one `webRequest.onBeforeSendHeaders` listener per session, and this is the
- * only one on the browser session; a later module that needs the event must compose with it.
- */
-export function initBrowserSession(deps: BrowserSessionDeps): void {
-  if (initialized) return;
-  initialized = true;
+const extensionsOf = (contents: Electron.WebContents): BrowserExtensions | null =>
+  extensionsBySession.get(contents.session) ?? null;
 
-  const browserSession = getBrowserSession();
+/** Not awaited by the setup: a failure is logged and browsing in that profile carries on without extensions. */
+const startExtensions = (
+  partition: string,
+  browserSession: Electron.Session,
+  deps: BrowserSessionDeps
+): Promise<void> => {
+  const profile = profileOfPartition(partition) ?? undefined;
+  const extensionsPath =
+    partition === BROWSER_SESSION_PARTITION || !browserSession.storagePath
+      ? undefined
+      : path.join(browserSession.storagePath, AGENT_EXTENSIONS_DIR);
+  return initBrowserExtensions({
+    session: browserSession,
+    getMainWindow: deps.getMainWindow,
+    // An extension's new tab opens in the profile the extension lives in.
+    openTab: (url) => ipcBridge.browser.openTabRequested.emit({ url, background: false, profile }),
+    closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
+    extensionsPath,
+  }).then(
+    (ready) => {
+      extensionsBySession.set(browserSession, ready);
+    },
+    (error: unknown) => {
+      console.error('[BrowserSession] Chrome extensions are unavailable:', error);
+    }
+  );
+};
+
+/**
+ * The browser session of `partition` (Personal, or an Agent partition from `agentPartition`), set up on first use
+ * with everything Personal gets: Chrome's user agent and brands, the permission prompt, downloads and extensions;
+ * its tabs and popups get the context menu, shortcuts and window-open rules. Lazy, idempotent and cached per
+ * partition. Throws before {@link initBrowserSession}, and for any other partition.
+ *
+ * Electron keeps one `webRequest.onBeforeSendHeaders` listener per session, and this is the only one on browser
+ * sessions; a later module that needs the event must compose with it.
+ */
+export function ensureBrowserSession(partition: string): Electron.Session {
+  const existing = sessions.get(partition);
+  if (existing) return existing;
+  const deps = initDeps;
+  if (!deps) throw new Error('The browser session is not initialized yet');
+  if (profileOfPartition(partition) === null) throw new Error(`Not a browser profile partition: ${partition}`);
+
+  const browserSession = session.fromPartition(partition);
+  sessions.set(partition, browserSession);
+  rememberBrowserSession(partition, browserSession);
   browserSession.setUserAgent(toChromeUserAgent(app.userAgentFallback));
   installDownloads(browserSession);
   installPermissions(browserSession);
@@ -90,21 +134,30 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
     );
     callback({ requestHeaders });
   });
+  extensionsSettled.set(partition, startExtensions(partition, browserSession, deps));
+  return browserSession;
+}
 
-  // Fire-and-forget like the async listeners below: a failure is logged and browsing carries on.
-  initBrowserExtensions({
-    session: browserSession,
+/**
+ * Resolves once the extensions of a set-up partition have started (or failed to): tabs created after it are known
+ * to `chrome.tabs`. Resolves at once for a partition that was never set up.
+ */
+export const browserExtensionsSettled = (partition: string): Promise<void> =>
+  extensionsSettled.get(partition) ?? Promise.resolve();
+
+/**
+ * Sets up the Personal browser session (see {@link ensureBrowserSession}) and starts dispatching
+ * `onBrowserContentsCreated` listeners for every browser session. Idempotent: only the first call has an effect.
+ */
+export function initBrowserSession(deps: BrowserSessionDeps): void {
+  if (initDeps) return;
+  initDeps = deps;
+
+  installExtensionProtocols({
     getMainWindow: deps.getMainWindow,
-    openTab: (url) => ipcBridge.browser.openTabRequested.emit({ url, background: false }),
-    closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
-  }).then(
-    (ready) => {
-      extensions = ready;
-    },
-    (error: unknown) => {
-      console.error('[BrowserSession] Chrome extensions are unavailable:', error);
-    }
-  );
+    resolveSession: (partition) => sessions.get(partition) ?? null,
+  });
+  ensureBrowserSession(BROWSER_SESSION_PARTITION);
 
   // Popups are browser contents too, so they get the same window-open rules as the webview that opened them.
   onBrowserContentsCreated((contents) => installWindowOpenHandler(contents, deps.getMainWindow));
@@ -112,14 +165,14 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
     installContextMenu(
       contents,
       deps.getMainWindow,
-      (params) => extensions?.getContextMenuItems(contents, params) ?? []
+      (params) => extensionsOf(contents)?.getContextMenuItems(contents, params) ?? []
     )
   );
   onBrowserContentsCreated((contents) => installBrowserShortcuts(contents));
   onBrowserContentsCreated((contents) => installBeforeUnloadDialog(contents, deps.getMainWindow));
   // Tabs are webviews; popups stay windows of the page that opened them, not chrome.tabs entries.
   onBrowserContentsCreated((contents) => {
-    if (contents.getType() === 'webview') extensions?.addTab(contents);
+    if (contents.getType() === 'webview') extensionsOf(contents)?.addTab(contents);
   });
 
   app.on('web-contents-created', (_event, contents) => {
@@ -138,10 +191,10 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
 
 /**
  * Tells extensions which browser tab the user is looking at (`chrome.tabs.onActivated`). Ids that
- * are gone or not on the browser session are ignored, so a misreported id cannot reach extensions.
+ * are gone or not on a browser session are ignored, so a misreported id cannot reach extensions.
  */
 export function selectBrowserTab(webContentsId: number): void {
   const contents = webContents.fromId(webContentsId);
-  if (!contents || contents.isDestroyed() || contents.session !== getBrowserSession()) return;
-  extensions?.selectTab(contents);
+  if (!contents || contents.isDestroyed()) return;
+  extensionsOf(contents)?.selectTab(contents);
 }

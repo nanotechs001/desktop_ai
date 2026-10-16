@@ -9,16 +9,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type StubContents = { getType: () => string; session: unknown };
 
 const mocks = vi.hoisted(() => {
-  const browserSession = { setUserAgent: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() } };
+  const browserSession = { setUserAgent: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() }, storagePath: '/u/p' };
+  const agentSession = {
+    setUserAgent: vi.fn(),
+    webRequest: { onBeforeSendHeaders: vi.fn() },
+    storagePath: '/u/Partitions/aionui-agent-x',
+  };
   return {
     browserSession,
+    agentSession,
     otherSession: { setUserAgent: vi.fn() },
     app: {
       userAgentFallback:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) AionUi/2.2.2 Chrome/138.0.7204.243 Electron/37.10.3 Safari/537.36',
       on: vi.fn(),
     },
-    fromPartition: vi.fn(() => browserSession),
+    fromPartition: vi.fn((partition: string) =>
+      partition === 'persist:aionui-browser' ? browserSession : agentSession
+    ),
     installWindowOpenHandler: vi.fn(),
     installBeforeUnloadDialog: vi.fn(),
     installContextMenu: vi.fn(),
@@ -27,6 +35,7 @@ const mocks = vi.hoisted(() => {
     installPermissions: vi.fn(),
     extensions: { addTab: vi.fn(), selectTab: vi.fn(), getContextMenuItems: vi.fn(() => ['ext item']) },
     initBrowserExtensions: vi.fn(),
+    installExtensionProtocols: vi.fn(),
     fromId: vi.fn(),
     openTabEmit: vi.fn(),
     closeTabEmit: vi.fn(),
@@ -45,7 +54,10 @@ vi.mock('@/common', () => ({
   },
 }));
 
-vi.mock('@process/services/browserSession/extensions', () => ({ initBrowserExtensions: mocks.initBrowserExtensions }));
+vi.mock('@process/services/browserSession/extensions', () => ({
+  initBrowserExtensions: mocks.initBrowserExtensions,
+  installExtensionProtocols: mocks.installExtensionProtocols,
+}));
 
 vi.mock('@process/services/browserSession/downloads', () => ({ installDownloads: mocks.installDownloads }));
 
@@ -77,11 +89,12 @@ const makeMainWindow = (webContents: StubContents, destroyed = false) => ({
   isDestroyed: () => destroyed,
 });
 
-// The module keeps init state at module scope, so each test imports a fresh copy.
+// The modules keep init state at module scope, so each test imports fresh copies.
 const loadModule = async () => {
   vi.resetModules();
   return import('@process/services/browserSession/browserSession');
 };
+const loadProfiles = () => import('@process/services/browserSession/profiles/browserProfiles');
 
 type Mod = Awaited<ReturnType<typeof loadModule>>;
 type MainWindowArg = Parameters<Mod['isBrowserContents']>[1];
@@ -117,9 +130,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** A fresh module with the Personal session set up, as at startup. */
+const loadInitialized = async () => {
+  const mod = await loadModule();
+  mod.initBrowserSession({ getMainWindow: () => null });
+  return mod;
+};
+
 describe('isBrowserContents', () => {
   it('is true for a webview or window on the browser session', async () => {
-    const { isBrowserContents } = await loadModule();
+    const { isBrowserContents } = await loadInitialized();
     const main = makeMainWindow(makeContents('window', mocks.otherSession));
 
     expect(isBrowserContents(asContents(makeContents('webview')), asWindow(main))).toBe(true);
@@ -128,14 +148,14 @@ describe('isBrowserContents', () => {
   });
 
   it('is false for the main window, even on the browser session', async () => {
-    const { isBrowserContents } = await loadModule();
+    const { isBrowserContents } = await loadInitialized();
     const mainContents = makeContents('window');
 
     expect(isBrowserContents(asContents(mainContents), asWindow(makeMainWindow(mainContents)))).toBe(false);
   });
 
   it('does not touch a destroyed main window', async () => {
-    const { isBrowserContents } = await loadModule();
+    const { isBrowserContents } = await loadInitialized();
     const main = makeMainWindow(makeContents('window'), true);
     Object.defineProperty(main, 'webContents', {
       get: () => {
@@ -154,7 +174,7 @@ describe('isBrowserContents', () => {
   });
 
   it('is false for other contents types on the browser session', async () => {
-    const { isBrowserContents } = await loadModule();
+    const { isBrowserContents } = await loadInitialized();
 
     expect(isBrowserContents(asContents(makeContents('backgroundPage')), null)).toBe(false);
     expect(isBrowserContents(asContents(makeContents('remote')), null)).toBe(false);
@@ -444,7 +464,11 @@ describe('Chrome extensions wiring', () => {
     expect(deps.getMainWindow()).toBe(main);
     deps.openTab('https://a.test/');
     deps.closeTab(9);
-    expect(mocks.openTabEmit).toHaveBeenCalledWith({ url: 'https://a.test/', background: false });
+    expect(mocks.openTabEmit).toHaveBeenCalledWith({
+      url: 'https://a.test/',
+      background: false,
+      profile: { kind: 'personal' },
+    });
     expect(mocks.closeTabEmit).toHaveBeenCalledWith({ webContentsId: 9 });
   });
 
@@ -499,5 +523,85 @@ describe('Chrome extensions wiring', () => {
     mod.selectBrowserTab(1);
 
     expect(mocks.extensions.selectTab.mock.calls).toEqual([[browserTab]]);
+  });
+});
+
+describe('ensureBrowserSession (Agent profiles)', () => {
+  const setup = async () => {
+    const mod = await loadModule();
+    const { agentPartition } = await loadProfiles();
+    mod.initBrowserSession({ getMainWindow: () => null });
+    return { mod, partition: agentPartition('bare:632f31d2') };
+  };
+
+  it('ensureBrowserSession applies the same UA, permissions, downloads and window-open handlers to an agent partition, once', async () => {
+    const { mod, partition } = await setup();
+
+    expect(mod.ensureBrowserSession(partition)).toBe(mocks.agentSession);
+    expect(mod.ensureBrowserSession(partition)).toBe(mocks.agentSession);
+
+    expect(mocks.fromPartition).toHaveBeenCalledWith(partition);
+    expect(mocks.agentSession.setUserAgent).toHaveBeenCalledTimes(1);
+    expect(mocks.agentSession.setUserAgent).toHaveBeenCalledWith(CHROME_UA);
+    expect(mocks.agentSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
+    expect(mocks.installDownloads.mock.calls).toEqual([[mocks.browserSession], [mocks.agentSession]]);
+    expect(mocks.installPermissions.mock.calls).toEqual([[mocks.browserSession], [mocks.agentSession]]);
+    expect(mocks.initBrowserExtensions).toHaveBeenCalledTimes(2);
+    expect(mocks.installExtensionProtocols).toHaveBeenCalledTimes(1);
+    // One dispatcher serves every browser session.
+    expect(mocks.app.on.mock.calls.filter(([name]) => name === 'web-contents-created')).toHaveLength(1);
+
+    const webview = makeContents('webview', mocks.agentSession);
+    getCreatedHandler()({}, webview);
+    expect(mocks.installWindowOpenHandler.mock.calls.map(([contents]) => contents)).toEqual([webview]);
+    expect(mocks.installContextMenu.mock.calls.map(([contents]) => contents)).toEqual([webview]);
+    expect(mocks.installBrowserShortcuts.mock.calls.map(([contents]) => contents)).toEqual([webview]);
+    expect(mocks.installBeforeUnloadDialog.mock.calls.map(([contents]) => contents)).toEqual([webview]);
+  });
+
+  it("counts an Agent profile's contents as browser contents only once its session is set up", async () => {
+    const { mod, partition } = await setup();
+    const webview = asContents(makeContents('webview', mocks.agentSession));
+
+    expect(mod.isBrowserContents(webview, null)).toBe(false);
+    mod.ensureBrowserSession(partition);
+    expect(mod.isBrowserContents(webview, null)).toBe(true);
+  });
+
+  it('gives an Agent profile its own extensions folder, extension tabs and new tabs in that profile', async () => {
+    const { mod, partition } = await setup();
+    mod.ensureBrowserSession(partition);
+    await Promise.resolve();
+    await Promise.resolve();
+    const deps = mocks.initBrowserExtensions.mock.calls[1][0] as {
+      session: unknown;
+      openTab: (url: string) => void;
+      extensionsPath?: string;
+    };
+
+    expect(deps.session).toBe(mocks.agentSession);
+    expect(deps.extensionsPath).toBe(`${mocks.agentSession.storagePath}/WebStoreExtensions`);
+    expect(
+      (mocks.initBrowserExtensions.mock.calls[0][0] as { extensionsPath?: string }).extensionsPath
+    ).toBeUndefined();
+    deps.openTab('https://a.test/');
+    expect(mocks.openTabEmit).toHaveBeenCalledWith({
+      url: 'https://a.test/',
+      background: false,
+      profile: { kind: 'agent', agentId: 'bare:632f31d2' },
+    });
+  });
+
+  it('refuses partitions that are not a browser profile, and any call before init', async () => {
+    const mod = await loadModule();
+    const { agentPartition } = await loadProfiles();
+    const partition = agentPartition('bare:1');
+    expect(() => mod.ensureBrowserSession(partition)).toThrow();
+
+    mod.initBrowserSession({ getMainWindow: () => null });
+    for (const bad of ['persist:other', 'persist:aionui-agent-ffffffffffffffffffffffffffffffff', '']) {
+      expect(() => mod.ensureBrowserSession(bad), bad).toThrow();
+    }
+    expect(mocks.fromPartition).not.toHaveBeenCalledWith('persist:other');
   });
 });

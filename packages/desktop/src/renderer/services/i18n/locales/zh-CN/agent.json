@@ -85,5 +85,16 @@
       "user": "指示",
       "page": "来自网页"
     }
+  },
+  "browserProfile": {
+    "title": "浏览器资料",
+    "hint": "此智能体在浏览器窗格中独立的 Cookie、登录状态、网站数据和扩展，与你的分开。",
+    "clear": "清除浏览数据",
+    "clearConfirm": "清除此智能体的 Cookie、登录状态和网站数据？已打开的标签页需刷新后生效。",
+    "clearConfirmOk": "清除",
+    "cleared": "浏览数据已清除。",
+    "clearFailed": "无法清除浏览数据。",
+    "deleteWithAgent": "同时删除它的浏览器数据（Cookie、登录状态、网站数据、扩展）",
+    "deleteFailed": "智能体已删除，但无法移除它的浏览器数据。"
   }
 }

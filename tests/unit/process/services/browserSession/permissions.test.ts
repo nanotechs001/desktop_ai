@@ -272,6 +272,16 @@ describe('installPermissions', () => {
     expect(callback).toHaveBeenLastCalledWith(true);
   });
 
+  it('publishes each prompt change once, however many browser profiles installed the policy', () => {
+    setup();
+    const { request } = setup();
+    mocks.emit.mockClear();
+
+    request(contents, 'geolocation', vi.fn(), { requestingUrl: `${ORIGIN}/x` });
+
+    expect(mocks.emit).toHaveBeenCalledTimes(1);
+  });
+
   it('attributes the prompt to the requesting frame, not the top-level page', () => {
     const { request } = setup();
     request({ getURL: () => 'https://top.test/page' }, 'geolocation', vi.fn(), {

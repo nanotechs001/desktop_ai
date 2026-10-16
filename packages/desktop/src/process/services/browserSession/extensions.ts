@@ -7,7 +7,6 @@
 import { dialog, session as electronSession } from 'electron';
 import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-chrome-extensions';
 import { installChromeWebStore } from 'electron-chrome-web-store';
-import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { loadTranslate } from './contextMenu/contextMenuInstall';
 import { CreateTabWaiter, offerNewTab } from '@process/services/agentBrowser/tabWaiter';
 import { isSafeUrl } from './urlSafety';
@@ -17,6 +16,14 @@ export type ExtensionsDeps = {
   getMainWindow: () => Electron.BrowserWindow | null;
   openTab: (url: string) => void;
   closeTab: (webContentsId: number) => void;
+  /** Where Web Store installs go; the library's default (`<userData>/Extensions`) when unset, as for Personal. */
+  extensionsPath?: string;
+};
+
+export type ExtensionProtocolDeps = {
+  getMainWindow: () => Electron.BrowserWindow | null;
+  /** The browser session of a partition that was already set up; null for any other. */
+  resolveSession: (partition: string) => Electron.Session | null;
 };
 
 export type BrowserExtensions = {
@@ -99,19 +106,45 @@ const confirmInstall = async (parent: Electron.BrowserWindow | null, prompt: Ins
   return response === ADD_BUTTON;
 };
 
+const liveWindow = (getMainWindow: () => Electron.BrowserWindow | null): Electron.BrowserWindow | null => {
+  const mainWindow = getMainWindow();
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+};
+
 /**
- * Adds Chrome extension support to the in-app browser session: `chrome.tabs` mapped onto AionUi's
- * browser tabs, action icons/popups for `<browser-action-list>`, context-menu items, and installs
- * from the Chrome Web Store with auto-update. Throws if the extensions library cannot start; a
- * failed web store setup is only logged, so extensions already loaded keep working.
+ * The process-wide part of extension support, set up once: `<browser-action-list>` in the main window (whose pages
+ * use the default session) resolves only browser partitions already set up (none is created on request), and only
+ * the main window may load crx:// at all, so other default-session pages cannot probe which extensions are installed.
+ */
+export function installExtensionProtocols(deps: ExtensionProtocolDeps): void {
+  setSessionPartitionResolver((partition) => {
+    const resolved = deps.resolveSession(partition);
+    if (!resolved) throw new Error(`unknown extensions partition: ${partition}`);
+    return resolved;
+  });
+  ElectronChromeExtensions.handleCRXProtocol(electronSession.defaultSession);
+  // Unfiltered: webRequest URL patterns reject custom schemes ("Wrong scheme type"), so crx:// is
+  // matched here. This is the default session's only onBeforeRequest listener (Electron keeps one).
+  electronSession.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    if (!details.url.startsWith(CRX_PREFIX)) return callback({});
+    callback({
+      cancel:
+        details.webContentsId === undefined || details.webContentsId !== liveWindow(deps.getMainWindow)?.webContents.id,
+    });
+  });
+}
+
+/**
+ * Adds Chrome extension support to one browser session (Personal or an Agent profile): `chrome.tabs` mapped onto
+ * AionUi's browser tabs, action icons/popups for `<browser-action-list>`, context-menu items, and installs from the
+ * Chrome Web Store into this session, with auto-update. Call {@link installExtensionProtocols} once first. Throws if
+ * the extensions library cannot start; a failed web store setup is only logged, so extensions already loaded keep
+ * working.
  */
 export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<BrowserExtensions> {
-  const { session, getMainWindow, openTab, closeTab } = deps;
+  const { session, getMainWindow, openTab, closeTab, extensionsPath } = deps;
   const waiter = new CreateTabWaiter<Electron.WebContents>();
-  const liveMainWindow = (): Electron.BrowserWindow | null => {
-    const mainWindow = getMainWindow();
-    return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
-  };
+  const liveMainWindow = (): Electron.BrowserWindow | null => liveWindow(getMainWindow);
 
   const extensions = new ElectronChromeExtensions({
     license: 'GPL-3.0',
@@ -131,26 +164,14 @@ export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<Brows
     removeTab: (tab) => closeTab(tab.id),
   });
 
-  // <browser-action-list> lives in the main window, whose pages use the default session. Only the
-  // browser partition resolves (no partition is created on request), and only the main window may
-  // load crx:// at all, so other default-session pages cannot probe which extensions are installed.
-  setSessionPartitionResolver((partition) => {
-    if (partition !== BROWSER_SESSION_PARTITION) throw new Error(`unknown extensions partition: ${partition}`);
-    return session;
-  });
-  ElectronChromeExtensions.handleCRXProtocol(electronSession.defaultSession);
-  // Unfiltered: webRequest URL patterns reject custom schemes ("Wrong scheme type"), so crx:// is
-  // matched here. This is the default session's only onBeforeRequest listener (Electron keeps one).
-  electronSession.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    if (!details.url.startsWith(CRX_PREFIX)) return callback({});
-    callback({
-      cancel: details.webContentsId === undefined || details.webContentsId !== liveMainWindow()?.webContents.id,
-    });
-  });
-
   // Not awaited: loading installed extensions from disk must not delay tracking tabs.
   const beforeInstall = createBeforeInstall((prompt) => confirmInstall(liveMainWindow(), prompt));
-  installChromeWebStore({ session, autoUpdate: true, beforeInstall }).catch((error: unknown) => {
+  installChromeWebStore({
+    session,
+    autoUpdate: true,
+    beforeInstall,
+    ...(extensionsPath ? { extensionsPath } : {}),
+  }).catch((error: unknown) => {
     console.error('[BrowserExtensions] Chrome Web Store setup failed:', error);
   });
 

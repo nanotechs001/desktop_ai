@@ -203,6 +203,12 @@ const getConversation = async (id: string): Promise<{ assistant?: { id: string; 
 };
 
 /**
+ * The chat → Agent lookup shared by notebooks and the agent browser (each Agent's browser profile): the chat's
+ * assistant, else the default Agent; built-ins refused. One instance, so both share its cache.
+ */
+export const resolveChatAgent = createAgentResolver({ getConversation, getDefaultAgentId: defaultAgentId });
+
+/**
  * Sets up Agent notebooks: the store (every change re-syncs the Agent's rule), the renderer's `agentNotes` IPC, and
  * what the artifact server needs for the agents' `notes.add`. Call before `startArtifacts`.
  */
@@ -215,5 +221,5 @@ export async function startAgentNotes(): Promise<NotesApi> {
   ipcBridge.agentNotes.add.provider((request) => guardAsync(() => handlers.add(request)));
   ipcBridge.agentNotes.update.provider((request) => guardAsync(() => handlers.update(request)));
   ipcBridge.agentNotes.delete.provider((request) => guardAsync(() => handlers.delete(request)));
-  return { store, resolveAgent: createAgentResolver({ getConversation, getDefaultAgentId: defaultAgentId }) };
+  return { store, resolveAgent: resolveChatAgent };
 }

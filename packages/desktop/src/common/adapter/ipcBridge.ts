@@ -18,6 +18,7 @@ import type {
   AgentActionEvent,
   ConfirmRequest,
   BrowserShortcutRequest,
+  BrowserTabProfile,
   DownloadItem,
   PermissionRequest,
   TabOwnership,
@@ -1487,9 +1488,19 @@ export const deepLink = {
 export const browser = {
   // main → renderer: a browser page or an agent asked for a new tab (target=_blank, window.open, Target.createTarget).
   // conversationId: the agent's chat; its tab opens in that chat's pane, even when another chat is on screen.
-  openTabRequested: bridge.buildEmitter<{ url: string; background: boolean; conversationId?: string }>(
-    'browser.open-tab-requested'
-  ),
+  // profile: the browser profile the tab opens in (the opener's, or the agent's chat's Agent); Personal when absent.
+  openTabRequested: bridge.buildEmitter<{
+    url: string;
+    background: boolean;
+    conversationId?: string;
+    profile?: BrowserTabProfile;
+  }>('browser.open-tab-requested'),
+  // the partition a profile's tabs use; main sets the profile's session up first, so ask before mounting the webview
+  profilePartition: bridge.buildProvider<IBridgeResponse<string>, BrowserTabProfile>('browser.profile-partition'),
+  // clears an Agent profile's cookies, site data and caches (Personal has application.clearBrowserData)
+  clearProfileData: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('browser.clear-profile-data'),
+  // a deleted Agent's browser data: its session is cleared, then its partition folder removed
+  deleteProfileData: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('browser.delete-profile-data'),
   getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
   openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),
   showDownloadInFolder: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.show-download-in-folder'),

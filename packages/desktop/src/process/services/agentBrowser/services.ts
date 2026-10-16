@@ -5,7 +5,11 @@
  */
 
 import { ipcBridge } from '@/common';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
+import type { BrowserTabProfile } from '@/common/types/browser';
+import type { AgentResolution } from '@process/artifacts/notes';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
+import { partitionOfProfile, partitionOfSession } from '@process/services/browserSession/profiles/browserProfiles';
 import { PendingConfirms } from './confirmGate';
 import { startRelayServer } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
@@ -21,6 +25,8 @@ export type AgentBrowserOptions = {
   enabled: boolean;
   /** Loopback ports agents must not open besides the relay's own, e.g. the backend's. */
   blockedPorts: () => readonly number[];
+  /** The chat → Agent lookup the notebooks use (Task 13); without it every agent tab uses the default Agent profile. */
+  resolveAgent?: (conversationId: string) => Promise<AgentResolution>;
 };
 
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
@@ -136,6 +142,18 @@ const registerProviders = (
 };
 
 /**
+ * The profile an agent's tabs open in: its chat's Agent, else (another engine, a built-in, no chat, a failed lookup)
+ * the shared default Agent profile. Never Personal.
+ */
+export async function agentTabProfile(
+  resolveAgent: AgentBrowserOptions['resolveAgent'],
+  conversationId: string | undefined
+): Promise<BrowserTabProfile> {
+  const resolved = conversationId && resolveAgent ? await resolveAgent(conversationId) : null;
+  return { kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID };
+}
+
+/**
  * Registers the agent-browser IPC and, when enabled, starts the agent relay over the in-app browser's
  * tabs. Call before the backend spawns (its env carries the relay url/token) and before the renderer
  * loads, so every browser tab is seen as it is created. Resolves null when disabled.
@@ -157,20 +175,25 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   onBrowserContentsCreated((contents) => {
     registry.track(contents);
     watchUserInput(contents, registry);
-    if (contents.getType() === 'webview') offerNewTab(waiter, contents);
+    if (contents.getType() === 'webview')
+      offerNewTab(waiter, contents, partitionOfSession(contents.session) ?? undefined);
   });
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
   confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));
 
   const relay = await startRelayServer({
     registry,
-    openTab: (url, conversationId) =>
+    openTab: (url, conversationId, profile) =>
       ipcBridge.browser.openTabRequested.emit({
         url,
         background: false,
         ...(conversationId ? { conversationId } : {}),
+        profile,
       }),
-    waitForTab: (url, conversationId) => waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId),
+    // Only a tab in the profile's own partition answers, so a same-url tab elsewhere is never claimed.
+    waitForTab: (url, conversationId, profile) =>
+      waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(profile)),
+    resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
     requestConfirm: (request, signal) => confirms.request(request, undefined, signal),

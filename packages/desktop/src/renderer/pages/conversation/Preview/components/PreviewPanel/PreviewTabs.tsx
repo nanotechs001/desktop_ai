@@ -10,7 +10,9 @@ import { Tag } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import type { BrowserTabProfile } from '@/common/types/browser';
 import type { TabFadeState } from '../../hooks/useTabOverflow';
+import ProfileBadge from '../../browser/BrowserProfiles/ProfileBadge';
 
 /**
  * 单个 tab 的最大宽度。
@@ -66,6 +68,11 @@ export interface PreviewTab {
    * An agent opened this browser tab
    */
   agentOwned?: boolean;
+
+  /**
+   * The browser profile of a browser tab (Personal or an Agent's), shown as its avatar; absent for other tabs
+   */
+  profile?: BrowserTabProfile;
 
   /**
    * 这个 tab 的绝对路径（浏览器 tab 为其 URL）是否可复制。刻意只给布尔值：
@@ -171,6 +178,11 @@ interface PreviewTabsProps {
    * the plus button never appears in a document-only panel.
    */
   onNewBrowserTab?: () => void;
+
+  /**
+   * Shown next to the new-tab plus: the menu that opens a new tab in a chosen browser profile
+   */
+  newTabMenu?: React.ReactNode;
 }
 
 /**
@@ -193,6 +205,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   onContextMenu,
   onClosePanel,
   onNewBrowserTab,
+  newTabMenu,
   isMaximized,
   onToggleMaximize,
 }) => {
@@ -241,6 +254,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                     min-w-0 is what makes truncation possible: a flex child defaults
                     to its content width and refuses to shrink below it. */}
                 <span className='text-12px flex items-center gap-4px min-w-0'>
+                  {tab.profile && <ProfileBadge profile={tab.profile} size={12} />}
                   {/* 站点图标（浏览器 tab）/ Site icon (browser tabs) */}
                   {tab.favicon && (
                     <img
@@ -314,6 +328,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
               <Plus theme='outline' size='14' fill={iconColors.secondary} />
             </div>
           )}
+          {onNewBrowserTab && newTabMenu}
         </div>
 
         {/* 面板操作按钮：最大化 / 收起 / Panel actions: maximize / collapse */}

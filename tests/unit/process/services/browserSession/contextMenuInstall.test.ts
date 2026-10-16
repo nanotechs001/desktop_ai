@@ -26,6 +26,7 @@ vi.mock('@process/services/i18n', () => ({
 }));
 
 import { installContextMenu } from '@process/services/browserSession/contextMenu/contextMenuInstall';
+import { agentPartition, rememberBrowserSession } from '@process/services/browserSession/profiles/browserProfiles';
 
 type Template = { label?: string; type?: string; enabled?: boolean; click?: () => void };
 type Params = Parameters<Parameters<Electron.WebContents['on']>[1]>;
@@ -115,6 +116,19 @@ describe('installContextMenu', () => {
     await vi.waitFor(() => expect(mocks.popup).toHaveBeenCalled());
     clickItem('preview.browserChrome.menu.openLinkInNewTab');
     expect(mocks.emit).toHaveBeenCalledWith({ url: 'https://a.test/page', background: false });
+  });
+
+  it("opens the new tab in the page's own browser profile", async () => {
+    const stub = install();
+    rememberBrowserSession(agentPartition('bare:7'), stub.contents.session as unknown as Electron.Session);
+    stub.fire({ linkURL: 'https://a.test/page' });
+    await vi.waitFor(() => expect(mocks.popup).toHaveBeenCalled());
+    clickItem('preview.browserChrome.menu.openLinkInNewTab');
+    expect(mocks.emit).toHaveBeenCalledWith({
+      url: 'https://a.test/page',
+      background: false,
+      profile: { kind: 'agent', agentId: 'bare:7' },
+    });
   });
 
   it('offers no Open entry for a javascript: link', async () => {

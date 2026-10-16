@@ -46,6 +46,22 @@ describe('CreateTabWaiter', () => {
     expect(waiter.waiting).toBe(false);
   });
 
+  it("hands a tab only to a request for its own profile's partition", async () => {
+    const waiter = new CreateTabWaiter<FakeContents>();
+    const agentTab = waiter.wait('https://a.test/', 1000, 'conv-1', 'persist:aionui-agent-x');
+    const personalTab = new FakeContents(1);
+    const wrongAgentTab = new FakeContents(2);
+    const rightTab = new FakeContents(3);
+
+    expect(waiter.offer(personalTab, 'https://a.test/', 'persist:aionui-browser')).toBe(false);
+    expect(waiter.offer(wrongAgentTab, 'https://a.test/', 'persist:aionui-agent-y')).toBe(false);
+    expect(waiter.offer(wrongAgentTab, 'https://a.test/')).toBe(false);
+    offerNewTab(waiter, rightTab, 'persist:aionui-agent-x');
+    rightTab.navigate('https://a.test/');
+
+    await expect(agentTab).resolves.toBe(rightTab);
+  });
+
   it('gives two requests for the same url one tab each, oldest first', async () => {
     const waiter = new CreateTabWaiter<FakeContents>();
     const first = waiter.wait('about:blank', 1000);

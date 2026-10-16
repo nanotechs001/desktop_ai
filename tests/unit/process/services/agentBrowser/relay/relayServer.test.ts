@@ -2,7 +2,7 @@ import { connect as netConnect } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
-import type { AgentActionEvent, ConfirmRequest } from '@/common/types/browser';
+import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
 import {
   createTargetRegistry,
@@ -66,6 +66,13 @@ const closeTab = vi.fn();
 const onAgentAction = vi.fn<(event: AgentActionEvent) => void>();
 const requestConfirm = vi.fn<(req: ConfirmAsk, signal: AbortSignal) => Promise<boolean>>();
 let nextTab: () => Promise<FakeContents> = () => new Promise(() => {});
+const waitForTab = vi.fn((_url: string, _conversationId?: string, _profile?: BrowserTabProfile) => nextTab());
+/** Main's conversation → Agent lookup: each chat its own Agent, no chat the default Agent. */
+const agentProfileOf = (conversationId?: string): BrowserTabProfile => ({
+  kind: 'agent',
+  agentId: conversationId ? `agent-of-${conversationId}` : 'aion-default-agent',
+});
+const resolveProfile = vi.fn(async (conversationId?: string) => agentProfileOf(conversationId));
 
 const start = async (limits: Partial<RelayLimits> = {}): Promise<RelayHandle> => {
   registry = createTargetRegistry();
@@ -75,7 +82,8 @@ const start = async (limits: Partial<RelayLimits> = {}): Promise<RelayHandle> =>
     closeTab,
     onAgentAction,
     requestConfirm,
-    waitForTab: () => nextTab(),
+    waitForTab,
+    resolveProfile,
     limits,
   });
   return relay;
@@ -213,7 +221,7 @@ describe('relay server: targets', () => {
 
     const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
 
-    expect(openTab).toHaveBeenCalledWith('https://example.com', undefined);
+    expect(openTab).toHaveBeenCalledWith('https://example.com', undefined, agentProfileOf());
     expect(reply.result).toEqual({ targetId: 'wc-41' });
     expect(registry.ownership(41)?.owner).toMatchObject({ label: 'my agent' });
   });
@@ -236,10 +244,79 @@ describe('relay server: targets', () => {
     expect((await create(malformed)).error).toBeUndefined();
 
     expect(openTab.mock.calls).toEqual([
-      ['https://example.com', 'conv_A-1'],
-      ['https://example.com', undefined],
-      ['https://example.com', undefined],
+      ['https://example.com', 'conv_A-1', agentProfileOf('conv_A-1')],
+      ['https://example.com', undefined, agentProfileOf()],
+      ['https://example.com', undefined, agentProfileOf()],
     ]);
+  });
+
+  it("an agent tabs.open creates the tab in the chat's Agent profile, ignoring any profile in the tool input", async () => {
+    const handle = await start();
+    nextTab = () => {
+      const tab = new FakeContents(60);
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    const client = await connect(handle, 'a', { 'X-Aion-Conversation': 'conv_A-1' });
+
+    const reply = await client.send('Target.createTarget', {
+      url: 'https://example.com',
+      profile: { kind: 'personal' },
+      browserContextId: 'persist:aionui-browser',
+      partition: 'persist:aionui-browser',
+    });
+
+    expect(reply.error).toBeUndefined();
+    expect(resolveProfile).toHaveBeenCalledWith('conv_A-1');
+    expect(openTab).toHaveBeenCalledWith('https://example.com', 'conv_A-1', agentProfileOf('conv_A-1'));
+    expect(waitForTab).toHaveBeenCalledWith('https://example.com', 'conv_A-1', agentProfileOf('conv_A-1'));
+  });
+
+  it('opens nothing when the Agent of the chat cannot be resolved', async () => {
+    const handle = await start();
+    resolveProfile.mockRejectedValueOnce(new Error('backend down'));
+    const client = await connect(handle, 'a', { 'X-Aion-Conversation': 'conv_A-1' });
+
+    const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
+
+    expect(reply.error?.message).toMatch(/backend down/);
+    expect(openTab).not.toHaveBeenCalled();
+    expect(waitForTab).not.toHaveBeenCalled();
+  });
+
+  it("an agent cannot target a Personal tab unless shared, nor another Agent's tab", async () => {
+    const handle = await start();
+    nextTab = () => {
+      const tab = new FakeContents(70);
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    const agentA = await connect(handle, 'a', { 'X-Aion-Conversation': 'conv_A' });
+    const agentB = await connect(handle, 'b', { 'X-Aion-Conversation': 'conv_B' });
+    expect((await agentA.send('Target.createTarget', { url: 'https://example.com' })).result).toEqual({
+      targetId: 'wc-70',
+    });
+    registry.track(new FakeContents(71)); // the user's own Personal tab
+
+    const listed = async (client: TestClient) =>
+      (((await client.send('AionRelay.listTabs')).result?.tabs ?? []) as Array<{ targetId: string }>).map(
+        (t) => t.targetId
+      );
+    const attachTo = (client: TestClient, targetId: string) =>
+      client.send('Target.attachToTarget', { targetId, flatten: true });
+
+    // Agent B sees neither Agent A's tab (in A's profile) nor the unshared Personal tab, and cannot reach them.
+    expect(await listed(agentB)).toEqual([]);
+    expect((await attachTo(agentB, 'wc-70')).error?.message).toMatch(/not shared/i);
+    expect((await agentB.send('Target.closeTarget', { targetId: 'wc-70' })).error).toBeDefined();
+    expect((await attachTo(agentB, 'wc-71')).error?.message).toMatch(/not shared/i);
+    expect(await listed(agentA)).toEqual(['wc-70']);
+
+    // Share is the only way into a Personal tab.
+    registry.share(71, true);
+    expect((await listed(agentB)).toSorted()).toEqual(['wc-71']);
+    expect((await attachTo(agentB, 'wc-71')).error).toBeUndefined();
+    expect((await attachTo(agentB, 'wc-70')).error?.message).toMatch(/not shared/i);
   });
 
   it('Target.createTarget refuses non-web, metadata and app-internal urls without opening anything', async () => {

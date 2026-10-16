@@ -53,6 +53,23 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
 }));
 
 const { startAgentBrowserServices } = await import('@process/services/agentBrowser/services');
+const { agentPartition, rememberBrowserSession } =
+  await import('@process/services/browserSession/profiles/browserProfiles');
+
+/** Browser sessions as browserSession sets them up: Personal, the shared default Agent profile, and one Agent's. */
+const personalSession = { name: 'personal' } as unknown as Electron.Session;
+const defaultAgentSession = { name: 'default agent' } as unknown as Electron.Session;
+const agentSession = { name: 'agent' } as unknown as Electron.Session;
+rememberBrowserSession('persist:aionui-browser', personalSession);
+rememberBrowserSession(agentPartition('aion-default-agent'), defaultAgentSession);
+rememberBrowserSession(agentPartition('bare:agent-1'), agentSession);
+const DEFAULT_AGENT_PROFILE = { kind: 'agent', agentId: 'aion-default-agent' } as const;
+/** conv-1 belongs to Agent bare:agent-1; any other chat has no Agent (another engine, a built-in). */
+const resolveAgent = vi.fn(async (conversationId: string) =>
+  conversationId === 'conv-1'
+    ? ({ ok: true, agentId: 'bare:agent-1' } as const)
+    : ({ ok: false, message: 'No Agent for this chat' } as const)
+);
 
 type Services = NonNullable<Awaited<ReturnType<typeof startAgentBrowserServices>>>;
 type Reply = { id: number; result?: Record<string, unknown>; error?: { message: string } };
@@ -61,15 +78,15 @@ let services: Services | null = null;
 const sockets: WebSocket[] = [];
 
 const start = async (): Promise<Services> => {
-  const started = await startAgentBrowserServices({ enabled: true, blockedPorts: () => [] });
+  const started = await startAgentBrowserServices({ enabled: true, blockedPorts: () => [], resolveAgent });
   if (!started) throw new Error('relay did not start');
   services = started;
   return started;
 };
 
-/** A new browser tab, as browserSession dispatches it. */
-const newTab = (id: number): FakeContents => {
-  const tab = new FakeContents(id);
+/** A new browser tab in `session` (the default Agent profile unless given), as browserSession dispatches it. */
+const newTab = (id: number, session: Electron.Session = defaultAgentSession): FakeContents => {
+  const tab = Object.assign(new FakeContents(id), { session });
   h.created.forEach((listener) => listener(tab));
   return tab;
 };
@@ -153,6 +170,7 @@ describe('agent browser services: tabs', () => {
       expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledWith({
         url: 'https://a.test/',
         background: false,
+        profile: DEFAULT_AGENT_PROFILE,
       })
     );
 
@@ -175,6 +193,7 @@ describe('agent browser services: tabs', () => {
         url: 'https://a.test/',
         background: false,
         conversationId: 'conv-1',
+        profile: { kind: 'agent', agentId: 'bare:agent-1' },
       })
     );
 
@@ -201,6 +220,37 @@ describe('agent browser services: tabs', () => {
     const tab = newTab(9);
     tab.navigate('https://same.test/');
     expect((await createdA).result).toEqual({ targetId: 'wc-9' });
+  });
+
+  it("opens an agent's tab in its chat's Agent profile and never claims a same-url tab from another profile", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: 'https://a.test/' });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalled());
+    expect(resolveAgent).toHaveBeenCalledWith('conv-1');
+
+    const userTab = newTab(11, personalSession);
+    const otherAgentTab = newTab(12, defaultAgentSession);
+    const agentTab = newTab(13, agentSession);
+    userTab.navigate('https://a.test/');
+    otherAgentTab.navigate('https://a.test/');
+    agentTab.navigate('https://a.test/');
+
+    expect((await created).result).toEqual({ targetId: 'wc-13' });
+    expect((await ownership(11))?.owner).toBe('user');
+    expect((await ownership(12))?.owner).toBe('user');
+  });
+
+  it('uses the shared default Agent profile, never Personal, when the chat has no Agent or there is no chat', async () => {
+    const relay = await start();
+    const other = await connect(relay, 'a', { 'X-Aion-Conversation': 'conv-2' });
+    const none = await connect(relay, 'b');
+    void other('Target.createTarget', { url: 'https://a.test/' });
+    void none('Target.createTarget', { url: 'https://b.test/' });
+
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(2));
+    const profiles = h.ipcBridge.browser.openTabRequested.emit.mock.calls.map(([event]) => event.profile);
+    expect(profiles).toEqual([DEFAULT_AGENT_PROFILE, DEFAULT_AGENT_PROFILE]);
   });
 
   it('validates a tab refusal and ignores one nobody is waiting for', async () => {

@@ -85,5 +85,16 @@
       "user": "Anweisung",
       "page": "Von einer Webseite"
     }
+  },
+  "browserProfile": {
+    "title": "Browserprofil",
+    "hint": "Eigene Cookies, Anmeldungen, Websitedaten und Erweiterungen dieses Agenten im Browserbereich, getrennt von Ihren.",
+    "clear": "Browserdaten löschen",
+    "clearConfirm": "Cookies, Anmeldungen und Websitedaten dieses Agenten löschen? Offene Tabs übernehmen das nach dem Neuladen.",
+    "clearConfirmOk": "Löschen",
+    "cleared": "Browserdaten gelöscht.",
+    "clearFailed": "Die Browserdaten konnten nicht gelöscht werden.",
+    "deleteWithAgent": "Auch seine Browserdaten löschen (Cookies, Anmeldungen, Websitedaten, Erweiterungen)",
+    "deleteFailed": "Der Agent wurde gelöscht, aber seine Browserdaten konnten nicht entfernt werden."
   }
 }

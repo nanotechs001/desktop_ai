@@ -8,7 +8,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { AgentActionEvent, ConfirmRequest } from '@/common/types/browser';
+import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
@@ -38,9 +38,14 @@ import {
 export type RelayServerDeps = {
   registry: TargetRegistry;
   /** Asks the pane to open a browser tab (ipcBridge.browser.openTabRequested) in the agent's chat, when known. */
-  openTab(url: string, conversationId?: string): void;
-  /** Resolves with the next browser tab that attaches, in request order; rejects on timeout or a pane refusal. */
-  waitForTab(url: string, conversationId?: string): Promise<RelayContents>;
+  openTab(url: string, conversationId: string | undefined, profile: BrowserTabProfile): void;
+  /** Resolves with the next browser tab of `profile` that attaches, in request order; rejects on timeout or refusal. */
+  waitForTab(url: string, conversationId: string | undefined, profile: BrowserTabProfile): Promise<RelayContents>;
+  /**
+   * The browser profile an agent's new tabs open in: its chat's Agent (or the shared default Agent profile), resolved
+   * in main from the client's conversation, never from the agent's input. Never Personal.
+   */
+  resolveProfile(conversationId: string | undefined): Promise<BrowserTabProfile>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
@@ -172,8 +177,10 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     conn.pendingCreates += 1;
     let contents: RelayContents;
     try {
-      const waiting = deps.waitForTab(url, conn.conversationId);
-      deps.openTab(url, conn.conversationId);
+      // Only the url comes from the agent; any profile-like field in its params is ignored.
+      const profile = await deps.resolveProfile(conn.conversationId);
+      const waiting = deps.waitForTab(url, conn.conversationId, profile);
+      deps.openTab(url, conn.conversationId, profile);
       contents = await waiting;
     } finally {
       conn.pendingCreates -= 1;

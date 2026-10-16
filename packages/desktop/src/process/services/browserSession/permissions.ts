@@ -200,9 +200,15 @@ export function replyPermission(id: string, allow: boolean, remember: boolean): 
   return true;
 }
 
+/** Every browser profile shares one prompt list, so it is published once however many sessions install it. */
+let publishing = false;
+
 /** Applies the permission policy to a session and publishes open prompts to the renderer. */
 export function installPermissions(browserSession: Electron.Session): void {
-  pending.onChange((open) => ipcBridge.browser.permissionRequested.emit(open));
+  if (!publishing) {
+    publishing = true;
+    pending.onChange((open) => ipcBridge.browser.permissionRequested.emit(open));
+  }
 
   browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     const origin = originOf(details.requestingUrl ?? webContents.getURL());

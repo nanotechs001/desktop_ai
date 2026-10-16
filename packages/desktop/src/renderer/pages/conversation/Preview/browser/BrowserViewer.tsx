@@ -6,7 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
-import type { BrowserShortcutAction } from '@/common/types/browser';
+import type { BrowserShortcutAction, BrowserTabProfile } from '@/common/types/browser';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { isPlatformPrimaryModifier } from '@/renderer/utils/ui/keyboardShortcuts';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
@@ -17,12 +17,9 @@ import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
 import ExtensionActions from './BrowserChrome/ExtensionActions';
 import FindBar from './BrowserChrome/FindBar';
-import {
-  BROWSER_BLANK_URL,
-  BROWSER_SESSION_PARTITION,
-  browserTabLabelFromUrl,
-  resolveAddressBarInput,
-} from './constants';
+import ProfileBadge from './BrowserProfiles/ProfileBadge';
+import { useProfilePartition } from './BrowserProfiles/useBrowserProfiles';
+import { BROWSER_BLANK_URL, browserTabLabelFromUrl, resolveAddressBarInput } from './constants';
 import { useAgentBrowser } from './useAgentBrowser';
 
 /** `getWebContentsId()` throws before dom-ready and after the page crashed; that means "not this one". */
@@ -77,6 +74,8 @@ export interface BrowserViewerProps {
   onAgentOwnedChange?: (tabId: string, agentOwned: boolean) => void;
   /** The tab list already marks this tab as an agent's (it was opened for one); trusted until ownership is known */
   agentOwnedHint?: boolean;
+  /** The browser profile the tab lives in; Personal when absent. Fixed for the tab's life (a new profile is a new tab) */
+  profile?: BrowserTabProfile;
 }
 
 /**
@@ -102,8 +101,10 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   active = false,
   onAgentOwnedChange,
   agentOwnedHint = false,
+  profile,
 }) => {
   const preview = useOptionalPreviewContext();
+  const partition = useProfilePartition(profile);
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
   // Known from did-attach, before dom-ready: a tab must honour a close request while its page still loads.
   const [attachedWebview, setAttachedWebview] = useState<Electron.WebviewTag | null>(null);
@@ -307,36 +308,40 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     >
       {/* A hidden agent tab's page stays hit-testable for agent input, but its chrome is inert: nothing in it
           takes the user's focus (inert on an ancestor of the webview would stop hit-testing). */}
-      <WebviewHost
-        webviewTabIndex={active ? undefined : -1}
-        chromeInert={!active}
-        url={url || BROWSER_BLANK_URL}
-        partition={BROWSER_SESSION_PARTITION}
-        showNavBar
-        interceptNavigation={false}
-        navBarExtra={
-          <>
-            {tabWebContentsId !== null && (
-              <AgentControls webContentsId={tabWebContentsId} ownership={ownership} actions={actions} />
-            )}
-            <ExtensionActions />
-            <DownloadsButton />
-          </>
-        }
-        className='bg-bg-1'
-        resolveUrlInput={resolveAddressBarInput}
-        onUrlChange={handleUrlChange}
-        onTitleChange={handleTitleChange}
-        onFaviconChange={handleFaviconChange}
-        onDidFinishLoad={handleDidFinishLoad}
-        onDidFailLoad={handleDidFailLoad}
-        onWebviewReady={setWebview}
-        onWebviewAttached={setAttachedWebview}
-        onRenderProcessGone={handleRenderProcessGone}
-        onUnresponsive={handleUnresponsive}
-        onResponsive={handleResponsive}
-        addressInputRef={addressInputRef}
-      />
+      {/* A webview's partition is fixed once it attaches, so an Agent tab waits until main has set its profile up. */}
+      {partition && (
+        <WebviewHost
+          webviewTabIndex={active ? undefined : -1}
+          chromeInert={!active}
+          url={url || BROWSER_BLANK_URL}
+          partition={partition}
+          showNavBar
+          interceptNavigation={false}
+          navBarExtra={
+            <>
+              <ProfileBadge profile={profile} />
+              {tabWebContentsId !== null && (
+                <AgentControls webContentsId={tabWebContentsId} ownership={ownership} actions={actions} />
+              )}
+              <ExtensionActions partition={partition} profile={profile} />
+              <DownloadsButton />
+            </>
+          }
+          className='bg-bg-1'
+          resolveUrlInput={resolveAddressBarInput}
+          onUrlChange={handleUrlChange}
+          onTitleChange={handleTitleChange}
+          onFaviconChange={handleFaviconChange}
+          onDidFinishLoad={handleDidFinishLoad}
+          onDidFailLoad={handleDidFailLoad}
+          onWebviewReady={setWebview}
+          onWebviewAttached={setAttachedWebview}
+          onRenderProcessGone={handleRenderProcessGone}
+          onUnresponsive={handleUnresponsive}
+          onResponsive={handleResponsive}
+          addressInputRef={addressInputRef}
+        />
+      )}
       <div inert={!active}>
         {/* Mounted only while crashed or hung: any element here covers the webview and eats mouse input.
             Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}

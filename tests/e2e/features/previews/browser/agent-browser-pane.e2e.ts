@@ -7,6 +7,7 @@
  * prompt and the action overlay together. Pages come from the integration fixtures, served on two loopback
  * origins so the builder's iframe is cross-origin (an OOPIF).
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -495,6 +496,38 @@ test.describe('Agents in the browser pane', () => {
     } finally {
       await closeUserTab(electronApp, userTab);
     }
+  });
+
+  test("the agent's tab lives in its Agent profile: a cookie set in Personal is not there", async ({ electronApp }) => {
+    const wc = webContentsIdOf(builderTab);
+    // This MCP names no chat, so its tabs use the shared default Agent profile (ruling N-15 names the partition).
+    const hash = createHash('sha256').update('aion-default-agent').digest('hex').slice(0, 32);
+    const seen = await electronApp.evaluate(
+      async ({ session, webContents }, { id, url }) => {
+        const tab = webContents.fromId(id);
+        if (!tab) throw new Error(`no tab ${id}`);
+        const personal = session.fromPartition('persist:aionui-browser');
+        await personal.cookies.set({ url, name: 'personal_only', value: '1' });
+        try {
+          return {
+            onPersonal: tab.session === personal,
+            storagePath: tab.session.storagePath,
+            inPersonal: (await personal.cookies.get({ url, name: 'personal_only' })).length,
+            inAgent: (await tab.session.cookies.get({ url, name: 'personal_only' })).length,
+            pageCookie: await tab.executeJavaScript('document.cookie'),
+          };
+        } finally {
+          await personal.cookies.remove(url, 'personal_only');
+        }
+      },
+      { id: wc, url: builderUrl }
+    );
+
+    expect(seen.onPersonal).toBe(false);
+    expect(seen.storagePath).toMatch(new RegExp(`Partitions[\\\\/]aionui-agent-${hash}$`));
+    expect(seen.inPersonal).toBe(1);
+    expect(seen.inAgent).toBe(0);
+    expect(seen.pageCookie).not.toContain('personal_only');
   });
 });
 

@@ -3,14 +3,15 @@
  */
 import type { AssistantListItem } from './types';
 import AssistantAvatar from './AssistantAvatar';
-import { Modal } from '@arco-design/web-react';
-import React from 'react';
+import { Checkbox, Modal } from '@arco-design/web-react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type DeleteAssistantModalProps = {
   visible: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  /** `deleteBrowserData`: also delete the Agent's browser profile (cookies, sign-ins, site data, extensions). */
+  onConfirm: (deleteBrowserData: boolean) => void;
   activeAssistant: AssistantListItem | null;
 };
 
@@ -21,13 +22,19 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
   activeAssistant,
 }) => {
   const { t } = useTranslation();
+  const [deleteBrowserData, setDeleteBrowserData] = useState(true);
+
+  // Each time the dialog opens it asks afresh, defaulting to delete: a deleted Agent's sign-ins have no use.
+  useEffect(() => {
+    if (visible) setDeleteBrowserData(true);
+  }, [visible]);
 
   return (
     <Modal
       title={t('settings.deleteAssistantTitle', { defaultValue: 'Delete Agent' })}
       visible={visible}
       onCancel={onCancel}
-      onOk={onConfirm}
+      onOk={() => onConfirm(deleteBrowserData)}
       okButtonProps={{ status: 'danger' }}
       wrapClassName='delete-assistant-modal'
       data-testid='modal-delete-assistant'
@@ -51,6 +58,11 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
           </div>
         </div>
       )}
+      <Checkbox className='mt-12px' checked={deleteBrowserData} onChange={setDeleteBrowserData}>
+        {t('agent.browserProfile.deleteWithAgent', {
+          defaultValue: 'Also delete its browser data (cookies, sign-ins, site data, extensions)',
+        })}
+      </Checkbox>
     </Modal>
   );
 };

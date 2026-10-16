@@ -42,6 +42,8 @@ import PptViewer from '../viewers/PptViewer';
 import CodeEditor from '../editors/CodeEditor';
 import URLViewer from '../viewers/URLViewer';
 import { BrowserSlot } from '../../browser/BrowserTabLayer';
+import ProfileSwitcher from '../../browser/BrowserProfiles/ProfileSwitcher';
+import type { BrowserTabProfile } from '@/common/types/browser';
 import { MAX_BROWSER_TABS } from '../../browser/constants';
 import {
   PreviewTabs,
@@ -63,6 +65,9 @@ import {
 import { usePreviewKeyboardShortcuts, useScrollSync, useTabOverflow, useThemeDetection } from '../../hooks';
 import { useTranslation } from 'react-i18next';
 import './preview.css';
+
+/** A browser tab with no profile in its metadata lives in Personal. */
+const PERSONAL_PROFILE: BrowserTabProfile = { kind: 'personal' };
 
 /**
  * 预览面板主组件
@@ -1175,6 +1180,7 @@ const PreviewPanel: React.FC = () => {
       favicon: tab.content_type === 'browser' ? tab.metadata?.favicon : undefined,
       agentActive: tab.content_type === 'browser' ? tab.metadata?.agentActive : undefined,
       agentOwned: tab.content_type === 'browser' ? tab.metadata?.agentOwned : undefined,
+      profile: tab.content_type === 'browser' ? (tab.metadata?.profile ?? PERSONAL_PROFILE) : undefined,
       canCopyPath: canCopyAbsolutePath(paths.absolute, isElectronDesktop()),
       canCopyRelativePath: Boolean(paths.relative),
       canRevealInFolder: canRevealInFolder(paths.absolute, isElectronDesktop()),
@@ -1224,6 +1230,7 @@ const PreviewPanel: React.FC = () => {
           // browser) instead of requiring the user to open a browser first. It stays
           // hidden only while the panel is empty, so the plus never appears alone.
           onNewBrowserTab={previewTabs.length > 0 ? handleNewBrowserTab : undefined}
+          newTabMenu={<ProfileSwitcher onOpen={(profile) => openBrowserTab(undefined, profile)} />}
         />
 
         {/* 工具栏（URL / 浏览器 类型不显示工具栏，因为不需要下载/编辑等功能）

@@ -7,6 +7,8 @@
 type Waiter<T> = {
   url: string;
   conversationId?: string;
+  /** The browser partition the tab must live in; any when unset. */
+  partition?: string;
   resolve: (contents: T) => void;
   reject: (error: Error) => void;
 };
@@ -31,8 +33,9 @@ export const normalizeTabUrl = (url: string): string => {
 
 /**
  * Pairs "open a tab at <url>" requests with the browser tabs that appear afterwards. The renderer
- * reports no request id back, so a new tab is matched by the url of its first main-frame navigation:
- * the oldest waiter for that url takes it, and a tab nobody asked for (the user's) is never handed out.
+ * reports no request id back, so a new tab is matched by the url of its first main-frame navigation (and, when the
+ * request names one, its browser partition): the oldest such waiter takes it, and a tab nobody asked for (the user's)
+ * is never handed out.
  */
 export class CreateTabWaiter<T> {
   private pending: Waiter<T>[] = [];
@@ -42,12 +45,16 @@ export class CreateTabWaiter<T> {
     return this.pending.length > 0;
   }
 
-  /** Resolves with the tab that first navigates to `url`; rejects with 'tab-create-timeout' or a {@link refuse} error. */
-  wait(url: string, timeoutMs: number, conversationId?: string): Promise<T> {
+  /**
+   * Resolves with the tab (in `partition`, when given) that first navigates to `url`; rejects with
+   * 'tab-create-timeout' or a {@link refuse} error.
+   */
+  wait(url: string, timeoutMs: number, conversationId?: string, partition?: string): Promise<T> {
     return new Promise((resolve, reject) => {
       const waiter: Waiter<T> = {
         url: normalizeTabUrl(url),
         conversationId,
+        partition,
         resolve: (contents) => {
           clearTimeout(timer);
           resolve(contents);
@@ -76,10 +83,12 @@ export class CreateTabWaiter<T> {
     return true;
   }
 
-  /** Offers a new tab whose first main-frame navigation went to `url`; true when a waiter took it. */
-  offer(contents: T, url: string): boolean {
+  /** Offers a new tab (of `partition`) whose first main-frame navigation went to `url`; true when a waiter took it. */
+  offer(contents: T, url: string, partition?: string): boolean {
     const normalized = normalizeTabUrl(url);
-    const match = this.pending.find((entry) => entry.url === normalized);
+    const match = this.pending.find(
+      (entry) => entry.url === normalized && (entry.partition === undefined || entry.partition === partition)
+    );
     if (!match) return false;
     this.pending = this.pending.filter((entry) => entry !== match);
     match.resolve(contents);
@@ -97,8 +106,12 @@ export function onFirstMainFrameNavigation(contents: NavigatingContents, cb: (ur
   contents.on('did-start-navigation', listener);
 }
 
-/** Feeds a newly created tab to `waiter` once its first navigation reveals which request it answers. */
-export function offerNewTab<T extends NavigatingContents>(waiter: CreateTabWaiter<T>, contents: T): void {
+/** Feeds a newly created tab (of `partition`) to `waiter` once its first navigation reveals which request it answers. */
+export function offerNewTab<T extends NavigatingContents>(
+  waiter: CreateTabWaiter<T>,
+  contents: T,
+  partition?: string
+): void {
   if (!waiter.waiting) return;
-  onFirstMainFrameNavigation(contents, (url) => waiter.offer(contents, url));
+  onFirstMainFrameNavigation(contents, (url) => waiter.offer(contents, url, partition));
 }

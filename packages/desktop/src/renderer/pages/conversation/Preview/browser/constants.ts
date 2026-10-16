@@ -9,15 +9,6 @@
  * Shared constants and address-bar input parsing for in-app browser tabs
  */
 
-/**
- * 从 common 重新导出，方便浏览器相关代码就近取用。
- * 定义在 common 是因为主进程清理登录态时也要用同一个值。
- *
- * Re-exported from common so browser code can reach it locally. It is defined in
- * common because the main process needs the same value when clearing sign-in state.
- */
-export { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
-
 /** 新建浏览器 tab 的初始地址 / Initial address for a freshly opened browser tab. */
 export const BROWSER_BLANK_URL = 'about:blank';
 

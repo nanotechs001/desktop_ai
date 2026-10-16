@@ -265,6 +265,10 @@
       "detail": "Changes you made may not be saved.",
       "leave": "Leave",
       "stay": "Stay"
+    },
+    "profile": {
+      "personal": "Особистий",
+      "newTabIn": "Нова вкладка в…"
     }
   }
 }

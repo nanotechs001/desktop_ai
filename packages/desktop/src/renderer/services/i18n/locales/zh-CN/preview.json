@@ -263,6 +263,10 @@
       "detail": "Changes you made may not be saved.",
       "leave": "Leave",
       "stay": "Stay"
+    },
+    "profile": {
+      "personal": "个人",
+      "newTabIn": "在以下资料中新建标签页…"
     }
   }
 }

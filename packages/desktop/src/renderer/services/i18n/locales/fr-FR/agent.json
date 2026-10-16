@@ -85,5 +85,16 @@
       "user": "Instruction",
       "page": "D'une page web"
     }
+  },
+  "browserProfile": {
+    "title": "Profil de navigateur",
+    "hint": "Les cookies, connexions, données de sites et extensions propres à cet Agent dans le volet navigateur, séparés des vôtres.",
+    "clear": "Effacer les données de navigation",
+    "clearConfirm": "Effacer les cookies, connexions et données de sites de cet Agent ? Les onglets ouverts sont mis à jour après un rechargement.",
+    "clearConfirmOk": "Effacer",
+    "cleared": "Données de navigation effacées.",
+    "clearFailed": "Impossible d'effacer les données de navigation.",
+    "deleteWithAgent": "Supprimer aussi ses données de navigateur (cookies, connexions, données de sites, extensions)",
+    "deleteFailed": "L'Agent a été supprimé, mais ses données de navigateur n'ont pas pu être retirées."
   }
 }

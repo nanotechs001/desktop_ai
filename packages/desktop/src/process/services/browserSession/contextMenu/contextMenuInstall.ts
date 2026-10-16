@@ -7,6 +7,7 @@
 import { BrowserWindow, Menu, clipboard } from 'electron';
 import { ipcBridge } from '@/common';
 import { buildContextMenuEntries, type MenuEntry, type MenuTranslate } from './contextMenu';
+import { profileOfSession } from '../profiles/browserProfiles';
 import { isSafeUrl } from '../urlSafety';
 
 const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q=';
@@ -27,8 +28,15 @@ export const loadTranslate = async (): Promise<MenuTranslate> => {
   return (key, options) => String(i18n.t(key, options));
 };
 
-const openTab = (url: string): void => {
-  if (isSafeUrl(url)) ipcBridge.browser.openTabRequested.emit({ url, background: false });
+/** Opens `url` in a new tab in the profile of the page it came from. */
+const openTab = (url: string, from: Electron.WebContents): void => {
+  if (isSafeUrl(url)) {
+    ipcBridge.browser.openTabRequested.emit({
+      url,
+      background: false,
+      profile: profileOfSession(from.session) ?? undefined,
+    });
+  }
 };
 
 /** Trimmed and capped by code point, so the encoded query never contains a lone surrogate. */
@@ -46,7 +54,7 @@ const runAction = (entry: ActionEntry, contents: Electron.WebContents, params: C
       return contents.reload();
     case 'openLinkInNewTab':
     case 'openImageInNewTab':
-      return openTab(arg);
+      return openTab(arg, contents);
     case 'copyLink':
       return clipboard.writeText(arg);
     case 'copyImage':
@@ -62,7 +70,7 @@ const runAction = (entry: ActionEntry, contents: Electron.WebContents, params: C
     case 'selectAll':
       return contents.selectAll();
     case 'searchSelection':
-      return openTab(toSearchUrl(arg));
+      return openTab(toSearchUrl(arg), contents);
     case 'replaceMisspelling':
       return contents.replaceMisspelling(arg);
     case 'addToDictionary':

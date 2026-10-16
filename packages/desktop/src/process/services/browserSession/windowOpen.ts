@@ -6,9 +6,9 @@
 
 import { BrowserWindow, dialog, screen } from 'electron';
 import { ipcBridge } from '@/common';
-import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import type { MenuTranslate } from './contextMenu/contextMenu';
 import { loadTranslate } from './contextMenu/contextMenuInstall';
+import { partitionOfSession, profileOfSession } from './profiles/browserProfiles';
 import { isSafeUrl } from './urlSafety';
 
 /** What to do with a page's `window.open` / `target=_blank` request. */
@@ -139,8 +139,8 @@ export function popupTitle(title: string, url: string): string {
 const clampInto = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
 /**
- * Window options for a popup: a child of `parent` on the browser partition, so cookies and
- * `window.opener` are shared with the page that opened it. The size is clamped to a usable range
+ * Window options for a popup: a child of `parent` on the opener's `partition` (its browser profile), so cookies
+ * and `window.opener` are shared with the page that opened it. The size is clamped to a usable range
  * and to `workArea`; the popup is centred on the parent and kept inside `workArea`.
  *
  * This is the complete option set: the popup window is built from it alone (see createWindow in
@@ -149,7 +149,8 @@ const clampInto = (value: number, min: number, max: number): number => Math.max(
 export function popupWindowOptions(
   size: PopupSize,
   parent: Electron.BrowserWindow | null,
-  workArea: Area
+  workArea: Area,
+  partition: string
 ): Electron.BrowserWindowConstructorOptions {
   const width = Math.min(clamp(size.width, POPUP_WIDTH_RANGE), workArea.width);
   const height = Math.min(clamp(size.height, POPUP_HEIGHT_RANGE), workArea.height);
@@ -167,7 +168,7 @@ export function popupWindowOptions(
       : undefined,
     autoHideMenuBar: true,
     webPreferences: {
-      partition: BROWSER_SESSION_PARTITION,
+      partition,
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -177,8 +178,9 @@ export function popupWindowOptions(
 
 /**
  * Routes `window.open` and `target=_blank` from a browser webContents: tabs are requested from
- * the renderer (the native window is denied), popups open as child windows, and unsafe URLs are
- * denied. Popup windows are browser contents too, so they get this same handler.
+ * the renderer in the opener's profile (the native window is denied), popups open as child windows
+ * on the opener's partition, and unsafe URLs are denied. Popup windows are browser contents too, so
+ * they get this same handler.
  * This owns `setWindowOpenHandler` for browser contents: later code must not call it on them.
  * @param getParent returns the window popups attach to, or null when there is none
  */
@@ -188,17 +190,21 @@ export function installWindowOpenHandler(
   limiter: OpenLimiter = sharedLimiter
 ): void {
   const openerId = contents.id;
+  const partition = partitionOfSession(contents.session);
+  const profile = profileOfSession(contents.session) ?? undefined;
   contents.setWindowOpenHandler((details) => {
     const decision = classifyWindowOpen(details);
     if (decision.kind === 'tab') {
       if (limiter.tryOpenTab(openerId, Date.now())) {
-        ipcBridge.browser.openTabRequested.emit({ url: decision.url, background: decision.background });
+        ipcBridge.browser.openTabRequested.emit({ url: decision.url, background: decision.background, profile });
       } else {
         console.warn(`[BrowserSession] blocked a tab: too many opened by webContents ${openerId}`);
       }
       return { action: 'deny' };
     }
     if (decision.kind === 'popup') {
+      // Only browser contents get this handler, so the opener's partition is always known; fail closed if not.
+      if (partition === null) return { action: 'deny' };
       if (!limiter.canOpenPopup(openerId)) {
         console.warn(`[BrowserSession] blocked a popup: too many open from webContents ${openerId}`);
         return { action: 'deny' };
@@ -209,7 +215,7 @@ export function installWindowOpenHandler(
       const candidate = getParent();
       const parent = candidate && !candidate.isDestroyed() ? candidate : null;
       const workArea = (parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay()).workArea;
-      const options = popupWindowOptions(decision, parent, workArea);
+      const options = popupWindowOptions(decision, parent, workArea, partition);
       return {
         action: 'allow',
         // Sets the new page's web preferences; the window itself comes from createWindow.

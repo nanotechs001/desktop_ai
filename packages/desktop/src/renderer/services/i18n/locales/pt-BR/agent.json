@@ -85,5 +85,16 @@
       "user": "Instrução",
       "page": "De uma página web"
     }
+  },
+  "browserProfile": {
+    "title": "Perfil do navegador",
+    "hint": "Os cookies, logins, dados de sites e extensões próprios deste Agente no painel do navegador, separados dos seus.",
+    "clear": "Limpar dados de navegação",
+    "clearConfirm": "Limpar os cookies, logins e dados de sites deste Agente? As abas abertas são atualizadas depois de recarregar.",
+    "clearConfirmOk": "Limpar",
+    "cleared": "Dados de navegação limpos.",
+    "clearFailed": "Não foi possível limpar os dados de navegação.",
+    "deleteWithAgent": "Excluir também os dados do navegador dele (cookies, logins, dados de sites, extensões)",
+    "deleteFailed": "O Agente foi excluído, mas não foi possível remover os dados do navegador dele."
   }
 }

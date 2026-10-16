@@ -54,6 +54,7 @@ import {
   createBeforeInstall,
   describeInstall,
   initBrowserExtensions,
+  installExtensionProtocols,
   isWebStoreUrl,
 } from '@process/services/browserSession/extensions';
 
@@ -67,6 +68,10 @@ const navigate = (contents: Electron.WebContents, url: string) =>
 const setup = async (getMainWindow: () => Electron.BrowserWindow | null = () => mainWindow) => {
   const openTab = vi.fn();
   const closeTab = vi.fn();
+  installExtensionProtocols({
+    getMainWindow,
+    resolveSession: (partition) => (partition === 'persist:aionui-browser' ? browserSession : null),
+  });
   const extensions = await initBrowserExtensions({ session: browserSession, getMainWindow, openTab, closeTab });
   const impl = mocks.constructed.at(-1) as unknown as Impl;
   return { extensions, impl, openTab, closeTab };
@@ -89,6 +94,26 @@ describe('initBrowserExtensions', () => {
 
     expect(mocks.constructed).toHaveLength(1);
     expect(mocks.constructed[0]).toMatchObject({ license: 'GPL-3.0', session: browserSession });
+  });
+
+  it('installs Web Store extensions into the given folder for an Agent profile', async () => {
+    const agentSession = { name: 'agent' } as unknown as Electron.Session;
+
+    await initBrowserExtensions({
+      session: agentSession,
+      getMainWindow: () => mainWindow,
+      openTab: vi.fn(),
+      closeTab: vi.fn(),
+      extensionsPath: '/u/Partitions/aionui-agent-x/WebStoreExtensions',
+    });
+
+    expect(mocks.installChromeWebStore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: agentSession,
+        extensionsPath: '/u/Partitions/aionui-agent-x/WebStoreExtensions',
+      })
+    );
+    expect(mocks.constructed.at(-1)).toMatchObject({ session: agentSession });
   });
 
   it('installChromeWebStore is called with { session, autoUpdate: true }', async () => {
@@ -370,7 +395,7 @@ describe('crx:// on the default session', () => {
     expect(decide(listener, 'http://localhost:5173/main.js', 1)).toEqual({});
   });
 
-  it('resolves only the browser partition for <browser-action-list>', async () => {
+  it('resolves only browser partitions already set up for <browser-action-list>', async () => {
     await setup();
     const resolve = mocks.setSessionPartitionResolver.mock.calls[0][0] as (partition: string) => Electron.Session;
 

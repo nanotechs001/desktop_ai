@@ -85,5 +85,16 @@
       "user": "指示",
       "page": "來自網頁"
     }
+  },
+  "browserProfile": {
+    "title": "瀏覽器設定檔",
+    "hint": "此智慧體在瀏覽器窗格中獨立的 Cookie、登入狀態、網站資料與擴充功能，與你的分開。",
+    "clear": "清除瀏覽資料",
+    "clearConfirm": "清除此智慧體的 Cookie、登入狀態與網站資料？已開啟的標籤頁需重新整理後生效。",
+    "clearConfirmOk": "清除",
+    "cleared": "已清除瀏覽資料。",
+    "clearFailed": "無法清除瀏覽資料。",
+    "deleteWithAgent": "同時刪除它的瀏覽器資料（Cookie、登入狀態、網站資料、擴充功能）",
+    "deleteFailed": "智慧體已刪除，但無法移除它的瀏覽器資料。"
   }
 }

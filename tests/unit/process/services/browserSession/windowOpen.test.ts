@@ -58,6 +58,12 @@ import {
   installWindowOpenHandler,
   popupWindowOptions,
 } from '@process/services/browserSession/windowOpen';
+import { agentPartition, rememberBrowserSession } from '@process/services/browserSession/profiles/browserProfiles';
+
+const PERSONAL = 'persist:aionui-browser';
+/** Browser contents always live in a set-up browser session; this one is Personal's. */
+const personalSession = {} as Electron.Session;
+rememberBrowserSession(PERSONAL, personalSession);
 
 const classify = (url: string, disposition: string, features = '') =>
   classifyWindowOpen({ url, disposition, features });
@@ -196,7 +202,7 @@ describe('popupWindowOptions', () => {
   it('clamps 3000x50 to 1400x300, uses the browser partition and centers on the parent', () => {
     const parent = makeParent();
 
-    const options = popupWindowOptions({ width: 3000, height: 50 }, parent, WORK_AREA);
+    const options = popupWindowOptions({ width: 3000, height: 50 }, parent, WORK_AREA, PERSONAL);
 
     expect(options).toEqual({
       parent,
@@ -210,7 +216,7 @@ describe('popupWindowOptions', () => {
   });
 
   it('is an allowlist: no other window option is ever set', () => {
-    const options = popupWindowOptions({ width: 500, height: 600 }, makeParent(), WORK_AREA);
+    const options = popupWindowOptions({ width: 500, height: 600 }, makeParent(), WORK_AREA, PERSONAL);
 
     expect(Object.keys(options).sort()).toEqual(
       ['autoHideMenuBar', 'height', 'parent', 'webPreferences', 'width', 'x', 'y'].sort()
@@ -221,7 +227,7 @@ describe('popupWindowOptions', () => {
     const workArea = { x: 1920, y: 25, width: 1280, height: 775 };
     const offscreenParent = makeParent({ x: 3000, y: 700, width: 600, height: 400 });
 
-    const options = popupWindowOptions({ width: 1400, height: 1000 }, offscreenParent, workArea);
+    const options = popupWindowOptions({ width: 1400, height: 1000 }, offscreenParent, workArea, PERSONAL);
 
     expect(options).toMatchObject({ width: 1280, height: 775, x: 1920, y: 25 });
   });
@@ -229,11 +235,11 @@ describe('popupWindowOptions', () => {
   it('pins a centred popup to the work area edge when the parent hangs off-screen', () => {
     const parent = makeParent({ x: -900, y: -500, width: 1000, height: 800 });
 
-    expect(popupWindowOptions({ width: 500, height: 600 }, parent, WORK_AREA)).toMatchObject({ x: 0, y: 0 });
+    expect(popupWindowOptions({ width: 500, height: 600 }, parent, WORK_AREA, PERSONAL)).toMatchObject({ x: 0, y: 0 });
   });
 
   it('leaves position to the OS without a parent', () => {
-    const options = popupWindowOptions({ width: 500, height: 600 }, null, WORK_AREA);
+    const options = popupWindowOptions({ width: 500, height: 600 }, null, WORK_AREA, PERSONAL);
 
     expect(options.x).toBeUndefined();
     expect(options.y).toBeUndefined();
@@ -241,14 +247,14 @@ describe('popupWindowOptions', () => {
   });
 
   it('clamps the small end of width and the large end of height', () => {
-    expect(popupWindowOptions({ width: 10, height: 5000 }, null, WORK_AREA)).toMatchObject({
+    expect(popupWindowOptions({ width: 10, height: 5000 }, null, WORK_AREA, PERSONAL)).toMatchObject({
       width: 400,
       height: 1000,
     });
   });
 
   it('keeps an in-range size', () => {
-    expect(popupWindowOptions({ width: 500, height: 600 }, null, WORK_AREA)).toMatchObject({
+    expect(popupWindowOptions({ width: 500, height: 600 }, null, WORK_AREA, PERSONAL)).toMatchObject({
       width: 500,
       height: 600,
     });
@@ -266,7 +272,7 @@ describe('installWindowOpenHandler', () => {
   const install = (parent: { isDestroyed: () => boolean } | null, limiter = new OpenLimiter(), id = 1) => {
     const setWindowOpenHandler = vi.fn();
     installWindowOpenHandler(
-      { id, setWindowOpenHandler } as unknown as Electron.WebContents,
+      { id, setWindowOpenHandler, session: personalSession } as unknown as Electron.WebContents,
       () => parent as unknown as Electron.BrowserWindow | null,
       limiter
     );
@@ -281,7 +287,48 @@ describe('installWindowOpenHandler', () => {
     const result = handler({ url: 'https://a.test/', disposition: 'background-tab', features: '' });
 
     expect(result).toEqual({ action: 'deny' });
-    expect(mocks.emit).toHaveBeenCalledWith({ url: 'https://a.test/', background: true });
+    expect(mocks.emit).toHaveBeenCalledWith({
+      url: 'https://a.test/',
+      background: true,
+      profile: { kind: 'personal' },
+    });
+  });
+
+  it("opens an Agent profile page's tabs and popups in that Agent's profile", () => {
+    const partition = agentPartition('bare:42');
+    const agentSession = {} as Electron.Session;
+    rememberBrowserSession(partition, agentSession);
+    const setWindowOpenHandler = vi.fn();
+    installWindowOpenHandler(
+      { id: 7, setWindowOpenHandler, session: agentSession } as unknown as Electron.WebContents,
+      () => null,
+      new OpenLimiter()
+    );
+    const handler = setWindowOpenHandler.mock.calls[0][0] as Handler;
+
+    handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '' });
+    const popup = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup' });
+
+    expect(mocks.emit).toHaveBeenCalledWith({
+      url: 'https://a.test/',
+      background: false,
+      profile: { kind: 'agent', agentId: 'bare:42' },
+    });
+    expect(popup.overrideBrowserWindowOptions?.webPreferences?.partition).toBe(partition);
+  });
+
+  it('denies popups from a page whose session is not a browser profile', () => {
+    const setWindowOpenHandler = vi.fn();
+    installWindowOpenHandler(
+      { id: 8, setWindowOpenHandler, session: {} } as unknown as Electron.WebContents,
+      () => null,
+      new OpenLimiter()
+    );
+    const handler = setWindowOpenHandler.mock.calls[0][0] as Handler;
+
+    expect(handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup' })).toEqual({
+      action: 'deny',
+    });
   });
 
   it('allows a popup as a child window of the parent on the browser partition', () => {
@@ -385,7 +432,11 @@ describe('installWindowOpenHandler popup blocking', () => {
   };
   const install = (limiter: OpenLimiter, id = 1) => {
     const setWindowOpenHandler = vi.fn();
-    installWindowOpenHandler({ id, setWindowOpenHandler } as unknown as Electron.WebContents, () => null, limiter);
+    installWindowOpenHandler(
+      { id, setWindowOpenHandler, session: personalSession } as unknown as Electron.WebContents,
+      () => null,
+      limiter
+    );
     return setWindowOpenHandler.mock.calls[0][0] as Handler;
   };
   const popup = { url: 'https://a.test/', disposition: 'new-window', features: 'popup' };
@@ -505,7 +556,7 @@ describe('popup window title', () => {
   it("a popup's window title always shows the page origin, whatever the page sets", () => {
     const setWindowOpenHandler = vi.fn();
     installWindowOpenHandler(
-      { id: 1, setWindowOpenHandler } as unknown as Electron.WebContents,
+      { id: 1, setWindowOpenHandler, session: personalSession } as unknown as Electron.WebContents,
       () => null,
       new OpenLimiter()
     );

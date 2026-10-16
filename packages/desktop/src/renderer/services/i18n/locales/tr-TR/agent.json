@@ -85,5 +85,16 @@
       "user": "Talimat",
       "page": "Bir web sayfasından"
     }
+  },
+  "browserProfile": {
+    "title": "Tarayıcı profili",
+    "hint": "Bu Ajanın tarayıcı panelindeki kendi çerezleri, oturumları, site verileri ve uzantıları; sizinkilerden ayrıdır.",
+    "clear": "Tarama verilerini temizle",
+    "clearConfirm": "Bu Ajanın çerezleri, oturumları ve site verileri temizlensin mi? Açık sekmeler yeniden yüklendikten sonra güncellenir.",
+    "clearConfirmOk": "Temizle",
+    "cleared": "Tarama verileri temizlendi.",
+    "clearFailed": "Tarama verileri temizlenemedi.",
+    "deleteWithAgent": "Tarayıcı verilerini de sil (çerezler, oturumlar, site verileri, uzantılar)",
+    "deleteFailed": "Ajan silindi, ancak tarayıcı verileri kaldırılamadı."
   }
 }

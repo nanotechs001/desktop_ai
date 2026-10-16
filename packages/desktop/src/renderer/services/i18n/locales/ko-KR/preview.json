@@ -263,6 +263,10 @@
       "detail": "Changes you made may not be saved.",
       "leave": "Leave",
       "stay": "Stay"
+    },
+    "profile": {
+      "personal": "개인",
+      "newTabIn": "새 탭 열기 위치…"
     }
   }
 }

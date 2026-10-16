@@ -18,8 +18,9 @@
 import React from 'react';
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BrowserTabProfile } from '@/common/types/browser';
 
-type OpenTabRequest = { url: string; background: boolean };
+type OpenTabRequest = { url: string; background: boolean; profile?: BrowserTabProfile };
 
 const openTabRequested = vi.hoisted(() => ({
   handler: null as ((request: OpenTabRequest) => void) | null,
@@ -184,6 +185,20 @@ describe('PreviewContext browser tab requests from the main process', () => {
     expect(ctx.browserTabLimitHitAt).toBeTypeOf('number');
   });
 
+  it('opens a requested tab in the profile main names; a tab without one is Personal', () => {
+    renderProvider();
+
+    requestTab({ url: 'https://a.test/', background: false, profile: { kind: 'agent', agentId: 'bare:1' } });
+    requestTab({ url: 'https://b.test/', background: false, profile: { kind: 'personal' } });
+    requestTab({ url: 'https://c.test/', background: false });
+
+    expect(browserTabs().map((tab) => tab.metadata?.profile)).toEqual([
+      { kind: 'agent', agentId: 'bare:1' },
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('stops listening when the provider unmounts', () => {
     const { unmount } = renderProvider();
     openTabRequested.unsubscribe.mockClear();
@@ -265,6 +280,21 @@ describe('PreviewContext browser tab persistence', () => {
     renderProvider();
     act(() => ctx.closePreviewIfScopeChanged('project-a'));
     expect(browserTabs()[0].metadata?.agentOwned).toBe(false);
+  });
+
+  it('opens a tab in a chosen Agent profile and keeps that profile across a scope switch', () => {
+    renderProvider();
+    act(() => ctx.closePreviewIfScopeChanged('project-a'));
+    act(() => ctx.openBrowserTab('https://example.com', { kind: 'agent', agentId: 'bare:2' }));
+    act(() => ctx.openBrowserTab('https://example.com', { kind: 'personal' }));
+
+    act(() => ctx.closePreviewIfScopeChanged('project-b'));
+    act(() => ctx.closePreviewIfScopeChanged('project-a'));
+
+    expect(browserTabs().map((tab) => tab.metadata?.profile)).toEqual([
+      { kind: 'agent', agentId: 'bare:2' },
+      undefined,
+    ]);
   });
 
   it('persists the favicon so restored tabs keep their site icon', () => {

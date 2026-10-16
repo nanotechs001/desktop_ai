@@ -782,10 +782,13 @@ const handleAppReady = async (): Promise<void> => {
   const { cdpStartupEnabled, setActiveCdpPort } = await import('./process/utils/configureChromium');
   try {
     const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
+    const { resolveChatAgent } = await import('./process/artifacts');
     // Always called: the pane's agent-browser IPC answers even while the user has agent control off.
     const agentBrowser = await startAgentBrowserServices({
       enabled: cdpStartupEnabled,
       blockedPorts: () => (backendManager.port > 0 ? [backendManager.port] : []),
+      // An agent's tabs open in its chat's Agent browser profile (looked up when it opens one, once the backend is up).
+      resolveAgent: resolveChatAgent,
     });
     if (agentBrowser) {
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;
