@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Drag list</title>
+    <style>
+      li {
+        width: 200px;
+        height: 30px;
+        margin: 4px;
+        background: #ddd;
+        list-style: none;
+      }
+    </style>
+  </head>
+  <body>
+    <ul id="list">
+      <li id="d1" draggable="true">Item 1</li>
+      <li id="d2" draggable="true">Item 2</li>
+      <li id="d3" draggable="true">Item 3</li>
+    </ul>
+    <script>
+      window.dropLog = [];
+      let dragged = null;
+      for (const li of document.querySelectorAll('li')) {
+        li.addEventListener('dragstart', (e) => {
+          dragged = li;
+          e.dataTransfer.setData('text/plain', li.id);
+        });
+        li.addEventListener('dragover', (e) => e.preventDefault());
+        li.addEventListener('drop', (e) => {
+          e.preventDefault();
+          window.dropLog.push(`${dragged.id}->${li.id}`);
+          li.after(dragged);
+        });
+      }
+    </script>
+  </body>
+</html>

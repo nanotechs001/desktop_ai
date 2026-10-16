@@ -12,9 +12,25 @@
  */
 
 const esbuild = require('esbuild');
+const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
+
+/** `import text from './file?raw'` (the Vite convention, also used by vitest) as the file's text. */
+const RAW_IMPORT_PLUGIN = {
+  name: 'raw-import',
+  setup(build) {
+    build.onResolve({ filter: /\?raw$/ }, (args) => ({
+      path: path.resolve(args.resolveDir, args.path.slice(0, -'?raw'.length)),
+      namespace: 'raw-import',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'raw-import' }, (args) => ({
+      contents: fs.readFileSync(args.path, 'utf8'),
+      loader: 'text',
+    }));
+  },
+};
 
 const SHARED_OPTIONS = {
   bundle: true,
@@ -23,6 +39,7 @@ const SHARED_OPTIONS = {
   external: ['electron'],
   tsconfig: path.join(ROOT, 'tsconfig.json'),
   loader: { '.wasm': 'empty' },
+  plugins: [RAW_IMPORT_PLUGIN],
 };
 
 async function main() {

@@ -57,7 +57,7 @@ describe('aion-browser server', () => {
     const client = await connectClient(relay.env);
     expect(client.getInstructions()).toBe(BROWSER_RULE_TEXT);
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(['tabs']);
+    expect(tools.map((tool) => tool.name)).toEqual(['tabs', 'observe']);
     for (const tool of tools) expect(tool.description?.startsWith(PANE_SENTENCE)).toBe(true);
   });
 
@@ -82,7 +82,7 @@ describe('aion-browser server', () => {
       expect(reply.isError).toBe(true);
       expect(textOf(reply)).toBe(NOT_AVAILABLE);
     }
-    expect((await client.listTools()).tools).toHaveLength(1); // still serving
+    expect((await client.listTools()).tools).toHaveLength(2); // still serving
   });
 
   it('turns an unreachable relay into a tool error instead of throwing', async () => {

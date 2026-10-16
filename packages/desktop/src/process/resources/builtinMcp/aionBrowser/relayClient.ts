@@ -7,6 +7,7 @@
 // Runs inside the standalone aion-browser MCP process: no electron imports, and nothing that pulls them in.
 import WebSocket from 'ws';
 import { CdpConnection, createWebSocketTransport } from '@process/services/agentBrowser/cdpConnection';
+import { watchFrames } from './frames';
 
 /** Thrown by {@link RelayClient.connect} when the AionUi relay env vars are absent or unusable. */
 export const RELAY_ENV_MISSING = 'relay-env-missing';
@@ -209,6 +210,7 @@ export class RelayClient {
     this.reconnected = this.hadConnection;
     this.hadConnection = true;
     const conn = new CdpConnection(createWebSocketTransport(ws));
+    watchFrames(conn); // before any attach: the relay announces a tab's OOPIFs right after the attach reply
     conn.on('Target.targetDestroyed', ({ targetId }) => {
       if (typeof targetId === 'string') this.forgetTab(targetId);
     });

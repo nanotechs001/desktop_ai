@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow roots</title>
+  </head>
+  <body>
+    <div id="open-host"></div>
+    <div id="closed-host"></div>
+    <div contenteditable="true" aria-label="Post body" style="min-height: 40px">Hello</div>
+    <script>
+      const open = document.getElementById('open-host').attachShadow({ mode: 'open' });
+      open.innerHTML =
+        '<button>Shadow save</button><span id="lbl">Shadow email</span><input aria-labelledby="lbl" /><div id="inner-host"></div>';
+      const inner = open.getElementById('inner-host').attachShadow({ mode: 'open' });
+      inner.innerHTML = '<a href="#deep">Deep link</a><p>Text inside a shadow root</p>';
+      const closed = document.getElementById('closed-host').attachShadow({ mode: 'closed' });
+      closed.innerHTML = '<button>Closed secret</button>';
+    </script>
+  </body>
+</html>
