@@ -34,7 +34,7 @@ type Fixture = {
 const html = (body: string, title = 'fixture'): string => `<!doctype html><title>${title}</title>${body}`;
 
 /** A local site with one page per scenario; random port on 127.0.0.1 (a secure context for geolocation). */
-async function startFixtureServer(downloadName: string): Promise<Fixture> {
+async function startFixtureServer(): Promise<Fixture> {
   let reloads = 0;
   let loginPost: { body: string; contentType: string } | null = null;
 
@@ -90,11 +90,16 @@ async function startFixtureServer(downloadName: string): Promise<Fixture> {
           )
         );
       case '/download-page':
-        return send(html(`<a id="dl" href="/file">download</a>`, 'Downloads'));
+        return send(
+          html(
+            `<a id="dl" href="/file?name=${encodeURIComponent(url.searchParams.get('name') ?? '')}">download</a>`,
+            'Downloads'
+          )
+        );
       case '/file':
         return send('file contents', 200, {
           'content-type': 'application/octet-stream',
-          'content-disposition': `attachment; filename="${downloadName}"`,
+          'content-disposition': `attachment; filename="${url.searchParams.get('name') ?? 'download.txt'}"`,
         });
       case '/geo':
         return send(
@@ -212,13 +217,15 @@ const waitForFile = async (file: string): Promise<void> => {
   await expect.poll(() => fs.existsSync(file) && fs.statSync(file).size > 0, { timeout: 15_000 }).toBe(true);
 };
 
+const NO_ASSISTANT_REASON =
+  'Needs an installed Claude assistant: the browser panel only renders inside a conversation, which needs one';
+
 test.describe('Built-in browser behaves like a regular browser', () => {
-  const downloadName = `e2e-report-${process.pid}.txt`;
   let fixture: Fixture;
   let conversationId = '';
 
   test.beforeAll(async () => {
-    fixture = await startFixtureServer(downloadName);
+    fixture = await startFixtureServer();
   });
 
   test.afterAll(async () => {
@@ -230,7 +237,9 @@ test.describe('Built-in browser behaves like a regular browser', () => {
     if (conversationId) return;
     await goToGuid(page);
     const assistantId = await findAssistantIdForBackend(page, 'claude');
-    test.skip(!assistantId, 'No assistant available to host a conversation');
+    // Never a silent skip: CI fails outright, and a local run reports each test as fixme with the reason.
+    if (!assistantId && process.env.CI) throw new Error(NO_ASSISTANT_REASON);
+    test.fixme(!assistantId, NO_ASSISTANT_REASON);
     conversationId = await createAndOpenConversation(page, { assistantId: assistantId ?? '' });
   });
 
@@ -311,7 +320,13 @@ test.describe('Built-in browser behaves like a regular browser', () => {
     electronApp,
     page,
   }) => {
-    const guest = await openBrowserTab(electronApp, page, `${fixture.origin}/download-page`);
+    // Unique per run and per retry, so "name (1).ext" is always the second download of this test.
+    const downloadName = `e2e-report-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
+    const guest = await openBrowserTab(
+      electronApp,
+      page,
+      `${fixture.origin}/download-page?name=${encodeURIComponent(downloadName)}`
+    );
     const { name, ext } = path.parse(downloadName);
 
     await guest.click('#dl');
@@ -331,7 +346,10 @@ test.describe('Built-in browser behaves like a regular browser', () => {
     const prompt = page.locator('.arco-modal').filter({ hasText: fixture.origin });
     await expect(prompt).toBeVisible();
     // Do not remember the answer: the store lives in the real ~/.aionui, which a test must not write.
+    const remember = prompt.locator('.arco-checkbox input');
+    await expect(remember).toBeChecked();
     await prompt.locator('.arco-checkbox').click();
+    await expect(remember).not.toBeChecked();
     // Block is the default-styled button; Allow is the primary one.
     await prompt.locator('.arco-btn-secondary').click();
 
@@ -339,7 +357,7 @@ test.describe('Built-in browser behaves like a regular browser', () => {
     await expect(prompt).toBeHidden();
   });
 
-  test('Cmd/Ctrl+R in the page reloads the page, not the AionUi window', async ({ electronApp, page }) => {
+  test('Cmd/Ctrl+R in the page reloads the guest page', async ({ electronApp, page }) => {
     const guest = await openBrowserTab(electronApp, page, `${fixture.origin}/counter`);
     await expect(guest.locator('#n')).toHaveText('1');
     // A reload of the AionUi window would drop this; a reload of only the page cannot touch it.
