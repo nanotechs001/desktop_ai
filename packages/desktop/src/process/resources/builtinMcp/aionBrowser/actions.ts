@@ -310,8 +310,8 @@ const need = (value: string | undefined, what: string, op: string): string => {
 
 /** A label the user would be asked about, and the frame its control sits in. */
 type Labeled = { label: string; frame: FrameHandle };
-/** Keys that activate the focused control; the gate reads what has focus before sending them. */
-const ACTIVATING_KEYS = new Set(['Enter', 'Space']);
+/** Keys that act on the focused control (activate it, or change a native select); the gate reads it first. */
+const ACTIVATING_KEYS = new Set(['Enter', 'Space', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 const CHECK_FAILED = 'could not check what this input would activate; observe again';
 const CHANGED_WHILE_ASKING = 'the page changed while the user was asked; observe again';
 
@@ -374,11 +374,17 @@ async function focusLabels(ctx: ActionContext, t: Target | null, key: string): P
   return reports.flatMap((r) => r.labels.map((label) => ({ label, frame: r.frame })));
 }
 
-/** Everything a press would click or activate: the target's own click, and for Enter or Space the focused control. */
+/** What a click on `t` activates: its own label, and every control or pointer-run under its click point. */
+const clickLabels = async (ctx: ActionContext, t: Target): Promise<Labeled[]> => [
+  { label: t.label, frame: t.frame },
+  ...(await pointLabels(ctx, t.point)),
+];
+
+/** Everything a press would click or activate: the target's click, and for a gated key the focused control. */
 const pressLabels = async (ctx: ActionContext, t: Target | null, key: string): Promise<Labeled[]> => {
   const activating = ACTIVATING_KEYS.has(key);
   return [
-    ...(t ? [{ label: t.label, frame: t.frame }] : []),
+    ...(t ? await clickLabels(ctx, t) : []),
     ...(activating ? await focusLabels(ctx, t, key) : []),
     // A target that cancels mousedown leaves the focus where it was, and the key goes there as well.
     ...(activating && t ? await focusLabels(ctx, null, key) : []),
@@ -418,8 +424,12 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle |
   if (op === 'press' || op === 'scroll') return op === 'press' ? press(ctx, step) : scroll(ctx, step);
   const id = need(step.target, 'a target id from observe', op);
   let t = await resolveTarget(ctx, id);
-  if (op === 'click' && (await confirmRisky(ctx, [{ label: t.label, frame: t.frame }]))) {
-    t = await resolveTarget(ctx, id);
+  if (op === 'click') {
+    const asked = await clickLabels(ctx, t);
+    if (await confirmRisky(ctx, asked)) {
+      t = await resolveTarget(ctx, id);
+      if (signature(await clickLabels(ctx, t)) !== signature(asked)) throw new StepError('stale', CHANGED_WHILE_ASKING);
+    }
   }
   if (op === 'hover') {
     await mouse(ctx, 'mouseMoved', t.point);
@@ -442,15 +452,33 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle |
   return t.frame;
 }
 
-/** Native selects only (jev's in-page value set plus input and change events); custom dropdowns are clicked. */
-async function selectOption(ctx: ActionContext, t: Target, text: string): Promise<void> {
+/** The option of native select `t` that `text` names, as the page labels it in full. */
+function optionFor(t: Target, text: string): string {
   if (!t.options) throw new StepError('error', `${t.id} is not a native dropdown; click it open and click the option.`);
   // Compare the way observe showed the options: sanitized and cut.
   const wanted = sanitizePageText(text, MAX_OPTION_LENGTH);
-  const index = t.options.findIndex((o) => sanitizePageText(o, MAX_OPTION_LENGTH) === wanted);
-  if (index < 0) throw new StepError('error', `${t.id} has no enabled option with that label.`);
+  const option = t.options.find((o) => sanitizePageText(o, MAX_OPTION_LENGTH) === wanted);
+  if (option === undefined) throw new StepError('error', `${t.id} has no enabled option with that label.`);
+  return option;
+}
+
+/**
+ * Native selects only (jev's in-page value set plus input and change events); custom dropdowns are clicked. Choosing
+ * fires the page's change handler, so a risky option (or select) is asked about first, and re-read after Allow.
+ */
+async function selectOption(ctx: ActionContext, first: Target, text: string): Promise<void> {
+  const labelsFor = (t: Target): Labeled[] => [
+    { label: optionFor(t, text), frame: t.frame },
+    { label: t.label, frame: t.frame },
+  ];
+  let t = first;
+  const asked = labelsFor(t);
+  if (await confirmRisky(ctx, asked)) {
+    t = await resolveTarget(ctx, t.id);
+    if (signature(labelsFor(t)) !== signature(asked)) throw new StepError('stale', CHANGED_WHILE_ASKING);
+  }
   // The page picks the option by its full label again, so a list that changed since the check is never misread.
-  if ((await callIn(ctx.conn, t.frame, SELECT_OPTION, values(t.node, t.options[index]))) !== true) {
+  if ((await callIn(ctx.conn, t.frame, SELECT_OPTION, values(t.node, optionFor(t, text)))) !== true) {
     throw new StepError('stale', 'the dropdown changed since observe');
   }
 }

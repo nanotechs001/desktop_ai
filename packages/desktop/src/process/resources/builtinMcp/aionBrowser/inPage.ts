@@ -80,7 +80,8 @@ const LABELS_OF = `const buttonLike = ['button', 'submit', 'reset', 'image'];
  * (node, key) → `{labels, framed, focused}` for a Space or Enter press. The control is the observed `node` or, when
  * node is null, the focused element (through open shadow roots). Enter: its labels (a text field's own label too,
  * e.g. a composer) and those of every submit button its form has, `form="id"` buttons and image inputs included.
- * Space: the control's labels, unless it is a text field (a space typed there activates nothing). `framed`: the
+ * Space: the control's labels, unless it is a text field (a space typed there activates nothing). Arrow, Home, End
+ * and Page keys: on a native select, its labels and options (the value changes); elsewhere nothing. `framed`: the
  * focus is on an iframe element, so the real target is in another frame; `focused`: this document has focus.
  */
 export const ENTER_LABELS = `function (node, key) {
@@ -91,6 +92,11 @@ export const ENTER_LABELS = `function (node, key) {
   const none = { labels: [], framed: false, focused: document.hasFocus() };
   if (!e || e === document.body || e === document.documentElement) return none;
   if (e.tagName === 'IFRAME' || e.tagName === 'FRAME') return { ...none, framed: true };
+  if (e.tagName === 'SELECT' && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(key)) {
+    // These keys change a native select's value: any of its options may be what they land on.
+    const options = [...e.options].slice(0, 100).map((o) => o.label.slice(0, 200));
+    return { ...none, labels: [...labelsOf(e), ...options] };
+  }
   const labels = key === 'Enter' || !isField(e) ? labelsOf(e) : [];
   const form = key === 'Enter' && e.tagName !== 'TEXTAREA' && !e.isContentEditable && (e.form || e.closest('form'));
   if (form) {
@@ -105,11 +111,12 @@ export const ENTER_LABELS = `function (node, key) {
 }`;
 
 /**
- * (x, y) → `{labels, framed}` for the frame-local point, for a click_point or a drag's release. Walking up from the
- * topmost element there (through open shadow roots and hosts) it takes the first control: observe's roles, links,
- * buttons, fields, `label` and `summary` (a label also gives its control's text), or anything with a pointer
- * cursor (a `div` with a click handler). On none it falls back to the hit element's own text. `framed`: the hit is
- * an iframe element, so what is under the point is in another frame.
+ * (x, y) → `{labels, framed}` for the frame-local point, for a click_point, a drag's release or the click of an act.
+ * The topmost element there (through open shadow roots) and every ancestor up to the body that is a control (observe's
+ * roles, links, buttons, fields, `label`, `summary`), or the outermost element of a pointer-cursor run (a `div` with
+ * a click handler; `cursor` is inherited, so only the first of a run counts), each contribute their labels: an icon
+ * inside a Delete button says Delete. A label also gives its control's text. Total bounded to 600 chars. `framed`:
+ * the hit is an iframe element, so what is under the point is in another frame.
  */
 export const POINT_LABELS = `function (x, y) {
   ${LABELS_OF}
@@ -124,13 +131,23 @@ export const POINT_LABELS = `function (x, y) {
   const roles = ['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'menuitemradio', 'option',
     'gridcell', 'combobox', 'textbox', 'searchbox', 'spinbutton'];
   const control = 'button,a,input,select,textarea,summary,label,' + roles.map((role) => '[role="' + role + '"]').join(',');
+  const pointer = (node) => getComputedStyle(node).cursor === 'pointer';
+  const found = [...labelsOf(hit)];
   for (let node = hit; node && node !== document.body; node = node.parentNode || node.host) {
     if (node.nodeType !== 1) continue;
-    if (node.matches(control) || getComputedStyle(node).cursor === 'pointer') {
-      return { labels: [...labelsOf(node), ...(node.control ? labelsOf(node.control) : [])], framed: false };
-    }
+    const parent = node.parentNode || node.host;
+    const outermostPointer = pointer(node) && !(parent && parent.nodeType === 1 && pointer(parent));
+    if (!node.matches(control) && !outermostPointer) continue;
+    found.push(...labelsOf(node), ...(node.control ? labelsOf(node.control) : []));
   }
-  return { labels: labelsOf(hit), framed: false };
+  const labels = [];
+  let total = 0;
+  for (const label of new Set(found)) {
+    if (total >= 600) break;
+    labels.push(label.slice(0, 600 - total));
+    total += label.length;
+  }
+  return { labels, framed: false };
 }`;
 
 /** (node, label) → true once the first enabled option of a native select with exactly that label is chosen. */

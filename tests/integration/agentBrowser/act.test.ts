@@ -328,6 +328,70 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(await evaluate(session, 'window.submits')).toEqual([]);
   });
 
+  it('click_point on an icon inside a risky pointer-cursor button or link asks about the control', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const centreOf = async (id: string) => {
+      const [x, y] = (await evaluate(
+        session,
+        `(() => { const r = document.getElementById('${id}').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`
+      )) as [number, number];
+      return { x, y };
+    };
+    const asked: string[] = [];
+    const deny = contextFor(session, async (label) => {
+      asked.push(label.trim());
+      return false;
+    }).ctx;
+    const icon = await centreOf('ico');
+    expect(await clickPoint(deny, icon.x, icon.y)).toMatchObject({ result: 'denied' });
+    const cart = await centreOf('cart');
+    expect(await clickPoint(deny, cart.x, cart.y)).toMatchObject({ result: 'denied' });
+    expect(asked).toEqual(['Delete account', 'Checkout']);
+    expect(await evaluate(session, '[window.svgDeleted, window.checkouts]')).toEqual([0, 0]);
+  });
+
+  it('act click on a harmless child (a grip) inside a risky button asks about the button', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const ctx = contextFor(session, async (label) => {
+      asked.push(label);
+      return false;
+    }).ctx;
+    const input = await inputSentDuring(async () => {
+      const { results } = await act(ctx, [{ op: 'click', target: row(obs, 'Grip').id }]);
+      expect(results[0].result).toBe('denied');
+    });
+    expect(input).toEqual([]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatch(/Remove/);
+    expect(await evaluate(session, 'window.wraps')).toBe(0);
+  });
+
+  it('asks before a select picks a risky option, and before arrow keys can land on one', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const ctx = contextFor(session, async (label) => {
+      asked.push(label);
+      return false;
+    }).ctx;
+    const picked = await act(ctx, [{ op: 'select', target: row(obs, 'Action').id, text: 'Delete selected' }]);
+    expect(picked.results[0].result).toBe('denied');
+    expect(asked).toEqual(['Delete selected']);
+    expect(await evaluate(session, '[window.selChanged, document.getElementById("sel").value]')).toEqual([0, 'Choose']);
+
+    await evaluate(session, `document.getElementById('sel').focus()`);
+    const input = await inputSentDuring(() => act(ctx, [{ op: 'press', key: 'ArrowDown' }]));
+    expect(input).toEqual([]);
+    expect(asked).toHaveLength(2);
+    expect(await evaluate(session, 'window.selChanged')).toBe(0);
+
+    // Allowed, the option is chosen and the page's handler runs.
+    await act(contextFor(session).ctx, [{ op: 'select', target: row(obs, 'Action').id, text: 'Delete selected' }]);
+    expect(await evaluate(session, 'window.selChanged')).toBe(1);
+  });
+
   it('a denied risky click sends no input and leaves the page alone', async () => {
     const session = await chrome.openPage(`${servers.originA}/confirm.html`);
     const obs = await observePage(chrome.conn, session);

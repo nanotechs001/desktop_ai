@@ -1,7 +1,12 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ENTER_LABELS, POINT_LABELS } from '@process/resources/builtinMcp/aionBrowser/inPage';
+import {
+  ENTER_LABELS,
+  POINT_LABELS,
+  RESOLVE_TARGET,
+  SELECT_OPTION,
+} from '@process/resources/builtinMcp/aionBrowser/inPage';
 import { RelayClient } from '@process/resources/builtinMcp/aionBrowser/relayClient';
 import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
 import { FakeRelay } from './fakeRelay';
@@ -201,7 +206,8 @@ describe('confirm gate', () => {
   const page = (
     label: string,
     enter: string[] | ((call: number, node: unknown) => unknown) = [],
-    point: string[] | (() => unknown) = []
+    point: string[] | (() => unknown) = [],
+    options?: string[]
   ) => {
     let calls = 0;
     relay.on('Runtime.callFunctionOn', (params): Reply => {
@@ -214,15 +220,18 @@ describe('confirm gate', () => {
       if (fn === POINT_LABELS) {
         return { result: { type: 'object', value: typeof point === 'function' ? point() : pointReport(point) } };
       }
+      if (fn === SELECT_OPTION) return { result: { type: 'boolean', value: true } };
       return fn.includes('elementFromPoint')
-        ? { result: { type: 'object', value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label, role: 'button' } } }
+        ? {
+            result: { type: 'object', value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label, role: 'button', options } },
+          }
         : { result: { type: 'undefined' } };
     });
   };
   const answerWith = (allow: boolean) => relay.on('AionRelay.requestConfirm', () => ({ allow }));
   const asked = () => relay.callsTo('AionRelay.requestConfirm');
   const resolves = () =>
-    relay.callsTo('Runtime.callFunctionOn').filter((p) => String(p.functionDeclaration).includes('elementFromPoint'));
+    relay.callsTo('Runtime.callFunctionOn').filter((p) => p.functionDeclaration === RESOLVE_TARGET);
   const results = async (actions: Array<Record<string, unknown>>) =>
     JSON.parse(textOf(await call('act', { actions }))) as {
       results: Array<{ result: string; reason?: string }>;
@@ -390,6 +399,77 @@ describe('confirm gate', () => {
     expect((await results([{ op: 'press', key: 'Enter', target: id }])).results[0].result).toBe('denied');
     expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete repo', ...FRAME }]);
     expect(inputRequests()).toEqual([]);
+  });
+
+  it('a click on a harmless-looking target asks when a risky control is under its click point', async () => {
+    const id = await openAndObserve();
+    page('Grip', [], ['Remove item']);
+    answerWith(false);
+    expect((await results([{ op: 'click', target: id }])).results[0].result).toBe('denied');
+    expect(asked()).toEqual([{ webContentsId: 7, label: 'Remove item', ...FRAME }]);
+    expect(inputRequests()).toEqual([]);
+
+    // Allowed, but the control under the point changed while the user decided.
+    answerWith(true);
+    let calls = 0;
+    page('Grip', [], () => pointReport(calls++ === 0 ? ['Remove item'] : ['Cancel']));
+    expect((await results([{ op: 'click', target: id }])).results[0].result).toBe('stale');
+    expect(inputRequests()).toEqual([]);
+  });
+
+  describe('select', () => {
+    const pick = (text: string) => results([{ op: 'select', target: 'f0:3', text }]);
+    beforeEach(async () => {
+      await openAndObserve();
+    });
+
+    it('asks about a risky option before choosing it, and chooses after Allow', async () => {
+      page('Action', [], [], ['Choose', 'Delete selected']);
+      answerWith(false);
+      expect((await pick('Delete selected')).results[0].result).toBe('denied');
+      expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete selected', ...FRAME }]);
+      expect(relay.callsTo('Runtime.callFunctionOn').some((p) => p.functionDeclaration === SELECT_OPTION)).toBe(false);
+
+      answerWith(true);
+      expect((await pick('Delete selected')).results[0].result).toBe('done');
+      expect(
+        relay.callsTo('Runtime.callFunctionOn').filter((p) => p.functionDeclaration === SELECT_OPTION)
+      ).toHaveLength(1);
+    });
+
+    it('asks about a risky select even for a harmless option, and not for a harmless pair', async () => {
+      page('Delete all', [], [], ['Choose', 'Later']);
+      answerWith(false);
+      expect((await pick('Later')).results[0].result).toBe('denied');
+      page('Action', [], [], ['Choose', 'Later']);
+      expect((await pick('Later')).results[0].result).toBe('done');
+      expect(asked()).toHaveLength(1);
+    });
+  });
+
+  describe('keys that change a native select', () => {
+    it.each(['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageUp', 'PageDown'])(
+      '%s reads the focused control, and asks when an option is risky',
+      async (key) => {
+        await openAndObserve();
+        page('Save', ['Action', 'Choose', 'Delete selected']);
+        answerWith(false);
+        expect((await results([{ op: 'press', key }])).results[0].result).toBe('denied');
+        expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete selected', ...FRAME }]);
+        expect(inputRequests()).toEqual([]);
+        const read = relay.requests.find((r) => r.params.functionDeclaration === ENTER_LABELS);
+        expect(read?.params.arguments).toEqual([{ value: null }, { value: key }]);
+      }
+    );
+
+    it('does not read the focus for keys that move nothing', async () => {
+      await openAndObserve();
+      page('Save', ['Delete selected']);
+      const keys = ['Tab', 'Escape', 'Backspace', 'ArrowLeft'];
+      const reply = await results(keys.map((key) => ({ op: 'press', key })));
+      expect(reply.results.map((r) => r.result)).toEqual(keys.map(() => 'done'));
+      expect(relay.requests.some((r) => r.params.functionDeclaration === ENTER_LABELS)).toBe(false);
+    });
   });
 
   describe('drag', () => {
