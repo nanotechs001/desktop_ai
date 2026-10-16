@@ -149,11 +149,15 @@ let store: PermissionStore | undefined;
 const storeFile = (): string => path.join(homedir(), '.aionui', 'browser-permissions.json');
 const currentStore = (): PermissionStore => (store ??= loadPermissionStore(storeFile()));
 
-/** The origin of `url`, or null when it does not parse or is opaque (about:blank, data:, file:). */
+/**
+ * The origin of `url`, or null when it does not parse or is opaque (about:blank, data:, file:).
+ * Extension pages are `chrome-extension://<id>`: URL gives non-web schemes an opaque origin.
+ */
 const originOf = (url: string | undefined): string | null => {
   if (!url) return null;
   try {
-    const { origin } = new URL(url);
+    const { origin, protocol, host } = new URL(url);
+    if (protocol === 'chrome-extension:') return host ? `chrome-extension://${host}` : null;
     return origin === 'null' ? null : origin;
   } catch {
     return null;

@@ -332,6 +332,18 @@ describe('installPermissions', () => {
     expect(getPermissionRequests()).toEqual([]);
   });
 
+  it('uses chrome-extension://<id> as the origin of extension pages, so they can prompt and be allowed', () => {
+    const { request, check } = setup();
+    const extensionUrl = 'chrome-extension://abcdefghijklmnop/popup.html';
+
+    request({ getURL: () => extensionUrl }, 'notifications', vi.fn(), {});
+
+    expect(getPermissionRequests()[0].origin).toBe('chrome-extension://abcdefghijklmnop');
+    expect(check(null, 'fullscreen', 'chrome-extension://abcdefghijklmnop', { requestingUrl: extensionUrl })).toBe(
+      true
+    );
+  });
+
   it('the check handler falls back to requestingOrigin and denies an opaque origin', () => {
     const { check } = setup();
     expect(check(null, 'fullscreen', ORIGIN, {})).toBe(true);
