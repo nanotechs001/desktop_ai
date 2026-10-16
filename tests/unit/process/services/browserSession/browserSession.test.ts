@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     },
     fromPartition: vi.fn(() => browserSession),
     installWindowOpenHandler: vi.fn(),
+    installBeforeUnloadDialog: vi.fn(),
     installContextMenu: vi.fn(),
     installBrowserShortcuts: vi.fn(),
     installDownloads: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock('@process/services/browserSession/shortcuts', () => ({
 
 vi.mock('@process/services/browserSession/windowOpen', () => ({
   installWindowOpenHandler: mocks.installWindowOpenHandler,
+  installBeforeUnloadDialog: mocks.installBeforeUnloadDialog,
 }));
 
 const CHROME_UA =
@@ -101,6 +103,7 @@ beforeEach(() => {
   mocks.browserSession.setUserAgent.mockClear();
   mocks.browserSession.webRequest.onBeforeSendHeaders.mockClear();
   mocks.installWindowOpenHandler.mockClear();
+  mocks.installBeforeUnloadDialog.mockClear();
   mocks.installContextMenu.mockClear();
   mocks.installBrowserShortcuts.mockClear();
   mocks.installDownloads.mockClear();
@@ -257,6 +260,8 @@ describe('initBrowserSession', () => {
 
       expect(mocks.installWindowOpenHandler.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
       expect(mocks.installWindowOpenHandler.mock.calls[0][1]()).toBe(main);
+      expect(mocks.installBeforeUnloadDialog.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
+      expect(mocks.installBeforeUnloadDialog.mock.calls[0][1]()).toBe(main);
     });
 
     it('installs the context menu on browser webviews and popups only', async () => {

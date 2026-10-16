@@ -12,11 +12,22 @@ type FakeWindow = {
   handlers: Map<string, (...args: unknown[]) => void>;
 };
 
-const mocks = vi.hoisted(() => ({ emit: vi.fn(), windows: [] as FakeWindow[] }));
+const mocks = vi.hoisted(() => ({
+  emit: vi.fn(),
+  windows: [] as FakeWindow[],
+  showMessageBoxSync: vi.fn(() => 0),
+  fromWebContents: vi.fn((_contents: unknown): unknown => null),
+}));
+
+vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
+  loadTranslate: () => Promise.resolve((key: string) => key),
+}));
 
 vi.mock('@/common', () => ({ ipcBridge: { browser: { openTabRequested: { emit: mocks.emit } } } }));
 vi.mock('electron', () => ({
+  dialog: { showMessageBoxSync: mocks.showMessageBoxSync },
   BrowserWindow: class {
+    static fromWebContents = mocks.fromWebContents;
     options: Electron.BrowserWindowConstructorOptions;
     webContents: { id: number };
     handlers = new Map<string, (...args: unknown[]) => void>();
@@ -40,6 +51,7 @@ vi.mock('electron', () => ({
 import {
   OpenLimiter,
   classifyWindowOpen,
+  installBeforeUnloadDialog,
   installWindowOpenHandler,
   popupWindowOptions,
 } from '@process/services/browserSession/windowOpen';
@@ -407,5 +419,76 @@ describe('installWindowOpenHandler popup blocking', () => {
 
     expect(mocks.emit).toHaveBeenCalledTimes(3);
     expect(console.warn).toHaveBeenCalled();
+  });
+});
+
+describe('installBeforeUnloadDialog', () => {
+  const owner = { isDestroyed: () => false };
+  const mainWindow = { isDestroyed: () => false };
+
+  const installOn = async (contents: Record<string, unknown>) => {
+    const handlers = new Map<string, (event: { preventDefault: () => void }) => void>();
+    const target = {
+      ...contents,
+      on: (event: string, handler: (event: { preventDefault: () => void }) => void) => handlers.set(event, handler),
+    };
+    installBeforeUnloadDialog(
+      target as unknown as Electron.WebContents,
+      () => mainWindow as unknown as Electron.BrowserWindow
+    );
+    // Translations load asynchronously once; the dialog needs them.
+    await vi.waitFor(() => expect(handlers.has('will-prevent-unload')).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const fire = () => {
+      const event = { preventDefault: vi.fn() };
+      handlers.get('will-prevent-unload')?.(event);
+      return event;
+    };
+    return { fire };
+  };
+
+  beforeEach(() => {
+    mocks.showMessageBoxSync.mockReset();
+    mocks.fromWebContents.mockReset();
+  });
+
+  it('asks "Leave site?" on the window that hosts the webview; Leave lets the page go', async () => {
+    const host = { id: 1 };
+    mocks.fromWebContents.mockImplementation((contents) => (contents === host ? owner : null));
+    mocks.showMessageBoxSync.mockReturnValue(0);
+    const { fire } = await installOn({ hostWebContents: host });
+
+    const event = fire();
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    const [parent, options] = mocks.showMessageBoxSync.mock.calls[0] as unknown as [
+      unknown,
+      Electron.MessageBoxSyncOptions,
+    ];
+    expect(parent).toBe(owner);
+    expect(options).toMatchObject({
+      message: 'preview.browserChrome.leave.title',
+      detail: 'preview.browserChrome.leave.detail',
+      buttons: ['preview.browserChrome.leave.leave', 'preview.browserChrome.leave.stay'],
+      cancelId: 1,
+    });
+  });
+
+  it('Stay keeps the page (no preventDefault)', async () => {
+    mocks.fromWebContents.mockReturnValue(owner);
+    mocks.showMessageBoxSync.mockReturnValue(1);
+    const { fire } = await installOn({});
+
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the main window when no window owns the page', async () => {
+    mocks.fromWebContents.mockReturnValue(null);
+    mocks.showMessageBoxSync.mockReturnValue(0);
+    const { fire } = await installOn({});
+
+    fire();
+
+    expect(mocks.showMessageBoxSync.mock.calls[0][0]).toBe(mainWindow);
   });
 });

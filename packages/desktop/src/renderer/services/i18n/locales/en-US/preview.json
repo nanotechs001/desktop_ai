@@ -237,6 +237,12 @@
       "sites": "It can read and change your data on:",
       "add": "Add extension",
       "cancel": "Cancel"
+    },
+    "leave": {
+      "title": "Leave site?",
+      "detail": "Changes you made may not be saved.",
+      "leave": "Leave",
+      "stay": "Stay"
     }
   }
 }

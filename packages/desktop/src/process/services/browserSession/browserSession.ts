@@ -13,7 +13,7 @@ import { initBrowserExtensions, type BrowserExtensions } from './extensions';
 import { installPermissions } from './permissions';
 import { installBrowserShortcuts } from './shortcuts';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
-import { installWindowOpenHandler } from './windowOpen';
+import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
 
@@ -116,6 +116,7 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
     )
   );
   onBrowserContentsCreated((contents) => installBrowserShortcuts(contents));
+  onBrowserContentsCreated((contents) => installBeforeUnloadDialog(contents, deps.getMainWindow));
   // Tabs are webviews; popups stay windows of the page that opened them, not chrome.tabs entries.
   onBrowserContentsCreated((contents) => {
     if (contents.getType() === 'webview') extensions?.addTab(contents);

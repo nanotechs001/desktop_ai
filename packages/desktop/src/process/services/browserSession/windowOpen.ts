@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, dialog, screen } from 'electron';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
+import type { MenuTranslate } from './contextMenu';
+import { loadTranslate } from './contextMenuInstall';
 import { isSafeUrl } from './urlSafety';
 
 /** What to do with a page's `window.open` / `target=_blank` request. */
@@ -211,5 +213,53 @@ export function installWindowOpenHandler(
       };
     }
     return { action: 'deny' };
+  });
+}
+
+const LEAVE_KEY = 'preview.browserChrome.leave';
+const LEAVE_BUTTON = 0;
+const STAY_BUTTON = 1;
+/** Loaded once, ahead of time: `will-prevent-unload` must be answered synchronously. */
+let leaveTranslate: MenuTranslate | null = null;
+let leaveTranslateLoading = false;
+
+const preloadLeaveTranslate = (): void => {
+  if (leaveTranslate || leaveTranslateLoading) return;
+  leaveTranslateLoading = true;
+  loadTranslate().then(
+    (t) => {
+      leaveTranslate = t;
+    },
+    (error: unknown) => {
+      leaveTranslateLoading = false;
+      console.error('[BrowserSession] could not load the leave-site dialog text:', error);
+    }
+  );
+};
+
+/**
+ * Asks "Leave site?" when a page's beforeunload handler blocks a navigation or close, on the window
+ * that shows the page (the main window for a tab, the popup's own window). Leave lets the page go;
+ * Stay, or no answer possible yet, keeps it.
+ */
+export function installBeforeUnloadDialog(
+  contents: Electron.WebContents,
+  getMainWindow: () => Electron.BrowserWindow | null
+): void {
+  preloadLeaveTranslate();
+  contents.on('will-prevent-unload', (event) => {
+    const t = leaveTranslate;
+    const owner = BrowserWindow.fromWebContents(contents.hostWebContents ?? contents) ?? getMainWindow();
+    if (!t || !owner || owner.isDestroyed()) return;
+    const choice = dialog.showMessageBoxSync(owner, {
+      type: 'question',
+      message: t(`${LEAVE_KEY}.title`),
+      detail: t(`${LEAVE_KEY}.detail`),
+      buttons: [t(`${LEAVE_KEY}.leave`), t(`${LEAVE_KEY}.stay`)],
+      defaultId: LEAVE_BUTTON,
+      cancelId: STAY_BUTTON,
+      noLink: true,
+    });
+    if (choice === LEAVE_BUTTON) event.preventDefault();
   });
 }
