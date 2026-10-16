@@ -187,7 +187,9 @@
       "showInFolder": "Show in folder",
       "cancel": "Cancel",
       "failed": "Failed",
-      "actionFailed": "Couldn't complete that action"
+      "actionFailed": "Couldn't complete that action",
+      "openExecutableTitle": "Open “{{name}}”?",
+      "openExecutableContent": "This file can run programs on your Mac."
     },
     "permission": {
       "title": "Site permission",

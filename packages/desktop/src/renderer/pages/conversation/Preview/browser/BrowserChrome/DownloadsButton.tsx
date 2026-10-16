@@ -5,11 +5,14 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, List, Message, Popover, Progress } from '@arco-design/web-react';
+import { Button, List, Message, Modal, Popover, Progress } from '@arco-design/web-react';
 import { Download } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { DownloadItem } from '@/common/types/browser';
+import { isExecutableFilename } from '../constants';
+
+type ConfirmModal = ReturnType<typeof Modal.useModal>[0];
 
 const percentOf = (item: DownloadItem): number =>
   Math.min(100, Math.round((item.receivedBytes / item.totalBytes) * 100));
@@ -26,7 +29,7 @@ const formatBytes = (bytes: number): string => {
   return `${unit === 0 ? value : value.toFixed(1)} ${BYTE_UNITS[unit]}`;
 };
 
-const DownloadRow: React.FC<{ item: DownloadItem }> = ({ item }) => {
+const DownloadRow: React.FC<{ item: DownloadItem; modal: ConfirmModal }> = ({ item, modal }) => {
   const { t } = useTranslation();
   const { id } = item;
   const run = (action: Promise<{ success: boolean }>): void => {
@@ -36,6 +39,17 @@ const DownloadRow: React.FC<{ item: DownloadItem }> = ({ item }) => {
       .then((ok) => {
         if (!ok) Message.error(t('preview.browserChrome.downloads.actionFailed'));
       });
+  };
+  const open = (): void => {
+    const openIt = () => run(ipcBridge.browser.openDownload.invoke({ id }));
+    if (!isExecutableFilename(item.filename)) return openIt();
+    modal.confirm?.({
+      title: t('preview.browserChrome.downloads.openExecutableTitle', { name: item.filename }),
+      content: t('preview.browserChrome.downloads.openExecutableContent'),
+      okText: t('preview.browserChrome.downloads.open'),
+      cancelText: t('preview.browserChrome.downloads.cancel'),
+      onOk: openIt,
+    });
   };
   return (
     <List.Item>
@@ -57,7 +71,7 @@ const DownloadRow: React.FC<{ item: DownloadItem }> = ({ item }) => {
         )}
         {item.state === 'completed' && (
           <div className='flex gap-8px'>
-            <Button size='mini' onClick={() => run(ipcBridge.browser.openDownload.invoke({ id }))}>
+            <Button size='mini' onClick={open}>
               {t('preview.browserChrome.downloads.open')}
             </Button>
             <Button size='mini' onClick={() => run(ipcBridge.browser.showDownloadInFolder.invoke({ id }))}>
@@ -77,6 +91,7 @@ const DownloadRow: React.FC<{ item: DownloadItem }> = ({ item }) => {
 const DownloadsButton: React.FC = () => {
   const { t } = useTranslation();
   const [items, setItems] = useState<DownloadItem[]>([]);
+  const [modal, modalContextHolder] = Modal.useModal();
   const gotEvent = useRef(false);
 
   useEffect(() => {
@@ -101,21 +116,24 @@ const DownloadsButton: React.FC = () => {
           size='small'
           bordered={false}
           dataSource={items.toReversed()}
-          render={(item) => <DownloadRow key={item.id} item={item} />}
+          render={(item) => <DownloadRow key={item.id} item={item} modal={modal} />}
         />
       )}
     </div>
   );
 
   return (
-    <Popover trigger='click' position='br' content={content}>
-      <Button
-        type='text'
-        size='mini'
-        aria-label={t('preview.browserChrome.downloads.title')}
-        icon={<Download theme='outline' size='16' />}
-      />
-    </Popover>
+    <>
+      <Popover trigger='click' position='br' content={content}>
+        <Button
+          type='text'
+          size='mini'
+          aria-label={t('preview.browserChrome.downloads.title')}
+          icon={<Download theme='outline' size='16' />}
+        />
+      </Popover>
+      {modalContextHolder}
+    </>
   );
 };
 

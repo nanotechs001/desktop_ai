@@ -9,8 +9,37 @@ import {
   BROWSER_BLANK_URL,
   BROWSER_TAB_FALLBACK_TITLE,
   browserTabLabelFromUrl,
+  isExecutableFilename,
   resolveAddressBarInput,
 } from '@/renderer/pages/conversation/Preview/browser/constants';
+
+describe('isExecutableFilename', () => {
+  it.each([
+    'Setup.app',
+    'run.command',
+    'install.sh',
+    'Thing.pkg',
+    'Thing.DMG',
+    'setup.exe',
+    'setup.msi',
+    'a.bat',
+    'a.cmd',
+    'screen.scr',
+    'tool.jar',
+    'x.tool',
+    'shell.terminal',
+    'archive.tar.sh',
+  ])('%s can run programs', (name) => {
+    expect(isExecutableFilename(name)).toBe(true);
+  });
+
+  it.each(['report.pdf', 'photo.jpg', 'notes.txt', 'archive.zip', 'sh', '.sh', 'dmg', 'app.dmg.txt', ''])(
+    '%j is not executable-ish',
+    (name) => {
+      expect(isExecutableFilename(name)).toBe(false);
+    }
+  );
+});
 
 describe('resolveAddressBarInput', () => {
   it('returns null for empty or whitespace-only input', () => {

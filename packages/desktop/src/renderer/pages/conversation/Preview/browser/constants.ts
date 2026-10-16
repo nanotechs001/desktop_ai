@@ -102,3 +102,26 @@ export const browserTabLabelFromUrl = (url: string): string => {
     return BROWSER_TAB_FALLBACK_TITLE;
   }
 };
+
+/** Extensions of downloads that can run programs when opened; opening one asks first. */
+const EXECUTABLE_EXTENSIONS = new Set([
+  'app',
+  'command',
+  'sh',
+  'pkg',
+  'dmg',
+  'exe',
+  'msi',
+  'bat',
+  'cmd',
+  'scr',
+  'jar',
+  'tool',
+  'terminal',
+]);
+
+/** True when a downloaded file's last extension can run programs (`setup.dmg`, `run.sh`); dotfiles have none. */
+export const isExecutableFilename = (filename: string): boolean => {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 && EXECUTABLE_EXTENSIONS.has(filename.slice(dot + 1).toLowerCase());
+};

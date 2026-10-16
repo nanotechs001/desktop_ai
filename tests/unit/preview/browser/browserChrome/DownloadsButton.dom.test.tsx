@@ -91,6 +91,30 @@ describe('DownloadsButton', () => {
     expect(mocks.showDownloadInFolder).toHaveBeenCalledWith({ id: 'done' });
   });
 
+  it('asks before opening a file that can run programs; Cancel does not open it', async () => {
+    await openMenu([item('setup', { filename: 'Setup.dmg' })]);
+
+    fireEvent.click(await screen.findByText(`${KEY}.open`));
+    expect(mocks.openDownload).not.toHaveBeenCalled();
+    expect(await screen.findByText(`${KEY}.openExecutableTitle`)).toBeTruthy();
+    expect(screen.getByText(`${KEY}.openExecutableContent`)).toBeTruthy();
+
+    fireEvent.click(screen.getAllByText(`${KEY}.cancel`).at(-1) as HTMLElement);
+    await waitFor(() => expect(screen.queryByText(`${KEY}.openExecutableTitle`)).toBeNull());
+    expect(mocks.openDownload).not.toHaveBeenCalled();
+  });
+
+  it('opens a file that can run programs once the user confirms', async () => {
+    await openMenu([item('setup', { filename: 'install.sh' })]);
+    fireEvent.click(await screen.findByText(`${KEY}.open`));
+    await screen.findByText(`${KEY}.openExecutableTitle`);
+
+    const openButtons = screen.getAllByText(`${KEY}.open`);
+    fireEvent.click(openButtons.at(-1) as HTMLElement);
+
+    await waitFor(() => expect(mocks.openDownload).toHaveBeenCalledWith({ id: 'setup' }));
+  });
+
   it('Cancel calls cancelDownload with the item id', async () => {
     await openMenu([item('busy', { state: 'progressing', receivedBytes: 10 })]);
     fireEvent.click(await screen.findByText(`${KEY}.cancel`));
