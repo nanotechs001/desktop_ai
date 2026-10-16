@@ -4,10 +4,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import React from 'react';
+import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { IConversationListChangedEvent } from '@/common/adapter/ipcBridge';
+import type { TChatConversation } from '@/common/config/storage';
+
+const scopeEntered = vi.hoisted(() => vi.fn());
+
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
+vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'c1' }), useNavigate: () => vi.fn() }));
+vi.mock('@/renderer/pages/conversation/components/ChatConversation', () => ({ default: () => null }));
+// The route's view of the context; the provider tests import the real context module directly.
+vi.mock('@/renderer/pages/conversation/Preview', () => ({
+  // A fresh function per render, like the real context whose callback changes with its state.
+  usePreviewContext: () => ({ closePreviewIfScopeChanged: (...args: unknown[]) => scopeEntered(...args) }),
+}));
+vi.mock('@/renderer/hooks/chat/useAutoTitle', () => ({ useAutoTitle: () => ({ syncTitleFromHistory: vi.fn() }) }));
+
+const getConversationOrNull = vi.fn<(id: string) => Promise<TChatConversation | null>>();
+vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
+  getConversationOrNull: (id: string) => getConversationOrNull(id),
+}));
+
+let listChangedCb: ((e: IConversationListChangedEvent) => void) | null = null;
 vi.mock('@/common', () => ({
   ipcBridge: {
     fileStream: { contentUpdate: { on: () => () => {} } },
@@ -19,9 +41,20 @@ vi.mock('@/common', () => ({
       readFile: { invoke: async () => null },
       getImageBase64: { invoke: async () => null },
     },
+    conversation: {
+      listChanged: {
+        on: (cb: (e: IConversationListChangedEvent) => void) => {
+          listChangedCb = cb;
+          return () => {
+            listChangedCb = null;
+          };
+        },
+      },
+    },
   },
 }));
 
+import ChatConversationIndex from '@/renderer/pages/conversation/index';
 import { BROWSER_BLANK_URL } from '@/renderer/pages/conversation/Preview/browser/constants';
 import {
   PreviewProvider,
@@ -287,5 +320,38 @@ describe('conversation scopes open the browser pane by default', () => {
 
     expect(ctx.isOpen).toBe(false);
     expect(ctx.tabs).toHaveLength(0);
+  });
+});
+
+/**
+ * The conversation route enters its preview scope once per conversation/scope, and tells the
+ * context when the scope changed under the same conversation (project_id arrived), so the
+ * live tabs follow it.
+ */
+describe('conversation route preview scope entry', () => {
+  const conv = (project_id: string | null): TChatConversation =>
+    ({ id: 'c1', name: 'x', type: 'acp', extra: { workspace: '/w' }, project_id }) as unknown as TChatConversation;
+
+  beforeEach(() => {
+    vi.useRealTimers(); // SWR and waitFor need real timers
+    scopeEntered.mockReset();
+    getConversationOrNull.mockReset();
+  });
+
+  it('enters the scope with the browser default and carries the live tabs once project_id arrives', async () => {
+    getConversationOrNull.mockResolvedValueOnce(conv(null)).mockResolvedValue(conv('p1'));
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <ChatConversationIndex />
+      </SWRConfig>
+    );
+
+    await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
+    expect(scopeEntered).toHaveBeenLastCalledWith('/w', { openBrowserIfEmpty: true, carryFromScope: undefined });
+
+    listChangedCb?.({ conversation_id: 'c1', action: 'updated' } as IConversationListChangedEvent);
+
+    await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(2));
+    expect(scopeEntered).toHaveBeenLastCalledWith('p1', { openBrowserIfEmpty: true, carryFromScope: '/w' });
   });
 });

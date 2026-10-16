@@ -7,7 +7,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { BROWSER_RULE_TEXT } from '@/common/config/browserRule';
+import { BROWSER_RULE_TEXT } from '@process/services/agentBrowser/browserRule';
 import { CdpError } from '@process/services/agentBrowser/cdpConnection';
 import { isSafeUrl } from '@process/services/browserSession/urlSafety';
 import {

@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RelayClient } from '@process/resources/builtinMcp/aionBrowser/relayClient';
 import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
-import { BROWSER_RULE_TEXT } from '@/common/config/browserRule';
+import { BROWSER_RULE_TEXT } from '@process/services/agentBrowser/browserRule';
 import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { FakeRelay } from './fakeRelay';
 

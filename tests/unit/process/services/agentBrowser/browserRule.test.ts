@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSER_RULE_MARKERS, BROWSER_RULE_TEXT, upsertBrowserRule } from '@/common/config/browserRule';
+import { BROWSER_RULE_MARKERS, BROWSER_RULE_TEXT, upsertBrowserRule } from '@process/services/agentBrowser/browserRule';
 
 const { start, end } = BROWSER_RULE_MARKERS;
 const block = `${start}\n${BROWSER_RULE_TEXT}\n${end}`;

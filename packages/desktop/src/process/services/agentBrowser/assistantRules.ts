@@ -5,7 +5,7 @@
  */
 
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { upsertBrowserRule } from '@/common/config/browserRule';
+import { upsertBrowserRule } from './browserRule';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 
 export type AssistantRuleDeps = {

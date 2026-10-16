@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { BROWSER_RULE_MARKERS, upsertBrowserRule } from '@/common/config/browserRule';
+import { BROWSER_RULE_MARKERS, upsertBrowserRule } from '@process/services/agentBrowser/browserRule';
 import { backendAssistantRuleDeps, ensureBrowserRuleInAssistants } from '@process/services/agentBrowser/assistantRules';
 
 vi.mock('@/common/adapter/httpBridge', () => ({ httpRequest: vi.fn() }));
