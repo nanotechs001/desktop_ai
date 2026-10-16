@@ -37,6 +37,7 @@ describe('decideRelayCommand: methods', () => {
     'DOM.setFileInputFiles', // ruling P2-G
     'Page.setInterceptFileChooserDialog', // ruling P2-G
     'Input.setIgnoreInputEvents',
+    'Page.navigateToHistoryEntry', // its url would skip the url check
     'Input.synthesizeScrollGesture',
     'Network.enable',
     'toString',
@@ -138,6 +139,9 @@ describe('isAgentNavigableUrl', () => {
     `http://x.localhost.:${RELAY_PORT}/`,
     `http://127.0.0.1.:${BACKEND_PORT}/`,
     'http://169.254.169.254./',
+    `http://localhost..:${BACKEND_PORT}/`,
+    `http://x.localhost..:${RELAY_PORT}/`,
+    `http://0.0.0.0..:${BACKEND_PORT}/`,
   ])('denies %s', (url) => {
     expect(isAgentNavigableUrl(url, blocked)).toBe(false);
   });
@@ -181,7 +185,6 @@ describe('decideRelayCommand: ownership and pause', () => {
       ['Runtime.evaluate', { expression: '1', contextId: 3 }],
       ['Page.navigate', { url: 'https://example.com' }],
       ['Page.reload', {}],
-      ['Page.navigateToHistoryEntry', { entryId: 1 }],
       ['Page.stopLoading', {}],
       ['Page.handleJavaScriptDialog', { accept: true }],
     ] as const) {

@@ -55,6 +55,7 @@ type Connection = {
   createTimes: number[];
   pendingCreates: number;
   inFlight: number;
+  dialogsInFlight: number;
   queue: string[];
   queuedBytes: number;
   bufferTimer: NodeJS.Timeout | null;
@@ -66,6 +67,7 @@ const MAX_OP_LENGTH = 40;
 const MAX_ACTION_LABEL_LENGTH = 120;
 const AUTO_ATTACH_METHOD = 'Target.setAutoAttach';
 const DIALOG_METHOD = 'Page.handleJavaScriptDialog';
+const MAX_DIALOGS_IN_FLIGHT = 2;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -314,20 +316,38 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   /** Runs up to `maxInFlightPerSocket` commands per client at once; the rest wait their turn. */
+  /** Starts queued commands while a slot is free. */
+  const drain = (conn: Connection): void => {
+    while (conn.inFlight < limits.maxInFlightPerSocket && conn.queue.length > 0) {
+      const [next, ...rest] = conn.queue;
+      conn.queue = rest;
+      conn.queuedBytes -= Buffer.byteLength(next);
+      void run(conn, next);
+    }
+  };
+
   const run = async (conn: Connection, raw: string): Promise<void> => {
     conn.inFlight += 1;
     try {
       await onMessage(conn, raw);
     } finally {
       conn.inFlight -= 1;
-      const [next, ...rest] = conn.queue;
-      if (next !== undefined) {
-        conn.queue = rest;
-        conn.queuedBytes -= Buffer.byteLength(next);
-        void run(conn, next);
-      }
+      drain(conn);
     }
   };
+
+  /** Dialog answers use their own few slots, so they never wait behind (or inflate) the command slots. */
+  const runDialog = async (conn: Connection, raw: string): Promise<void> => {
+    conn.dialogsInFlight += 1;
+    try {
+      await onMessage(conn, raw);
+    } finally {
+      conn.dialogsInFlight -= 1;
+    }
+  };
+
+  const refuseBusy = (conn: Connection, id: number): void =>
+    send(conn, { id, error: { code: POLICY_ERROR_CODE, message: 'Too many pending commands' } });
 
   const enqueue = (conn: Connection, raw: string): void => {
     if (conn.inFlight < limits.maxInFlightPerSocket) {
@@ -337,7 +357,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     const request = parseRequest(raw);
     // A page blocked on alert/confirm stalls every other command, so its answer must never wait behind them.
     if (request && 'method' in request && request.method === DIALOG_METHOD) {
-      void run(conn, raw);
+      if (conn.dialogsInFlight < MAX_DIALOGS_IN_FLIGHT) void runDialog(conn, raw);
+      else refuseBusy(conn, request.id);
       return;
     }
     const bytes = Buffer.byteLength(raw);
@@ -348,8 +369,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       conn.queuedBytes += bytes;
       return;
     }
-    if (request)
-      send(conn, { id: request.id, error: { code: POLICY_ERROR_CODE, message: 'Too many pending commands' } });
+    if (request) refuseBusy(conn, request.id);
   };
 
   const onConnection = (ws: WebSocket, label: string): void => {
@@ -360,6 +380,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       createTimes: [],
       pendingCreates: 0,
       inFlight: 0,
+      dialogsInFlight: 0,
       queue: [],
       queuedBytes: 0,
       bufferTimer: null,

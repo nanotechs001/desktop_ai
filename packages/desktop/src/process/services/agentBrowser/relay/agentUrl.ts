@@ -40,8 +40,8 @@ export function isAgentNavigableUrl(url: string, blockedLoopbackPorts: ReadonlyS
   if (!isSafeUrl(url)) return false;
   if (url === 'about:blank') return true;
   const parsed = new URL(url);
-  // `localhost.` and `x.localhost.` are the same hosts as without the dot; compare them without it.
-  const host = unmapIpv4(parsed.hostname.replace(/\.$/, ''));
+  // `localhost.`, `localhost..` and `0.0.0.0..` name the same hosts as without the dots; compare them without.
+  const host = unmapIpv4(parsed.hostname.replace(/\.+$/, ''));
   if (isLinkLocal(host)) return false;
   const port = parsed.port ? Number(parsed.port) : DEFAULT_PORTS[parsed.protocol];
   return !(isLoopback(host) && blockedLoopbackPorts.has(port));

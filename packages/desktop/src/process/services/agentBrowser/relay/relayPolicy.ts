@@ -13,6 +13,10 @@
  *   (b) give the MCP tools (our code) a minimal, safe CDP surface (this file);
  *   (c) keep the user in control: ownership, take-over pause and confirmation.
  * No separate partition and no per-origin approval, by design.
+ *
+ * Accepted under P2-H: the url check guards the explicit navigation APIs (Page.navigate,
+ * Target.createTarget), it is not a sandbox. Setting `location` from the agent's own isolated world, or
+ * clicking a link, can still reach a blocked url.
  */
 
 import type { TabOwnership } from '@/common/types/browser';
@@ -78,7 +82,7 @@ const ALLOWED_PARAMS: Readonly<Record<string, ReadonlySet<string>>> = {
   'Page.reload': keys('ignoreCache'),
   'Page.stopLoading': keys(),
   'Page.getNavigationHistory': keys(),
-  'Page.navigateToHistoryEntry': keys('entryId'),
+  // No Page.navigateToHistoryEntry: the entry's url would bypass the url check; agents go back with keys.
   'Page.getFrameTree': keys(),
   'Page.createIsolatedWorld': keys('frameId', 'worldName'),
   'Page.captureScreenshot': keys(
@@ -135,13 +139,7 @@ const ALLOWED_PARAMS: Readonly<Record<string, ReadonlySet<string>>> = {
 /** Refused while the user has taken over the tab. */
 const PAUSED_PREFIXES = ['Input.', 'Runtime.'];
 // Everything that moves the page or answers its dialogs (a beforeunload "Leave" navigates too).
-const PAUSED_METHODS = new Set([
-  'Page.navigate',
-  'Page.reload',
-  'Page.navigateToHistoryEntry',
-  'Page.stopLoading',
-  'Page.handleJavaScriptDialog',
-]);
+const PAUSED_METHODS = new Set(['Page.navigate', 'Page.reload', 'Page.stopLoading', 'Page.handleJavaScriptDialog']);
 
 const ALLOWED = { allow: true } as const;
 const deny = (message: string): PolicyDecision => ({ allow: false, code: POLICY_ERROR_CODE, message });

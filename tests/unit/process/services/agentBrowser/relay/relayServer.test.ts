@@ -1,8 +1,7 @@
 import { connect as netConnect } from 'node:net';
-import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { guardUpgradeSocket, type RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
+import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
 import type { AgentActionEvent } from '@/common/types/browser';
 import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from '@process/services/agentBrowser/relay/targetRegistry';
@@ -644,13 +643,89 @@ describe('relay server: queue', () => {
   });
 });
 
+describe('relay server: dialog slots', () => {
+  it('keeps concurrency within the cap plus 2 dialog slots under a dialog flood, and drains only into free slots', async () => {
+    const handle = await start({ maxInFlightPerSocket: 2 });
+    const client = await connect(handle);
+    const tab = ownedTab(53, 'claude');
+    const session = await attach(client, 53);
+    let running = 0;
+    let peak = 0;
+    const releases: Array<{ method: string; release: () => void }> = [];
+    tab.debugger.handler = (method) => {
+      running += 1;
+      peak = Math.max(peak, running);
+      return new Promise((resolve) =>
+        releases.push({
+          method,
+          release: () => {
+            running -= 1;
+            resolve({});
+          },
+        })
+      );
+    };
+    const releaseAll = (method: string) =>
+      releases.splice(0).forEach((entry) => (entry.method === method ? entry.release() : releases.push(entry)));
+
+    const commands = Array.from({ length: 3 }, () => client.send('Page.getFrameTree', {}, session));
+    await vi.waitFor(() => expect(releases).toHaveLength(2)); // the third command waits in the queue
+    const dialogs = Array.from({ length: 5 }, () =>
+      client.send('Page.handleJavaScriptDialog', { accept: true }, session)
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(4));
+    const settled = await Promise.all(dialogs.slice(2));
+    expect(settled.every((reply) => reply.error?.message === 'Too many pending commands')).toBe(true);
+    expect(peak).toBe(4); // cap 2 + 2 dialog slots
+
+    // Finishing dialogs frees dialog slots only; the queued command still waits for a command slot.
+    releaseAll('Page.handleJavaScriptDialog');
+    await Promise.all(dialogs.slice(0, 2));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(running).toBe(2);
+    expect(releases.filter((entry) => entry.method === 'Page.getFrameTree')).toHaveLength(2);
+
+    releaseAll('Page.getFrameTree');
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releaseAll('Page.getFrameTree');
+    expect((await Promise.all(commands)).every((reply) => reply.error === undefined)).toBe(true);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+});
+
 describe('relay server: sockets', () => {
-  it('logs, rather than throws, an error on a raw upgrade socket', () => {
+  it('logs, rather than crashes on, an upgrade socket the peer resets mid-handshake', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const socket = new PassThrough();
-    guardUpgradeSocket(socket);
-    expect(() => socket.emit('error', new Error('ECONNRESET'))).not.toThrow();
-    expect(warn).toHaveBeenCalledWith('[AgentBrowserRelay] upgrade socket error:', 'ECONNRESET');
+    const handle = await start();
+    const { port } = new URL(handle.url);
+    const upgradeErrors = () =>
+      warn.mock.calls.filter(([message]) => message === '[AgentBrowserRelay] upgrade socket error:').length;
+    // Send a handshake the relay refuses and reset the connection at once: its 403 then hits a dead
+    // socket. Retried because the reset can occasionally lose the race with the reply.
+    const resetOnce = (): Promise<void> =>
+      new Promise<void>((resolve) => {
+        const raw = netConnect(Number(port), '127.0.0.1', () => {
+          raw.write(
+            `GET / HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+              `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nOrigin: https://evil.example\r\n\r\n`,
+            () => {
+              raw.resetAndDestroy();
+              resolve();
+            }
+          );
+        });
+        raw.on('error', () => {});
+      });
+    const resetUntilLogged = async (attemptsLeft: number): Promise<void> => {
+      if (attemptsLeft === 0 || upgradeErrors() > 0) return;
+      await resetOnce();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await resetUntilLogged(attemptsLeft - 1);
+    };
+    await resetUntilLogged(20);
+    expect(upgradeErrors()).toBeGreaterThan(0);
+    // The relay is still up.
+    expect((await (await connect(handle)).send('Target.getTargets')).error).toBeUndefined();
     warn.mockRestore();
   });
 
