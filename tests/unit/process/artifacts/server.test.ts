@@ -8,49 +8,31 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import type { IncomingMessage } from 'node:http';
+import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ArtifactKind, ArtifactVersion } from '@/common/types/agent/artifacts';
+import { getPlatformServices } from '@/common/platform';
+import { ARTIFACT_LIMITS } from '@/common/types/agent/artifacts';
 import { artifactsRoot, cleanupArtifacts, fetchLiveConversationIds, startArtifacts } from '@process/artifacts';
-import { renderArtifactPage } from '@process/artifacts/server';
+import { BodyTooLarge, readBody } from '@process/artifacts/server';
 import type { ArtifactStore } from '@process/artifacts/store';
 
 vi.mock('@/common', () => ({ ipcBridge: {} }));
 
-const version = (kind: ArtifactKind, content: string, title = 'T'): ArtifactVersion => ({
-  id: 'AAAAAAAAAAAAAAAAAAAAAA',
-  conversationId: 'conv1',
-  title,
-  kind,
-  createdAt: 1,
-  updatedAt: 1,
-  latest: 1,
-  version: 1,
-  content,
-});
-
-describe('renderArtifactPage', () => {
-  it('serves html as written', () => {
-    expect(renderArtifactPage(version('html', '<h1>x</h1>'))).toBe('<h1>x</h1>');
-  });
-
-  it('wraps svg in an <img> data url and escapes the title', () => {
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>';
-    const html = renderArtifactPage(version('svg', svg, '"><script>'));
-    expect(html).toContain(`<img src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}"`);
-    expect(html).not.toContain('<svg');
-    expect(html).not.toContain('"><script>');
-  });
-
-  it.each(['react', 'markdown', 'mermaid'] as const)('shows a "kind not available yet" page for %s', (kind) => {
-    const html = renderArtifactPage(version(kind, '<script>alert(1)</script>'));
-    expect(html).toContain('not available yet');
-    expect(html).not.toContain('<script>alert(1)</script>');
-  });
-});
-
 describe('artifactsRoot', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
   it('keeps dev artifacts apart from release ones (separate backends must not clean each other up)', () => {
+    const isPackaged = vi.spyOn(getPlatformServices().paths, 'isPackaged').mockReturnValue(false);
+    vi.stubEnv('AIONUI_MULTI_INSTANCE', '');
     expect(artifactsRoot()).toBe(path.join(os.homedir(), '.aionui-dev', 'artifacts'));
+    vi.stubEnv('AIONUI_MULTI_INSTANCE', '1');
+    expect(artifactsRoot()).toBe(path.join(os.homedir(), '.aionui-dev-2', 'artifacts'));
+    isPackaged.mockReturnValue(true);
+    expect(artifactsRoot()).toBe(path.join(os.homedir(), '.aionui', 'artifacts'));
   });
 });
 
@@ -87,6 +69,36 @@ describe('startArtifacts', () => {
     } finally {
       await new Promise((resolve) => blocker.close(resolve));
     }
+  });
+});
+
+describe('readBody', () => {
+  /** A request stream the test drives by hand. */
+  const fakeRequest = () => new PassThrough() as unknown as IncomingMessage & PassThrough;
+
+  it('resolves with the body once the client is done', async () => {
+    const req = fakeRequest();
+    const body = readBody(req);
+    req.end('{"a":1}');
+    await expect(body).resolves.toBe('{"a":1}');
+  });
+
+  it('a client abort below the cap rejects as an abort, not as too large', async () => {
+    const req = fakeRequest();
+    const body = readBody(req);
+    req.write('{"a":');
+    req.emit('close');
+    const error = await body.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(BodyTooLarge);
+    expect((error as Error).message).toMatch(/aborted/);
+  });
+
+  it('an upload past the cap rejects as too large', async () => {
+    const req = fakeRequest();
+    const body = readBody(req);
+    req.end(Buffer.alloc(ARTIFACT_LIMITS.maxContentBytes + 65 * 1024));
+    await expect(body).rejects.toBeInstanceOf(BodyTooLarge);
   });
 });
 

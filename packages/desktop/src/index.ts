@@ -806,14 +806,21 @@ const handleAppReady = async (): Promise<void> => {
 
   // Artifact server (loopback, token-guarded). Same rule as the relay: its env must be set before
   // startBackendOrExit() so the artifacts MCP under aioncore inherits it. Only the url is logged.
-  const { startArtifacts, cleanupArtifacts } = await import('./process/artifacts');
-  const artifacts = await startArtifacts();
-  if (artifacts) {
-    process.env.AION_ARTIFACTS_URL = artifacts.server.origin;
-    process.env.AION_ARTIFACTS_TOKEN = artifacts.token;
-    console.log(`[artifacts] server listening on ${artifacts.server.origin} (token required)`);
-    app.once('will-quit', () => void artifacts.server.close());
-    mark('artifactServer');
+  let artifacts: Awaited<ReturnType<typeof import('./process/artifacts').startArtifacts>> = null;
+  try {
+    const { startArtifacts } = await import('./process/artifacts');
+    const started = await startArtifacts();
+    if (started) {
+      process.env.AION_ARTIFACTS_URL = started.server.origin;
+      process.env.AION_ARTIFACTS_TOKEN = started.token;
+      console.log(`[artifacts] server listening on ${started.server.origin} (token required)`);
+      app.once('will-quit', () => void started.server.close());
+      mark('artifactServer');
+    }
+    artifacts = started;
+  } catch (error) {
+    // Without the env the artifacts MCP reports artifacts as unavailable; the rest of the app runs.
+    console.error('[artifacts] Failed to start the artifact server; artifacts are unavailable.', error);
   }
 
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
@@ -896,7 +903,10 @@ const handleAppReady = async (): Promise<void> => {
     }
 
     // Before any window opens, so no artifact can be created first. Skips itself on any error.
-    if (artifacts && backendStartedOk) await cleanupArtifacts(artifacts.store);
+    if (artifacts && backendStartedOk) {
+      const { cleanupArtifacts } = await import('./process/artifacts');
+      await cleanupArtifacts(artifacts.store);
+    }
   }
 
   // One-shot backend migrations are deferred until after the renderer finishes

@@ -31,8 +31,13 @@ export type ArtifactServerOptions = {
 
 const HOST = '127.0.0.1';
 
+/**
+ * The plan's artifact CSP, verbatim, plus `sandbox` (ruling N-14): every page gets an opaque origin of its own, so
+ * artifacts share no storage or cookies and can't reach into each other's DOM.
+ */
 export const ARTIFACT_CSP =
-  "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; frame-ancestors 'self'; form-action 'none'; base-uri 'none'";
+  "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; frame-ancestors 'self'; form-action 'none'; base-uri 'none'" +
+  '; sandbox allow-scripts allow-popups allow-modals allow-downloads';
 
 /** Sent on every response. No CORS headers, ever: other origins must not read anything. */
 const SECURITY_HEADERS = {
@@ -58,27 +63,6 @@ const HTML_TYPE = 'text/html; charset=utf-8';
 const TEXT_TYPE = 'text/plain; charset=utf-8';
 const JSON_TYPE = 'application/json; charset=utf-8';
 
-const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
-
-const wrapperPage = (title: string, body: string): string =>
-  `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>` +
-  '<style>html,body{margin:0;height:100%}body{display:flex;align-items:center;justify-content:center}img{max-width:100%;max-height:100%}</style>' +
-  `</head><body>${body}</body></html>`;
-
-/**
- * Renders an artifact version as a page: html as written, svg inside an `<img>` wrapper (never inline).
- * Other kinds get a placeholder until their bundled renderers ship.
- */
-export function renderArtifactPage(v: ArtifactVersion): string {
-  if (v.kind === 'html') return v.content;
-  if (v.kind === 'svg') {
-    const src = `data:image/svg+xml;base64,${Buffer.from(v.content, 'utf8').toString('base64')}`;
-    return wrapperPage(v.title, `<img src="${src}" alt="${escapeHtml(v.title)}">`);
-  }
-  return wrapperPage(v.title, `<p>This kind of artifact (${v.kind}) is not available yet.</p>`);
-}
-
 /** Constant-time token check; hashing first makes the lengths equal. */
 const tokenMatches = (expected: string, header: string | undefined): boolean => {
   const given = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
@@ -86,20 +70,30 @@ const tokenMatches = (expected: string, header: string | undefined): boolean => 
   return given.length > 0 && timingSafeEqual(digest(expected), digest(given));
 };
 
-const send = (res: ServerResponse, status: number, type: string, body: string | Buffer): void => {
-  res.writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store' }).end(body);
+const send = (
+  res: ServerResponse,
+  status: number,
+  type: string,
+  body: string | Buffer,
+  headers: Record<string, string> = {}
+): void => {
+  res
+    .writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store', ...headers })
+    .end(body);
 };
 const sendJson = (res: ServerResponse, status: number, body: unknown): void =>
   send(res, status, JSON_TYPE, JSON.stringify(body));
 const badRequest = (message: string) => ({ ok: false as const, error: 'bad-content' as const, message });
 
-class BodyTooLarge extends Error {}
+/** The request body went past the cap. */
+export class BodyTooLarge extends Error {}
 
 /**
  * Reads the request body. Past the cap it stops buffering and rejects with BodyTooLarge once the
  * client is done, so the client still gets its 413; an upload that runs on far past the cap is cut off.
+ * A client that hangs up first gets an abort error.
  */
-const readBody = (req: IncomingMessage): Promise<string> =>
+export const readBody = (req: IncomingMessage): Promise<string> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -111,7 +105,10 @@ const readBody = (req: IncomingMessage): Promise<string> =>
     req.on('end', () =>
       size > MAX_BODY_BYTES ? reject(new BodyTooLarge()) : resolve(Buffer.concat(chunks).toString('utf8'))
     );
-    req.on('close', () => reject(new BodyTooLarge())); // no-op once settled
+    // A no-op once settled.
+    req.on('close', () =>
+      reject(size > MAX_BODY_BYTES ? new BodyTooLarge() : new Error('Request aborted by the client'))
+    );
     req.on('error', reject);
   });
 
@@ -160,7 +157,10 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     if (typeof manifest !== 'object' || manifest === null || !Object.hasOwn(manifest, file)) {
       return send(res, 404, TEXT_TYPE, 'Not found');
     }
-    send(res, 200, type, await fs.readFile(path.join(libsDir, file)));
+    // Sandboxed pages have opaque origins, so for them every library is a cross-origin load.
+    send(res, 200, type, await fs.readFile(path.join(libsDir, file)), {
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+    });
   };
 
   const serveApi = async (req: IncomingMessage, res: ServerResponse, op: string): Promise<void> => {

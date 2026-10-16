@@ -11,12 +11,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createArtifactStore } from '@process/artifacts/store';
-import { ARTIFACT_CSP, renderArtifactPage, startArtifactServer, type ArtifactServer } from '@process/artifacts/server';
+import { renderArtifactPage } from '@process/artifacts/pages';
+import { ARTIFACT_CSP, startArtifactServer, type ArtifactServer } from '@process/artifacts/server';
 
 const TOKEN = 'test-token-0123456789abcdefghijklmnopqrstuv';
 const SECURITY_HEADERS = {
   'content-security-policy':
-    "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; frame-ancestors 'self'; form-action 'none'; base-uri 'none'",
+    "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; frame-ancestors 'self'; form-action 'none'; base-uri 'none'" +
+    // Ruling N-14: every page is its own opaque origin.
+    '; sandbox allow-scripts allow-popups allow-modals allow-downloads',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
   'cross-origin-resource-policy': 'same-origin',
@@ -275,7 +278,8 @@ describe('artifact server', () => {
         const lib = await request(withLibs.port, { path: '/lib/react.js' });
         expect(lib.status).toBe(200);
         expect(lib.headers['content-type']).toBe('text/javascript; charset=utf-8');
-        expect(lib.headers).toMatchObject(SECURITY_HEADERS);
+        // Sandboxed (opaque-origin) pages must be able to load the libraries.
+        expect(lib.headers).toMatchObject({ ...SECURITY_HEADERS, 'cross-origin-resource-policy': 'cross-origin' });
         expect(lib.body).toBe('window.React = {};');
         const hidden = ['/lib/secret.js', '/lib/manifest.json', '/lib/..%2fmanifest.json', '/lib/x/react.js'];
         const statuses = await Promise.all(

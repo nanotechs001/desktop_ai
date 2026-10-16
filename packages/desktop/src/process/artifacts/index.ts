@@ -12,7 +12,8 @@ import path from 'node:path';
 import { ipcBridge } from '@/common';
 import { getEnvAwareName } from '@/common/config/appEnv';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
-import { renderArtifactPage, startArtifactServer, type ArtifactServer } from './server';
+import { renderArtifactPage } from './pages';
+import { startArtifactServer, type ArtifactServer } from './server';
 import { createArtifactStore, type ArtifactStore } from './store';
 
 /**
@@ -27,20 +28,30 @@ const PAGE_SIZE = 500;
 const MAX_PAGES = 1000;
 
 /**
+ * `out/main/artifact-libs`, where scripts/build-mcp-servers.js puts the bundled libraries: next to the main
+ * entry, inside app.asar once packaged (Electron's fs reads it there). Null outside the bundled main process.
+ */
+const artifactLibsDir = (): string | null =>
+  typeof require !== 'undefined' && require.main
+    ? path.join(path.dirname(require.main.filename), 'artifact-libs')
+    : null;
+
+/**
  * Starts the artifact store and its loopback server with a fresh per-launch token.
- * Returns null (and logs) when the server can't bind; the rest of the app runs without artifacts.
+ * Returns null (and logs) when it can't start, e.g. the port can't be bound; the rest of the app runs
+ * without artifacts.
  */
 export async function startArtifacts(
   opts: { rootDir?: string; port?: number } = {}
 ): Promise<{ server: ArtifactServer; token: string; store: ArtifactStore } | null> {
-  const store = createArtifactStore(opts.rootDir ?? artifactsRoot());
-  const token = randomBytes(32).toString('base64url');
   try {
+    const store = createArtifactStore(opts.rootDir ?? artifactsRoot());
+    const token = randomBytes(32).toString('base64url');
     const server = await startArtifactServer({
       store,
       token,
       renderPage: renderArtifactPage,
-      libsDir: null,
+      libsDir: artifactLibsDir(),
       port: opts.port,
     });
     return { server, token, store };
