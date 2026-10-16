@@ -18,7 +18,7 @@ vi.mock('@/common', () => ({
   },
 }));
 
-import { fetchManagedAgents } from '@/renderer/utils/model/agentTypes';
+import { fetchManagedAgents, fetchManagedAgentsOrThrow } from '@/renderer/utils/model/agentTypes';
 import { ipcBridge } from '@/common';
 
 describe('fetchManagedAgents', () => {
@@ -44,5 +44,36 @@ describe('fetchManagedAgents', () => {
     (ipcBridge.acpConversation.getManagedAgents.invoke as any).mockResolvedValue(undefined);
 
     await expect(fetchManagedAgents()).resolves.toEqual([]);
+  });
+});
+
+describe('fetchManagedAgentsOrThrow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the rows like fetchManagedAgents', async () => {
+    const rows = [{ id: 'a', name: 'A', agent_type: 'acp', agent_source: 'builtin', enabled: true }];
+    (ipcBridge.acpConversation.getManagedAgents.invoke as any).mockResolvedValue(rows);
+
+    await expect(fetchManagedAgentsOrThrow()).resolves.toEqual(rows);
+  });
+
+  it('rejects when the bridge rejects, so callers can tell a failure from an empty list', async () => {
+    (ipcBridge.acpConversation.getManagedAgents.invoke as any).mockRejectedValue(new Error('boom'));
+
+    await expect(fetchManagedAgentsOrThrow()).rejects.toThrow('boom');
+  });
+
+  it('rejects when the bridge yields a non-array', async () => {
+    (ipcBridge.acpConversation.getManagedAgents.invoke as any).mockResolvedValue(undefined);
+
+    await expect(fetchManagedAgentsOrThrow()).rejects.toThrow();
+  });
+
+  it('resolves an empty list as an empty list', async () => {
+    (ipcBridge.acpConversation.getManagedAgents.invoke as any).mockResolvedValue([]);
+
+    await expect(fetchManagedAgentsOrThrow()).resolves.toEqual([]);
   });
 });

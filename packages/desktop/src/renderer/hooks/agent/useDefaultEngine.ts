@@ -9,7 +9,11 @@ import { configService } from '@/common/config/configService';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { isDeprecatedRuntimeAgentType } from '@/renderer/utils/model/agentTypeSupportPolicy';
-import { fetchManagedAgents, MANAGED_AGENTS_SWR_KEY, type ManagedAgent } from '@/renderer/utils/model/agentTypes';
+import {
+  ENGINE_CATALOG_SWR_KEY,
+  fetchManagedAgentsOrThrow,
+  type ManagedAgent,
+} from '@/renderer/utils/model/agentTypes';
 import { Message } from '@arco-design/web-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -95,7 +99,8 @@ async function seedEnginePins(
   defaultId: string,
   persistDefault: boolean
 ): Promise<void> {
-  if (configService.get('agent.enginePins') != null) return;
+  // Before the config is loaded `agent.enginePins` reads as unset; seeding then would overwrite the user's pins.
+  if (!configService.isInitialized() || configService.get('agent.enginePins') != null) return;
   const pins = Object.fromEntries(
     assistants
       .filter((assistant) => assistant.source !== 'generated' && assistant.agent_id && assistant.agent_id !== defaultId)
@@ -125,6 +130,12 @@ type SyncOutcome = { failedCount: number; skipped: boolean };
 async function syncEngineBindings(request: SyncRequest): Promise<SyncOutcome> {
   const { defaultId, engineIds, seedFromId = defaultId, commitDefault = false } = request;
   const commit = () => (commitDefault ? configService.set('agent.defaultAgentId', defaultId) : Promise.resolve());
+
+  // Without loaded settings pins and default are unknown: touch nothing (an explicit default choice is still stored).
+  if (!configService.isInitialized()) {
+    await commit();
+    return { failedCount: 0, skipped: false };
+  }
 
   let assistants: Assistant[];
   try {
@@ -174,23 +185,42 @@ export function resetEngineSyncSession(): void {
 
 /** Engine catalog plus its resolved default; shared by the hooks below. */
 function useEngineState() {
-  const { data, isLoading } = useSWR<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY, fetchManagedAgents);
+  const { data, error, isLoading, mutate } = useSWR<ManagedAgent[]>(ENGINE_CATALOG_SWR_KEY, fetchManagedAgentsOrThrow);
   const [storedId] = useConfig('agent.defaultAgentId');
   const agents = useMemo(() => data ?? [], [data]);
   const agent = useMemo(() => resolveDefaultEngine(agents, storedId), [agents, storedId]);
   const engineIds = useMemo(() => new Set(agents.map((item) => item.id)), [agents]);
-  // The catalog always lists at least the built-in Aion CLI, so an empty one after loading means the fetch failed.
-  return { agent, engineIds, loading: isLoading, unavailable: !isLoading && agents.length === 0 };
+  // The resolved default can be a fallback that is not installed; "connected" asks for a usable one.
+  const hasConnectedEngine = useMemo(
+    () => agents.some((item) => isEligibleEngine(item) && item.status !== 'missing'),
+    [agents]
+  );
+  const retry = useCallback(() => mutate(), [mutate]);
+  // Only a failure with nothing to show counts: a failed background refresh keeps the last good list.
+  return {
+    agent,
+    engineIds,
+    loading: isLoading,
+    error: Boolean(error) && data === undefined,
+    hasConnectedEngine,
+    retry,
+  };
 }
 
-/** Sync bindings and surface problems as at most one warning per session (with a count of failed Agents). */
+/**
+ * Sync bindings and surface problems as one warning with a count of failed Agents. A background
+ * sync (`reportOnce`) warns at most once per session; the user's own action always reports.
+ */
 function useReportedEngineSync() {
   const { t } = useTranslation();
   return useCallback(
-    async (request: SyncRequest) => {
+    async (request: SyncRequest, reportOnce = false) => {
       const { failedCount, skipped } = await syncEngineBindings(request);
-      if (engineSyncWarned || (!skipped && failedCount === 0)) return;
-      engineSyncWarned = true;
+      if (!skipped && failedCount === 0) return;
+      if (reportOnce) {
+        if (engineSyncWarned) return;
+        engineSyncWarned = true;
+      }
       Message.warning(
         skipped ? t('agent.engine.rebindListFailed') : t('agent.engine.rebindFailed', { count: failedCount })
       );
@@ -205,7 +235,11 @@ export type UseDefaultEngineResult = {
   setDefault: (id: string) => Promise<void>;
   loading: boolean;
   /** The engine list could not be loaded (as opposed to there being no usable engine). */
-  unavailable: boolean;
+  error: boolean;
+  /** At least one enabled engine is installed; false when all are missing or there are none. */
+  hasConnectedEngine: boolean;
+  /** Reload the engine list after an error. */
+  retry: () => Promise<unknown>;
 };
 
 /**
@@ -213,7 +247,7 @@ export type UseDefaultEngineResult = {
  * choice and then re-binds every unpinned Agent to it; re-bind errors only warn.
  */
 export function useDefaultEngine(): UseDefaultEngineResult {
-  const { agent, engineIds, loading, unavailable } = useEngineState();
+  const { agent, engineIds, loading, error, hasConnectedEngine, retry } = useEngineState();
   const sync = useReportedEngineSync();
   const currentId = agent?.id;
 
@@ -224,7 +258,7 @@ export function useDefaultEngine(): UseDefaultEngineResult {
     [currentId, engineIds, sync]
   );
 
-  return { agent, agentId: currentId ?? null, setDefault, loading, unavailable };
+  return { agent, agentId: currentId ?? null, setDefault, loading, error, hasConnectedEngine, retry };
 }
 
 /** Once per app session, re-bind Agents that drifted off their engine. Mount it app-wide. */
@@ -237,6 +271,6 @@ export function useEngineDriftSync(): void {
   useEffect(() => {
     if (!defaultId || doneRef.current) return;
     doneRef.current = true;
-    void sync({ defaultId, engineIds });
+    void sync({ defaultId, engineIds }, true);
   }, [defaultId, engineIds, sync]);
 }

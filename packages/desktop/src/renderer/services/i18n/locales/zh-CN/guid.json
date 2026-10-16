@@ -17,5 +17,6 @@
   "noEngine": {
     "message": "请先在 设置 → 引擎 中连接一个 AI 账号。",
     "action": "打开引擎设置"
-  }
+  },
+  "engineLoadFailed": "无法加载你的 AI 账号。"
 }

@@ -17,5 +17,6 @@
   "noEngine": {
     "message": "설정 → 엔진에서 AI 계정을 연결하세요.",
     "action": "엔진 설정 열기"
-  }
+  },
+  "engineLoadFailed": "AI 계정을 불러오지 못했습니다."
 }

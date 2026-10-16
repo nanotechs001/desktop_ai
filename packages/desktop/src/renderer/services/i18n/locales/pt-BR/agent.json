@@ -62,6 +62,8 @@
     "setDefault": "Definir como padrão",
     "useDefault": "Usar padrão",
     "rebindFailed": "Não foi possível atualizar o motor de {{count}} Agents.",
+    "rebindFailed_one": "Não foi possível atualizar o motor de {{count}} Agent.",
+    "rebindFailed_other": "Não foi possível atualizar o motor de {{count}} Agents.",
     "rebindListFailed": "Não foi possível carregar seus Agents para atualizar o motor."
   }
 }

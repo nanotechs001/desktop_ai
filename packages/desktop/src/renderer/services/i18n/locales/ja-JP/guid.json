@@ -17,5 +17,6 @@
   "noEngine": {
     "message": "設定 → エンジン で AI アカウントを接続してください。",
     "action": "エンジン設定を開く"
-  }
+  },
+  "engineLoadFailed": "AI アカウントを読み込めませんでした。"
 }

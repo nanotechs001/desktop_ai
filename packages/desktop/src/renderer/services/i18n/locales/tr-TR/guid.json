@@ -17,5 +17,6 @@
   "noEngine": {
     "message": "Ayarlar → Motor bölümünde bir yapay zekâ hesabı bağlayın.",
     "action": "Motor ayarlarını aç"
-  }
+  },
+  "engineLoadFailed": "Yapay zekâ hesaplarınız yüklenemedi."
 }

@@ -62,6 +62,8 @@
     "setDefault": "既定にする",
     "useDefault": "既定を使用",
     "rebindFailed": "{{count}} 件の Agent のエンジンを更新できませんでした。",
+    "rebindFailed_one": "{{count}} 件の Agent のエンジンを更新できませんでした。",
+    "rebindFailed_other": "{{count}} 件の Agent のエンジンを更新できませんでした。",
     "rebindListFailed": "エンジンを更新するための Agent を読み込めませんでした。"
   }
 }

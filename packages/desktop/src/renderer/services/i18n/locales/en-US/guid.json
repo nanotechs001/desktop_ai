@@ -17,5 +17,6 @@
   "noEngine": {
     "message": "Connect an AI account in Settings → Engine.",
     "action": "Open Engine settings"
-  }
+  },
+  "engineLoadFailed": "Couldn't load your AI accounts."
 }

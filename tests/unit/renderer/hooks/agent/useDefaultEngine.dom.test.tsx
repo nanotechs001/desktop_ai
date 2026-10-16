@@ -6,19 +6,25 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
+import i18next from 'i18next';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
+import enAgent from '@/renderer/services/i18n/locales/en-US/agent.json';
+import ruAgent from '@/renderer/services/i18n/locales/ru-RU/agent.json';
 
 const mocks = vi.hoisted(() => {
   const store = new Map<string, unknown>();
   const subscribers = new Map<string, Set<(value: unknown) => void>>();
   const notify = (key: string, value: unknown) => subscribers.get(key)?.forEach((callback) => callback(value));
+  const state = { initialized: true };
   return {
     store,
     subscribers,
+    state,
     configService: {
+      isInitialized: () => state.initialized,
       get: (key: string) => store.get(key),
       set: vi.fn(async (key: string, value: unknown) => {
         store.set(key, value);
@@ -169,6 +175,7 @@ describe('persistEnginePin', () => {
 describe('useDefaultEngine', () => {
   beforeEach(() => {
     resetEngineSyncSession();
+    mocks.state.initialized = true;
     mocks.store.clear();
     mocks.store.set('agent.enginePins', {});
     mocks.configService.set.mockClear();
@@ -259,7 +266,7 @@ describe('useDefaultEngine', () => {
     expect(mocks.messageWarning).toHaveBeenCalledWith('agent.engine.rebindFailed:3');
   });
 
-  it('warns about re-bind failures only once per session', async () => {
+  it("always reports a failure of the user's own setDefault, even after an earlier warning", async () => {
     mocks.listAssistants.mockResolvedValue([assistant('one', 'a')]);
     mocks.updateAssistant.mockRejectedValue(new Error('boom'));
     const { result } = renderHook(() => useDefaultEngine(), { wrapper });
@@ -274,7 +281,7 @@ describe('useDefaultEngine', () => {
     });
 
     expect(mocks.updateAssistant).toHaveBeenCalledTimes(2);
-    expect(mocks.messageWarning).toHaveBeenCalledTimes(1);
+    expect(mocks.messageWarning).toHaveBeenCalledTimes(2);
   });
 
   it('sends the same model/permission/thought-level reset the editor applies when the engine changes', async () => {
@@ -292,22 +299,44 @@ describe('useDefaultEngine', () => {
     expect(Object.keys(request.defaults)).not.toContain('mcps');
   });
 
-  it('reports an unavailable catalog (fetch error) instead of "no engine"', async () => {
+  it('reports a catalog fetch error explicitly, and retry loads the engines', async () => {
     mocks.getManagedAgents.mockRejectedValue(new Error('backend down'));
     const { result } = renderHook(() => useDefaultEngine(), { wrapper });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.error).toBe(true));
     expect(result.current.agentId).toBeNull();
-    expect(result.current.unavailable).toBe(true);
+
+    mocks.getManagedAgents.mockResolvedValue([agent('a')]);
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    await waitFor(() => expect(result.current.agentId).toBe('a'));
+    expect(result.current.error).toBe(false);
   });
 
-  it('is not "unavailable" when engines exist but none is enabled', async () => {
-    mocks.getManagedAgents.mockResolvedValue([agent('a', { enabled: false })]);
+  it('does not treat an empty catalog as an error', async () => {
+    mocks.getManagedAgents.mockResolvedValue([]);
     const { result } = renderHook(() => useDefaultEngine(), { wrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.agentId).toBeNull();
-    expect(result.current.unavailable).toBe(false);
+    expect(result.current.error).toBe(false);
+    expect(result.current.hasConnectedEngine).toBe(false);
+  });
+
+  it('has no connected engine when every enabled engine is missing, though a fallback id still resolves', async () => {
+    mocks.getManagedAgents.mockResolvedValue([agent('a', { status: 'missing' }), agent('b', { status: 'missing' })]);
+    const { result } = renderHook(() => useDefaultEngine(), { wrapper });
+
+    await waitFor(() => expect(result.current.agentId).toBe('a'));
+    expect(result.current.hasConnectedEngine).toBe(false);
+  });
+
+  it('has a connected engine as soon as one enabled engine is not missing', async () => {
+    mocks.getManagedAgents.mockResolvedValue([agent('a', { status: 'missing' }), agent('b', { status: 'unchecked' })]);
+    const { result } = renderHook(() => useDefaultEngine(), { wrapper });
+
+    await waitFor(() => expect(result.current.hasConnectedEngine).toBe(true));
   });
 
   it('setDefault still changes the default when the Agent list cannot be loaded', async () => {
@@ -327,7 +356,9 @@ describe('useDefaultEngine', () => {
 describe('useEngineDriftSync', () => {
   beforeEach(() => {
     resetEngineSyncSession();
+    mocks.state.initialized = true;
     mocks.store.clear();
+    mocks.configService.set.mockClear();
     mocks.store.set('agent.enginePins', {});
     mocks.messageWarning.mockReset();
     mocks.getManagedAgents.mockResolvedValue([agent('a'), agent('b')]);
@@ -344,6 +375,37 @@ describe('useEngineDriftSync', () => {
     );
     rerender();
     expect(mocks.updateAssistant).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns about background re-bind failures only once per session', async () => {
+    mocks.listAssistants.mockResolvedValue([assistant('drifted', 'b')]);
+    mocks.updateAssistant.mockRejectedValue(new Error('boom'));
+
+    const first = renderHook(() => useEngineDriftSync(), { wrapper });
+    await waitFor(() => expect(mocks.messageWarning).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    renderHook(() => useEngineDriftSync(), { wrapper });
+    await waitFor(() => expect(mocks.updateAssistant).toHaveBeenCalledTimes(2));
+    expect(mocks.messageWarning).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing while the config service is not initialized (a failed init would read pins as unset)', async () => {
+    mocks.state.initialized = false;
+    mocks.store.clear();
+    mocks.listAssistants.mockResolvedValue([assistant('drifted', 'b')]);
+    const { result } = renderHook(
+      () => {
+        useEngineDriftSync();
+        return useDefaultEngine();
+      },
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.agentId).toBe('a'));
+    expect(mocks.configService.set).not.toHaveBeenCalled();
+    expect(mocks.updateAssistant).not.toHaveBeenCalled();
+    expect(mocks.messageWarning).not.toHaveBeenCalled();
   });
 
   it('does nothing when there is no engine to bind to', async () => {
@@ -390,6 +452,7 @@ describe('first-run pin seeding (Ruling N-9)', () => {
 
   beforeEach(() => {
     resetEngineSyncSession();
+    mocks.state.initialized = true;
     mocks.store.clear();
     mocks.configService.set.mockClear();
     mocks.messageWarning.mockReset();
@@ -465,5 +528,38 @@ describe('first-run pin seeding (Ruling N-9)', () => {
 
     await waitFor(() => expect(mocks.messageWarning).toHaveBeenCalledTimes(1));
     expect(mocks.updateAssistant).not.toHaveBeenCalled();
+  });
+
+  it('setDefault while the config service is not initialized stores only the default: no seeding, no re-bind', async () => {
+    mocks.state.initialized = false;
+    mocks.listAssistants.mockResolvedValue([assistant('x', 'a'), assistant('y', 'b')]);
+    const { result } = renderHook(() => useDefaultEngine(), { wrapper });
+    await waitFor(() => expect(result.current.agentId).toBe('a'));
+
+    await act(async () => {
+      await result.current.setDefault('c');
+    });
+
+    expect(writeOrder()).toEqual(['agent.defaultAgentId']);
+    expect(mocks.store.has('agent.enginePins')).toBe(false);
+    expect(mocks.updateAssistant).not.toHaveBeenCalled();
+  });
+});
+
+describe('rebind failure wording', () => {
+  const translate = async (lng: string, resource: object, count: number) => {
+    const instance = i18next.createInstance();
+    await instance.init({ lng, fallbackLng: lng, resources: { [lng]: { translation: resource } } });
+    return instance.t('engine.rebindFailed', { count });
+  };
+
+  it('reads "1 Agent" for a count of one and "N Agents" otherwise', async () => {
+    expect(await translate('en-US', enAgent, 1)).toBe('Could not update the engine for 1 Agent.');
+    expect(await translate('en-US', enAgent, 3)).toBe('Could not update the engine for 3 Agents.');
+  });
+
+  it('uses the Russian plural categories', async () => {
+    expect(await translate('ru-RU', ruAgent, 1)).toContain('1 агента');
+    expect(await translate('ru-RU', ruAgent, 3)).toContain('3 агентов');
   });
 });

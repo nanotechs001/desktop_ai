@@ -35,5 +35,6 @@
   "noEngine": {
     "message": "Conecta una cuenta de IA en Ajustes → Motor.",
     "action": "Abrir ajustes del motor"
-  }
+  },
+  "engineLoadFailed": "No se pudieron cargar tus cuentas de IA."
 }

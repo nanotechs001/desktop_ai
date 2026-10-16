@@ -16,6 +16,13 @@ import type { TFunction } from 'i18next';
  */
 export const MANAGED_AGENTS_SWR_KEY = 'agents.managed';
 
+/**
+ * Separate SWR key for the engine hooks, which need fetch failures to surface as SWR errors
+ * (`fetchManagedAgentsOrThrow`). Sharing `MANAGED_AGENTS_SWR_KEY` would let another consumer's
+ * error-swallowing fetcher win the request dedupe and hide the error.
+ */
+export const ENGINE_CATALOG_SWR_KEY = 'agents.managed.engines';
+
 /** Type of an agent. */
 export type AgentType = 'acp' | 'remote' | 'aionrs' | 'openclaw-gateway' | 'nanobot';
 
@@ -175,6 +182,18 @@ export async function fetchManagedAgents(): Promise<ManagedAgent[]> {
     // fallback to empty
   }
   return [];
+}
+
+/**
+ * Like `fetchManagedAgents` but rejects on failure, so callers can tell "could not load" from
+ * "no agents". Used where an empty list would otherwise be mistaken for "nothing connected".
+ */
+export async function fetchManagedAgentsOrThrow(): Promise<ManagedAgent[]> {
+  const agents = await ipcBridge.acpConversation.getManagedAgents.invoke();
+  if (!Array.isArray(agents)) {
+    throw new Error('Managed agents response was not a list');
+  }
+  return agents as ManagedAgent[];
 }
 
 /**

@@ -62,6 +62,8 @@
     "setDefault": "기본으로 설정",
     "useDefault": "기본값 사용",
     "rebindFailed": "Agent {{count}}개의 엔진을 업데이트하지 못했습니다.",
+    "rebindFailed_one": "Agent {{count}}개의 엔진을 업데이트하지 못했습니다.",
+    "rebindFailed_other": "Agent {{count}}개의 엔진을 업데이트하지 못했습니다.",
     "rebindListFailed": "엔진을 업데이트할 Agent를 불러오지 못했습니다."
   }
 }

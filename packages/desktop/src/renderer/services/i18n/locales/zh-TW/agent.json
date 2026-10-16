@@ -62,6 +62,8 @@
     "setDefault": "設為預設",
     "useDefault": "使用預設",
     "rebindFailed": "有 {{count}} 個 Agent 無法更新引擎。",
+    "rebindFailed_one": "有 {{count}} 個 Agent 無法更新引擎。",
+    "rebindFailed_other": "有 {{count}} 個 Agent 無法更新引擎。",
     "rebindListFailed": "無法載入你的 Agent 以更新其引擎。"
   }
 }

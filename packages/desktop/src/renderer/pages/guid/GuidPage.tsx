@@ -142,8 +142,9 @@ const GuidPage: React.FC = () => {
   // so there is no engine picker here; the default only seeds which Agent is
   // preselected, and with no engine at all there is nothing to send to.
   const defaultEngine = useDefaultEngine();
-  // An engine list that failed to load is not "no engine connected"; stay quiet rather than mislead.
-  const noEngine = !defaultEngine.loading && !defaultEngine.unavailable && defaultEngine.agentId === null;
+  // A failed engine list is its own (retryable) state, never "no engine connected".
+  const engineLoadFailed = defaultEngine.error;
+  const noEngine = !defaultEngine.loading && !engineLoadFailed && !defaultEngine.hasConnectedEngine;
   const agentSelection = useGuidAssistantSelection({
     defaultEngineId: defaultEngine.agentId,
     resetAssistant: resetAssistantRequested,
@@ -681,6 +682,20 @@ const GuidPage: React.FC = () => {
           <div className={styles.heroHeader}>
             <p className='text-2xl font-semibold mb-0 text-t-primary text-center'>{t('conversation.welcome.title')}</p>
           </div>
+
+          {engineLoadFailed ? (
+            <Alert
+              data-testid='guid-engine-error'
+              className='mb-12px w-full'
+              type='warning'
+              content={t('guid.engineLoadFailed', { defaultValue: "Couldn't load your AI accounts." })}
+              action={
+                <Button size='mini' type='primary' onClick={() => void defaultEngine.retry()}>
+                  {t('common.retry', { defaultValue: 'Retry' })}
+                </Button>
+              }
+            />
+          ) : null}
 
           {noEngine ? (
             <Alert

@@ -28,7 +28,9 @@ const {
     agentId: 'engine-claude' as string | null,
     setDefault: vi.fn(),
     loading: false,
-    unavailable: false,
+    error: false,
+    hasConnectedEngine: true,
+    retry: vi.fn(),
   },
   modelSelectionMock: {
     modelList: [],
@@ -326,7 +328,9 @@ describe('GuidPage', () => {
     defaultEngineMock.agent = { id: 'engine-claude', name: 'Claude' };
     defaultEngineMock.agentId = 'engine-claude';
     defaultEngineMock.loading = false;
-    defaultEngineMock.unavailable = false;
+    defaultEngineMock.error = false;
+    defaultEngineMock.hasConnectedEngine = true;
+    defaultEngineMock.retry.mockClear();
     sendMock.isButtonDisabled = false;
     resolveGuidAssistantDefaultsMock.mockReturnValue({
       disabledBuiltinSkillIds: [],
@@ -679,6 +683,7 @@ describe('GuidPage', () => {
   it('points to Settings -> Engine, with a link, when no engine is connected', () => {
     defaultEngineMock.agent = null;
     defaultEngineMock.agentId = null;
+    defaultEngineMock.hasConnectedEngine = false;
 
     render(<GuidPage />);
 
@@ -692,6 +697,7 @@ describe('GuidPage', () => {
   it('does not flash the no-engine notice while the engine list is still loading', () => {
     defaultEngineMock.agent = null;
     defaultEngineMock.agentId = null;
+    defaultEngineMock.hasConnectedEngine = false;
     defaultEngineMock.loading = true;
 
     render(<GuidPage />);
@@ -699,20 +705,35 @@ describe('GuidPage', () => {
     expect(screen.queryByTestId('guid-no-engine')).toBeNull();
   });
 
-  it('shows no "connect an account" notice when the engine list failed to load', () => {
+  it('shows a retryable error, not "connect an account", when the engine list failed to load', () => {
     defaultEngineMock.agent = null;
     defaultEngineMock.agentId = null;
-    defaultEngineMock.unavailable = true;
+    defaultEngineMock.hasConnectedEngine = false;
+    defaultEngineMock.error = true;
 
     render(<GuidPage />);
 
     expect(screen.queryByTestId('guid-no-engine')).toBeNull();
-    expect(capturedGuidActionRowProps.at(-1)?.isButtonDisabled).toBe(false);
+    expect(screen.getByTestId('guid-engine-error')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load your AI accounts.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(defaultEngineMock.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks to connect an account when every enabled engine is missing, even though a fallback id resolves', () => {
+    defaultEngineMock.hasConnectedEngine = false;
+
+    render(<GuidPage />);
+
+    expect(screen.getByTestId('guid-no-engine')).toBeInTheDocument();
+    expect(screen.queryByTestId('guid-engine-error')).toBeNull();
+    expect(capturedGuidActionRowProps.at(-1)?.isButtonDisabled).toBe(true);
   });
 
   it('does not send on Enter when no engine is connected', () => {
     defaultEngineMock.agent = null;
     defaultEngineMock.agentId = null;
+    defaultEngineMock.hasConnectedEngine = false;
     sendMock.sendMessageHandler.mockClear();
 
     render(<GuidPage />);

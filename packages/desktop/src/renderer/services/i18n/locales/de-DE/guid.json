@@ -35,5 +35,6 @@
   "noEngine": {
     "message": "Verbinde in Einstellungen → Engine ein KI-Konto.",
     "action": "Engine-Einstellungen öffnen"
-  }
+  },
+  "engineLoadFailed": "Deine KI-Konten konnten nicht geladen werden."
 }
