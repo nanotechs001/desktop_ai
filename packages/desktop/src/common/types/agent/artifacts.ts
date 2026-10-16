@@ -28,6 +28,13 @@ export type ArtifactMeta = {
 
 export type ArtifactVersion = ArtifactMeta & { version: number; content: string };
 
-export type ArtifactError = 'not-found' | 'too-large' | 'bad-title' | 'bad-kind' | 'limit-reached' | 'io';
+export type ArtifactError =
+  | 'not-found'
+  | 'too-large'
+  | 'bad-title'
+  | 'bad-kind'
+  | 'bad-content'
+  | 'limit-reached'
+  | 'io';
 
 export type ArtifactResult<T> = { ok: true; value: T } | { ok: false; error: ArtifactError; message: string };

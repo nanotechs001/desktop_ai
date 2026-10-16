@@ -35,6 +35,8 @@ export type ArtifactStore = {
    * Removes the folders of conversations that are not in `liveConversationIds` and returns how many
    * were removed. An empty set deletes nothing unless `allowEmpty` is true: callers must pass the real
    * set of live conversations and must never reach this with an empty set produced by a failed fetch.
+   * Run it once at startup, before any `create`: a folder is only skipped while its mtime is within the
+   * last 10 minutes, so a conversation created in the same session must not rely on that grace period.
    */
   cleanup(liveConversationIds: ReadonlySet<string>, options?: { allowEmpty?: boolean }): Promise<number>;
 };
@@ -51,6 +53,9 @@ const CONVERSATION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const ARTIFACT_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 const META_FILE = 'meta.json';
 const NOT_FOUND_MESSAGE = 'Artifact not found';
+const IO_MESSAGE = "Couldn't save the artifact";
+/** Conversation folders touched more recently than this are never cleaned up (defence in depth). */
+const CLEANUP_GRACE_MS = 10 * 60 * 1000;
 
 const fail = (error: ArtifactError, message: string): { ok: false; error: ArtifactError; message: string } => ({
   ok: false,
@@ -58,14 +63,19 @@ const fail = (error: ArtifactError, message: string): { ok: false; error: Artifa
   message,
 });
 const notFound = () => fail('not-found', NOT_FOUND_MESSAGE);
-const isEnoent = (e: unknown): boolean => (e as NodeJS.ErrnoException | null)?.code === 'ENOENT';
+const notFoundError = (): Error => Object.assign(new Error(NOT_FOUND_MESSAGE), { code: 'ENOENT' });
+/** ENOENT, or ENOTDIR when a stray file sits where a folder should be: both mean "nothing there". */
+const isMissing = (e: unknown): boolean => {
+  const code = (e as NodeJS.ErrnoException | null)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+};
 
-/** Lists a directory; a missing directory is empty. */
+/** Lists a directory; a missing directory (or a file in its place) is empty. */
 const listDir = async (dir: string): Promise<Dirent[]> => {
   try {
     return await fs.readdir(dir, { withFileTypes: true });
   } catch (e) {
-    if (isEnoent(e)) return [];
+    if (isMissing(e)) return [];
     throw e;
   }
 };
@@ -81,21 +91,26 @@ const isMeta = (v: unknown): v is ArtifactMeta => {
     ARTIFACT_KINDS.includes(m.kind as ArtifactKind) &&
     typeof m.createdAt === 'number' &&
     typeof m.updatedAt === 'number' &&
-    Number.isInteger(m.latest)
+    Number.isInteger(m.latest) &&
+    m.latest >= 1
   );
 };
 
-/** Validates the fields shared by create and update. Returns the trimmed title. */
+/** Validates the fields shared by create and update at runtime; `title` is the trimmed title if given. */
 const validateInput = (
-  content: string,
-  title: string | undefined
+  content: unknown,
+  title: unknown,
+  titleRequired: boolean
 ): { error: ReturnType<typeof fail> } | { title: string | undefined } => {
+  if (typeof content !== 'string') return { error: fail('bad-content', 'Content must be a string') };
   if (Buffer.byteLength(content, 'utf8') > ARTIFACT_LIMITS.maxContentBytes) {
     return { error: fail('too-large', `Content exceeds ${ARTIFACT_LIMITS.maxContentBytes} bytes`) };
   }
-  if (title === undefined) return { title };
-  const trimmed = title.trim();
-  if (trimmed.length < 1 || trimmed.length > ARTIFACT_LIMITS.maxTitleChars) {
+  if (title === undefined && !titleRequired) return { title: undefined };
+  const trimmed = typeof title === 'string' ? title.trim() : '';
+  // Code points, not UTF-16 units, so emoji count once.
+  const length = Array.from(trimmed).length;
+  if (typeof title !== 'string' || length < 1 || length > ARTIFACT_LIMITS.maxTitleChars) {
     return { error: fail('bad-title', `Title must be 1-${ARTIFACT_LIMITS.maxTitleChars} characters`) };
   }
   return { title: trimmed };
@@ -131,22 +146,39 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
 
   const artifactDir = (conversationId: string, id: string) => path.join(rootDir, conversationId, id);
 
+  /** True when `p` exists as a real directory; a symlink or file there counts as absent. */
+  const isRealDir = async (p: string): Promise<boolean> => {
+    try {
+      return (await fs.lstat(p)).isDirectory();
+    } catch (e) {
+      if (isMissing(e)) return false;
+      throw e;
+    }
+  };
+
+  /** Reads and checks meta.json. Every path comes from the validated arguments, never from the file's contents. */
   const readMeta = async (conversationId: string, id: string): Promise<ArtifactMeta> => {
-    const parsed: unknown = JSON.parse(
-      await fs.readFile(path.join(artifactDir(conversationId, id), META_FILE), 'utf8')
-    );
+    const dir = artifactDir(conversationId, id);
+    if (!(await isRealDir(path.join(rootDir, conversationId))) || !(await isRealDir(dir))) throw notFoundError();
+    const parsed: unknown = JSON.parse(await fs.readFile(path.join(dir, META_FILE), 'utf8'));
     if (!isMeta(parsed)) throw new Error('Corrupt artifact metadata');
+    // A mismatch also catches case-insensitive filesystems answering for a differently-cased name.
+    if (parsed.id !== id || parsed.conversationId !== conversationId) throw notFoundError();
     return parsed;
   };
 
-  const versionFile = (meta: ArtifactMeta, version: number) =>
-    path.join(artifactDir(meta.conversationId, meta.id), `v${version}.${EXTENSIONS[meta.kind]}`);
+  const versionFile = (conversationId: string, id: string, kind: ArtifactKind, version: number) =>
+    path.join(artifactDir(conversationId, id), `v${version}.${EXTENSIONS[kind]}`);
 
-  const toIoFailure = (e: unknown) => (isEnoent(e) ? notFound() : fail('io', `Artifact storage error: ${String(e)}`));
+  const toIoFailure = (e: unknown) => {
+    if (isMissing(e)) return notFound();
+    console.error('[artifacts] storage error', e);
+    return fail('io', IO_MESSAGE);
+  };
 
   const readVersion = async (meta: ArtifactMeta, version: number): Promise<ArtifactResult<ArtifactVersion>> => {
     if (!Number.isInteger(version) || version < 1 || version > meta.latest) return notFound();
-    const content = await fs.readFile(versionFile(meta, version), 'utf8');
+    const content = await fs.readFile(versionFile(meta.conversationId, meta.id, meta.kind, version), 'utf8');
     return { ok: true, value: { ...meta, version, content } };
   };
 
@@ -187,16 +219,26 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
 
   const create: ArtifactStore['create'] = async (conversationId, input) => {
     if (!CONVERSATION_ID_RE.test(conversationId)) return notFound();
+    if (typeof input !== 'object' || input === null) return fail('bad-content', 'Input must be an object');
     if (!ARTIFACT_KINDS.includes(input.kind)) return fail('bad-kind', `Unknown artifact kind: ${String(input.kind)}`);
-    const checked = validateInput(input.content, input.title);
+    const checked = validateInput(input.content, input.title, true);
     if ('error' in checked) return checked.error;
-    const title = checked.title as string;
+    const { title } = checked;
 
     // Serialised per conversation so the 200 limit holds under concurrent creates.
     return serialised(`conv:${conversationId}`, async () => {
       const convDir = path.join(rootDir, conversationId);
       let id = '';
       try {
+        // A symlink (or file) in the conversation's place is never written through.
+        const convState = await fs.lstat(convDir).then(
+          (st) => (st.isDirectory() ? 'dir' : 'other'),
+          (e: unknown) => {
+            if (isMissing(e)) return 'missing';
+            throw e;
+          }
+        );
+        if (convState === 'other') return notFound();
         const existing = await listDir(convDir);
         if (
           existing.filter((e) => e.isDirectory() && ARTIFACT_ID_RE.test(e.name)).length >=
@@ -209,14 +251,14 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
         const meta: ArtifactMeta = {
           id,
           conversationId,
-          title,
+          title: title as string,
           kind: input.kind,
           createdAt: now,
           updatedAt: now,
           latest: 1,
         };
         await fs.mkdir(artifactDir(conversationId, id), { recursive: true });
-        await writeAtomic(versionFile(meta, 1), input.content);
+        await writeAtomic(versionFile(conversationId, id, meta.kind, 1), input.content);
         await writeAtomic(path.join(artifactDir(conversationId, id), META_FILE), JSON.stringify(meta));
         idIndex.set(id, conversationId);
         return { ok: true as const, value: { ...meta, version: 1, content: input.content } };
@@ -230,7 +272,8 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
 
   const update: ArtifactStore['update'] = async (conversationId, id, input) => {
     if (!CONVERSATION_ID_RE.test(conversationId) || !ARTIFACT_ID_RE.test(id)) return notFound();
-    const checked = validateInput(input.content, input.title);
+    if (typeof input !== 'object' || input === null) return fail('bad-content', 'Input must be an object');
+    const checked = validateInput(input.content, input.title, false);
     if ('error' in checked) return checked.error;
 
     return serialised(`id:${id}`, async () => {
@@ -243,7 +286,7 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
           latest: current.latest + 1,
         };
         // Version file first, meta second: until meta lands, `latest` still points at the old version.
-        await writeAtomic(versionFile(next, next.latest), input.content);
+        await writeAtomic(versionFile(conversationId, id, next.kind, next.latest), input.content);
         await writeAtomic(path.join(artifactDir(conversationId, id), META_FILE), JSON.stringify(next));
         return { ok: true as const, value: { ...next, version: next.latest, content: input.content } };
       } catch (e) {
@@ -258,12 +301,15 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
       (e) => e.isDirectory() && CONVERSATION_ID_RE.test(e.name) && !liveConversationIds.has(e.name)
     );
     const outcomes = await Promise.all(
-      stale.map(async ({ name }) => {
+      stale.map(async ({ name }): Promise<boolean> => {
+        const dir = path.join(rootDir, name);
         try {
-          await fs.rm(path.join(rootDir, name), { recursive: true, force: true });
+          if (Date.now() - (await fs.lstat(dir)).mtimeMs < CLEANUP_GRACE_MS) return false;
+          await fs.rm(dir, { recursive: true, force: true });
           return true;
-        } catch {
-          return false; // retried on the next cleanup
+        } catch (e) {
+          console.warn(`[artifacts] could not remove conversation folder "${name}"; retrying on the next cleanup`, e);
+          return false;
         }
       })
     );
