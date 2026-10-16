@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { session as electronSession } from 'electron';
+import { dialog, session as electronSession } from 'electron';
 import { ElectronChromeExtensions } from 'electron-chrome-extensions';
 import { installChromeWebStore } from 'electron-chrome-web-store';
+import { loadTranslate } from './contextMenuInstall';
 import { isSafeUrl } from './urlSafety';
 
 export type ExtensionsDeps = {
@@ -23,9 +24,78 @@ export type BrowserExtensions = {
 };
 
 type Waiter = { resolve: (contents: Electron.WebContents) => void };
+type BeforeInstall = NonNullable<NonNullable<Parameters<typeof installChromeWebStore>[0]>['beforeInstall']>;
+type InstallDetails = Parameters<BeforeInstall>[0];
+
+/** What an extension asks for, as shown in the install dialog. */
+export type InstallSummary = { permissions: string[]; hostPermissions: string[] };
+/** The install dialog's content: the extension's name plus what it asks for. */
+export type InstallPrompt = InstallSummary & { name: string };
 
 const TAB_CREATE_TIMEOUT_MS = 10_000;
 const EXTENSION_PAGE_PREFIX = 'chrome-extension://';
+const WEB_STORE_HOST = 'chromewebstore.google.com';
+const INSTALL_KEY = 'preview.browserChrome.extensions';
+/** Button order in the install dialog; Cancel is also what Esc / closing the dialog returns. */
+const ADD_BUTTON = 0;
+const CANCEL_BUTTON = 1;
+
+/** True only for https://chromewebstore.google.com pages: exact host, no lookalikes, no other port. */
+export const isWebStoreUrl = (url: string): boolean => {
+  try {
+    const { protocol, host } = new URL(url);
+    return protocol === 'https:' && host === WEB_STORE_HOST;
+  } catch {
+    return false;
+  }
+};
+
+/** MV2 lists host patterns among `permissions`; these are the patterns Chrome treats as site access. */
+const isHostPattern = (permission: string): boolean => permission === '<all_urls>' || permission.includes('://');
+
+/** Splits a manifest's requests into API permissions and site access, as Chrome's install prompt does. */
+export function describeInstall(manifest: chrome.runtime.Manifest): InstallSummary {
+  const declared = (manifest.permissions ?? []).filter((p): p is string => typeof p === 'string');
+  const hostPermissions = 'host_permissions' in manifest ? (manifest.host_permissions ?? []) : [];
+  const scriptMatches = (manifest.content_scripts ?? []).flatMap((script) => script.matches ?? []);
+  return {
+    permissions: [...new Set(declared.filter((p) => !isHostPattern(p)))],
+    hostPermissions: [...new Set([...declared.filter(isHostPattern), ...hostPermissions, ...scriptMatches])],
+  };
+}
+
+/**
+ * The Web Store `beforeInstall` hook: re-checks that the request comes from the real Web Store page
+ * (the library's own origin gate is patched to an exact host match too), then installs only if the
+ * user confirms.
+ */
+export function createBeforeInstall(confirm: (prompt: InstallPrompt) => Promise<boolean>): BeforeInstall {
+  return async ({ frame, localizedName, manifest }: InstallDetails) => {
+    if (frame.isDestroyed() || !isWebStoreUrl(frame.url)) return { action: 'deny' };
+    const allowed = await confirm({ name: localizedName, ...describeInstall(manifest) });
+    return { action: allowed ? 'allow' : 'deny' };
+  };
+}
+
+/** Native "Add “name”?" dialog on the main window; resolves true only for Add. */
+const confirmInstall = async (parent: Electron.BrowserWindow | null, prompt: InstallPrompt): Promise<boolean> => {
+  if (!parent) return false;
+  const t = await loadTranslate();
+  const sections = [
+    prompt.permissions.length > 0 ? `${t(`${INSTALL_KEY}.permissions`)}\n${prompt.permissions.join('\n')}` : '',
+    prompt.hostPermissions.length > 0 ? `${t(`${INSTALL_KEY}.sites`)}\n${prompt.hostPermissions.join('\n')}` : '',
+  ].filter(Boolean);
+  const { response } = await dialog.showMessageBox(parent, {
+    type: 'question',
+    message: t(`${INSTALL_KEY}.addTitle`, { name: prompt.name }),
+    detail: sections.join('\n\n'),
+    buttons: [t(`${INSTALL_KEY}.add`), t(`${INSTALL_KEY}.cancel`)],
+    defaultId: CANCEL_BUTTON,
+    cancelId: CANCEL_BUTTON,
+    noLink: true,
+  });
+  return response === ADD_BUTTON;
+};
 
 /**
  * Pairs `chrome.tabs.create` calls with the browser webviews that attach afterwards. The renderer
@@ -96,7 +166,8 @@ export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<Brows
   ElectronChromeExtensions.handleCRXProtocol(electronSession.defaultSession);
 
   // Not awaited: loading installed extensions from disk must not delay tracking tabs.
-  installChromeWebStore({ session, autoUpdate: true }).catch((error: unknown) => {
+  const beforeInstall = createBeforeInstall((prompt) => confirmInstall(liveMainWindow(), prompt));
+  installChromeWebStore({ session, autoUpdate: true, beforeInstall }).catch((error: unknown) => {
     console.error('[BrowserExtensions] Chrome Web Store setup failed:', error);
   });
 

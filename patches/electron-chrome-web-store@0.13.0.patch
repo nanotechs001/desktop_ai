@@ -1,0 +1,69 @@
+diff --git a/dist/chrome-web-store.preload.js b/dist/chrome-web-store.preload.js
+index 94fb2b4c5d240bc80aba0d8e72b526b12684daf9..401f1d4e702ce2e50b4aea48ec92889c501fef2b 100644
+--- a/dist/chrome-web-store.preload.js
++++ b/dist/chrome-web-store.preload.js
+@@ -292,7 +292,7 @@
+       window.navigation.addEventListener("navigate", maybeUpdateBranding);
+     }
+   }
+-  if (location.href.startsWith("https://chromewebstore.google.com")) {
++  if (location.protocol === "https:" && location.host === "chromewebstore.google.com") {
+     log("Injecting Chrome Web Store API");
+     setupChromeWebStoreApi();
+   }
+diff --git a/dist/cjs/browser/index.js b/dist/cjs/browser/index.js
+index 4580b782dcf28a2d8d9ec2f0318276365cf2b957..b870692caab81c26107f93f430dd8e9dabc9b4df 100644
+--- a/dist/cjs/browser/index.js
++++ b/dist/cjs/browser/index.js
+@@ -1149,6 +1149,14 @@ async function uninstallExtension(extensionId, opts = {}) {
+ // src/browser/api.ts
+ var d3 = (0, import_debug3.default)("electron-chrome-web-store:api");
+ var WEBSTORE_URL = "https://chromewebstore.google.com";
++function isWebStoreOrigin(url) {
++  try {
++    const parsed = new URL(url);
++    return parsed.protocol === "https:" && parsed.host === "chromewebstore.google.com";
++  } catch {
++    return false;
++  }
++}
+ function getExtensionInfo(ext) {
+   const manifest = ext.manifest;
+   return {
+@@ -1275,7 +1283,7 @@ function registerWebStoreApi(webStoreState) {
+       import_electron3.ipcMain.handle(channel, async function handleWebStoreIpc(event, ...args) {
+         d3("received %s", channel);
+         const senderOrigin = event.senderFrame?.origin;
+-        if (!senderOrigin || !senderOrigin.startsWith(WEBSTORE_URL)) {
++        if (!senderOrigin || !isWebStoreOrigin(senderOrigin)) {
+           d3("ignoring webstore request from %s", senderOrigin);
+           return;
+         }
+diff --git a/dist/esm/browser/index.mjs b/dist/esm/browser/index.mjs
+index 85ba0e0023ea491e8d07b9a8effd01cfc89ee977..5a711563d1b8f6d5e4d25f7ecfb259d4b23ada8a 100644
+--- a/dist/esm/browser/index.mjs
++++ b/dist/esm/browser/index.mjs
+@@ -426,6 +426,14 @@ async function uninstallExtension(extensionId, opts = {}) {
+ // src/browser/api.ts
+ var d3 = debug3("electron-chrome-web-store:api");
+ var WEBSTORE_URL = "https://chromewebstore.google.com";
++function isWebStoreOrigin(url) {
++  try {
++    const parsed = new URL(url);
++    return parsed.protocol === "https:" && parsed.host === "chromewebstore.google.com";
++  } catch {
++    return false;
++  }
++}
+ function getExtensionInfo(ext) {
+   const manifest = ext.manifest;
+   return {
+@@ -552,7 +560,7 @@ function registerWebStoreApi(webStoreState) {
+       ipcMain.handle(channel, async function handleWebStoreIpc(event, ...args) {
+         d3("received %s", channel);
+         const senderOrigin = event.senderFrame?.origin;
+-        if (!senderOrigin || !senderOrigin.startsWith(WEBSTORE_URL)) {
++        if (!senderOrigin || !isWebStoreOrigin(senderOrigin)) {
+           d3("ignoring webstore request from %s", senderOrigin);
+           return;
+         }

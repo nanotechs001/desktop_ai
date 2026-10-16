@@ -215,6 +215,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "electron-chrome-web-store@0.13.0": "patches/electron-chrome-web-store@0.13.0.patch",
+  },
   "overrides": {
     "@codemirror/language": "6.12.3",
     "body-parser": "^2.2.1",

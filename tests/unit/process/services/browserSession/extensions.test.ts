@@ -19,9 +19,19 @@ const mocks = vi.hoisted(() => ({
   getContextMenuItems: vi.fn(() => [{ label: 'Ext item' }]),
   handleCRXProtocol: vi.fn(),
   installChromeWebStore: vi.fn(() => Promise.resolve()),
+  showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })),
 }));
 
-vi.mock('electron', () => ({ session: { defaultSession: mocks.defaultSession } }));
+vi.mock('electron', () => ({
+  session: { defaultSession: mocks.defaultSession },
+  dialog: { showMessageBox: mocks.showMessageBox },
+}));
+vi.mock('@process/services/browserSession/contextMenuInstall', () => ({
+  loadTranslate: () =>
+    Promise.resolve((key: string, options?: Record<string, unknown>) =>
+      options ? `${key} ${JSON.stringify(options)}` : key
+    ),
+}));
 
 vi.mock('electron-chrome-extensions', () => ({
   ElectronChromeExtensions: class {
@@ -37,7 +47,13 @@ vi.mock('electron-chrome-extensions', () => ({
 
 vi.mock('electron-chrome-web-store', () => ({ installChromeWebStore: mocks.installChromeWebStore }));
 
-import { CreateTabWaiter, initBrowserExtensions } from '@process/services/browserSession/extensions';
+import {
+  CreateTabWaiter,
+  createBeforeInstall,
+  describeInstall,
+  initBrowserExtensions,
+  isWebStoreUrl,
+} from '@process/services/browserSession/extensions';
 
 const browserSession = { name: 'browser' } as unknown as Electron.Session;
 const mainWindow = { isDestroyed: () => false } as unknown as Electron.BrowserWindow;
@@ -109,7 +125,11 @@ describe('initBrowserExtensions', () => {
   it('installChromeWebStore is called with { session, autoUpdate: true }', async () => {
     await setup();
 
-    expect(mocks.installChromeWebStore).toHaveBeenCalledWith({ session: browserSession, autoUpdate: true });
+    expect(mocks.installChromeWebStore).toHaveBeenCalledWith({
+      session: browserSession,
+      autoUpdate: true,
+      beforeInstall: expect.any(Function),
+    });
   });
 
   it('handleCRXProtocol is registered on session.defaultSession', async () => {
@@ -196,5 +216,140 @@ describe('initBrowserExtensions', () => {
     expect(mocks.selectTab).toHaveBeenCalledWith(contents);
     expect(mocks.getContextMenuItems).toHaveBeenCalledWith(contents, params);
     expect(items).toEqual([{ label: 'Ext item' }]);
+  });
+});
+
+type InstallDetails = Parameters<ReturnType<typeof createBeforeInstall>>[0];
+
+const installDetails = (frameUrl: string, manifest: Record<string, unknown> = {}): InstallDetails =>
+  ({
+    id: 'abcdefghijklmnopabcdefghijklmnop',
+    localizedName: 'Good Ext',
+    manifest: { name: 'Good Ext', version: '1', manifest_version: 3, ...manifest },
+    frame: { url: frameUrl, isDestroyed: () => false },
+  }) as unknown as InstallDetails;
+
+describe('isWebStoreUrl', () => {
+  it('accepts only https://chromewebstore.google.com, by exact host', () => {
+    expect(isWebStoreUrl('https://chromewebstore.google.com/detail/x/abc')).toBe(true);
+    expect(isWebStoreUrl('https://chromewebstore.google.com')).toBe(true);
+  });
+
+  it.each([
+    'https://chromewebstore.google.com.evil.test/detail/x',
+    'https://chromewebstore.google.comevil.test/',
+    'http://chromewebstore.google.com/',
+    'https://chromewebstore.google.com:8443/',
+    'https://evil.test/?u=https://chromewebstore.google.com',
+    'https://user@evil.test/',
+    'not a url',
+    '',
+  ])('rejects %s', (url) => {
+    expect(isWebStoreUrl(url)).toBe(false);
+  });
+});
+
+describe('describeInstall', () => {
+  it('splits API permissions from host access, including MV2 host permissions and content script matches', () => {
+    const prompt = describeInstall({
+      name: 'X',
+      version: '1',
+      manifest_version: 2,
+      permissions: ['storage', 'tabs', '<all_urls>', 'https://*.example.com/*', 'storage'],
+      host_permissions: ['https://a.test/*'],
+      content_scripts: [{ matches: ['https://a.test/*', 'https://b.test/*'], js: ['c.js'] }],
+    } as unknown as chrome.runtime.Manifest);
+
+    expect(prompt).toEqual({
+      permissions: ['storage', 'tabs'],
+      hostPermissions: ['<all_urls>', 'https://*.example.com/*', 'https://a.test/*', 'https://b.test/*'],
+    });
+  });
+
+  it('returns empty lists when the manifest asks for nothing', () => {
+    expect(describeInstall({ name: 'X', version: '1', manifest_version: 3 })).toEqual({
+      permissions: [],
+      hostPermissions: [],
+    });
+  });
+});
+
+describe('createBeforeInstall', () => {
+  it('asks with the extension name and permissions, and allows only when the user confirms', async () => {
+    const confirm = vi.fn(() => Promise.resolve(true));
+    const beforeInstall = createBeforeInstall(confirm);
+
+    const result = await beforeInstall(
+      installDetails('https://chromewebstore.google.com/detail/good/abc', { permissions: ['storage'] })
+    );
+
+    expect(result).toEqual({ action: 'allow' });
+    expect(confirm).toHaveBeenCalledWith({ name: 'Good Ext', permissions: ['storage'], hostPermissions: [] });
+  });
+
+  it('denies when the user cancels', async () => {
+    const beforeInstall = createBeforeInstall(() => Promise.resolve(false));
+
+    await expect(beforeInstall(installDetails('https://chromewebstore.google.com/detail/x'))).resolves.toEqual({
+      action: 'deny',
+    });
+  });
+
+  it('denies a lookalike-domain request without asking', async () => {
+    const confirm = vi.fn(() => Promise.resolve(true));
+    const beforeInstall = createBeforeInstall(confirm);
+
+    const result = await beforeInstall(installDetails('https://chromewebstore.google.com.evil.test/detail/x'));
+
+    expect(result).toEqual({ action: 'deny' });
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('denies when the requesting frame is gone', async () => {
+    const confirm = vi.fn(() => Promise.resolve(true));
+    const details = {
+      ...installDetails('https://chromewebstore.google.com/'),
+      frame: { url: 'https://chromewebstore.google.com/', isDestroyed: () => true },
+    } as unknown as InstallDetails;
+
+    await expect(createBeforeInstall(confirm)(details)).resolves.toEqual({ action: 'deny' });
+    expect(confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('web store install dialog', () => {
+  const installHook = async () => {
+    await setup();
+    const [[options]] = mocks.installChromeWebStore.mock.calls as unknown as [
+      [{ beforeInstall: ReturnType<typeof createBeforeInstall> }],
+    ];
+    return options.beforeInstall;
+  };
+
+  it('shows a native Add / Cancel dialog on the main window; Add installs', async () => {
+    mocks.showMessageBox.mockResolvedValueOnce({ response: 0 });
+    const beforeInstall = await installHook();
+
+    const result = await beforeInstall(
+      installDetails('https://chromewebstore.google.com/detail/x', { host_permissions: ['https://a.test/*'] })
+    );
+
+    expect(result).toEqual({ action: 'allow' });
+    const [parent, options] = mocks.showMessageBox.mock.calls[0] as unknown as [unknown, Electron.MessageBoxOptions];
+    expect(parent).toBe(mainWindow);
+    expect(options.message).toContain('Good Ext');
+    expect(options.detail).toContain('https://a.test/*');
+    expect(options.buttons).toHaveLength(2);
+    expect(options.cancelId).toBe(1);
+    expect(options.defaultId).toBe(1);
+  });
+
+  it('Cancel (or closing the dialog) does not install', async () => {
+    mocks.showMessageBox.mockResolvedValueOnce({ response: 1 });
+    const beforeInstall = await installHook();
+
+    await expect(beforeInstall(installDetails('https://chromewebstore.google.com/detail/x'))).resolves.toEqual({
+      action: 'deny',
+    });
   });
 });

@@ -233,7 +233,12 @@
       "wait": "Wait"
     },
     "extensions": {
-      "get": "Get extensions"
+      "get": "Get extensions",
+      "addTitle": "Add “{{name}}”?",
+      "permissions": "It can:",
+      "sites": "It can read and change your data on:",
+      "add": "Add extension",
+      "cancel": "Cancel"
     }
   }
 }

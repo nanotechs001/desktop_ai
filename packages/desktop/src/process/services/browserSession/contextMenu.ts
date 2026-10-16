@@ -39,7 +39,7 @@ export type ContextMenuParams = Pick<
 >;
 
 /** `options.text` fills the `{{text}}` placeholder of the "Search Google for …" label. */
-export type MenuTranslate = (key: string, options?: { text: string }) => string;
+export type MenuTranslate = (key: string, options?: Record<string, string>) => string;
 
 const MAX_SUGGESTIONS = 5;
 const MAX_SELECTION_LABEL_CHARS = 30;

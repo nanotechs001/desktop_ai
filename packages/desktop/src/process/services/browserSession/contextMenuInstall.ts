@@ -17,8 +17,11 @@ type ContextMenuEvent = Electron.ContextMenuParams;
 /** Extension items come from electron-chrome-extensions as ready-made `MenuItem`s. */
 type ExtraItems = (params: ContextMenuEvent) => Array<Electron.MenuItemConstructorOptions | Electron.MenuItem>;
 
-/** Lazily loads i18n to avoid pulling the initStorage chain in at module load (same as updateBridge). */
-const loadTranslate = async (): Promise<MenuTranslate> => {
+/**
+ * Main-process translator for `preview.browserChrome.*` keys. Loads i18n lazily to avoid pulling the
+ * initStorage chain in at module load (same as updateBridge).
+ */
+export const loadTranslate = async (): Promise<MenuTranslate> => {
   const { default: i18n, i18nReady } = await import('@process/services/i18n');
   await i18nReady;
   return (key, options) => String(i18n.t(key, options));
