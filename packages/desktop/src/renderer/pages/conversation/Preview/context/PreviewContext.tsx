@@ -63,6 +63,7 @@ export interface PreviewMetadata {
   missingFile?: boolean; // 文件不存在或无法读取 / Whether the referenced file is missing or unreadable
   favicon?: string; // 浏览器 tab 的站点图标 URL / Site icon URL for browser tabs
   agentActive?: boolean; // Agent 正在操作该浏览器 tab / Agent is currently driving this browser tab
+  agentOwned?: boolean; // An agent opened this browser tab / Agent 打开了该浏览器 tab
 }
 
 export interface PreviewTab {
@@ -317,8 +318,11 @@ const PERSISTABLE_CONTENT_TYPES = new Set<PreviewContentType>([
 const tabForPersistence = (tab: PreviewTab): PreviewTab | null => {
   const shared = {
     ...tab,
-    // Agent activity is a live, per-session signal — never restore it as active.
-    metadata: tab.metadata?.agentActive ? { ...tab.metadata, agentActive: false } : tab.metadata,
+    // Agent activity and ownership are live, per-session signals — never restore them as set.
+    metadata:
+      tab.metadata?.agentActive || tab.metadata?.agentOwned
+        ? { ...tab.metadata, agentActive: false, agentOwned: false }
+        : tab.metadata,
   };
 
   if (REFETCHABLE_CONTENT_TYPES.has(tab.content_type)) {

@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
 import type { BrowserShortcutAction } from '@/common/types/browser';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { isPlatformPrimaryModifier } from '@/renderer/utils/ui/keyboardShortcuts';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
+import AgentBanner from './BrowserChrome/AgentBanner';
+import AgentControls from './BrowserChrome/AgentControls';
+import AgentOverlay from './BrowserChrome/AgentOverlay';
 import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
 import ExtensionActions from './BrowserChrome/ExtensionActions';
@@ -20,6 +23,7 @@ import {
   browserTabLabelFromUrl,
   resolveAddressBarInput,
 } from './constants';
+import { useAgentBrowser } from './useAgentBrowser';
 
 /** `getWebContentsId()` throws before dom-ready and after the page crashed; that means "not this one". */
 const ownWebContentsId = (webview: Electron.WebviewTag): number | null => {
@@ -66,6 +70,8 @@ export interface BrowserViewerProps {
   onRequestClose?: (tabId: string) => void;
   /** 是否为当前显示的浏览器 tab / Whether this is the browser tab on screen */
   active?: boolean;
+  /** An agent opened this tab (or it stopped being agent-owned); lets the tab strip show an Agent badge */
+  onAgentOwnedChange?: (tabId: string, agentOwned: boolean) => void;
 }
 
 /**
@@ -89,6 +95,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   onFaviconChange,
   onRequestClose,
   active = false,
+  onAgentOwnedChange,
 }) => {
   const preview = useOptionalPreviewContext();
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
@@ -97,6 +104,10 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   const [crashState, setCrashState] = useState<CrashState>(null);
   const [reloading, setReloading] = useState(false);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const tabWebContentsId = useMemo(() => (webview ? ownWebContentsId(webview) : null), [webview]);
+  const { ownership, actions } = useAgentBrowser(tabWebContentsId);
+  const agentOwned = ownership !== null && ownership.owner !== 'user';
+  const reportedAgentOwned = useRef(false);
 
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
 
@@ -249,6 +260,13 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     });
   }, [webview, tabId, onRequestClose]);
 
+  // Only a change is reported, so an ordinary user tab never writes to the tab list.
+  useEffect(() => {
+    if (reportedAgentOwned.current === agentOwned) return;
+    reportedAgentOwned.current = agentOwned;
+    onAgentOwnedChange?.(tabId, agentOwned);
+  }, [agentOwned, tabId, onAgentOwnedChange]);
+
   return (
     <div className='relative h-full w-full' onKeyDown={handleControlKeyDown}>
       <WebviewHost
@@ -258,6 +276,9 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         interceptNavigation={false}
         navBarExtra={
           <>
+            {tabWebContentsId !== null && (
+              <AgentControls webContentsId={tabWebContentsId} ownership={ownership} actions={actions} />
+            )}
             <ExtensionActions />
             <DownloadsButton />
           </>
@@ -280,6 +301,12 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
       {crashState && (
         <div className='absolute inset-x-0 bottom-0 top-40px'>
           <CrashOverlay state={crashState} reloading={reloading} onReload={handleReload} onWait={handleWait} />
+        </div>
+      )}
+      <AgentOverlay action={actions[actions.length - 1] ?? null} />
+      {tabWebContentsId !== null && ownership?.paused && (
+        <div className='absolute top-48px start-1/2 z-20 -translate-x-1/2'>
+          <AgentBanner webContentsId={tabWebContentsId} />
         </div>
       )}
       {findOpen && webview && (

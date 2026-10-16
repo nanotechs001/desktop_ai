@@ -13,6 +13,11 @@ const shortcut = vi.hoisted(() => ({ emit: null as null | ((r: { webContentsId: 
 vi.mock('@/common', () => ({
   ipcBridge: {
     application: { reportBrowserWebContentsId: { invoke: vi.fn(() => Promise.resolve({ success: true })) } },
+    agentBrowser: {
+      ownershipChanged: { on: () => () => {} },
+      agentAction: { on: () => () => {} },
+      getOwnership: { invoke: () => Promise.resolve({ success: true, data: [] }) },
+    },
     browser: {
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },

@@ -53,6 +53,11 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
     [updateTab]
   );
 
+  const handleAgentOwnedChange = useCallback(
+    (tabId: string, agentOwned: boolean) => updateTab(tabId, { metadata: { agentOwned } }),
+    [updateTab]
+  );
+
   if (browserTabs.length === 0) return null;
 
   const isBrowserActive = browserTabs.some((tab) => tab.id === activeTabId);
@@ -78,6 +83,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
               onTitleChange={handleTitleChange}
               onFaviconChange={handleFaviconChange}
               onRequestClose={closeTab}
+              onAgentOwnedChange={handleAgentOwnedChange}
               active={isActive}
             />
           </div>

@@ -13,6 +13,11 @@ const mocks = vi.hoisted(() => ({ report: vi.fn(() => Promise.resolve({ success:
 vi.mock('@/common', () => ({
   ipcBridge: {
     application: { reportBrowserWebContentsId: { invoke: mocks.report } },
+    agentBrowser: {
+      ownershipChanged: { on: () => () => {} },
+      agentAction: { on: () => () => {} },
+      getOwnership: { invoke: () => Promise.resolve({ success: true, data: [] }) },
+    },
     browser: {
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },

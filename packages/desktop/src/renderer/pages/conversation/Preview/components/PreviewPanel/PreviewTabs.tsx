@@ -6,6 +6,7 @@
 
 import { iconColors } from '@/renderer/styles/colors';
 import { Close, Plus } from '@icon-park/react';
+import { Tag } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +61,11 @@ export interface PreviewTab {
    * Agent is currently driving this browser tab
    */
   agentActive?: boolean;
+
+  /**
+   * An agent opened this browser tab
+   */
+  agentOwned?: boolean;
 
   /**
    * 这个 tab 的绝对路径（浏览器 tab 为其 URL）是否可复制。刻意只给布尔值：
@@ -261,6 +267,11 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                       className='w-6px h-6px rd-full bg-success animate-pulse flex-shrink-0'
                       title={t('preview.browser.agentActiveTooltip')}
                     />
+                  )}
+                  {tab.agentOwned && (
+                    <Tag size='small' className='flex-shrink-0'>
+                      {t('preview.browserChrome.agent.badge')}
+                    </Tag>
                   )}
                   {/* 未保存指示器 / Unsaved indicator */}
                   {tab.isDirty && (

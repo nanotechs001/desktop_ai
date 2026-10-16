@@ -1175,6 +1175,7 @@ const PreviewPanel: React.FC = () => {
       isDirty: tab.isDirty,
       favicon: tab.content_type === 'browser' ? tab.metadata?.favicon : undefined,
       agentActive: tab.content_type === 'browser' ? tab.metadata?.agentActive : undefined,
+      agentOwned: tab.content_type === 'browser' ? tab.metadata?.agentOwned : undefined,
       canCopyPath: canCopyAbsolutePath(paths.absolute, isElectronDesktop()),
       canCopyRelativePath: Boolean(paths.relative),
       canRevealInFolder: canRevealInFolder(paths.absolute, isElectronDesktop()),

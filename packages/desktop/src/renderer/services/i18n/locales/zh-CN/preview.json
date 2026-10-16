@@ -226,6 +226,14 @@
       "next": "下一个匹配项",
       "close": "关闭"
     },
+    "agent": {
+      "badge": "Agent",
+      "share": "Share with agent",
+      "stopSharing": "Stop sharing",
+      "paused": "Paused: you took over.",
+      "resume": "Resume agent",
+      "actions": "Agent actions"
+    },
     "crash": {
       "crashed": "This tab crashed.",
       "unresponsive": "This page isn't responding.",
