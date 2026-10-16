@@ -223,6 +223,12 @@
       "previous": "Önceki eşleşme",
       "next": "Sonraki eşleşme",
       "close": "Kapat"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

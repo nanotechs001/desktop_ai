@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
+import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
 import FindBar from './BrowserChrome/FindBar';
 import {
@@ -66,6 +67,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [findFocusToken, setFindFocusToken] = useState(0);
+  const [crashState, setCrashState] = useState<CrashState>(null);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
@@ -92,6 +94,31 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   const handleDidFinishLoad = useCallback(() => {
     if (url === BROWSER_BLANK_URL) onTitleChange(tabId, browserTabLabelFromUrl(url));
   }, [url, tabId, onTitleChange]);
+
+  // clean-exit is a normal teardown (e.g. the tab is closing), not a crash.
+  const handleRenderProcessGone = useCallback((details: { reason: string }) => {
+    if (details.reason !== 'clean-exit') setCrashState('crashed');
+  }, []);
+  // A hang never downgrades a crash that is already showing.
+  const handleUnresponsive = useCallback(() => setCrashState((state) => state ?? 'unresponsive'), []);
+  const handleResponsive = useCallback(() => setCrashState((state) => (state === 'unresponsive' ? null : state)), []);
+  const handleWait = useCallback(() => setCrashState(null), []);
+
+  const handleReload = useCallback(() => {
+    if (!webview) return;
+    setCrashState(null);
+    try {
+      webview.reload();
+    } catch (error) {
+      // The guest is gone, so reload() has nothing to reload; assigning src starts a fresh load.
+      console.warn('[BrowserViewer] reload failed, re-assigning src:', error);
+      try {
+        webview.src = url || BROWSER_BLANK_URL;
+      } catch (fallbackError) {
+        console.error('[BrowserViewer] src re-assignment failed:', fallbackError);
+      }
+    }
+  }, [webview, url]);
 
   const closeFind = useCallback(() => {
     setFindOpen(false);
@@ -142,8 +169,15 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         onFaviconChange={handleFaviconChange}
         onDidFinishLoad={handleDidFinishLoad}
         onWebviewReady={setWebview}
+        onRenderProcessGone={handleRenderProcessGone}
+        onUnresponsive={handleUnresponsive}
+        onResponsive={handleResponsive}
         addressInputRef={addressInputRef}
       />
+      {/* Starts below the nav bar so the address bar stays usable. */}
+      <div className='absolute inset-x-0 bottom-0 top-48px'>
+        <CrashOverlay state={crashState} onReload={handleReload} onWait={handleWait} />
+      </div>
       {findOpen && webview && (
         <div className='absolute top-48px end-16px z-20'>
           <FindBar webview={webview} onClose={closeFind} focusToken={findFocusToken} />

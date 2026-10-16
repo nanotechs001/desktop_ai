@@ -223,6 +223,12 @@
       "previous": "Correspondência anterior",
       "next": "Próxima correspondência",
       "close": "Fechar"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

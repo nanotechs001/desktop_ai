@@ -223,6 +223,12 @@
       "previous": "上一个匹配项",
       "next": "下一个匹配项",
       "close": "关闭"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

@@ -223,6 +223,12 @@
       "previous": "مورد قبلی",
       "next": "مورد بعدی",
       "close": "بستن"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

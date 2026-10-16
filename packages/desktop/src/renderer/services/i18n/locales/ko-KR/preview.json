@@ -223,6 +223,12 @@
       "previous": "이전 일치 항목",
       "next": "다음 일치 항목",
       "close": "닫기"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

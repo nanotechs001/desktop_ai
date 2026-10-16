@@ -223,6 +223,12 @@
       "previous": "上一個符合項目",
       "next": "下一個符合項目",
       "close": "關閉"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

@@ -225,6 +225,12 @@
       "previous": "Предыдущее совпадение",
       "next": "Следующее совпадение",
       "close": "Закрыть"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }

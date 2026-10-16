@@ -223,6 +223,12 @@
       "previous": "前の一致",
       "next": "次の一致",
       "close": "閉じる"
+    },
+    "crash": {
+      "crashed": "This tab crashed.",
+      "unresponsive": "This page isn't responding.",
+      "reload": "Reload",
+      "wait": "Wait"
     }
   }
 }
