@@ -82,6 +82,15 @@ export function createPipeTransport(toChrome: NodeJS.WritableStream, fromChrome:
   };
 }
 
+/** Run a listener so that one throwing listener cannot stop the others or the message loop behind it. */
+function safeInvoke(label: string, listener: () => void): void {
+  try {
+    listener();
+  } catch (error) {
+    console.error(`[CdpConnection] ${label} handler threw`, error);
+  }
+}
+
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void; method: string };
 type EventHandler = (params: Record<string, unknown>, sessionId: string | undefined) => void;
 type IncomingMessage = {
@@ -116,8 +125,10 @@ export class CdpConnection {
     if (this.isClosed) return Promise.reject(new Error(CLOSED_MESSAGE));
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
+      // Serialize first: if it throws (e.g. circular params) nothing is registered, so nothing leaks.
+      const payload = JSON.stringify({ id, method, params, sessionId });
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, method });
-      this.transport.send(JSON.stringify({ id, method, params, sessionId }));
+      this.transport.send(payload);
     });
   }
 
@@ -141,6 +152,11 @@ export class CdpConnection {
 
   /** Subscribe to connection close. Returns an unsubscribe function. */
   onClose(cb: () => void): () => void {
+    if (this.isClosed) {
+      // Already closed: still tell the late subscriber, asynchronously (the returned unsubscribe is a no-op).
+      queueMicrotask(() => safeInvoke('close', cb));
+      return () => {};
+    }
     this.closeHandlers.add(cb);
     return () => {
       this.closeHandlers.delete(cb);
@@ -150,8 +166,11 @@ export class CdpConnection {
   /** Close the connection and its transport; pending requests reject. Safe to call repeatedly. */
   close(): void {
     if (this.isClosed) return;
-    this.handleClose();
-    this.transport.close();
+    try {
+      this.handleClose();
+    } finally {
+      this.transport.close();
+    }
   }
 
   private handleClose(): void {
@@ -160,7 +179,7 @@ export class CdpConnection {
     const pending = [...this.pending.values()];
     this.pending.clear();
     pending.forEach(({ reject }) => reject(new Error(CLOSED_MESSAGE)));
-    [...this.closeHandlers].forEach((cb) => cb());
+    [...this.closeHandlers].forEach((cb) => safeInvoke('close', cb));
   }
 
   private handleMessage(raw: string): void {
@@ -197,8 +216,10 @@ export class CdpConnection {
     const params =
       typeof message.params === 'object' && message.params !== null ? (message.params as Record<string, unknown>) : {};
     const sessionId = typeof message.sessionId === 'string' ? message.sessionId : undefined;
-    [...(this.eventHandlers.get(method) ?? [])].forEach((handler) => handler(params, sessionId));
+    [...(this.eventHandlers.get(method) ?? [])].forEach((handler) =>
+      safeInvoke(method, () => handler(params, sessionId))
+    );
     const event: CdpEventMessage = sessionId === undefined ? { method, params } : { method, params, sessionId };
-    [...this.anyHandlers].forEach((handler) => handler(event));
+    [...this.anyHandlers].forEach((handler) => safeInvoke(method, () => handler(event)));
   }
 }

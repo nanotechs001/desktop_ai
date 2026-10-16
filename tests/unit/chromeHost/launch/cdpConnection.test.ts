@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { once } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -18,6 +19,7 @@ function createFakeTransport() {
   const sent: string[] = [];
   let messageCb: ((message: string) => void) | undefined;
   let closeCb: (() => void) | undefined;
+  const close = vi.fn(() => closeCb?.());
   const transport: CdpTransport = {
     send: (message) => {
       sent.push(message);
@@ -28,11 +30,12 @@ function createFakeTransport() {
     onClose: (cb) => {
       closeCb = cb;
     },
-    close: () => closeCb?.(),
+    close,
   };
   return {
     transport,
     sent,
+    close,
     push: (message: string) => messageCb?.(message),
     closeTransport: () => closeCb?.(),
   };
@@ -139,6 +142,76 @@ describe('CdpConnection', () => {
     await expect(pending).resolves.toEqual({ ok: true });
   });
 
+  it('resolves concurrent send() calls with their own result when replies arrive out of order', async () => {
+    const fake = createFakeTransport();
+    const connection = new CdpConnection(fake.transport);
+
+    const first = connection.send('A.one');
+    const second = connection.send('A.two');
+    const third = connection.send('A.three');
+    fake.push('{"id":3,"result":{"n":3}}');
+    fake.push('{"id":1,"result":{"n":1}}');
+    fake.push('{"id":2,"error":{"code":-1,"message":"two failed"}}');
+
+    await expect(first).resolves.toEqual({ n: 1 });
+    await expect(second).rejects.toMatchObject({ code: -1, message: 'two failed', method: 'A.two' });
+    await expect(third).resolves.toEqual({ n: 3 });
+  });
+
+  it('close() closes the transport once, even when called repeatedly', () => {
+    const fake = createFakeTransport();
+    const connection = new CdpConnection(fake.transport);
+
+    connection.close();
+    connection.close();
+
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('close() still closes the transport and notifies the other handlers when a close handler throws', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fake = createFakeTransport();
+    const connection = new CdpConnection(fake.transport);
+    const healthy = vi.fn();
+    connection.onClose(() => {
+      throw new Error('close handler bug');
+    });
+    connection.onClose(healthy);
+
+    expect(() => connection.close()).not.toThrow();
+
+    expect(healthy).toHaveBeenCalledTimes(1);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  it('invokes a late onClose() subscriber once, asynchronously', async () => {
+    const fake = createFakeTransport();
+    const connection = new CdpConnection(fake.transport);
+    connection.close();
+    const late = vi.fn();
+
+    connection.onClose(late);
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects send() with unserializable params without leaking a pending request', async () => {
+    const fake = createFakeTransport();
+    const connection = new CdpConnection(fake.transport);
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    await expect(connection.send('A.b', circular)).rejects.toThrow(TypeError);
+
+    expect(fake.sent).toEqual([]);
+    // Inspect the private map: a settled promise would hide a leaked entry otherwise.
+    expect((connection as unknown as { pending: Map<number, unknown> }).pending.size).toBe(0);
+  });
+
   it('drops malformed JSON without breaking the connection', async () => {
     const fake = createFakeTransport();
     const connection = new CdpConnection(fake.transport);
@@ -149,6 +222,34 @@ describe('CdpConnection', () => {
 
     await expect(pending).resolves.toEqual({ ok: true });
     expect(connection.closed).toBe(false);
+  });
+});
+
+describe('CdpConnection handler isolation', () => {
+  it('keeps delivering to other handlers and later messages in the same chunk when a handler throws', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fromChrome = new PassThrough();
+    const connection = new CdpConnection(createPipeTransport(new PassThrough(), fromChrome));
+    const healthyOn = vi.fn();
+    const healthyAny = vi.fn();
+    connection.on('A.b', () => {
+      throw new Error('on handler bug');
+    });
+    connection.on('A.b', healthyOn);
+    connection.onAny(() => {
+      throw new Error('onAny handler bug');
+    });
+    connection.onAny(healthyAny);
+
+    const reply = connection.send<{ ok: boolean }>('A.c');
+    fromChrome.write('{"method":"A.b","params":{"x":1}}\0{"id":1,"result":{"ok":true}}\0');
+
+    await expect(reply).resolves.toEqual({ ok: true });
+    expect(healthyOn).toHaveBeenCalledWith({ x: 1 }, undefined);
+    expect(healthyAny).toHaveBeenCalledWith({ method: 'A.b', params: { x: 1 } });
+    expect(consoleError).toHaveBeenCalledTimes(2);
+    expect(consoleError.mock.calls[0][0]).toContain('A.b');
+    consoleError.mockRestore();
   });
 });
 
@@ -191,15 +292,28 @@ describe('createPipeTransport', () => {
     await vi.waitFor(() => expect(written.join('')).toBe('{"id":1}\0{"id":2}\0'));
   });
 
+  it('close() ends the stream to Chrome, which is how Chrome is told to exit', async () => {
+    const toChrome = new PassThrough();
+    const transport = createPipeTransport(toChrome, new PassThrough());
+    const finished = once(toChrome, 'finish');
+
+    transport.close();
+
+    await finished;
+    expect(toChrome.writableEnded).toBe(true);
+  });
+
   it('notifies onClose when Chrome closes the pipe, and once only', async () => {
     const fromChrome = new PassThrough();
     const transport = createPipeTransport(new PassThrough(), fromChrome);
     const onClose = vi.fn();
     transport.onClose(onClose);
+    const streamClosed = once(fromChrome, 'close');
 
     fromChrome.end();
+    await streamClosed; // both 'end' and 'close' have fired by now; each must not notify again
 
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalledTimes(1);
     transport.close();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
