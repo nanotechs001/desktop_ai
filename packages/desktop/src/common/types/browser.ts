@@ -16,11 +16,14 @@ export type DownloadItem = {
   totalBytes: number;
 };
 
+/** The only permissions that ever prompt the user; every other one is allowed or denied by policy. */
+export type PromptPermission = 'media' | 'geolocation' | 'notifications' | 'clipboard-read' | 'midi' | 'midiSysex';
+
 /** A site permission prompt waiting for the user's answer. */
 export type PermissionRequest = {
   id: string;
   origin: string;
-  permission: string;
+  permission: PromptPermission;
   /** `'video'` / `'audio'` for `media` requests; empty otherwise. */
   mediaTypes: string[];
 };

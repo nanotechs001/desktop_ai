@@ -13,7 +13,7 @@ import type { PermissionRequest } from '@/common/types/browser';
 const KEY = 'preview.browserChrome.permission';
 
 /** i18n key suffix for what a request asks for; `media` says camera, microphone or both. */
-const messageKey = ({ permission, mediaTypes }: PermissionRequest): string | null => {
+const messageKey = ({ permission, mediaTypes }: PermissionRequest): string => {
   switch (permission) {
     case 'media': {
       const video = mediaTypes.includes('video');
@@ -30,8 +30,11 @@ const messageKey = ({ permission, mediaTypes }: PermissionRequest): string | nul
     case 'midi':
     case 'midiSysex':
       return 'midi';
-    default:
-      return null;
+    default: {
+      // Adding a PromptPermission without a message here is a compile error.
+      const unhandled: never = permission;
+      return unhandled;
+    }
   }
 };
 
@@ -43,12 +46,10 @@ const reply = (id: string, allow: boolean, remember: boolean): void => {
 const PromptBody: React.FC<{ request: PermissionRequest }> = ({ request }) => {
   const { t } = useTranslation();
   const [remember, setRemember] = useState(true);
-  const key = messageKey(request);
 
   return (
     <div className='flex flex-col gap-16px'>
-      {/* Only ask-set permissions reach here, all mapped; the raw name is a safe fallback for any other. */}
-      <div>{key ? t(`${KEY}.${key}`, { origin: request.origin }) : `${request.origin}: ${request.permission}`}</div>
+      <div>{t(`${KEY}.${messageKey(request)}`, { origin: request.origin })}</div>
       <Checkbox checked={remember} onChange={setRemember}>
         {t(`${KEY}.remember`)}
       </Checkbox>

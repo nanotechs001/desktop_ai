@@ -9,17 +9,26 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { ipcBridge } from '@/common';
-import type { PermissionRequest } from '@/common/types/browser';
+import type { PermissionRequest, PromptPermission } from '@/common/types/browser';
 
 export type PermissionDecision = 'allow' | 'deny' | 'ask';
 /** origin -> permission -> decision */
 export type PermissionStore = Record<string, Record<string, 'allow' | 'deny'>>;
 
-const ASK_PERMISSIONS = new Set(['media', 'geolocation', 'notifications', 'clipboard-read', 'midi', 'midiSysex']);
+const ASK_PERMISSIONS = new Set<string>([
+  'media',
+  'geolocation',
+  'notifications',
+  'clipboard-read',
+  'midi',
+  'midiSysex',
+] satisfies PromptPermission[]);
 const ALWAYS_ALLOW_PERMISSIONS = new Set(['fullscreen', 'pointerLock', 'clipboard-sanitized-write']);
 const PROMPT_TIMEOUT_MS = 60_000;
 /** Bounds the prompt queue so a page cannot stack prompts (e.g. iframes on endless origins). */
 export const MAX_OPEN_PERMISSION_PROMPTS = 3;
+
+const isPromptPermission = (permission: string): permission is PromptPermission => ASK_PERMISSIONS.has(permission);
 
 /** Always-allow permissions first, then a remembered answer for the origin; anything outside the ask set is denied. */
 export function decidePermission(permission: string, origin: string, store: PermissionStore): PermissionDecision {
@@ -183,7 +192,7 @@ export function installPermissions(browserSession: Electron.Session): void {
     const origin = originOf(details.requestingUrl ?? webContents.getURL());
     if (!origin) return callback(false);
     const decision = decidePermission(permission, origin, currentStore());
-    if (decision !== 'ask') return callback(decision === 'allow');
+    if (decision !== 'ask' || !isPromptPermission(permission)) return callback(decision === 'allow');
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes ?? []) : [];
     void pending.request({ origin, permission, mediaTypes }, PROMPT_TIMEOUT_MS).then(callback);
   });

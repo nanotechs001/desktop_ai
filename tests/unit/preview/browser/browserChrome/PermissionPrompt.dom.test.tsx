@@ -56,6 +56,8 @@ const mount = async (initial: PermissionRequest[] = []) => {
   await act(async () => {});
 };
 
+const wrapper = (): HTMLElement => document.querySelector('.arco-modal-wrapper') as HTMLElement;
+
 const push = (open: PermissionRequest[]) => act(() => mocks.handler?.(open));
 
 beforeEach(() => {
@@ -97,7 +99,6 @@ describe('PermissionPrompt', () => {
     expect(screen.queryByText(`${KEY}.block`)).toBeNull();
   });
 
-  const wrapper = () => document.querySelector('.arco-modal-wrapper') as HTMLElement;
   it.each([
     ['the close button', () => fireEvent.click(document.querySelector('.arco-modal-close-icon') as HTMLElement)],
     [
@@ -135,11 +136,11 @@ describe('PermissionPrompt', () => {
   });
 
   it('keeps an event that arrived before the initial list', async () => {
-    let resolveInitial: (value: unknown) => void = () => {};
-    mocks.getPermissionRequests.mockReturnValue(new Promise((resolve) => (resolveInitial = resolve)));
+    const initial = Promise.withResolvers<unknown>();
+    mocks.getPermissionRequests.mockReturnValue(initial.promise);
     render(<PermissionPrompt />);
     await push([request('new')]);
-    await act(async () => resolveInitial({ success: true, data: [request('old')] }));
+    await act(async () => initial.resolve({ success: true, data: [request('old')] }));
     expect(screen.getByText(`${KEY}.media @ https://new.test`)).toBeTruthy();
   });
 

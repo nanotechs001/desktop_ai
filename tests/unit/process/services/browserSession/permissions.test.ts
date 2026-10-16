@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PermissionRequest } from '@/common/types/browser';
 
 const mocks = vi.hoisted(() => ({ emit: vi.fn(), home: '' }));
 
@@ -114,7 +115,7 @@ describe('permission store', () => {
 });
 
 describe('PendingPermissions', () => {
-  const req = { origin: ORIGIN, permission: 'media', mediaTypes: ['video'] };
+  const req: Omit<PermissionRequest, 'id'> = { origin: ORIGIN, permission: 'media', mediaTypes: ['video'] };
 
   it('resolves the promise with the reply and removes the request', async () => {
     const pending = new PendingPermissions();
@@ -187,13 +188,16 @@ describe('PendingPermissions', () => {
     warn.mockRestore();
   });
 
-  it('still shares an already-open request when the cap is reached', () => {
+  it('still shares an already-open request when the cap is reached', async () => {
     const pending = new PendingPermissions();
     for (let i = 0; i < MAX_OPEN_PERMISSION_PROMPTS; i++) {
       void pending.request({ ...req, origin: `https://o${i}.test` }, 60_000);
     }
-    void pending.request({ ...req, origin: 'https://o0.test' }, 60_000);
+    const shared = pending.request({ ...req, origin: 'https://o0.test' }, 60_000);
     expect(pending.list()).toHaveLength(MAX_OPEN_PERMISSION_PROMPTS);
+
+    pending.reply(pending.list()[0].id, true);
+    await expect(shared).resolves.toBe(true);
   });
 
   it('unions mediaTypes into the open request and re-emits the list', () => {
