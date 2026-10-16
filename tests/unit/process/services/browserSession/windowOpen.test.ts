@@ -34,8 +34,10 @@ vi.mock('electron', () => ({
     constructor(options: Electron.BrowserWindowConstructorOptions) {
       this.options = options;
       this.webContents = (options.webContents as unknown as { id: number }) ?? { id: 0 };
+      Object.assign(this.webContents, { getURL: this.getURL });
       mocks.windows.push(this);
     }
+    getURL = () => 'https://login.example.com/oauth?x=1';
     on(event: string, handler: (...args: unknown[]) => void) {
       this.handlers.set(event, handler);
       return this;
@@ -52,6 +54,7 @@ import {
   OpenLimiter,
   classifyWindowOpen,
   installBeforeUnloadDialog,
+  popupTitle,
   installWindowOpenHandler,
   popupWindowOptions,
 } from '@process/services/browserSession/windowOpen';
@@ -490,5 +493,36 @@ describe('installBeforeUnloadDialog', () => {
     fire();
 
     expect(mocks.showMessageBoxSync.mock.calls[0][0]).toBe(mainWindow);
+  });
+});
+
+describe('popup window title', () => {
+  it('popupTitle appends the origin of the page', () => {
+    expect(popupTitle('Sign in', 'https://login.example.com/oauth?x=1')).toBe('Sign in — https://login.example.com');
+    expect(popupTitle('Blank', 'about:blank')).toBe('Blank — about:blank');
+  });
+
+  it("a popup's window title always shows the page origin, whatever the page sets", () => {
+    const setWindowOpenHandler = vi.fn();
+    installWindowOpenHandler(
+      { id: 1, setWindowOpenHandler } as unknown as Electron.WebContents,
+      () => null,
+      new OpenLimiter()
+    );
+    const handler = setWindowOpenHandler.mock.calls[0][0] as (details: {
+      url: string;
+      disposition: string;
+      features: string;
+    }) => { createWindow?: (options: Electron.BrowserWindowConstructorOptions) => Electron.WebContents };
+    handler({ url: 'https://login.example.com/', disposition: 'new-window', features: 'popup' }).createWindow?.({
+      webContents: { id: 10 } as unknown as Electron.WebContents,
+    } as Electron.BrowserWindowConstructorOptions);
+    const popup = mocks.windows.at(-1) as FakeWindow & { setTitle: ReturnType<typeof vi.fn> };
+    const event = { preventDefault: vi.fn() };
+
+    popup.handlers.get('page-title-updated')?.(event, 'Your bank — https://bank.test');
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(popup.setTitle).toHaveBeenCalledWith('Your bank — https://bank.test — https://login.example.com');
   });
 });

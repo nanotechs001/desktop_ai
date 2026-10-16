@@ -123,6 +123,18 @@ export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecisi
   };
 }
 
+/** A popup's window title: the page title, then the page origin, so a sign-in popup shows where it is. */
+export function popupTitle(title: string, url: string): string {
+  let origin = url;
+  try {
+    const parsed = new URL(url).origin;
+    if (parsed !== 'null') origin = parsed;
+  } catch {
+    // Not a URL: show it as it is.
+  }
+  return `${title} — ${origin}`;
+}
+
 /** `value` moved into [min, max]; `min` wins when the range is empty. */
 const clampInto = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
@@ -208,6 +220,11 @@ export function installWindowOpenHandler(
           const guestOptions: WithGuest = { ...options, webContents: (pageOptions as WithGuest).webContents };
           const popup = new BrowserWindow(guestOptions);
           popup.on('closed', release);
+          // Popups have no address bar, so the title is the only place the page origin can show.
+          popup.on('page-title-updated', (event, title) => {
+            event.preventDefault();
+            popup.setTitle(popupTitle(title, popup.webContents.getURL()));
+          });
           return popup.webContents;
         },
       };
