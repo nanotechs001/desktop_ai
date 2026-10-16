@@ -1,7 +1,8 @@
 import { connect as netConnect } from 'node:net';
+import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
+import { guardUpgradeSocket, type RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
 import type { AgentActionEvent } from '@/common/types/browser';
 import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from '@process/services/agentBrowser/relay/targetRegistry';
@@ -597,5 +598,117 @@ describe('relay server: limits', () => {
     expect(replies.slice(0, 5).every((reply) => reply.result?.targetId)).toBe(true);
     expect(replies[5].error?.message).toMatch(/rate limited/);
     expect(openTab).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe('relay server: queue', () => {
+  it('refuses new commands once the queued bytes pass the cap, without closing the socket', async () => {
+    const handle = await start({ maxInFlightPerSocket: 1, maxQueuedBytesPerSocket: 1000 });
+    const client = await connect(handle);
+    const tab = ownedTab(50, 'claude');
+    const session = await attach(client, 50);
+    const releases: Array<() => void> = [];
+    tab.debugger.handler = () => new Promise((resolve) => releases.push(() => resolve({})));
+    const padding = { expression: 'x'.repeat(500), contextId: 1 }; // denied by policy later; only its size matters here
+
+    const running = client.send('Page.getFrameTree', {}, session);
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    const queued = client.send('Runtime.evaluate', padding, session);
+    const refused = await client.send('Runtime.evaluate', padding, session);
+    expect(refused.error?.message).toBe('Too many pending commands');
+
+    releases[0]();
+    await running;
+    expect((await queued).error?.message).toMatch(/isolated-world/); // it ran, after waiting its turn
+    tab.debugger.handler = () => ({});
+    expect((await client.send('Page.getFrameTree', {}, session)).error).toBeUndefined();
+  });
+
+  it('answers Page.handleJavaScriptDialog even while every in-flight slot is taken', async () => {
+    const handle = await start({ maxInFlightPerSocket: 2 });
+    const client = await connect(handle);
+    const tab = ownedTab(51, 'claude');
+    const session = await attach(client, 51);
+    const releases: Array<() => void> = [];
+    tab.debugger.handler = (method) =>
+      method === 'Page.handleJavaScriptDialog' ? {} : new Promise((resolve) => releases.push(() => resolve({})));
+
+    const blocked = [client.send('Page.getFrameTree', {}, session), client.send('Page.getFrameTree', {}, session)];
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    const dialog = await client.send('Page.handleJavaScriptDialog', { accept: true }, session);
+
+    expect(dialog.error).toBeUndefined();
+    expect(releases).toHaveLength(2); // the stuck commands are still stuck
+    releases.forEach((release) => release());
+    await Promise.all(blocked);
+  });
+});
+
+describe('relay server: sockets', () => {
+  it('logs, rather than throws, an error on a raw upgrade socket', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const socket = new PassThrough();
+    guardUpgradeSocket(socket);
+    expect(() => socket.emit('error', new Error('ECONNRESET'))).not.toThrow();
+    expect(warn).toHaveBeenCalledWith('[AgentBrowserRelay] upgrade socket error:', 'ECONNRESET');
+    warn.mockRestore();
+  });
+
+  it('survives a client socket error (an unmasked frame) and drops that client only', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const handle = await start();
+    const good = await connect(handle, 'good');
+    const { port } = new URL(handle.url);
+    const raw = netConnect(Number(port), '127.0.0.1', () => {
+      raw.write(
+        `GET /?client=bad HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+          `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n` +
+          `Authorization: Bearer ${handle.token}\r\n\r\n`
+      );
+    });
+    raw.on('error', () => {});
+    await new Promise((resolve) => raw.once('data', resolve)); // 101 Switching Protocols
+    await vi.waitFor(() => expect(handle.clients().map((c) => c.label)).toContain('bad'));
+
+    raw.write(Buffer.from([0x81, 0x01, 0x61])); // a text frame without the mask a client must set
+
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith('[AgentBrowserRelay] client socket error:', expect.any(String))
+    );
+    await vi.waitFor(() => expect(handle.clients().map((c) => c.label)).toEqual(['good']));
+    expect((await good.send('Target.getTargets')).error).toBeUndefined();
+    raw.destroy();
+    warn.mockRestore();
+  });
+});
+
+describe('relay server: OOPIF contexts', () => {
+  it('drops a child session and its isolated worlds when the child detaches', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    const tab = ownedTab(52, 'claude');
+    await attach(client, 52);
+    const announce = (cdpSessionId: string) =>
+      tab.debugger.message('Target.attachedToTarget', {
+        sessionId: cdpSessionId,
+        targetInfo: { targetId: 'FRAME', type: 'iframe' },
+      });
+    tab.debugger.handler = (method) => (method === 'Page.createIsolatedWorld' ? { executionContextId: 9 } : {});
+
+    announce('CDP-1');
+    const first = String((await client.waitForEvent('Target.attachedToTarget')).params?.sessionId);
+    await client.send('Page.createIsolatedWorld', { frameId: 'FRAME', worldName: 'aion' }, first);
+    const evaluate = { expression: '1', contextId: 9 };
+    expect((await client.send('Runtime.evaluate', evaluate, first)).error).toBeUndefined();
+
+    tab.debugger.message('Target.detachedFromTarget', { sessionId: 'CDP-1', targetId: 'FRAME' });
+    await client.waitForEvent('Target.detachedFromTarget');
+    expect((await client.send('Runtime.evaluate', evaluate, first)).error?.message).toMatch(/unknown sessionId/i);
+
+    // The same frame re-attached (e.g. after it navigated) starts with no worlds of its own.
+    client.events.splice(0);
+    announce('CDP-2');
+    const second = String((await client.waitForEvent('Target.attachedToTarget')).params?.sessionId);
+    expect((await client.send('Runtime.evaluate', evaluate, second)).error?.message).toMatch(/isolated-world/);
   });
 });

@@ -134,7 +134,14 @@ const ALLOWED_PARAMS: Readonly<Record<string, ReadonlySet<string>>> = {
 
 /** Refused while the user has taken over the tab. */
 const PAUSED_PREFIXES = ['Input.', 'Runtime.'];
-const PAUSED_METHODS = new Set(['Page.navigate', 'Page.reload']);
+// Everything that moves the page or answers its dialogs (a beforeunload "Leave" navigates too).
+const PAUSED_METHODS = new Set([
+  'Page.navigate',
+  'Page.reload',
+  'Page.navigateToHistoryEntry',
+  'Page.stopLoading',
+  'Page.handleJavaScriptDialog',
+]);
 
 const ALLOWED = { allow: true } as const;
 const deny = (message: string): PolicyDecision => ({ allow: false, code: POLICY_ERROR_CODE, message });

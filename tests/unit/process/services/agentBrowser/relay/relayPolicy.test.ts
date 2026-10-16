@@ -133,6 +133,11 @@ describe('isAgentNavigableUrl', () => {
     `http://app.localhost:${RELAY_PORT}/`,
     'chrome://settings',
     'data:text/html,hi',
+    // A trailing dot names the same host.
+    `http://localhost.:${BACKEND_PORT}/`,
+    `http://x.localhost.:${RELAY_PORT}/`,
+    `http://127.0.0.1.:${BACKEND_PORT}/`,
+    'http://169.254.169.254./',
   ])('denies %s', (url) => {
     expect(isAgentNavigableUrl(url, blocked)).toBe(false);
   });
@@ -168,7 +173,7 @@ describe('decideRelayCommand: ownership and pause', () => {
     expect(decide('Page.getFrameTree', {}, { tab: null }).allow).toBe(false);
   });
 
-  it('denies Input.*, Runtime.*, Page.navigate and Page.reload on a paused tab with "user took over"', () => {
+  it('denies input, script, navigation and dialog answers on a paused tab with "user took over"', () => {
     const tab = { ...ownTab, paused: true };
     for (const [method, params] of [
       ['Input.insertText', { text: 'x' }],
@@ -176,6 +181,9 @@ describe('decideRelayCommand: ownership and pause', () => {
       ['Runtime.evaluate', { expression: '1', contextId: 3 }],
       ['Page.navigate', { url: 'https://example.com' }],
       ['Page.reload', {}],
+      ['Page.navigateToHistoryEntry', { entryId: 1 }],
+      ['Page.stopLoading', {}],
+      ['Page.handleJavaScriptDialog', { accept: true }],
     ] as const) {
       expect(decide(method, params, { tab })).toMatchObject({
         allow: false,

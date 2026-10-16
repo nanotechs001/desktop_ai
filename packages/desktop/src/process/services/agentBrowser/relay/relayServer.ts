@@ -17,6 +17,7 @@ import {
   RELAY_HOST,
   asParams,
   checkUpgrade,
+  guardUpgradeSocket,
   parseRequest,
   refuseUpgrade,
   takeSlot,
@@ -55,6 +56,7 @@ type Connection = {
   pendingCreates: number;
   inFlight: number;
   queue: string[];
+  queuedBytes: number;
   bufferTimer: NodeJS.Timeout | null;
 };
 
@@ -63,6 +65,7 @@ const ACTION_WINDOW_MS = 1000;
 const MAX_OP_LENGTH = 40;
 const MAX_ACTION_LABEL_LENGTH = 120;
 const AUTO_ATTACH_METHOD = 'Target.setAutoAttach';
+const DIALOG_METHOD = 'Page.handleJavaScriptDialog';
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -320,6 +323,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       const [next, ...rest] = conn.queue;
       if (next !== undefined) {
         conn.queue = rest;
+        conn.queuedBytes -= Buffer.byteLength(next);
         void run(conn, next);
       }
     }
@@ -330,11 +334,20 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       void run(conn, raw);
       return;
     }
-    if (conn.queue.length < limits.maxQueuedPerSocket) {
-      conn.queue = [...conn.queue, raw];
+    const request = parseRequest(raw);
+    // A page blocked on alert/confirm stalls every other command, so its answer must never wait behind them.
+    if (request && 'method' in request && request.method === DIALOG_METHOD) {
+      void run(conn, raw);
       return;
     }
-    const request = parseRequest(raw);
+    const bytes = Buffer.byteLength(raw);
+    const fits =
+      conn.queue.length < limits.maxQueuedPerSocket && conn.queuedBytes + bytes <= limits.maxQueuedBytesPerSocket;
+    if (fits) {
+      conn.queue = [...conn.queue, raw];
+      conn.queuedBytes += bytes;
+      return;
+    }
     if (request)
       send(conn, { id: request.id, error: { code: POLICY_ERROR_CODE, message: 'Too many pending commands' } });
   };
@@ -348,6 +361,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       pendingCreates: 0,
       inFlight: 0,
       queue: [],
+      queuedBytes: 0,
       bufferTimer: null,
     };
     connections.set(conn.client.clientId, conn);
@@ -355,6 +369,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     ws.on('close', () => {
       if (conn.bufferTimer) clearTimeout(conn.bufferTimer);
       conn.queue = [];
+      conn.queuedBytes = 0;
       connections.delete(conn.client.clientId);
       sessions.dropSink(conn.client.clientId);
       registry.releaseClient(conn.client.clientId);
@@ -363,7 +378,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   httpServer.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-    socket.on('error', (error) => console.warn('[AgentBrowserRelay] upgrade socket error:', error.message));
+    guardUpgradeSocket(socket);
     const verdict = checkUpgrade(req, token, port);
     if (verdict.ok === false) return refuseUpgrade(socket, verdict.status);
     if (connections.size >= limits.maxConnections) return refuseUpgrade(socket, '503 Service Unavailable');

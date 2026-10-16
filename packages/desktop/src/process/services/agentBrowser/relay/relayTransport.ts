@@ -17,6 +17,8 @@ export type RelayLimits = {
   maxInFlightPerSocket: number;
   /** Commands waiting behind the in-flight ones; beyond this they are refused. */
   maxQueuedPerSocket: number;
+  /** Raw bytes of the waiting commands; beyond this new commands are refused (the socket stays open). */
+  maxQueuedBytesPerSocket: number;
   maxBufferedBytes: number;
   /** How long a socket's send buffer may stay above `maxBufferedBytes` before it is closed. */
   bufferedGraceMs: number;
@@ -31,6 +33,7 @@ export const DEFAULT_RELAY_LIMITS: RelayLimits = {
   maxSessionsPerClient: 32,
   maxInFlightPerSocket: 16,
   maxQueuedPerSocket: 256,
+  maxQueuedBytesPerSocket: 32 * 1024 * 1024,
   maxBufferedBytes: 16 * 1024 * 1024,
   bufferedGraceMs: 5000,
   maxTabsPerClient: 10,
@@ -75,6 +78,11 @@ export function checkUpgrade(req: IncomingMessage, token: string, port: number):
   if (!tokensMatch(token, given)) return { ok: false, status: '401 Unauthorized' };
   return { ok: true, label: sanitizeClientLabel(url.searchParams.get('client')) };
 }
+
+/** Logs instead of crashing on errors of a raw upgrade socket (e.g. the peer reset it mid-handshake). */
+export const guardUpgradeSocket = (socket: Duplex): void => {
+  socket.on('error', (error) => console.warn('[AgentBrowserRelay] upgrade socket error:', error.message));
+};
 
 /** Ends a refused upgrade with a bare HTTP status. */
 export const refuseUpgrade = (socket: Duplex, status: string): void => {
