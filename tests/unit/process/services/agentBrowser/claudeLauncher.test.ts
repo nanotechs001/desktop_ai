@@ -68,6 +68,18 @@ describe('isBrowserOpenCommand', () => {
     'eval open https://x.com',
     'python3 -c "import webbrowser; webbrowser.open(\'https://x.com\')"',
     'cat <<EOF > f\nhi\nEOF\nopen https://x.com',
+    'cat <<EOF\nEOF\nopen x\necho hi\nEOF',
+    'cat <<EOF\nEOF\nopen x\ncat <<EOF\nz\nEOF',
+    "echo '<<EOF'\nopen x\nEOF",
+    'git commit -m "see <<EOF"\nopen x\nEOF',
+    'echo $((1<<2))\nopen x\n2',
+    'cat <<A <<B\n1\nA\n2\nB\nopen x',
+    'cat <<EOF | open -f -\nbody\nEOF',
+    '"open" https://x.com',
+    "'open' https://x.com",
+    '\\open https://x.com',
+    '"/usr/bin/open" https://x.com',
+    'sudo "open" https://x.com',
   ])('%s is a browser-open command', (command) => {
     expect(isBrowserOpenCommand(command)).toBe(true);
   });
@@ -208,9 +220,9 @@ describe('buildLauncherScript', () => {
     const result = runLauncher(buildLauncherScript('/h.cjs', []), [], { PATH: selfDir, HOME: tmp });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/could not find Claude Code/);
-    expect(result.stderr).toMatch(/Install it/);
-    expect(result.stderr).toMatch(/override/);
-    expect(result.stderr).not.toMatch(/skipped/);
+    expect(result.stderr).toMatch(/Install Claude Code/);
+    expect(result.stderr).toMatch(/set your own Claude command/);
+    expect(result.stderr).not.toMatch(/clear|skipped/);
   });
 });
 

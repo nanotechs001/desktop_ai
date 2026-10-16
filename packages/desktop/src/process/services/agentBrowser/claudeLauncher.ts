@@ -21,7 +21,7 @@ const DENIED_BASH_TOOLS = ['Bash(open:*)', 'Bash(xdg-open:*)', 'Bash(osascript:*
 export function isBrowserOpenCommand(command: string): boolean {
   const browsers = 'Safari|Google Chrome|Chromium|Firefox|Arc|Brave Browser|Microsoft Edge|Opera|Vivaldi';
   const osascriptBrowser = new RegExp(`open location|tell\\s+application\\s+\\\\?["']?(?:${browsers})`, 'i');
-  const heredoc = /(?<!<)(<<-?\s*(['"]?)(\w+)\2[^\n]*)\n[\s\S]*?\n[ \t]*\3[ \t]*(?=\n|$)/g;
+  const heredocOpener = /^<<-?\s*(["']?)(\w+)\1/;
   const assignment = /^[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s+/;
   const wrapper =
     /^(?:(?:\S*\/)?(?:nohup|command|exec|sudo|env|time|nice|xargs)\s+(?:-\S+\s+(?:\d+\s+)?)*|(?:then|do|else)\s+|[{!]\s+)/;
@@ -33,19 +33,49 @@ export function isBrowserOpenCommand(command: string): boolean {
   const queue = [{ text: command, depth: 0 }];
   for (const { text, depth } of queue) {
     const segments: string[] = [];
+    const heredocTags: string[] = [];
     let current = '';
     let quote = '';
-    for (const ch of text.replace(heredoc, '$1\n')) {
+    let arithmeticEnd = -1;
+    let i = 0;
+    while (i < text.length) {
+      const ch = text[i];
       if (quote) {
         if (ch === quote) quote = '';
       } else if (ch === '"' || ch === "'") {
         quote = ch;
+      } else if (ch === '(' && text[i + 1] === '(') {
+        arithmeticEnd = Math.max(arithmeticEnd, text.indexOf('))', i));
+      } else if (ch === '<' && text[i + 1] === '<' && text[i - 1] !== '<' && text[i + 2] !== '<' && i > arithmeticEnd) {
+        const opener = heredocOpener.exec(text.slice(i));
+        if (opener) {
+          heredocTags.push(opener[2]);
+          current += opener[0];
+          i += opener[0].length;
+          continue;
+        }
+      } else if (ch === '\n' && heredocTags.length > 0) {
+        // Skip the body of every heredoc opened on this line; an empty body ends at the first line.
+        segments.push(current);
+        current = '';
+        i += 1;
+        for (const tag of heredocTags.splice(0)) {
+          while (i < text.length) {
+            const lineEnd = text.indexOf('\n', i) < 0 ? text.length : text.indexOf('\n', i);
+            const line = text.slice(i, lineEnd);
+            i = lineEnd + 1;
+            if (line.trim() === tag) break;
+          }
+        }
+        continue;
       } else if ('&|;\n`()'.includes(ch)) {
         segments.push(current);
         current = '';
+        i += 1;
         continue;
       }
       current += ch;
+      i += 1;
     }
     segments.push(current);
 
@@ -59,7 +89,9 @@ export function isBrowserOpenCommand(command: string): boolean {
 
       const match = /^(\S+)\s*([\s\S]*)$/.exec(rest);
       if (!match) continue;
-      const [, word, args] = match;
+      const [, rawWord, args] = match;
+      // `"open"`, `'open'` and `\open` run the same command.
+      const word = rawWord.replace(/["'\\]/g, '');
       // A relative path (./open, scripts/open) is a local script, not the system opener.
       if (word.includes('/') && !systemDir.test(word)) continue;
       const name = word.replace(/^.*\//, '');
@@ -170,7 +202,7 @@ real=$(candidates | while IFS= read -r c; do
 done)
 
 if [ -z "$real" ]; then
-  echo "AionUi: could not find Claude Code. Install it (https://claude.com/claude-code), or clear the Claude command override in AionUi's agent settings to launch it without browser safeguards." >&2
+  echo "AionUi: could not find Claude Code. Install Claude Code (https://claude.com/claude-code), or set your own Claude command in AionUi's agent settings." >&2
   exit 127
 fi
 
