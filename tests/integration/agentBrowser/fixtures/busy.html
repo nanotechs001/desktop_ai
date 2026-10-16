@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Busy frame</title>
+    <style>
+      iframe {
+        position: absolute;
+        left: 30px;
+        top: 60px;
+        width: 400px;
+        height: 200px;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <button>Still here</button>
+    <script>
+      if (location.search.includes('spin')) {
+        // Blocks this (cross-origin, so separate) renderer for a while, shortly after load.
+        setTimeout(() => {
+          const end = Date.now() + 6000;
+          while (Date.now() < end);
+        }, 300);
+      } else {
+        const frame = document.createElement('iframe');
+        frame.src = '{{OTHER}}/busy.html?spin';
+        document.body.append(frame);
+      }
+    </script>
+  </body>
+</html>

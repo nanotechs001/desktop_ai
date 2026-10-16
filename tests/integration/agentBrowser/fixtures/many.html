@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Many controls</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #grid {
+        display: grid;
+        grid-template-columns: repeat(20, 44px);
+        gap: 2px;
+      }
+      #grid button {
+        width: 44px;
+        height: 20px;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <select id="big" aria-label="Big list"></select>
+    <button id="long">Long</button>
+    <div id="grid"></div>
+    <p id="essay"></p>
+    <script>
+      const grid = document.getElementById('grid');
+      for (let i = 1; i <= 300; i++) grid.insertAdjacentHTML('beforeend', `<button>B${i}</button>`);
+      const select = document.getElementById('big');
+      for (let i = 1; i <= 60; i++) select.add(new Option(`Option ${i} ${'o'.repeat(300)}`, String(i)));
+      document.getElementById('long').setAttribute('aria-label', 'L'.repeat(1000));
+      document.getElementById('essay').textContent = 'word '.repeat(4000);
+    </script>
+  </body>
+</html>

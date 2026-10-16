@@ -8,7 +8,7 @@ import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection
 
 /** One observable frame of a tab: where its snapshot runs and where its content sits in the top viewport. */
 export type FrameHandle = {
-  /** `f<k>`: stable while the frame keeps its document. */
+  /** `f<k>`: names exactly one isolated world, so `f<k>:<n>` names exactly one element. */
   frameKey: string;
   /** Owner iframe's title, name or id, else the frame's origin (page-derived, unsanitized). */
   label: string;
@@ -20,7 +20,15 @@ export type FrameHandle = {
   offset: { x: number; y: number };
 };
 
+/** A frame that did not answer in time or failed: by key once it has one, else by its (unsanitized) origin. */
+export type FrameFailure = { frameKey?: string; label: string };
+
+/** How long one frame may take per stage (frame tree, placement and world, snapshot) before it is reported. */
+export const FRAME_TIMEOUT_MS = 2000;
+
 const WORLD_NAME = 'aion-browser';
+/** Label for an OOPIF that never answered and has neither a key nor a url yet. */
+const UNKNOWN_FRAME = 'a cross-origin frame';
 
 type CdpFrame = { id: string; loaderId: string; url: string; securityOrigin?: string };
 type CdpFrameTree = { frame: CdpFrame; childFrames?: CdpFrameTree[] };
@@ -30,11 +38,17 @@ type Box = Point & { w: number; h: number };
 /** A frame found in one session's frame tree; `ownerSession` holds its iframe element (null for the top frame). */
 type FoundFrame = { frame: CdpFrame; sessionId: string; ownerSession: string | null };
 type Placement = { offset: Point; name?: string } | null;
+/** A frame key and the one world it names; minted together, retired together. */
+type FrameWorld = { frameKey: string; world: Promise<number> };
 
-type TabFrames = { keys: Map<string, string>; worlds: Map<string, Promise<number>>; handles: Map<string, FrameHandle> };
+type TabFrames = {
+  /** By `sessionId|frameId|loaderId` (one document). Kept while the frame is off-screen. */
+  worlds: Map<string, FrameWorld>;
+  handles: Map<string, FrameHandle>;
+};
 type ConnFrames = {
-  /** OOPIF child session -> its parent session and target (frame) id. */
-  children: Map<string, { parent: string; targetId: string }>;
+  /** OOPIF child session -> its parent session, target (frame) id and url at attach time. */
+  children: Map<string, { parent: string; targetId: string; url: string }>;
   /** Per page session. */
   tabs: Map<string, TabFrames>;
   nextKey: number;
@@ -44,6 +58,15 @@ const states = new WeakMap<CdpConnection, ConnFrames>();
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
+/** `promise`, or a rejection after `ms`; the late result is ignored. */
+export const withTimeout = <T>(promise: Promise<T>, ms: number, what: string): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
 
 const dropSession = (state: ConnFrames, sessionId: string): void => {
   for (const [child, { parent }] of state.children) if (parent === sessionId) dropSession(state, child);
@@ -62,7 +85,9 @@ export function watchFrames(conn: CdpConnection): void {
   conn.on('Target.attachedToTarget', (params, parent) => {
     const info = asRecord(params.targetInfo);
     if (!parent || typeof params.sessionId !== 'string' || info.type !== 'iframe') return;
-    if (typeof info.targetId === 'string') state.children.set(params.sessionId, { parent, targetId: info.targetId });
+    if (typeof info.targetId !== 'string') return;
+    const url = typeof info.url === 'string' ? info.url : '';
+    state.children.set(params.sessionId, { parent, targetId: info.targetId, url });
   });
   conn.on('Target.detachedFromTarget', (params) => {
     if (typeof params.sessionId === 'string') dropSession(state, params.sessionId);
@@ -78,10 +103,14 @@ const stateOf = (conn: CdpConnection): ConnFrames => {
 export const frameByKey = (conn: CdpConnection, pageSessionId: string, frameKey: string): FrameHandle | undefined =>
   states.get(conn)?.tabs.get(pageSessionId)?.handles.get(frameKey);
 
-/** Forgets a frame's isolated world (e.g. its evaluation failed), so the next collect creates a fresh one. */
+/**
+ * Retires a frame key with its isolated world (e.g. its snapshot failed): the next collect makes a fresh world under
+ * a new key, so ids observed under the old key can never point at another element.
+ */
 export const forgetWorld = (conn: CdpConnection, pageSessionId: string, frameKey: string): void => {
   const tab = states.get(conn)?.tabs.get(pageSessionId);
-  for (const [doc, key] of tab?.keys ?? []) if (key === frameKey) tab?.worlds.delete(doc);
+  for (const [doc, entry] of tab?.worlds ?? []) if (entry.frameKey === frameKey) tab?.worlds.delete(doc);
+  tab?.handles.delete(frameKey);
 };
 
 const descendants = (state: ConnFrames, sessionId: string): string[] =>
@@ -89,14 +118,16 @@ const descendants = (state: ConnFrames, sessionId: string): string[] =>
     .filter(([, c]) => c.parent === sessionId)
     .flatMap(([child]) => [child, ...descendants(state, child)]);
 
-const originOf = (frame: CdpFrame): string => {
-  if (frame.securityOrigin && frame.securityOrigin !== '://') return frame.securityOrigin;
+const originOfUrl = (url: string): string => {
   try {
-    return new URL(frame.url).origin;
+    return new URL(url).origin;
   } catch {
-    return frame.url;
+    return url;
   }
 };
+
+const originOf = (frame: CdpFrame): string =>
+  frame.securityOrigin && frame.securityOrigin !== '://' ? frame.securityOrigin : originOfUrl(frame.url);
 
 /** Frames of one session's tree, minus OOPIFs (their own sessions report them). */
 const framesOf = (
@@ -135,43 +166,68 @@ const ownerBox = async (conn: CdpConnection, frameId: string, sessionId: string)
 const intersects = (box: Box, viewport: { w: number; h: number }): boolean =>
   box.w > 0 && box.h > 0 && box.x < viewport.w && box.y < viewport.h && box.x + box.w > 0 && box.y + box.h > 0;
 
-/**
- * Every visible frame of the tab behind `pageSessionId`: the top frame, same-origin iframes (same session) and
- * OOPIFs (child sessions), each with an isolated world and its offset in the top viewport. Frames whose owner
- * box is zero-size or entirely off-screen are skipped, with everything inside them. Top frame first.
- */
-export async function collectFrames(conn: CdpConnection, pageSessionId: string): Promise<FrameHandle[]> {
-  const state = stateOf(conn);
-  // The relay sends a tab's known OOPIFs before any reply that follows the attach, so read children after this.
-  const [metrics, topTree] = await Promise.all([
-    conn.send<{ cssLayoutViewport: { clientWidth: number; clientHeight: number } }>(
-      'Page.getLayoutMetrics',
-      {},
-      pageSessionId
-    ),
-    conn.send<{ frameTree: CdpFrameTree }>('Page.getFrameTree', {}, pageSessionId),
-  ]);
-  const viewport = { w: metrics.cssLayoutViewport.clientWidth, h: metrics.cssLayoutViewport.clientHeight };
+type FoundFrames = { found: FoundFrame[]; sessionRoot: Map<string, string>; failed: FrameFailure[] };
+
+/** Frame trees of the page session and every OOPIF session under it; a session that does not answer is reported. */
+const findFrames = async (
+  conn: CdpConnection,
+  state: ConnFrames,
+  pageSessionId: string,
+  topTree: CdpFrameTree,
+  previous: TabFrames | undefined
+): Promise<FoundFrames> => {
   const childSessions = descendants(state, pageSessionId);
   const oopifs = new Set(childSessions.map((s) => state.children.get(s)?.targetId ?? ''));
   const childTrees = await Promise.allSettled(
-    childSessions.map((s) => conn.send<{ frameTree: CdpFrameTree }>('Page.getFrameTree', {}, s))
+    childSessions.map((s) =>
+      withTimeout(conn.send<{ frameTree: CdpFrameTree }>('Page.getFrameTree', {}, s), FRAME_TIMEOUT_MS, 'A frame')
+    )
   );
-  const found = [
-    ...framesOf(topTree.frameTree, pageSessionId, null, oopifs),
-    ...childSessions.flatMap((s, i) => {
-      const tree = childTrees[i];
-      return tree.status === 'fulfilled'
-        ? framesOf(tree.value.frameTree, s, state.children.get(s)?.parent ?? null, oopifs)
-        : [];
-    }),
-  ];
-  const byId = new Map(found.map((f) => [f.frame.id, f]));
-  const sessionRoot = new Map<string, string>([[pageSessionId, topTree.frameTree.frame.id]]);
+  const found = framesOf(topTree, pageSessionId, null, oopifs);
+  const sessionRoot = new Map<string, string>([[pageSessionId, topTree.frame.id]]);
+  const failed: FrameFailure[] = [];
   childSessions.forEach((s, i) => {
     const tree = childTrees[i];
-    if (tree.status === 'fulfilled') sessionRoot.set(s, tree.value.frameTree.frame.id);
+    const child = state.children.get(s);
+    if (tree.status === 'rejected') {
+      // An OOPIF attaches before its url is known, so prefer the key it was observed under.
+      const root = `${s}|${child?.targetId ?? ''}|`;
+      const known = [...(previous?.worlds ?? [])].find(([doc]) => doc.startsWith(root))?.[1].frameKey;
+      failed.push({ frameKey: known, label: child?.url ? originOfUrl(child.url) : UNKNOWN_FRAME });
+      return;
+    }
+    sessionRoot.set(s, tree.value.frameTree.frame.id);
+    found.push(...framesOf(tree.value.frameTree, s, child?.parent ?? null, oopifs));
   });
+  return { found, sessionRoot, failed };
+};
+
+/**
+ * Every visible frame of the tab behind `pageSessionId`, plus the frames that did not answer in time. See
+ * {@link collectFrames}.
+ */
+export async function collectFramesReport(
+  conn: CdpConnection,
+  pageSessionId: string
+): Promise<{ frames: FrameHandle[]; failed: FrameFailure[] }> {
+  const state = stateOf(conn);
+  // The relay sends a tab's known OOPIFs before any reply that follows the attach, so read children after this.
+  const [metrics, topTree] = await withTimeout(
+    Promise.all([
+      conn.send<{ cssLayoutViewport: { clientWidth: number; clientHeight: number } }>(
+        'Page.getLayoutMetrics',
+        {},
+        pageSessionId
+      ),
+      conn.send<{ frameTree: CdpFrameTree }>('Page.getFrameTree', {}, pageSessionId),
+    ]),
+    FRAME_TIMEOUT_MS,
+    'The page'
+  );
+  const viewport = { w: metrics.cssLayoutViewport.clientWidth, h: metrics.cssLayoutViewport.clientHeight };
+  const previous = state.tabs.get(pageSessionId);
+  const { found, sessionRoot, failed } = await findFrames(conn, state, pageSessionId, topTree.frameTree, previous);
+  const byId = new Map(found.map((f) => [f.frame.id, f]));
 
   // Content origin in top-viewport px, or null when the frame (or one around it) is not on screen.
   const placed = new Map<string, Promise<Placement>>();
@@ -192,42 +248,53 @@ export async function collectFrames(conn: CdpConnection, pageSessionId: string):
     return result;
   };
 
-  const previous = state.tabs.get(pageSessionId);
-  const tab: TabFrames = { keys: new Map(), worlds: new Map(), handles: new Map() };
-  const handles = await Promise.all(
-    found.map(async (f): Promise<FrameHandle | null> => {
-      const doc = `${f.sessionId}|${f.frame.id}|${f.frame.loaderId}`;
-      const frameKey = previous?.keys.get(doc) ?? `f${state.nextKey++}`;
-      tab.keys.set(doc, frameKey);
-      const where = await place(f);
-      if (!where) return null;
-      const world =
-        previous?.worlds.get(doc) ??
-        conn
-          .send<{ executionContextId: number }>(
-            'Page.createIsolatedWorld',
-            { frameId: f.frame.id, worldName: WORLD_NAME },
-            f.sessionId
-          )
-          .then(({ executionContextId }) => executionContextId);
-      tab.worlds.set(doc, world);
-      try {
-        const contextId = await world;
-        return {
-          frameKey,
-          label: where.name || originOf(f.frame),
-          sessionId: f.sessionId,
-          contextId,
-          offset: where.offset,
-        };
-      } catch {
-        tab.worlds.delete(doc); // e.g. the frame went away mid-call; the next observe retries
-        return null;
-      }
-    })
-  );
-  const kept = handles.filter((h): h is FrameHandle => h !== null);
-  kept.forEach((h) => tab.handles.set(h.frameKey, h));
+  const tab: TabFrames = { worlds: new Map(), handles: new Map() };
+  const settle = async (f: FoundFrame): Promise<FrameHandle | null> => {
+    const doc = `${f.sessionId}|${f.frame.id}|${f.frame.loaderId}`;
+    const kept = previous?.worlds.get(doc);
+    if (kept) tab.worlds.set(doc, kept); // an off-screen frame keeps its key and world for when it returns
+    const where = await place(f);
+    if (!where) return null;
+    const entry: FrameWorld = kept ?? {
+      frameKey: `f${state.nextKey++}`,
+      world: conn
+        .send<{ executionContextId: number }>(
+          'Page.createIsolatedWorld',
+          { frameId: f.frame.id, worldName: WORLD_NAME },
+          f.sessionId
+        )
+        .then(({ executionContextId }) => executionContextId),
+    };
+    tab.worlds.set(doc, entry);
+    try {
+      const contextId = await entry.world;
+      const label = where.name || originOf(f.frame);
+      return { frameKey: entry.frameKey, label, sessionId: f.sessionId, contextId, offset: where.offset };
+    } catch (error) {
+      tab.worlds.delete(doc); // the frame went away mid-call; a later collect starts over with a new key
+      throw error;
+    }
+  };
+  const results = await Promise.allSettled(found.map((f) => withTimeout(settle(f), FRAME_TIMEOUT_MS, 'A frame')));
+  const frames: FrameHandle[] = [];
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      if (result.value) frames.push(result.value);
+      return;
+    }
+    const doc = `${found[i].sessionId}|${found[i].frame.id}|${found[i].frame.loaderId}`;
+    failed.push({ frameKey: tab.worlds.get(doc)?.frameKey, label: originOf(found[i].frame) });
+  });
+  frames.forEach((h) => tab.handles.set(h.frameKey, h));
   state.tabs.set(pageSessionId, tab);
-  return kept;
+  return { frames, failed };
+}
+
+/**
+ * Every visible frame of the tab behind `pageSessionId`: the top frame, same-origin iframes (same session) and
+ * OOPIFs (child sessions), each with an isolated world and its offset in the top viewport. Frames whose owner
+ * box is zero-size or entirely off-screen are skipped, with everything inside them. Top frame first.
+ */
+export async function collectFrames(conn: CdpConnection, pageSessionId: string): Promise<FrameHandle[]> {
+  return (await collectFramesReport(conn, pageSessionId)).frames;
 }

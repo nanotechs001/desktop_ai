@@ -5,7 +5,14 @@
  */
 
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
-import { collectFrames, forgetWorld, type FrameHandle } from './frames';
+import {
+  FRAME_TIMEOUT_MS,
+  collectFramesReport,
+  forgetWorld,
+  withTimeout,
+  type FrameFailure,
+  type FrameHandle,
+} from './frames';
 import { sanitizePageText } from './pageText';
 import SNAPSHOT_SOURCE from './snapshot.js?raw';
 
@@ -17,7 +24,12 @@ const MAX_LABEL_LENGTH = 120;
 const MAX_VALUE_LENGTH = 120;
 const MAX_OPTION_LENGTH = 60;
 const MAX_FRAME_LABEL_LENGTH = 80;
+/** Options shown per select; snapshot.js caps at the same number and adds a "+N more" entry. */
+const MAX_OPTIONS = 50;
 const STATE_KEYS = ['checked', 'selected', 'expanded'] as const;
+const STATE_VALUES = new Set(['true', 'false', 'mixed']);
+/** The relay's refusal while the user has taken over the tab: the world is fine, so keep it (and its key). */
+const PAUSED_PREFIX = 'Paused:';
 /** Roles whose value is what the user typed or picked (a checkbox's value is just "on"). */
 const VALUE_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobox']);
 
@@ -31,7 +43,7 @@ export type SnapshotAction = {
   value: string;
   rect: Rect;
   options?: string[];
-} & Partial<Record<(typeof STATE_KEYS)[number], string>>;
+} & Partial<Record<(typeof STATE_KEYS)[number], 'true' | 'false' | 'mixed'>>;
 
 export type FrameSnapshot = { actions: SnapshotAction[]; text: string; omitted: number };
 
@@ -55,7 +67,7 @@ export type Observation = {
   rows: ActionRow[];
   omitted: number;
   text: string;
-  /** Frame keys whose snapshot failed. */
+  /** Frames that failed or did not answer in time: a frame key, or a quoted origin when it has no key yet. */
   failed: string[];
 };
 
@@ -72,8 +84,10 @@ const parseAction = (value: unknown): SnapshotAction | null => {
   if (!a || typeof a !== 'object' || !Number.isInteger(a.node) || !isString(a.role) || !isString(a.label)) return null;
   const rect = parseRect(a.rect);
   if (!rect) return null;
-  const states = Object.fromEntries(STATE_KEYS.filter((key) => isString(a[key])).map((key) => [key, a[key]]));
-  const options = Array.isArray(a.options) ? a.options.filter(isString) : undefined;
+  const states = Object.fromEntries(
+    STATE_KEYS.filter((key) => STATE_VALUES.has(a[key] as string)).map((key) => [key, a[key]])
+  );
+  const options = Array.isArray(a.options) ? a.options.filter(isString).slice(0, MAX_OPTIONS + 1) : undefined;
   return {
     node: a.node as number,
     role: a.role,
@@ -106,20 +120,21 @@ const toRow = (frame: FrameHandle, frameLabel: string, a: SnapshotAction): Actio
     label: sanitizePageText(a.label, MAX_LABEL_LENGTH),
     ...(value ? { value } : {}),
     ...(a.options ? { options: a.options.map((o) => sanitizePageText(o, MAX_OPTION_LENGTH)) } : {}),
-    states: STATE_KEYS.flatMap((key) => (a[key] === undefined ? [] : [`${key}=${sanitizePageText(a[key], 20)}`])),
+    states: STATE_KEYS.flatMap((key) => (a[key] === undefined ? [] : [`${key}=${a[key]}`])),
     rect: { ...a.rect, x: a.rect.x + frame.offset.x, y: a.rect.y + frame.offset.y },
   };
 };
 
 const frameText = (frame: FrameHandle, snapshot: FrameSnapshot, isTop: boolean): string => {
+  // Every page line starts with "> ", so page text can never pass for a row or a frame heading.
   const lines = snapshot.text
     .split('\n')
     .map((line) => sanitizePageText(line, MAX_TEXT_LENGTH))
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((line) => `> ${line}`);
   if (!lines.length) return '';
-  return isTop
-    ? lines.join('\n')
-    : [`[in: ${sanitizePageText(frame.label, MAX_FRAME_LABEL_LENGTH)}]`, ...lines].join('\n');
+  const heading = `[in: ${JSON.stringify(sanitizePageText(frame.label, MAX_FRAME_LABEL_LENGTH))}]`;
+  return (isTop ? lines : [heading, ...lines]).join('\n');
 };
 
 /**
@@ -153,7 +168,7 @@ const formatRow = (row: ActionRow, topFrameKey: string | undefined): string =>
     row.value === undefined ? '' : ` = ${JSON.stringify(row.value)}`,
     row.options?.length ? ` options: ${row.options.map((o) => JSON.stringify(o)).join(' | ')}` : '',
     row.states.length ? ` (${row.states.join(', ')})` : '',
-    row.frameKey === topFrameKey ? '' : ` · in: ${row.frameLabel}`,
+    row.frameKey === topFrameKey ? '' : ` · in: ${JSON.stringify(row.frameLabel)}`,
   ].join('');
 
 /** The observation as the agent reads it: a frame list, one line per control, then the visible text. */
@@ -176,36 +191,44 @@ export function formatObservation(obs: Observation, options: { text?: boolean } 
 type EvaluateReply = { result?: { value?: unknown }; exceptionDetails?: unknown };
 
 const snapshotFrame = async (conn: CdpConnection, frame: FrameHandle): Promise<FrameSnapshot | null> => {
-  const reply = await conn.send<EvaluateReply>(
-    'Runtime.evaluate',
-    { expression: SNAPSHOT_SOURCE, contextId: frame.contextId, returnByValue: true },
-    frame.sessionId
+  const reply = await withTimeout(
+    conn.send<EvaluateReply>(
+      'Runtime.evaluate',
+      { expression: SNAPSHOT_SOURCE, contextId: frame.contextId, returnByValue: true },
+      frame.sessionId
+    ),
+    FRAME_TIMEOUT_MS,
+    `Frame ${frame.frameKey}`
   );
-  if (reply.exceptionDetails) throw new Error('snapshot threw');
+  if (reply.exceptionDetails) throw new Error(`Frame ${frame.frameKey} could not be read`);
   // null: the document has no body yet (still loading).
   return reply.result?.value === null ? { actions: [], text: '', omitted: 0 } : parseSnapshot(reply.result?.value);
 };
 
+const isPausedRefusal = (error: unknown): boolean => error instanceof Error && error.message.startsWith(PAUSED_PREFIX);
+
+const describeFailure = ({ frameKey, label }: FrameFailure): string =>
+  frameKey ?? JSON.stringify(sanitizePageText(label, MAX_FRAME_LABEL_LENGTH));
+
 /**
  * Observes the tab behind `pageSessionId`: one snapshot per visible frame, all in parallel, merged into one table.
- * `scope` (a frame label or key) limits the snapshots to matching frames. Never takes a screenshot.
+ * `scope` (a frame label or key) limits the snapshots to matching frames. A frame that fails or does not answer
+ * within {@link FRAME_TIMEOUT_MS} is reported and the others still return; when none can be read, the first error is
+ * thrown. Never takes a screenshot.
  */
 export async function observePage(
   conn: CdpConnection,
   pageSessionId: string,
   options: { scope?: string } = {}
 ): Promise<Observation> {
-  const frames = await collectFrames(conn, pageSessionId);
+  const { frames, failed: unreadable } = await collectFramesReport(conn, pageSessionId);
   const { scope } = options;
   const chosen = scope
     ? frames.filter((f) => f.frameKey === scope || sanitizePageText(f.label, MAX_FRAME_LABEL_LENGTH) === scope)
     : frames;
   const results = await Promise.allSettled(chosen.map((frame) => snapshotFrame(conn, frame)));
-  // Nothing readable at all (e.g. the relay refused because the user took over): say why instead of listing keys.
-  const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-  if (firstError && results.every((r) => r.status === 'rejected')) throw firstError.reason;
   const snapshots: Array<{ frame: FrameHandle; snapshot: FrameSnapshot }> = [];
-  const failed: string[] = [];
+  const failed = unreadable.map(describeFailure);
   results.forEach((result, i) => {
     const frame = chosen[i];
     if (result.status === 'fulfilled' && result.value) {
@@ -213,7 +236,12 @@ export async function observePage(
       return;
     }
     failed.push(frame.frameKey);
-    forgetWorld(conn, pageSessionId, frame.frameKey);
+    // A stale or broken world must not break this document for good; the next observe gets a new world and key.
+    if (result.status === 'fulfilled' || !isPausedRefusal(result.reason))
+      forgetWorld(conn, pageSessionId, frame.frameKey);
   });
+  // Nothing readable at all (e.g. the relay refused because the user took over): say why instead of listing keys.
+  const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (firstError && results.every((r) => r.status === 'rejected')) throw firstError.reason;
   return { frames, failed, ...mergeSnapshots(snapshots, frames[0]?.frameKey) };
 }

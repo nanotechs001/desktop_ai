@@ -6,7 +6,9 @@
  * Changes: walks open shadow roots; reports every contenteditable (and a designMode body) as textbox; one
  * entry per element (a select lists its options instead of one action per option; no "Open" duplicates,
  * no scroll/wait pseudo-actions); state lives in window.__aionFast; marker, page key and guards are returned
- * as short hashes so a 250-row snapshot stays small. Rects stay frame-local, as in jev.
+ * as short hashes, and page strings are cut (labels, values and options to 200 chars, 50 options per select,
+ * 6000 chars of text) so a 250-row snapshot stays small; aria states are kept only as true/false/mixed.
+ * Rects stay frame-local, as in jev.
  *
  * MIT License
  *
@@ -32,6 +34,10 @@
  */
 (() => {
   if (!document.body) return null;
+  const MAX_STRING = 200;
+  const MAX_OPTIONS = 50;
+  const MAX_TEXT = 6000;
+  const cut = (text) => String(text).slice(0, MAX_STRING);
   const cache = (window.__aionFast ||= { ids: new WeakMap(), nodes: new Map(), next: 1 });
   const identity = (e) => {
     if (!cache.ids.has(e)) cache.ids.set(e, cache.next++);
@@ -181,21 +187,22 @@
     const base = {
       node: identity(e),
       role: rname,
-      label: name(e) || rname,
+      label: cut(name(e) || rname),
       rect: { x: r.x, y: r.y, w: r.width, h: r.height },
     };
     for (const key of ['checked', 'selected', 'expanded']) {
       const value = e.getAttribute('aria-' + key);
-      if (value !== null) base[key] = value;
+      if (['true', 'false', 'mixed'].includes(value)) base[key] = value;
     }
     if (['checkbox', 'radio'].includes(e.type)) base.checked = String(e.checked);
     if (e.tagName === 'SELECT') {
       const options = [...e.options].filter((o) => !o.disabled && !o.closest('optgroup[disabled]'));
+      const more = options.length > MAX_OPTIONS ? ['+' + (options.length - MAX_OPTIONS) + ' more'] : [];
       actions.push({
         ...base,
         kind: 'select',
-        value: [...e.selectedOptions].map((o) => o.label).join(', '),
-        options: options.slice(0, 20).map((o) => o.label),
+        value: cut([...e.selectedOptions].map((o) => o.label).join(', ')),
+        options: [...options.slice(0, MAX_OPTIONS).map((o) => cut(o.label)), ...more],
       });
     } else {
       const editable =
@@ -205,7 +212,7 @@
           (rname === 'combobox' && ['INPUT', 'TEXTAREA'].includes(e.tagName)));
       const value =
         'value' in e ? String(e.value) : e.isContentEditable || rname === 'combobox' ? e.innerText.trim() : '';
-      actions.push({ ...base, kind: editable ? 'fill' : 'click', value });
+      actions.push({ ...base, kind: editable ? 'fill' : 'click', value: cut(value) });
     }
   }
   const words = [],
@@ -214,7 +221,7 @@
   for (const root of roots) {
     const walker = document.createTreeWalker(root === document ? document.body : root, NodeFilter.SHOW_TEXT);
     let node;
-    while ((node = walker.nextNode()) && length < 6000) {
+    while ((node = walker.nextNode()) && length < MAX_TEXT) {
       const value = node.textContent.trim(),
         parent = node.parentElement;
       if (!value || !parent || parent.closest('script,style,noscript,template') || !visible(parent)) continue;
@@ -226,7 +233,7 @@
       }
     }
   }
-  const text = words.join('\n').slice(0, 6000),
+  const text = words.join('\n').slice(0, MAX_TEXT),
     height = document.documentElement.scrollHeight;
   const page_key = cache.pageKey(),
     guards = {};
@@ -248,8 +255,8 @@
   const omitted_actions = Math.max(0, actions.length - 250);
   actions.splice(250);
   return {
-    url: location.href,
-    title: document.title,
+    url: location.href.slice(0, 2000),
+    title: cut(document.title),
     w: innerWidth,
     h: innerHeight,
     text,
