@@ -26,6 +26,8 @@
     "recent7Days": "최근 7일",
     "earlier": "이전",
     "noHistory": "채팅 기록 없음",
+    "searchChats": "채팅 검색",
+    "noMatches": "일치하는 채팅이 없습니다",
     "deleteTitle": "삭제",
     "deleteConfirm": "이 채팅을 삭제하시겠습니까?",
     "confirmDelete": "삭제",

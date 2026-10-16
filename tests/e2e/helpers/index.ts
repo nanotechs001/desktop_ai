@@ -62,6 +62,7 @@ export {
   waitForSessionActive,
   waitForAiReply,
   deleteConversation,
+  openHistoryPanel,
   goToNewChat,
   runConversationCycle,
 } from './conversation';

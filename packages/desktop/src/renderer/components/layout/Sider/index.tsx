@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview/context/PreviewContext';
 import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
@@ -12,7 +12,6 @@ import SiderFooter from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
 
-const WorkspaceGroupedHistory = React.lazy(() => import('@renderer/pages/conversation/GroupedHistory'));
 const SettingsSider = React.lazy(() => import('@renderer/pages/settings/components/SettingsSider'));
 
 interface SiderProps {
@@ -30,7 +29,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { closePreview, clearPreviewForScope } = usePreviewContext();
   const { logout, status } = useAuth();
   const { theme, setTheme } = useThemeContext();
-  const [isBatchMode, setIsBatchMode] = useState(false);
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
   const showLogout =
@@ -46,7 +44,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     cleanupSiderTooltips();
     blurActiveElement();
     closePreview();
-    setIsBatchMode(false);
     Promise.resolve(navigate('/guid', { state: { resetAssistant: true } })).catch((error) => {
       console.error('Navigation failed:', error);
     });
@@ -73,21 +70,15 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   };
 
-  const handleConversationSelect = () => {
+  const handleMessageSearchSelect = () => {
     cleanupSiderTooltips();
     blurActiveElement();
-    // Do NOT call closePreview() here. conversation/index.tsx calls
-    // closePreviewIfScopeChanged() once the conversation data loads, which
-    // keeps the preview open when switching between conversations of the same
-    // scope and closes it only when the scope (today = workspace) actually changes.
-    setIsBatchMode(false);
   };
 
   const handleScheduledClick = () => {
     cleanupSiderTooltips();
     blurActiveElement();
     closePreview();
-    setIsBatchMode(false);
     Promise.resolve(navigate('/scheduled')).catch((error) => {
       console.error('Navigation failed:', error);
     });
@@ -100,7 +91,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     cleanupSiderTooltips();
     blurActiveElement();
     closePreview();
-    setIsBatchMode(false);
     Promise.resolve(navigate('/assistants')).catch((error) => {
       console.error('Navigation failed:', error);
     });
@@ -163,14 +153,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const tooltipEnabled = collapsed && !isMobile;
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
 
-  const workspaceHistoryProps = {
-    collapsed,
-    tooltipEnabled,
-    onSessionClick,
-    batchMode: isBatchMode,
-    onBatchModeChange: setIsBatchMode,
-  };
-
   return (
     <div className='size-full flex flex-col'>
       {/* Main content area */}
@@ -183,20 +165,17 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
           <div className='size-full flex flex-col gap-2px'>
             <SiderToolbar
               isMobile={isMobile}
-              isBatchMode={isBatchMode}
               collapsed={collapsed}
               siderTooltipProps={siderTooltipProps}
               onNewChat={handleNewChat}
-              onToggleBatchMode={() => setIsBatchMode((prev) => !prev)}
             />
-            {/* Search entry — desktop moves this into the titlebar toolbar;
-                mobile keeps it here in the sidebar. */}
+            {/* Message search: mobile keeps it here (desktop has the titlebar panel). */}
             {isMobile && (
               <SiderSearchEntry
                 isMobile={isMobile}
                 collapsed={collapsed}
                 siderTooltipProps={siderTooltipProps}
-                onConversationSelect={handleConversationSelect}
+                onConversationSelect={handleMessageSearchSelect}
                 onSessionClick={onSessionClick}
               />
             )}
@@ -216,30 +195,14 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleScheduledClick}
             />
-            {/* Divider between fixed top nav and scrollable content area */}
-            <div
-              className={classNames(
-                'shrink-0 mt-6px mb-2px h-1px bg-[var(--color-border-2)]',
-                collapsed ? 'mx-6px' : 'mx-10px'
-              )}
-            />
-            {/* Scrollable content: pinned → team (slot) → projects → conversations */}
+            {/* Chats live in the titlebar history panel; only the Teams section (removed in a later task) scrolls here. */}
             <div className={classNames('flex-1 min-h-0 overflow-y-auto', siderStyles.scrollArea)}>
-              <Suspense fallback={<div className='min-h-200px' />}>
-                <WorkspaceGroupedHistory
-                  {...workspaceHistoryProps}
-                  afterPinnedContent={
-                    <>
-                      <TeamSiderSection
-                        collapsed={collapsed}
-                        pathname={pathname}
-                        siderTooltipProps={siderTooltipProps}
-                        onSessionClick={onSessionClick}
-                      />
-                    </>
-                  }
-                />
-              </Suspense>
+              <TeamSiderSection
+                collapsed={collapsed}
+                pathname={pathname}
+                siderTooltipProps={siderTooltipProps}
+                onSessionClick={onSessionClick}
+              />
             </div>
           </div>
         )}

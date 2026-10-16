@@ -22,6 +22,8 @@
   "history": {
     "recents": "اخیر",
     "noHistory": "تاریخچه چتی وجود ندارد",
+    "searchChats": "جستجوی گفتگوها",
+    "noMatches": "گفتگوی منطبقی یافت نشد",
     "deleteTitle": "حذف",
     "deleteConfirm": "آیا مطمئن هستید که می‌خواهید این چت را حذف کنید؟",
     "confirmDelete": "حذف",

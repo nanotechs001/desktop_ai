@@ -22,6 +22,8 @@
   "history": {
     "recents": "Недавние",
     "noHistory": "Нет истории чатов",
+    "searchChats": "Поиск чатов",
+    "noMatches": "Подходящих чатов нет",
     "deleteTitle": "Удалить",
     "deleteConfirm": "Вы уверены, что хотите удалить этот чат?",
     "confirmDelete": "Удалить",

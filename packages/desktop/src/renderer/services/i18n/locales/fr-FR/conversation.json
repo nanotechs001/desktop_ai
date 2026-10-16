@@ -22,6 +22,8 @@
   "history": {
     "recents": "Récents",
     "noHistory": "Aucun historique de chat",
+    "searchChats": "Rechercher des discussions",
+    "noMatches": "Aucune discussion correspondante",
     "deleteTitle": "Supprimer",
     "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce chat ?",
     "confirmDelete": "Supprimer",

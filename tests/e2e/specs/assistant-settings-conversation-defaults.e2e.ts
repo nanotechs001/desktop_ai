@@ -24,7 +24,7 @@ import {
   waitForAssistantEditorClose,
 } from '../helpers';
 import { CHAT_INPUT } from '../helpers/selectors';
-import { goToNewChat, waitForAiReply } from '../helpers/conversation';
+import { goToNewChat, openHistoryPanel, waitForAiReply } from '../helpers/conversation';
 import { getAionrsTestModels, type TProviderWithModel } from '../helpers/chatAionrs';
 
 type AssistantDetail = {
@@ -484,6 +484,7 @@ async function sendConversationMessage(page: Page, message: string): Promise<voi
 
 async function reopenConversationFromHistory(page: Page, conversationId: string): Promise<void> {
   await goToNewChat(page);
+  await openHistoryPanel(page);
   const historyRow = page.locator(`#c-${conversationId}`).first();
   if (await historyRow.isVisible().catch(() => false)) {
     await historyRow.click();

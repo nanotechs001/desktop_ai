@@ -20,6 +20,7 @@ import {
   waitForSessionActive,
   waitForAiReply,
   deleteConversation,
+  openHistoryPanel,
   startAutoApprovePermissionMessages,
 } from '../helpers';
 
@@ -341,7 +342,9 @@ test.describe('Cron via AI conversation', () => {
 
     // The scheduled task still has a management page, while the originating
     // conversation stays in the regular conversation/project history.
+    await openHistoryPanel(page);
     await expect(page.locator(`#c-${conversationId}`).first()).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press('Escape');
     await expect(page.locator(`[data-testid="cron-child-sortable-${conversationId}"]`)).toHaveCount(0);
 
     await page.evaluate(() => window.location.assign('#/scheduled'));

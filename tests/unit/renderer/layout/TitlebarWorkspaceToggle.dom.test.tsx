@@ -15,7 +15,7 @@ vi.mock('@/common', () => ({
   ipcBridge: { conversation: { get: { invoke: vi.fn() } } },
 }));
 vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
-vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/Titlebar/HistoryPanel', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({
   default: () => <div data-testid='window-controls' />,
@@ -23,8 +23,8 @@ vi.mock('@/renderer/components/layout/WindowControls', () => ({
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ isMobile: false }),
 }));
-vi.mock('@/renderer/hooks/context/NavigationHistoryContext', () => ({
-  useNavigationHistory: () => null,
+vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({
+  useChatNavHistory: () => ({ canBack: false, canForward: false, back: vi.fn(), forward: vi.fn() }),
 }));
 vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
   useFeedback: () => ({ openFeedback: vi.fn() }),

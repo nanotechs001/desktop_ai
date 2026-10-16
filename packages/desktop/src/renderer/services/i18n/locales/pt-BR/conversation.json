@@ -22,6 +22,8 @@
   "history": {
     "recents": "Recentes",
     "noHistory": "Nenhum histórico de chat",
+    "searchChats": "Pesquisar conversas",
+    "noMatches": "Nenhuma conversa correspondente",
     "deleteTitle": "Excluir",
     "deleteConfirm": "Tem certeza de que deseja excluir este chat?",
     "confirmDelete": "Excluir",

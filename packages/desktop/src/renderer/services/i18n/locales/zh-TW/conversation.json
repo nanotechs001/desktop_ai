@@ -26,6 +26,8 @@
     "recent7Days": "最近7天",
     "earlier": "更早",
     "noHistory": "暫無對話記錄",
+    "searchChats": "搜尋聊天",
+    "noMatches": "沒有符合的聊天",
     "deleteTitle": "刪除",
     "deleteConfirm": "確定要刪除此對話嗎？",
     "confirmDelete": "刪除",

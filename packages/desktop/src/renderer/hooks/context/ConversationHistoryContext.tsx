@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { useConversationListSync } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import type { GroupedHistoryResult } from '@/renderer/pages/conversation/GroupedHistory/types';
 import { buildGroupedHistory } from '@/renderer/pages/conversation/GroupedHistory/utils/groupingHelpers';
@@ -19,6 +20,20 @@ const ConversationHistoryContext = createContext<ConversationHistoryContextValue
 export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { t } = useTranslation();
   const conversationListSync = useConversationListSync();
+
+  const { pathname } = useLocation();
+  const { setActiveConversation, clearCompletionUnread, clearManualUnread } = conversationListSync;
+
+  // The sidebar no longer mounts the chat list, so this is what tells the store which chat is on
+  // screen (finished turns there raise no unread dot) and clears its unread marks when it opens.
+  useEffect(() => {
+    const activeId = pathname.match(/^\/conversation\/([^/]+)/)?.[1] ?? null;
+    setActiveConversation(activeId);
+    if (activeId) {
+      clearCompletionUnread(activeId);
+      clearManualUnread(activeId);
+    }
+  }, [pathname, setActiveConversation, clearCompletionUnread, clearManualUnread]);
 
   const groupedHistory = useMemo(() => {
     return buildGroupedHistory(conversationListSync.conversations, t);

@@ -22,6 +22,8 @@
   "history": {
     "recents": "Recientes",
     "noHistory": "Sin historial de chats",
+    "searchChats": "Buscar chats",
+    "noMatches": "No hay chats coincidentes",
     "deleteTitle": "Eliminar",
     "deleteConfirm": "¿Estás seguro de que deseas eliminar este chat?",
     "confirmDelete": "Eliminar",

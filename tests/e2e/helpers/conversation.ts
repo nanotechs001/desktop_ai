@@ -290,13 +290,20 @@ export async function waitForSessionActive(page: Page, timeoutMs = 120_000): Pro
     .toBeTruthy();
 }
 
+/** Open the titlebar chat history panel (chat rows live there, not in the sidebar). */
+export async function openHistoryPanel(page: Page): Promise<void> {
+  await page
+    .getByRole('button', { name: /Search chats|搜索聊天/ })
+    .first()
+    .click();
+}
+
 /**
- * Delete a conversation through the UI: open the sidebar context menu,
- * click "Delete", then confirm in the modal dialog.
- *
- * Requires the conversation to be visible in the sidebar history.
+ * Delete a conversation through the UI: open the history panel, open the row's
+ * context menu, click "Delete", then confirm in the modal dialog.
  */
 export async function deleteConversation(page: Page, conversationId: string): Promise<boolean> {
+  await openHistoryPanel(page);
   const row = page.locator(`#c-${conversationId}`);
   await row.waitFor({ state: 'visible', timeout: 10_000 });
 

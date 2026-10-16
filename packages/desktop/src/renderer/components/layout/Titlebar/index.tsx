@@ -6,18 +6,18 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ipcBridge } from '@/common';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
-import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
+import HistoryPanel from './HistoryPanel';
 import MobileConversationBrand from './MobileConversationBrand';
 import WindowControls from '../WindowControls';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
-import { useNavigationHistory } from '@/renderer/hooks/context/NavigationHistoryContext';
 import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
 import { resolveFeedbackModule } from '@/renderer/services/feedback/resolveFeedbackModule';
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import MigrationInviteCapsule from './MigrationInviteCapsule';
+import { useChatNavHistory } from './useChatNavHistory';
 import './titlebar.css';
 
 interface TitlebarProps {
@@ -103,7 +103,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
   const [mobileCenterOffset, setMobileCenterOffset] = useState(0);
   const layout = useLayoutContext();
-  const navigationHistory = useNavigationHistory();
+  const chatNav = useChatNavHistory();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const { openFeedback } = useFeedback();
   const location = useLocation();
   const navigate = useNavigate();
@@ -152,16 +153,12 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })
     : t('common.collapse', { defaultValue: 'Collapse sidebar' });
-  // 前进/后退仅在桌面端显示（移动端空间有限，保留原有的返回到聊天按钮）
   // Show back/forward on desktop only; mobile keeps the existing back-to-chat button.
-  const showHistoryNav = Boolean(navigationHistory) && !layout?.isMobile;
+  const showHistoryNav = !layout?.isMobile;
   const historyBackTooltip = t('common.historyBack', { defaultValue: 'Back' });
   const historyForwardTooltip = t('common.forward', { defaultValue: 'Forward' });
-  // Conversation search moved from the sidebar into the titlebar toolbar
-  // (between the sidebar toggle and the back/forward nav). Desktop only —
-  // mobile keeps search inside the sidebar.
-  const showSearchButton = !layout?.isMobile;
-  const searchTooltip = t('conversation.historySearch.tooltip', { defaultValue: 'Search conversations' });
+  // The chat list lives in the history panel opened from here, on every platform.
+  const searchTooltip = t('conversation.history.searchChats');
 
   const handleSiderToggle = () => {
     if (!showSiderToggle || !layout?.setSiderCollapsed) return;
@@ -333,35 +330,29 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
             <SidebarIcon size={iconSize} strokeWidth={desktopIconStroke} />
           </button>
         )}
-        {showSearchButton && (
-          <ConversationSearchPopover
-            renderTrigger={({ onClick }) => (
-              <button
-                type='button'
-                className='app-titlebar__button'
-                onClick={onClick}
-                aria-label={searchTooltip}
-                title={searchTooltip}
-              >
-                <Search
-                  theme='outline'
-                  size={iconSize}
-                  fill='currentColor'
-                  strokeWidth={desktopIconStroke}
-                  className='block leading-none'
-                  style={{ lineHeight: 0 }}
-                />
-              </button>
-            )}
+        <button
+          type='button'
+          className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}
+          onClick={() => setHistoryOpen(true)}
+          aria-label={searchTooltip}
+          title={searchTooltip}
+        >
+          <Search
+            theme='outline'
+            size={iconSize}
+            fill='currentColor'
+            strokeWidth={desktopIconStroke}
+            className='block leading-none'
+            style={{ lineHeight: 0 }}
           />
-        )}
+        </button>
         {showHistoryNav && (
           <>
             <button
               type='button'
               className='app-titlebar__button app-titlebar__button--nav'
-              onClick={() => navigationHistory?.back()}
-              disabled={!navigationHistory?.canBack}
+              onClick={() => chatNav.back()}
+              disabled={!chatNav.canBack}
               aria-label={historyBackTooltip}
               title={historyBackTooltip}
             >
@@ -370,8 +361,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
             <button
               type='button'
               className='app-titlebar__button app-titlebar__button--nav'
-              onClick={() => navigationHistory?.forward()}
-              disabled={!navigationHistory?.canForward}
+              onClick={() => chatNav.forward()}
+              disabled={!chatNav.canForward}
               aria-label={historyForwardTooltip}
               title={historyForwardTooltip}
             >
@@ -435,6 +426,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         )}
         {showWindowControls && <WindowControls />}
       </div>
+      <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   );
 };
