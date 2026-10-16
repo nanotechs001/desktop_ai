@@ -226,5 +226,107 @@ describe('initBrowserSession', () => {
       expect(after).toHaveBeenCalledTimes(1);
       expect(consoleError).toHaveBeenCalledTimes(1);
     });
+
+    it('logs a rejecting async listener once and still runs the other listeners', async () => {
+      const { initBrowserSession, onBrowserContentsCreated } = await loadModule();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const failure = new Error('async boom');
+      const rejecting = vi.fn(async () => {
+        throw failure;
+      });
+      const after = vi.fn();
+      onBrowserContentsCreated(rejecting);
+      onBrowserContentsCreated(after);
+      initBrowserSession({ getMainWindow: () => null });
+
+      expect(() => getCreatedHandler()({}, makeContents('webview'))).not.toThrow();
+
+      expect(after).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(consoleError).toHaveBeenCalledTimes(1));
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('[BrowserSession]'), failure);
+    });
+
+    it('starts an async listener synchronously, before the first navigation can happen', async () => {
+      const { initBrowserSession, onBrowserContentsCreated } = await loadModule();
+      const steps: string[] = [];
+      onBrowserContentsCreated(async () => {
+        steps.push('sync part');
+        await Promise.resolve();
+        steps.push('after await');
+      });
+      initBrowserSession({ getMainWindow: () => null });
+
+      getCreatedHandler()({}, makeContents('webview'));
+
+      expect(steps).toEqual(['sync part']);
+      await vi.waitFor(() => expect(steps).toEqual(['sync part', 'after await']));
+    });
+
+    it('does not log a listener whose promise resolves', async () => {
+      const { initBrowserSession, onBrowserContentsCreated } = await loadModule();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const listener = vi.fn(async () => {});
+      onBrowserContentsCreated(listener);
+      initBrowserSession({ getMainWindow: () => null });
+
+      getCreatedHandler()({}, makeContents('webview'));
+      await Promise.resolve();
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(consoleError).not.toHaveBeenCalled();
+    });
+
+    it('runs a listener registered after initBrowserSession for later contents', async () => {
+      const { initBrowserSession, onBrowserContentsCreated } = await loadModule();
+      initBrowserSession({ getMainWindow: () => null });
+      const handler = getCreatedHandler();
+      const early = makeContents('webview');
+      handler({}, early);
+      const late = vi.fn();
+      onBrowserContentsCreated(late);
+
+      const later = makeContents('webview');
+      handler({}, later);
+
+      expect(late.mock.calls.map(([contents]) => contents)).toEqual([later]);
+    });
+
+    it('dispatches to a snapshot: changes made during dispatch apply from the next contents', async () => {
+      const { initBrowserSession, onBrowserContentsCreated } = await loadModule();
+      const added = vi.fn();
+      const removed = vi.fn();
+      // Registered first, so it runs before `removed` and changes the set mid-dispatch.
+      onBrowserContentsCreated(() => {
+        unsubscribeRemoved();
+        onBrowserContentsCreated(added);
+      });
+      const unsubscribeRemoved = onBrowserContentsCreated(removed);
+      initBrowserSession({ getMainWindow: () => null });
+      const handler = getCreatedHandler();
+
+      handler({}, makeContents('webview'));
+      expect(removed).toHaveBeenCalledTimes(1);
+      expect(added).not.toHaveBeenCalled();
+
+      handler({}, makeContents('webview'));
+      expect(removed).toHaveBeenCalledTimes(1);
+      expect(added).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares one slot when the same function is registered twice', async () => {
+      const { initBrowserSession, onBrowserContentsCreated } = await loadModule();
+      const listener = vi.fn();
+      onBrowserContentsCreated(listener);
+      const unsubscribe = onBrowserContentsCreated(listener);
+      initBrowserSession({ getMainWindow: () => null });
+      const handler = getCreatedHandler();
+
+      handler({}, makeContents('webview'));
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+      handler({}, makeContents('webview'));
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
   });
 });

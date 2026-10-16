@@ -10,7 +10,8 @@ import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgen
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
 
-type BrowserContentsListener = (contents: Electron.WebContents) => void;
+/** May be async: the dispatch does not await it, and a rejection is logged rather than thrown. */
+type BrowserContentsListener = (contents: Electron.WebContents) => void | Promise<void>;
 
 /** Requests whose client-hint headers get a "Google Chrome" brand. Mirrors `isGoogleHost`. */
 const GOOGLE_URL_FILTER = ['*://*.google.com/*', '*://google.com/*', '*://*.googleusercontent.com/*'];
@@ -20,6 +21,10 @@ const listeners = new Set<BrowserContentsListener>();
 let initialized = false;
 
 const getBrowserSession = (): Electron.Session => session.fromPartition(BROWSER_SESSION_PARTITION);
+
+const logListenerError = (error: unknown): void => {
+  console.error('[BrowserSession] onBrowserContentsCreated listener failed:', error);
+};
 
 /**
  * True for webviews and popup windows living in the in-app browser's session. The
@@ -34,7 +39,11 @@ export function isBrowserContents(contents: Electron.WebContents, mainWindow: El
 
 /**
  * Registers per-contents setup for the in-app browser (permissions, popups, shortcuts, …).
- * Listeners run for every browser webContents created after `initBrowserSession`.
+ * A listener runs for browser webContents created after it is registered; existing contents are
+ * not replayed, so register during startup, before the renderer loads. Do not rely on listener
+ * order. Registering the same function twice shares one slot. Dispatch is synchronous, so a
+ * listener's synchronous part runs before the contents' first navigation; a returned promise is
+ * not awaited, and its rejection is logged.
  * @returns a function that removes the listener
  */
 export function onBrowserContentsCreated(listener: BrowserContentsListener): () => void {
@@ -73,11 +82,13 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
 
   app.on('web-contents-created', (_event, contents) => {
     if (!isBrowserContents(contents, deps.getMainWindow())) return;
-    for (const listener of listeners) {
+    // Snapshot: registering or unsubscribing during dispatch only affects later contents.
+    for (const listener of Array.from(listeners)) {
       try {
-        listener(contents);
+        const result = listener(contents);
+        if (result instanceof Promise) result.catch(logListenerError);
       } catch (error) {
-        console.error('[BrowserSession] onBrowserContentsCreated listener failed:', error);
+        logListenerError(error);
       }
     }
   });
