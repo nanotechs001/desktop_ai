@@ -27,6 +27,51 @@ const POPUP_HEIGHT_RANGE = { min: 300, max: 1000 };
 /** Values of the `popup` feature that mean "off", per the HTML window features rules. */
 const POPUP_OFF_VALUES = new Set(['0', 'no', 'false']);
 
+const MAX_POPUPS_PER_OPENER = 2;
+const MAX_POPUPS_TOTAL = 5;
+const MAX_TABS_PER_OPENER = 3;
+const TAB_RATE_WINDOW_MS = 10_000;
+
+/**
+ * The popup blocker: at most 2 open popups per opening page and 5 in all, and at most 3 new tabs
+ * per opening page in any 10 s. Openers are webContents ids.
+ */
+export class OpenLimiter {
+  private popups = new Map<number, number>();
+  private tabOpens = new Map<number, number[]>();
+
+  canOpenPopup(openerId: number): boolean {
+    const total = [...this.popups.values()].reduce((sum, count) => sum + count, 0);
+    return (this.popups.get(openerId) ?? 0) < MAX_POPUPS_PER_OPENER && total < MAX_POPUPS_TOTAL;
+  }
+
+  /** Counts a popup for `openerId` until the returned release runs (extra calls are ignored). */
+  reservePopup(openerId: number): () => void {
+    this.popups.set(openerId, (this.popups.get(openerId) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const left = (this.popups.get(openerId) ?? 1) - 1;
+      if (left > 0) this.popups.set(openerId, left);
+      else this.popups.delete(openerId);
+    };
+  }
+
+  /** Records a tab open at `now` (ms); false, and not recorded, when the opener is over its rate. */
+  tryOpenTab(openerId: number, now: number): boolean {
+    const recent = (this.tabOpens.get(openerId) ?? []).filter((at) => now - at < TAB_RATE_WINDOW_MS);
+    if (recent.length >= MAX_TABS_PER_OPENER) {
+      this.tabOpens.set(openerId, recent);
+      return false;
+    }
+    this.tabOpens.set(openerId, [...recent, now]);
+    return true;
+  }
+}
+
+const sharedLimiter = new OpenLimiter();
+
 const clamp = (value: number, { min, max }: { min: number; max: number }): number =>
   Math.min(max, Math.max(min, value));
 
@@ -125,15 +170,28 @@ export function popupWindowOptions(
  */
 export function installWindowOpenHandler(
   contents: Electron.WebContents,
-  getParent: () => Electron.BrowserWindow | null
+  getParent: () => Electron.BrowserWindow | null,
+  limiter: OpenLimiter = sharedLimiter
 ): void {
+  const openerId = contents.id;
   contents.setWindowOpenHandler((details) => {
     const decision = classifyWindowOpen(details);
     if (decision.kind === 'tab') {
-      ipcBridge.browser.openTabRequested.emit({ url: decision.url, background: decision.background });
+      if (limiter.tryOpenTab(openerId, Date.now())) {
+        ipcBridge.browser.openTabRequested.emit({ url: decision.url, background: decision.background });
+      } else {
+        console.warn(`[BrowserSession] blocked a tab: too many opened by webContents ${openerId}`);
+      }
       return { action: 'deny' };
     }
     if (decision.kind === 'popup') {
+      if (!limiter.canOpenPopup(openerId)) {
+        console.warn(`[BrowserSession] blocked a popup: too many open from webContents ${openerId}`);
+        return { action: 'deny' };
+      }
+      // Reserved now, not in createWindow: a burst of window.open calls all reach this handler first.
+      // shortcut: a popup Electron never creates (opener torn down in between) keeps its slot until restart.
+      const release = limiter.reservePopup(openerId);
       const candidate = getParent();
       const parent = candidate && !candidate.isDestroyed() ? candidate : null;
       const workArea = (parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay()).workArea;
@@ -146,7 +204,9 @@ export function installWindowOpenHandler(
         // here; only the guest webContents is taken from them, so window.opener keeps working.
         createWindow: (pageOptions) => {
           const guestOptions: WithGuest = { ...options, webContents: (pageOptions as WithGuest).webContents };
-          return new BrowserWindow(guestOptions).webContents;
+          const popup = new BrowserWindow(guestOptions);
+          popup.on('closed', release);
+          return popup.webContents;
         },
       };
     }

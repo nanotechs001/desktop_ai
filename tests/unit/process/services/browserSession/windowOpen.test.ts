@@ -38,6 +38,7 @@ vi.mock('electron', () => ({
 }));
 
 import {
+  OpenLimiter,
   classifyWindowOpen,
   installWindowOpenHandler,
   popupWindowOptions,
@@ -247,11 +248,12 @@ describe('installWindowOpenHandler', () => {
   };
   type Handler = (details: { url: string; disposition: string; features: string }) => PopupResult;
 
-  const install = (parent: { isDestroyed: () => boolean } | null) => {
+  const install = (parent: { isDestroyed: () => boolean } | null, limiter = new OpenLimiter(), id = 1) => {
     const setWindowOpenHandler = vi.fn();
     installWindowOpenHandler(
-      { setWindowOpenHandler } as unknown as Electron.WebContents,
-      () => parent as unknown as Electron.BrowserWindow | null
+      { id, setWindowOpenHandler } as unknown as Electron.WebContents,
+      () => parent as unknown as Electron.BrowserWindow | null,
+      limiter
     );
     expect(setWindowOpenHandler).toHaveBeenCalledTimes(1);
     return setWindowOpenHandler.mock.calls[0][0] as Handler;
@@ -317,5 +319,93 @@ describe('installWindowOpenHandler', () => {
       action: 'deny',
     });
     expect(mocks.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('OpenLimiter', () => {
+  it('allows 2 open popups per opener; closing one frees a slot', () => {
+    const limiter = new OpenLimiter();
+    const release = limiter.reservePopup(1);
+    limiter.reservePopup(1);
+
+    expect(limiter.canOpenPopup(1)).toBe(false);
+    expect(limiter.canOpenPopup(2)).toBe(true);
+    release();
+    expect(limiter.canOpenPopup(1)).toBe(true);
+  });
+
+  it('allows 5 open popups in total across openers', () => {
+    const limiter = new OpenLimiter();
+    [1, 1, 2, 2, 3].forEach((opener) => limiter.reservePopup(opener));
+
+    expect(limiter.canOpenPopup(4)).toBe(false);
+  });
+
+  it('a release is idempotent', () => {
+    const limiter = new OpenLimiter();
+    const release = limiter.reservePopup(1);
+    limiter.reservePopup(1);
+    release();
+    release();
+
+    expect(limiter.canOpenPopup(1)).toBe(true);
+    limiter.reservePopup(1);
+    expect(limiter.canOpenPopup(1)).toBe(false);
+  });
+
+  it('allows 3 tab opens per opener in 10 s, then again once the window has passed', () => {
+    const limiter = new OpenLimiter();
+
+    expect([0, 1000, 2000].map((t) => limiter.tryOpenTab(1, t))).toEqual([true, true, true]);
+    expect(limiter.tryOpenTab(1, 9_999)).toBe(false);
+    expect(limiter.tryOpenTab(2, 9_999)).toBe(true);
+    expect(limiter.tryOpenTab(1, 10_000)).toBe(true);
+  });
+});
+
+describe('installWindowOpenHandler popup blocking', () => {
+  type Handler = (details: { url: string; disposition: string; features: string }) => {
+    action: string;
+    createWindow?: (options: Electron.BrowserWindowConstructorOptions) => Electron.WebContents;
+  };
+  const install = (limiter: OpenLimiter, id = 1) => {
+    const setWindowOpenHandler = vi.fn();
+    installWindowOpenHandler({ id, setWindowOpenHandler } as unknown as Electron.WebContents, () => null, limiter);
+    return setWindowOpenHandler.mock.calls[0][0] as Handler;
+  };
+  const popup = { url: 'https://a.test/', disposition: 'new-window', features: 'popup' };
+  const tab = { url: 'https://a.test/', disposition: 'foreground-tab', features: '' };
+
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  it('denies a third popup from the same page until one closes', () => {
+    const handler = install(new OpenLimiter());
+    const first = handler(popup);
+    first.createWindow?.({ webContents: { id: 10 } as unknown as Electron.WebContents });
+    handler(popup).createWindow?.({ webContents: { id: 11 } as unknown as Electron.WebContents });
+
+    expect(handler(popup)).toEqual({ action: 'deny' });
+    mocks.windows[0].handlers.get('closed')?.();
+    expect(handler(popup).action).toBe('allow');
+  });
+
+  it('a burst of window.open calls is capped before any window exists', () => {
+    const handler = install(new OpenLimiter());
+
+    const actions = [1, 2, 3, 4].map(() => handler(popup).action);
+
+    expect(actions).toEqual(['allow', 'allow', 'deny', 'deny']);
+  });
+
+  it('denies a fourth tab within 10 s and logs it', () => {
+    const handler = install(new OpenLimiter());
+
+    [1, 2, 3].forEach(() => handler(tab));
+    expect(handler(tab)).toEqual({ action: 'deny' });
+
+    expect(mocks.emit).toHaveBeenCalledTimes(3);
+    expect(console.warn).toHaveBeenCalled();
   });
 });
