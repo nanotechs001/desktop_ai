@@ -37,6 +37,7 @@ import './process/bridge/feedbackBridge';
 import { wasLaunchedAtLogin } from '@process/bridge/applicationBridge';
 import { onLanguageChanged } from './process/bridge/systemSettingsBridge';
 import { setInitialLanguage } from '@process/services/i18n';
+import { initBrowserSession } from '@process/services/browserSession/browserSession';
 import { setupApplicationMenu } from './process/utils/appMenu';
 import { startWebHost } from '@aionui/web-host';
 import { initializeZoomFactor, setupZoomForWindow } from './process/utils/zoom';
@@ -503,6 +504,8 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     },
   });
   console.log(`[AionUi] Main window created (id=${mainWindow.id})`);
+
+  initBrowserSession({ getMainWindow: () => mainWindow });
 
   scheduleStartupLogReport(mainWindow);
 
