@@ -128,6 +128,18 @@ describe('PendingConfirms', () => {
     expect(confirms.list()).toHaveLength(1);
   });
 
+  it('never remembers or auto-allows an opaque-origin frame', async () => {
+    const confirms = new PendingConfirms({ file });
+    const opaque = { ...ask, frameOrigin: null };
+    expect(allowKey(opaque)).toBeNull();
+    const first = confirms.request(opaque);
+    confirms.reply(confirms.list()[0].id, true, true);
+    expect(await first).toBe(true);
+    expect(loadAllowedOrigins(file).size).toBe(0);
+    void confirms.request(opaque);
+    expect(confirms.list()).toHaveLength(1);
+  });
+
   it('reads the allow file again when it changes, and ignores one over 64 KB', async () => {
     const confirms = new PendingConfirms({ file });
     void confirms.request(ask);

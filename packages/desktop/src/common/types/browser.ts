@@ -76,8 +76,11 @@ export type ConfirmRequest = {
   id: string;
   /** The tab's page origin, derived by main from the tab's committed url, never taken from the agent. */
   origin: string;
-  /** The origin of the frame the control sits in, looked up by main; equal to `origin` for the top frame. */
-  frameOrigin: string;
+  /**
+   * The origin of the frame the control sits in, looked up by main; equal to `origin` for the top frame. Null for an
+   * opaque-origin frame (sandboxed): it has no identity to remember, so it is asked about every time.
+   */
+  frameOrigin: string | null;
   /** The control's label as the page names it, sanitized and bounded. Untrusted text: show it as text only. */
   label: string;
   clientLabel: string;

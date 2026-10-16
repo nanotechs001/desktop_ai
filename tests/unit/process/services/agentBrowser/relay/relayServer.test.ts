@@ -581,7 +581,8 @@ describe('relay server: AionRelay methods', () => {
         frame: { id: 'TOP', url: 'https://shop.test/cart?x=1#y', securityOrigin: 'https://shop.test' },
         childFrames: [
           { frame: { id: 'PAY', url: 'https://pay.test/card', securityOrigin: 'https://pay.test' } },
-          { frame: { id: 'BLANK', url: 'about:blank', securityOrigin: 'null' } },
+          { frame: { id: 'SANDBOX', url: 'https://pay.test/sandboxed', securityOrigin: '://' } },
+          { frame: { id: 'SILENT', url: 'https://pay.test/silent' } },
         ],
       },
     };
@@ -629,9 +630,46 @@ describe('relay server: AionRelay methods', () => {
         origin: 'https://shop.test',
         frameOrigin: 'https://pay.test',
       });
-      // A frame the tree does not know, or one without a web origin, is a denial without asking.
+      // A frame the tree does not know, or one that reports no security origin, is a denial without asking.
       expect((await ask({ frameId: 'GONE' })).result).toEqual({ allow: false });
-      expect((await ask({ frameId: 'BLANK' })).result).toEqual({ allow: false });
+      expect((await ask({ frameId: 'SILENT' })).result).toEqual({ allow: false });
+      expect(requestConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('never lends a sandboxed frame the origin of its url: it is asked about as opaque', async () => {
+      const { ask } = await confirmTab();
+      requestConfirm.mockResolvedValue(true);
+      await ask({ frameId: 'SANDBOX' });
+      expect(requestConfirm.mock.calls[0][0]).toMatchObject({ origin: 'https://shop.test', frameOrigin: null });
+    });
+
+    it("cannot borrow another shared tab's origin through this client's session on a different tab", async () => {
+      const { client, ask, sessionId } = await confirmTab();
+      const shared = new FakeContents(50, 'https://bank.test/');
+      shared.debugger.handler = (method) =>
+        method === 'Page.getFrameTree'
+          ? { frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } } }
+          : {};
+      registry.track(shared);
+      registry.share(50, true);
+      const bankSession = await attach(client, 50);
+      // Each session works for its own tab, and for no other.
+      requestConfirm.mockResolvedValue(true);
+      await client.send('AionRelay.requestConfirm', {
+        webContentsId: 50,
+        label: 'Send',
+        sessionId: bankSession,
+        frameId: 'TOP',
+      });
+      expect(requestConfirm.mock.calls[0][0]).toMatchObject({ origin: 'https://bank.test' });
+      const crossed = await Promise.all([
+        ask({ sessionId: bankSession }),
+        client.send('AionRelay.requestConfirm', { webContentsId: 50, label: 'Send', sessionId, frameId: 'TOP' }),
+      ]);
+      expect(crossed.map((reply) => reply.error?.message)).toEqual([
+        expect.stringMatching(/Unknown sessionId/),
+        expect.stringMatching(/Unknown sessionId/),
+      ]);
       expect(requestConfirm).toHaveBeenCalledTimes(1);
     });
 

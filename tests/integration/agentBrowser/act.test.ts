@@ -124,7 +124,8 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(await evaluate(session, 'window.submits')).toEqual(['mail']);
     expect(asked).toEqual(['Send message', 'Send message']);
 
-    // A harmless form is not asked about.
+    // A harmless form is not asked about (once nothing risky keeps the focus: a targeted key reads it too).
+    await evaluate(session, 'document.activeElement.blur()');
     await act(contextFor(session, ask(false)).ctx, [{ op: 'press', key: 'Enter', target: row(obs, 'Query').id }]);
     expect(await evaluate(session, 'window.submits')).toEqual(['mail', 'find']);
     expect(asked).toHaveLength(2);
@@ -164,6 +165,7 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(await evaluate(session, 'window.deleted')).toBe(1);
 
     // A space typed into a text field activates nothing, so it is not asked about.
+    await evaluate(session, 'document.activeElement.blur()');
     const typed = await act(contextFor(session, ask(false)).ctx, [
       { op: 'press', key: 'Space', target: row(obs, 'To').id },
     ]);
@@ -237,6 +239,93 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(await clickPoint(denyFrame.ctx, 80, 55)).toMatchObject({ result: 'denied' });
     expect(inFrame).toContainEqual({ label: 'Publish', frameId: child.frameId });
     expect(await evaluate(child.sessionId, 'window.clicks')).toBe(0);
+  });
+
+  it('click_point asks about a div with a click handler and about a label for a risky control', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const centreOf = async (id: string) => {
+      const rect = (await evaluate(
+        session,
+        `(() => { const r = document.getElementById('${id}').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`
+      )) as [number, number];
+      return { x: rect[0], y: rect[1] };
+    };
+    const asked: string[] = [];
+    const deny = async (label: string) => {
+      asked.push(label);
+      return false;
+    };
+    const div = await centreOf('divdel');
+    expect(await clickPoint(contextFor(session, deny).ctx, div.x, div.y)).toMatchObject({ result: 'denied' });
+    expect(await evaluate(session, 'window.divDeleted')).toBe(0);
+    const label = await centreOf('unsub');
+    const labelAt = (await evaluate(
+      session,
+      `(() => { const r = document.querySelector('label[for=unsub]').getBoundingClientRect(); return [r.x + 2, r.y + 2]; })()`
+    )) as [number, number];
+    expect(label.x).toBeGreaterThan(0);
+    expect(await clickPoint(contextFor(session, deny).ctx, labelAt[0], labelAt[1])).toMatchObject({ result: 'denied' });
+    expect(await evaluate(session, 'document.getElementById("unsub").checked')).toBe(false);
+    expect(asked.map((l) => l.trim())).toEqual(['Delete', 'Unsubscribe']);
+
+    // Allowed, the click goes through.
+    expect(await clickPoint(contextFor(session).ctx, div.x, div.y)).toEqual({ result: 'done' });
+    expect(await evaluate(session, 'window.divDeleted')).toBe(1);
+  });
+
+  it('gates a drag that releases on a risky control, even from a handle inside it, and refuses click-sized drags', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const deny = contextFor(session, async (label) => {
+      asked.push(label);
+      return false;
+    });
+    const input = await inputSentDuring(async () => {
+      // Onto a Delete button.
+      expect((await drag(deny.ctx, row(obs, 'Card').id, row(obs, 'Delete account').id)).result).toBe('denied');
+      // From the draggable handle inside the Publish draft button onto the button itself.
+      const handle = obs.rows.find((r) => r.label === 'Publish draft' && r.role === 'draggable');
+      const button = obs.rows.find((r) => r.label === 'Publish draft' && r.role === 'button');
+      if (!handle || !button) throw new Error('no publish rows');
+      expect((await drag(deny.ctx, handle.id, button.id, 'after')).result).toBe('denied');
+    });
+    expect(input).toEqual([]);
+    expect(asked).toEqual(['Delete account', 'Publish draft']);
+    expect(await evaluate(session, 'window.pubClicks')).toBe(0);
+    expect(await evaluate(session, 'window.deleted')).toBe(0);
+
+    // A drag that ends where it began is a click: refused whatever the control says.
+    const click = await drag(contextFor(session).ctx, row(obs, 'Card').id, row(obs, 'Card').id);
+    expect(click).toMatchObject({ result: 'error', reason: expect.stringContaining('use act click') });
+  });
+
+  it('presses Enter on a target that cancels mousedown: the key goes to the control that still has focus', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    await evaluate(session, `document.getElementById('del').focus()`);
+    const asked: string[] = [];
+    const ctx = contextFor(session, async (label) => {
+      asked.push(label);
+      return false;
+    }).ctx;
+    const input = await inputSentDuring(() => act(ctx, [{ op: 'press', key: 'Enter', target: row(obs, 'Bold').id }]));
+    expect(input).toEqual([]);
+    expect(asked).toEqual(['Delete account']);
+    expect(await evaluate(session, 'window.deleted')).toBe(0);
+  });
+
+  it('asks for an image submit button that names its form with form=id from outside it', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const ctx = contextFor(session, async (label) => {
+      asked.push(label);
+      return false;
+    }).ctx;
+    await act(ctx, [{ op: 'press', key: 'Enter', target: row(obs, 'Image query').id }]);
+    expect(asked).toEqual(['Purchase']);
+    expect(await evaluate(session, 'window.submits')).toEqual([]);
   });
 
   it('a denied risky click sends no input and leaves the page alone', async () => {

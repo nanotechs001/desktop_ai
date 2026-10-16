@@ -17,7 +17,18 @@
     <input id="composer" type="text" aria-label="Send a message" />
     <form id="dlg"><input id="dtitle" type="text" aria-label="Dialog title" /></form>
     <div><button type="submit" form="dlg">Publish</button></div>
+    <div id="divdel" onclick="window.divDeleted++">Delete</div>
+    <label for="unsub">Unsubscribe</label><input id="unsub" type="checkbox" />
+    <div id="card" draggable="true">Card</div>
+    <button id="pub" type="button" style="width: 240px; height: 70px" onclick="window.pubClicks++">
+      <span id="handle" draggable="true">Publish draft</span>
+    </button>
+    <button id="bold" type="button" onmousedown="event.preventDefault()">Bold</button>
+    <form id="img"><input id="imgq" type="text" aria-label="Image query" /></form>
+    <input type="image" form="img" alt="Purchase" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
     <script>
+      window.divDeleted = 0;
+      window.pubClicks = 0;
       window.submits = [];
       window.deleted = 0;
       for (const form of document.forms) {

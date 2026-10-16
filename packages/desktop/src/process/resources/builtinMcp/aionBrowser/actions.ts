@@ -85,6 +85,8 @@ const NO_RESPONSE = 'the page did not respond (a dialog may be open)';
 /** Largest screenshot side, CSS px. */
 const MAX_SCREENSHOT_SIDE = 4096;
 const DRAG_STEPS = 5;
+/** A drag that moves less than this is a click (the page gets one on a release near the press). */
+const MIN_DRAG_PX = 4;
 /** How long a started HTML5 drag takes to show up as Input.dragIntercepted (spike: within 200 ms). */
 const DRAG_INTERCEPT_MS = 200;
 /** Where on the drop target each position lands, as a fraction of its height. */
@@ -373,22 +375,37 @@ async function focusLabels(ctx: ActionContext, t: Target | null, key: string): P
 }
 
 /** Everything a press would click or activate: the target's own click, and for Enter or Space the focused control. */
-const pressLabels = async (ctx: ActionContext, t: Target | null, key: string): Promise<Labeled[]> => [
-  ...(t ? [{ label: t.label, frame: t.frame }] : []),
-  ...(ACTIVATING_KEYS.has(key) ? await focusLabels(ctx, t, key) : []),
-];
+const pressLabels = async (ctx: ActionContext, t: Target | null, key: string): Promise<Labeled[]> => {
+  const activating = ACTIVATING_KEYS.has(key);
+  return [
+    ...(t ? [{ label: t.label, frame: t.frame }] : []),
+    ...(activating ? await focusLabels(ctx, t, key) : []),
+    // A target that cancels mousedown leaves the focus where it was, and the key goes there as well.
+    ...(activating && t ? await focusLabels(ctx, null, key) : []),
+  ];
+};
 
-/** The controls under a top-viewport point in every frame showing it (a cover in an outer page counts as well). */
+/**
+ * The controls under a top-viewport point in every frame showing it (a cover in an outer page counts as well). A
+ * frame whose element at the point is an iframe that no deeper reported frame covers cannot be read: `stale`.
+ */
 async function pointLabels(ctx: ActionContext, at: Point): Promise<Labeled[]> {
   const { frames } = await collectFramesReport(ctx.conn, ctx.sessionId);
   const here = frames.filter((frame) => inside(at, frame.clip));
   if (here.length === 0) throw new StepError('stale', 'the point is not on a frame observe can see');
   const found = await Promise.all(
     here.map(async (frame) => {
-      const labels = strings(
-        await checkIn(ctx, frame, POINT_LABELS, values(at.x - frame.offset.x, at.y - frame.offset.y))
-      );
-      if (!labels) throw new StepError('stale', CHECK_FAILED);
+      const v = (await checkIn(
+        ctx,
+        frame,
+        POINT_LABELS,
+        values(at.x - frame.offset.x, at.y - frame.offset.y)
+      )) as Record<string, unknown> | null;
+      const labels = strings(v?.labels);
+      if (!labels || typeof v?.framed !== 'boolean') throw new StepError('stale', CHECK_FAILED);
+      if (v.framed && !here.some((deeper) => deeper.owners.length > frame.owners.length)) {
+        throw new StepError('stale', 'the point is on a frame observe cannot see; observe again');
+      }
       return labels.map((label) => ({ label, frame }));
     })
   );
@@ -555,10 +572,25 @@ export async function drag(
   position: DragPosition = 'inside'
 ): Promise<Outcome> {
   const { outcome } = await attempt(async () => {
-    const from = await resolveTarget(ctx, fromId);
-    const to = await resolveTarget(ctx, toId);
-    const drop = { x: to.point.x, y: to.rect.y + to.rect.h * DROP_AT[position] };
-    if (!inside(drop, to.frame.clip)) throw new StepError('stale', 'the drop point is off-screen');
+    const plan = async () => {
+      const from = await resolveTarget(ctx, fromId);
+      const to = await resolveTarget(ctx, toId);
+      const drop = { x: to.point.x, y: to.rect.y + to.rect.h * DROP_AT[position] };
+      if (!inside(drop, to.frame.clip)) throw new StepError('stale', 'the drop point is off-screen');
+      if (Math.hypot(drop.x - from.point.x, drop.y - from.point.y) < MIN_DRAG_PX) {
+        throw new StepError('error', `a drag must move at least ${MIN_DRAG_PX} px; use act click for a click.`);
+      }
+      return { from, to, drop };
+    };
+    let { from, to, drop } = await plan();
+    // A release on a control after a press near it is a click on it (or on their common parent): same gate.
+    const asked = await pointLabels(ctx, drop);
+    if (await confirmRisky(ctx, asked)) {
+      ({ from, to, drop } = await plan());
+      if (signature(await pointLabels(ctx, drop)) !== signature(asked)) {
+        throw new StepError('stale', CHANGED_WHILE_ASKING);
+      }
+    }
     await dragBetween(ctx, from.point, drop);
     await reportSafely(ctx, { op: 'drag', label: `${targetLabel(from)} → ${targetLabel(to)}`, rect: rectOf(to) });
     await settle(ctx, to.frame);

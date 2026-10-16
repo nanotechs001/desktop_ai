@@ -96,15 +96,20 @@ export const ENTER_LABELS = `function (node, key) {
   if (form) {
     const submit = [...form.elements].find((x) => x.type === 'submit');
     if (submit) labels.push(...labelsOf(submit));
-    for (const image of form.querySelectorAll('input[type="image"]')) labels.push(...labelsOf(image));
+    const images = [...form.querySelectorAll('input[type="image"]')];
+    // An image button outside the form names it with form="id".
+    if (form.id) images.push(...document.querySelectorAll('input[type="image"][form="' + CSS.escape(form.id) + '"]'));
+    for (const image of new Set(images)) labels.push(...labelsOf(image));
   }
   return { ...none, labels };
 }`;
 
 /**
- * (x, y) → labels of the control under the frame-local point, for a click_point: the topmost element there
- * (through open shadow roots), then the nearest button, link, input or button/link/menuitem role up its ancestors
- * (through shadow hosts). Empty when the point is on no such control.
+ * (x, y) → `{labels, framed}` for the frame-local point, for a click_point or a drag's release. Walking up from the
+ * topmost element there (through open shadow roots and hosts) it takes the first control: observe's roles, links,
+ * buttons, fields, `label` and `summary` (a label also gives its control's text), or anything with a pointer
+ * cursor (a `div` with a click handler). On none it falls back to the hit element's own text. `framed`: the hit is
+ * an iframe element, so what is under the point is in another frame.
  */
 export const POINT_LABELS = `function (x, y) {
   ${LABELS_OF}
@@ -114,11 +119,18 @@ export const POINT_LABELS = `function (x, y) {
     if (!inner || inner === hit) break;
     hit = inner;
   }
-  const control = 'button,a,input,[role="button"],[role="link"],[role="menuitem"]';
-  for (let node = hit; node; node = node.parentNode || node.host) {
-    if (node.nodeType === 1 && node.matches(control)) return labelsOf(node);
+  if (!hit || hit === document.body || hit === document.documentElement) return { labels: [], framed: false };
+  if (hit.tagName === 'IFRAME' || hit.tagName === 'FRAME') return { labels: [], framed: true };
+  const roles = ['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'menuitemradio', 'option',
+    'gridcell', 'combobox', 'textbox', 'searchbox', 'spinbutton'];
+  const control = 'button,a,input,select,textarea,summary,label,' + roles.map((role) => '[role="' + role + '"]').join(',');
+  for (let node = hit; node && node !== document.body; node = node.parentNode || node.host) {
+    if (node.nodeType !== 1) continue;
+    if (node.matches(control) || getComputedStyle(node).cursor === 'pointer') {
+      return { labels: [...labelsOf(node), ...(node.control ? labelsOf(node.control) : [])], framed: false };
+    }
   }
-  return [];
+  return { labels: labelsOf(hit), framed: false };
 }`;
 
 /** (node, label) → true once the first enabled option of a native select with exactly that label is chosen. */

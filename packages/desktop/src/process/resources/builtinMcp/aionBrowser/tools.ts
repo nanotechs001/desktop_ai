@@ -158,7 +158,7 @@ const actInput = {
   stop_on_change: z.boolean().optional().describe('Stop once an action changes the page controls. Defaults to true.'),
 };
 
-const DRAG_DESCRIPTION = `${PANE_SENTENCE} Drag one observed control onto another, by ids from observe: HTML5 drag and drop (e.g. a builder panel widget into its preview iframe, also cross-origin) and pointer-based sortable lists. position: before, after or inside (default) the target. Returns done, stale (observe again), paused (the user took over) or error. ${UNTRUSTED_SENTENCE}`;
+const DRAG_DESCRIPTION = `${PANE_SENTENCE} Drag one observed control onto another, by ids from observe: HTML5 drag and drop (e.g. a builder panel widget into its preview iframe, also cross-origin) and pointer-based sortable lists. position: before, after or inside (default) the target. The drag must move at least 4 px (a shorter one is a click: use act). A release on a risky control (Publish, Send, Pay, Delete…) asks the user first. Returns done, stale (observe again), paused (the user took over), denied (the user refused: do not retry or work around it unless they ask) or error. ${UNTRUSTED_SENTENCE}`;
 
 const dragInput = {
   tab: z.string().optional().describe('A tab id from tabs. Defaults to the current tab.'),

@@ -36,12 +36,18 @@ const PromptBody: React.FC<{ request: ConfirmRequest }> = ({ request }) => {
   return (
     <div className='flex flex-col gap-16px'>
       <div>{t(`${KEY}.message`, { origin: request.origin })}</div>
-      {request.frameOrigin !== request.origin && <div>{t(`${KEY}.frame`, { origin: request.frameOrigin })}</div>}
+      {request.frameOrigin === null && <div>{t(`${KEY}.frameOpaque`)}</div>}
+      {request.frameOrigin !== null && request.frameOrigin !== request.origin && (
+        <div>{t(`${KEY}.frame`, { origin: request.frameOrigin })}</div>
+      )}
       {/* The label is the page's own text: shown as plain text, never as markup. */}
       <div className='break-all font-bold'>{request.label}</div>
-      <Checkbox checked={always} onChange={setAlways}>
-        {t(`${KEY}.always`)}
-      </Checkbox>
+      {/* A sandboxed frame has no origin to remember. */}
+      {request.frameOrigin !== null && (
+        <Checkbox checked={always} onChange={setAlways}>
+          {t(`${KEY}.always`)}
+        </Checkbox>
+      )}
       <div className='flex justify-end gap-8px'>
         <Button ref={deny} onClick={() => reply(request.id, false, false)}>
           {t(`${KEY}.deny`)}

@@ -120,6 +120,15 @@ describe('ConfirmPrompt', () => {
     expect(screen.getByText(`${KEY}.frame @ https://pay.test`)).toBeTruthy();
   });
 
+  it('says a sandboxed frame cannot be remembered, and offers no always-allow box for it', async () => {
+    await mount([request('a', { frameOrigin: null })]);
+    expect(screen.getByText(`${KEY}.frameOpaque`)).toBeTruthy();
+    expect(screen.queryByText(`${KEY}.always`)).toBeNull();
+    await armAllow();
+    fireEvent.click(screen.getByText(`${KEY}.allow`));
+    expect(mocks.replyConfirm).toHaveBeenCalledWith({ id: 'a', allow: true, alwaysForSite: false });
+  });
+
   it('Deny never asks to remember the site, even with the box checked', async () => {
     await mount([request('a')]);
     fireEvent.click(screen.getByText(`${KEY}.always`));

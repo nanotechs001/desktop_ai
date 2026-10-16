@@ -23,6 +23,8 @@ const snapshotValue = {
 };
 
 /** What ENTER_LABELS reports: the labels, and whether focus is on an iframe element / in this document. */
+/** What POINT_LABELS reports: the labels under the point, and whether the hit is an iframe element. */
+const pointReport = (labels: string[], framed = false) => ({ labels, framed });
 const focusReport = (labels: string[], framed = false, focused = true) => ({ labels, framed, focused });
 
 let relay: FakeRelay;
@@ -62,7 +64,7 @@ beforeEach(async () => {
   relay.on('Runtime.callFunctionOn', (params) => {
     const fn = String(params.functionDeclaration);
     if (fn === ENTER_LABELS) return { result: { type: 'object', value: focusReport([]) } };
-    if (fn === POINT_LABELS) return { result: { type: 'object', value: [] } };
+    if (fn === POINT_LABELS) return { result: { type: 'object', value: pointReport([]) } };
     return fn.includes('elementFromPoint')
       ? { result: { type: 'object', value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label: 'Save', role: 'button' } } }
       : { result: { type: 'undefined' } };
@@ -198,18 +200,20 @@ describe('confirm gate', () => {
    */
   const page = (
     label: string,
-    enter: string[] | ((call: number) => unknown) = [],
+    enter: string[] | ((call: number, node: unknown) => unknown) = [],
     point: string[] | (() => unknown) = []
   ) => {
     let calls = 0;
     relay.on('Runtime.callFunctionOn', (params): Reply => {
       const fn = String(params.functionDeclaration);
       if (fn === ENTER_LABELS) {
-        const value = typeof enter === 'function' ? enter(calls++) : focusReport(enter);
+        const node = (params.arguments as Array<{ value: unknown }>)[0].value;
+        const value = typeof enter === 'function' ? enter(calls++, node) : focusReport(enter);
         return { result: { type: 'object', value } };
       }
-      if (fn === POINT_LABELS)
-        return { result: { type: 'object', value: typeof point === 'function' ? point() : point } };
+      if (fn === POINT_LABELS) {
+        return { result: { type: 'object', value: typeof point === 'function' ? point() : pointReport(point) } };
+      }
       return fn.includes('elementFromPoint')
         ? { result: { type: 'object', value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label, role: 'button' } } }
         : { result: { type: 'undefined' } };
@@ -379,6 +383,56 @@ describe('confirm gate', () => {
     expect(label.length).toBeLessThanOrEqual(120);
   });
 
+  it('a targeted Enter also reads the real focus, which a target that cancels mousedown leaves alone', async () => {
+    const id = await openAndObserve();
+    page('Bold', (_call, node) => focusReport(node === null ? ['Delete repo'] : ['Bold']));
+    answerWith(false);
+    expect((await results([{ op: 'press', key: 'Enter', target: id }])).results[0].result).toBe('denied');
+    expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete repo', ...FRAME }]);
+    expect(inputRequests()).toEqual([]);
+  });
+
+  describe('drag', () => {
+    const dragOnto = async () =>
+      JSON.parse(textOf(await call('drag', { from: 'f0:3', to: 'f0:3', position: 'after' }))) as Record<string, string>;
+    beforeEach(async () => {
+      await openAndObserve();
+      relay.on('Input.setInterceptDrags', () => ({}));
+    });
+
+    it('refuses a drag shorter than 4 px as a click, without input', async () => {
+      const reply = JSON.parse(textOf(await call('drag', { from: 'f0:3', to: 'f0:3' }))) as Record<string, string>;
+      expect(reply).toMatchObject({ result: 'error', reason: expect.stringMatching(/use act click/) });
+      expect(inputRequests()).toEqual([]);
+    });
+
+    it('asks about a risky control under the release point, and sends nothing on Deny', async () => {
+      page('Save', [], ['Publish']);
+      answerWith(false);
+      expect(await dragOnto()).toMatchObject({ result: 'denied' });
+      expect(asked()).toEqual([{ webContentsId: 7, label: 'Publish', ...FRAME }]);
+      expect(inputRequests()).toEqual([]);
+      expect(relay.requests.some((r) => r.method === 'Input.setInterceptDrags')).toBe(false);
+    });
+
+    it('drags after Allow, and goes stale when the release point changed meanwhile', async () => {
+      answerWith(true);
+      page('Save', [], ['Publish']);
+      expect(await dragOnto()).toEqual({ result: 'done' });
+      let calls = 0;
+      page('Save', [], () => pointReport(calls++ === 0 ? ['Publish'] : ['Cancel']));
+      const before = inputRequests().length;
+      expect(await dragOnto()).toMatchObject({ result: 'stale' });
+      expect(inputRequests()).toHaveLength(before);
+    });
+
+    it('does not ask about a harmless release point', async () => {
+      page('Save', [], ['Cancel']);
+      expect(await dragOnto()).toEqual({ result: 'done' });
+      expect(asked()).toEqual([]);
+    });
+  });
+
   describe('click_point', () => {
     const clickAt = async () => JSON.parse(textOf(await call('click_point', { x: 5, y: 6 }))) as Record<string, string>;
     beforeEach(async () => {
@@ -398,6 +452,12 @@ describe('confirm gate', () => {
       expect(inputRequests()).toHaveLength(3);
     });
 
+    it('goes stale when the point is on an iframe element no reported frame covers', async () => {
+      page('Save', [], () => pointReport([], true));
+      expect(await clickAt()).toMatchObject({ result: 'stale', reason: expect.stringMatching(/cannot see/) });
+      expect(inputRequests()).toEqual([]);
+    });
+
     it('probes the frame-local point, and does not ask about a harmless control', async () => {
       page('Save', [], ['Search']);
       expect(await clickAt()).toEqual({ result: 'done' });
@@ -409,7 +469,7 @@ describe('confirm gate', () => {
     it('goes stale, with no input, when the control under the point changed after Allow or the probe fails', async () => {
       answerWith(true);
       let calls = 0;
-      page('Save', [], () => (calls++ === 0 ? ['Delete account'] : ['Cancel']));
+      page('Save', [], () => pointReport(calls++ === 0 ? ['Delete account'] : ['Cancel']));
       expect(await clickAt()).toMatchObject({ result: 'stale' });
       expect(inputRequests()).toEqual([]);
 
@@ -417,7 +477,7 @@ describe('confirm gate', () => {
         throw new Error('Execution context was destroyed');
       });
       expect(await clickAt()).toMatchObject({ result: 'stale' });
-      page('Save', [], () => 'not a list');
+      page('Save', [], () => ({ labels: 'not a list', framed: false }));
       expect(await clickAt()).toMatchObject({ result: 'stale' });
       expect(inputRequests()).toEqual([]);
     });
@@ -438,7 +498,10 @@ describe('drag tool', () => {
       throw new Error('drop failed');
     });
 
-    const reply = JSON.parse(textOf(await call('drag', { from: id, to: id }))) as Record<string, unknown>;
+    const reply = JSON.parse(textOf(await call('drag', { from: id, to: id, position: 'after' }))) as Record<
+      string,
+      unknown
+    >;
 
     expect(reply).toEqual({ result: 'error', reason: 'drop failed' });
     const cleanup = relay.requests

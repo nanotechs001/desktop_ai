@@ -40,8 +40,10 @@ const MAX_ALLOWED_ENTRIES = 500;
  * What "Always allow" remembers: the page origin, and, for a control in a frame of another origin, the pair
  * `page|frame`, so a site allowed at the top never covers a risky control inside an embedded cross-origin frame.
  */
-export const allowKey = ({ origin, frameOrigin }: Pick<ConfirmRequest, 'origin' | 'frameOrigin'>): string =>
-  origin === frameOrigin ? origin : `${origin}|${frameOrigin}`;
+export const allowKey = ({ origin, frameOrigin }: Pick<ConfirmRequest, 'origin' | 'frameOrigin'>): string | null => {
+  if (frameOrigin === null) return null; // an opaque origin is nobody in particular
+  return origin === frameOrigin ? origin : `${origin}|${frameOrigin}`;
+};
 
 /** Origin keys the user chose "Always allow" for; empty when the file is missing, oversized or corrupt. */
 export function loadAllowedOrigins(file: string): ReadonlySet<string> {
@@ -97,7 +99,8 @@ export class PendingConfirms {
    */
   request(req: Omit<ConfirmRequest, 'id'>, timeoutMs = CONFIRM_TIMEOUT_MS, signal?: AbortSignal): Promise<boolean> {
     if (signal?.aborted) return Promise.resolve(false);
-    if (this.allowedOrigins().has(allowKey(req))) return Promise.resolve(true);
+    const key = allowKey(req);
+    if (key !== null && this.allowedOrigins().has(key)) return Promise.resolve(true);
     return new Promise((resolve) => {
       const id = randomUUID();
       const deny = (): void => void this.reply(id, false, false);
@@ -118,7 +121,8 @@ export class PendingConfirms {
     if (!entry) return false;
     entry.release();
     this.open.delete(id);
-    if (allow && alwaysForSite) this.remember(allowKey(entry.request));
+    const key = allowKey(entry.request);
+    if (allow && alwaysForSite && key !== null) this.remember(key);
     this.notify();
     entry.resolve(allow);
     return true;

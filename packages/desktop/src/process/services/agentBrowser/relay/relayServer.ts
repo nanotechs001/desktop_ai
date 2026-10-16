@@ -236,8 +236,11 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return {};
   };
 
-  /** The origin of frame `frameId` in the tab session's own frame tree; null when it is not found or not a web page. */
-  const frameOriginOf = async (relaySessionId: string, frameId: string): Promise<string | null> => {
+  /**
+   * The origin of frame `frameId` in the tab session's own frame tree: its security origin (never its url, which a
+   * sandboxed frame does not own), `'opaque'` for a sandboxed frame, null when it is not found or says nothing.
+   */
+  const frameOriginOf = async (relaySessionId: string, frameId: string): Promise<string | 'opaque' | null> => {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('Page.getFrameTree timed out')), FRAME_LOOKUP_TIMEOUT_MS);
@@ -253,8 +256,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       };
       const frame = find(asParams(reply)?.frameTree);
       if (!frame) return null;
-      const secure = typeof frame.securityOrigin === 'string' ? webOriginOf(frame.securityOrigin) : null;
-      return secure ?? (typeof frame.url === 'string' ? webOriginOf(frame.url) : null);
+      if (typeof frame.securityOrigin !== 'string') return null;
+      return webOriginOf(frame.securityOrigin) ?? 'opaque';
     } finally {
       clearTimeout(timer);
     }
@@ -299,7 +302,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       if (!origin || !frameOrigin) return { allow: false };
       const request = {
         origin,
-        frameOrigin,
+        frameOrigin: frameOrigin === 'opaque' ? null : frameOrigin,
         label: sanitizePageText(label, MAX_CONFIRM_LABEL_LENGTH),
         clientLabel: conn.client.label,
       };
