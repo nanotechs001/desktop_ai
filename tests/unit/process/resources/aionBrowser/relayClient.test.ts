@@ -108,6 +108,19 @@ describe('RelayClient', () => {
     expect(relay.callsTo('Target.attachToTarget')).toHaveLength(2);
   });
 
+  it('re-attaches after the relay detaches a tab session (stop sharing, crash), keeping the current tab', async () => {
+    const client = newClient();
+    expect(await client.session('wc-7')).toBe('s-wc-7');
+    client.currentTab = 'wc-7';
+    relay.emit('Target.detachedFromTarget', { sessionId: 'other', targetId: 'wc-9' }, 's-wc-7'); // a child session
+    relay.emit('Target.detachedFromTarget', { sessionId: 's-wc-7', targetId: 'wc-7' });
+    await vi.waitFor(async () => {
+      await client.session('wc-7');
+      expect(relay.callsTo('Target.attachToTarget')).toHaveLength(2);
+    });
+    expect(client.currentTab).toBe('wc-7');
+  });
+
   it('backs off between failed connects, capped at 5 seconds', async () => {
     expect([1, 2, 3, 4, 5, 6, 20].map(retryDelayMs)).toEqual([250, 500, 1000, 2000, 4000, 5000, 5000]);
 

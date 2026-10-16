@@ -170,6 +170,98 @@ describe('act tool', () => {
     expect((await call('observe', {})).isError).toBeFalsy();
   }, 15_000);
 
+  describe('in-page calls that never answer end the step and leave the tab usable', () => {
+    const hang = () => new Promise(() => {});
+    const resolved = (extra: Record<string, unknown> = {}) => ({
+      result: {
+        type: 'object',
+        value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label: 'Save', role: 'button', ...extra },
+      },
+    });
+    const observeWorks = async () => expect((await call('observe', {})).isError).toBeFalsy();
+
+    it('the target check', async () => {
+      const id = await openAndObserve();
+      relay.on('Runtime.callFunctionOn', (params) => (params.functionDeclaration === RESOLVE_TARGET ? hang() : {}));
+      const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'click', target: id }] }))) as {
+        results: Array<{ result: string }>;
+      };
+      expect(reply.results[0].result).toBe('stale');
+      expect(inputRequests()).toEqual([]);
+      relay.on('Runtime.callFunctionOn', () => resolved());
+      await observeWorks();
+    }, 10_000);
+
+    it('the cover check in an outer document', async () => {
+      relay.on('Page.getFrameTree', () => ({
+        frameTree: {
+          frame: { id: 'F1', loaderId: 'L1', url: 'https://app.example/', securityOrigin: 'https://app.example' },
+          childFrames: [{ frame: { id: 'F2', loaderId: 'L2', url: 'https://app.example/builder' } }],
+        },
+      }));
+      relay.on('DOM.getFrameOwner', () => ({ backendNodeId: 5 }));
+      relay.on('DOM.getBoxModel', () => ({ model: { content: [0, 0, 1200, 0, 1200, 900, 0, 900] } }));
+      relay.on('DOM.describeNode', () => ({ node: { attributes: ['title', 'GHL builder'] } }));
+      relay.on('Page.createIsolatedWorld', (params) => ({ executionContextId: params.frameId === 'F1' ? 41 : 42 }));
+      relay.on('Runtime.callFunctionOn', (params) =>
+        params.functionDeclaration === RESOLVE_TARGET
+          ? resolved()
+          : { result: { type: 'object', value: pointReport([]) } }
+      );
+      await call('tabs', { action: 'open' });
+      const id = /\[(f\d+:3)\][^\n]*· in: "GHL builder"/.exec(textOf(await call('observe', {})))?.[1];
+      expect(id).toBeDefined();
+      relay.on('DOM.resolveNode', hang);
+      const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'click', target: id }] }))) as {
+        results: Array<{ result: string }>;
+      };
+      expect(reply.results[0].result).toBe('stale');
+      expect(inputRequests()).toEqual([]);
+      await observeWorks();
+    }, 10_000);
+
+    it('choosing a native select option', async () => {
+      const id = await openAndObserve();
+      relay.on('Runtime.callFunctionOn', (params) => {
+        if (params.functionDeclaration === SELECT_OPTION) return hang();
+        if (params.functionDeclaration === RESOLVE_TARGET) return resolved({ role: 'combobox', options: ['A', 'B'] });
+        return { result: { type: 'object', value: pointReport([]) } };
+      });
+      const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'select', target: id, text: 'B' }] }))) as {
+        results: Array<{ result: string }>;
+      };
+      expect(reply.results[0].result).toBe('stale');
+      await observeWorks();
+    }, 10_000);
+
+    it('the viewport read of click_point says the page did not respond', async () => {
+      await call('tabs', { action: 'open' });
+      const metrics = relay.handlers.get('Page.getLayoutMetrics');
+      relay.on('Page.getLayoutMetrics', () => {
+        relay.on('Page.getLayoutMetrics', metrics as NonNullable<typeof metrics>);
+        return hang();
+      });
+      const reply = await call('click_point', { x: 5, y: 6 });
+      expect(reply.isError).toBe(true);
+      expect(textOf(reply)).toBe('the page did not respond (a dialog may be open)');
+      expect(inputRequests()).toEqual([]);
+      await observeWorks();
+    }, 10_000);
+  });
+
+  it('releases the button when a click fails after the press', async () => {
+    const id = await openAndObserve();
+    relay.on('Input.dispatchMouseEvent', (params) => {
+      if (params.type === 'mousePressed') throw new Error('press failed');
+      return {};
+    });
+    const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'click', target: id }] }))) as {
+      results: unknown[];
+    };
+    expect(reply.results).toEqual([{ op: 'click', target: id, result: 'error', reason: 'press failed' }]);
+    expect(inputRequests().map((r) => r.params.type)).toEqual(['mouseMoved', 'mousePressed', 'mouseReleased']);
+  });
+
   it('re-reads the top frame after a press without target', async () => {
     const id = await openAndObserve();
     relay.on('Input.dispatchKeyEvent', () => ({}));
@@ -611,6 +703,20 @@ describe('fallback tools', () => {
     const reply = await call('screenshot', {});
     expect(reply.content).toEqual([{ type: 'image', data: '/9j/AAAA', mimeType: 'image/jpeg' }]);
     expect(relay.callsTo('Page.captureScreenshot')[0]).toMatchObject({ format: 'jpeg' });
+  });
+
+  it('click_point on a tab the user took over returns paused with the note, not an error', async () => {
+    await call('tabs', { action: 'open' });
+    relay.on('Input.dispatchMouseEvent', () => {
+      throw new Error(PAUSED);
+    });
+    const reply = await call('click_point', { x: 5, y: 6 });
+    expect(reply.isError).toBeFalsy();
+    expect(JSON.parse(textOf(reply))).toEqual({
+      result: 'paused',
+      reason: 'The user took over this tab; wait for them to resume, then observe again.',
+    });
+    expect(inputRequests()).toHaveLength(1);
   });
 
   it('click_point refuses non-finite and out-of-viewport points without input', async () => {

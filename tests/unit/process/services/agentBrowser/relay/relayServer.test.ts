@@ -185,9 +185,9 @@ describe('relay server: transport security', () => {
     expect(await rawUpgradeStatus(handle, '/?client=ok')).toContain('101');
   });
 
-  it('accepts at most 8 connections', async () => {
+  it('accepts at most 32 connections', async () => {
     const handle = await start();
-    await Promise.all(Array.from({ length: 8 }, (_, i) => connect(handle, `c${i}`)));
+    await Promise.all(Array.from({ length: 32 }, (_, i) => connect(handle, `c${i}`)));
     expect(await refusedStatus(handle.url, bearer(handle.token))).toBe(503);
   });
 

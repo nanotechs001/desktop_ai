@@ -29,7 +29,7 @@ export type RelayLimits = {
 };
 
 export const DEFAULT_RELAY_LIMITS: RelayLimits = {
-  maxConnections: 8,
+  maxConnections: 32,
   maxSessionsPerClient: 32,
   maxInFlightPerSocket: 16,
   maxQueuedPerSocket: 256,

@@ -10,9 +10,10 @@ import path from 'node:path';
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { showNotification } from '@process/bridge/notificationBridge';
 import i18n from '@process/services/i18n';
-import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import type { ClaudeLauncherDeps } from './claudeLauncher';
 
+/** The fields read here from `/api/agents/management` rows (the renderer's ManagedAgent). */
+type ManagedAgentRow = { id: string; backend?: string; agent_source?: string };
 type AgentOverrides = { command_override?: string; env_override: { name: string; value: string }[] };
 
 const overridesUrl = (id: string): string => `/api/agents/${encodeURIComponent(id)}/overrides`;
@@ -21,14 +22,14 @@ const overridesUrl = (id: string): string => `/api/agents/${encodeURIComponent(i
 export const claudeLauncherDeps: ClaudeLauncherDeps = {
   homeDir: os.homedir(),
   async listAgents() {
-    const agents = await httpRequest<ManagedAgent[]>('GET', '/api/agents/management');
+    const agents = await httpRequest<ManagedAgentRow[]>('GET', '/api/agents/management');
     return (agents ?? []).map((a) => ({ id: a.id, backend: a.backend ?? '', source: a.agent_source }));
   },
   getOverrides: (id) => httpRequest<AgentOverrides>('GET', overridesUrl(id)),
   async setOverride(id, cmd) {
     const current = await httpRequest<AgentOverrides>('GET', overridesUrl(id));
     // PUT replaces the whole override, so carry the user's env entries over.
-    await httpRequest<ManagedAgent>('PUT', overridesUrl(id), {
+    await httpRequest<unknown>('PUT', overridesUrl(id), {
       command_override: cmd,
       env_override: current.env_override ?? [],
     });

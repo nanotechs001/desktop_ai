@@ -1000,9 +1000,30 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
       if (prev != null && prev === options?.carryFromScope && scopeKey != null) {
-        // Same conversation, new scope key: keep the live tabs instead of swapping them out.
+        // Same conversation, new scope key: merge the live tabs into the project's saved ones, never over them.
         currentScopeRef.current = scopeKey;
-        persistScopeState(scopeKey, { isOpen, tabs, activeTabId, userClosed: userClosedRef.current });
+        const saved = loadScopeState(scopeKey);
+        const hasSaved = saved !== EMPTY_SCOPE_STATE; // loadScopeState returns it exactly when nothing is stored
+        // The untouched blank browser tab only exists because the workspace scope was empty.
+        const isFiller = (tab: PreviewTab) =>
+          saved.tabs.length > 0 && tab.content_type === 'browser' && tab.content === BROWSER_BLANK_URL;
+        const liveTabs = tabs.filter(
+          (tab) =>
+            !isFiller(tab) &&
+            !saved.tabs.some((savedTab) => savedTab.id === tab.id) &&
+            !findPreviewTabInList(saved.tabs, tab.content_type, tab.content, tab.metadata)
+        );
+        const merged = [...saved.tabs, ...liveTabs];
+        const nextActive = merged.some((tab) => tab.id === activeTabId)
+          ? activeTabId
+          : (saved.activeTabId ?? merged[0]?.id ?? null);
+        const userClosed = hasSaved ? saved.userClosed === true : userClosedRef.current;
+        setTabs(merged);
+        setActiveTabId(nextActive);
+        activeTabIdRef.current = nextActive;
+        tabsRef.current = merged;
+        userClosedRef.current = userClosed;
+        persistScopeState(scopeKey, { isOpen, tabs: merged, activeTabId: nextActive, userClosed });
         reopenUnlessUserClosed();
         return;
       }
@@ -1040,7 +1061,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
     },
-    [isOpen, tabs, activeTabId, openBrowserTab]
+    [isOpen, tabs, activeTabId, openBrowserTab, findPreviewTabInList]
   );
 
   const closeTab = useCallback(

@@ -210,6 +210,53 @@ describe('conversation scopes open the browser pane by default', () => {
     expect(storedScope('proj-1').tabs).toHaveLength(2);
   });
 
+  it("keeps the project's saved tabs when the workspace scope carried only the auto-opened blank tab", () => {
+    localStorage.setItem(
+      previewScopeStorageKey('proj-1'),
+      JSON.stringify({
+        isOpen: true,
+        activeTabId: 'b',
+        tabs: [
+          { id: 'a', title: 'a.md', content: '# a', content_type: 'markdown', metadata: { title: 'a.md' } },
+          { id: 'b', title: 'b.md', content: '# b', content_type: 'markdown', metadata: { title: 'b.md' } },
+        ],
+      })
+    );
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    expect(ctx.tabs).toHaveLength(1); // the blank browser tab
+
+    act(() => ctx.closePreviewIfScopeChanged('proj-1', { ...OPEN_BROWSER, carryFromScope: '/ws/a' }));
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(['a', 'b']);
+    expect(ctx.activeTabId).toBe('b');
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedScope('proj-1').tabs.map((tab: { id: string }) => tab.id)).toEqual(['a', 'b']);
+  });
+
+  it("adds live tabs after the project's saved tabs on the carry, keeping the live active tab", () => {
+    localStorage.setItem(
+      previewScopeStorageKey('proj-1'),
+      JSON.stringify({
+        isOpen: true,
+        activeTabId: 'a',
+        userClosed: false,
+        tabs: [{ id: 'a', title: 'a.md', content: '# a', content_type: 'markdown', metadata: { title: 'a.md' } }],
+      })
+    );
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.openPreview('# doc', 'markdown', { title: 'Doc' }));
+    const docId = ctx.activeTabId;
+
+    act(() => ctx.closePreviewIfScopeChanged('proj-1', { ...OPEN_BROWSER, carryFromScope: '/ws/a' }));
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(['a', docId]);
+    expect(ctx.activeTabId).toBe(docId);
+  });
+
   it('carries a user close across the workspace to project switch', () => {
     mount();
     enterScope('/ws/a', OPEN_BROWSER);

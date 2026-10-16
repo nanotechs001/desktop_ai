@@ -101,6 +101,8 @@ export class RelayClient {
   private failures = 0;
   private retryAt = 0;
   private sessions = new Map<string, Promise<string>>();
+  /** Tab -> its attached session id, to match a relay detach to the cached tab. */
+  private sessionIds = new Map<string, string>();
 
   /**
    * @param env Source of AION_BROWSER_RELAY_URL / AION_BROWSER_RELAY_TOKEN.
@@ -162,6 +164,7 @@ export class RelayClient {
         if (typeof sessionId !== 'string') throw new Error('The AionUi browser returned no session id');
         // Keeps rAF, focus and menus working in a tab the user is not looking at (spec §4 Observation step 1).
         await conn.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
+        if (this.sessions.get(targetId) === attach) this.sessionIds.set(targetId, sessionId);
         return sessionId;
       });
     this.sessions.set(targetId, attach);
@@ -216,8 +219,14 @@ export class RelayClient {
   }
 
   private forgetTab(targetId: string): void {
-    this.sessions.delete(targetId);
+    this.forgetSession(targetId);
     if (this.currentTab === targetId) this.currentTab = null;
+  }
+
+  /** Drops a tab's cached session so the next call attaches afresh; the tab itself stays usable. */
+  private forgetSession(targetId: string): void {
+    this.sessions.delete(targetId);
+    this.sessionIds.delete(targetId);
   }
 
   private ensureConnected(): Promise<CdpConnection> {
@@ -251,10 +260,16 @@ export class RelayClient {
     conn.on('Target.targetDestroyed', ({ targetId }) => {
       if (typeof targetId === 'string') this.forgetTab(targetId);
     });
+    // A top-level detach (no parent session): the relay ended a tab session (stop sharing, crash, reload).
+    conn.on('Target.detachedFromTarget', ({ sessionId }, parent) => {
+      if (parent !== undefined || typeof sessionId !== 'string') return;
+      for (const [targetId, id] of this.sessionIds) if (id === sessionId) this.forgetSession(targetId);
+    });
     conn.onClose(() => {
       if (this.conn !== conn) return;
       this.conn = null;
       this.sessions = new Map();
+      this.sessionIds = new Map();
       this.currentTab = null;
     });
     this.conn = conn;

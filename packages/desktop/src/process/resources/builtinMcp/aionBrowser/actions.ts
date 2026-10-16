@@ -138,10 +138,15 @@ const isNumber = (value: unknown): value is number => typeof value === 'number' 
  * Sends a page-session command that may hang while the page is blocked (Input.*, captureScreenshot): after
  * {@link COMMAND_TIMEOUT_MS} it fails the step with {@link NO_RESPONSE}. The command is never retried.
  */
-const sendBounded = <T>(ctx: ActionContext, method: string, params: Record<string, unknown>): Promise<T> => {
+const sendBounded = <T>(
+  ctx: ActionContext,
+  method: string,
+  params: Record<string, unknown>,
+  ms = COMMAND_TIMEOUT_MS
+): Promise<T> => {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new StepError('error', NO_RESPONSE)), COMMAND_TIMEOUT_MS);
+    timer = setTimeout(() => reject(new StepError('error', NO_RESPONSE)), ms);
   });
   return Promise.race([ctx.conn.send<T>(method, params, ctx.sessionId), timeout]).finally(() => clearTimeout(timer));
 };
@@ -206,9 +211,11 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   const frame = frames.find((f) => f.frameKey === match[1]);
   if (!frame) throw new StepError('stale', 'its frame changed or is off-screen');
   const node = Number(match[2]);
-  const value = await callIn(ctx.conn, frame, RESOLVE_TARGET, values(node, baseline.pageKey, guard, hitTest)).catch(
-    staleUnlessPaused
-  );
+  const value = await withTimeout(
+    callIn(ctx.conn, frame, RESOLVE_TARGET, values(node, baseline.pageKey, guard, hitTest)),
+    FRAME_TIMEOUT_MS,
+    'The target check'
+  ).catch(staleUnlessPaused);
   const found = parseResolved(value);
   if (typeof found === 'string') throw new StepError('stale', found);
   const rect = { ...found.rect, x: found.rect.x + frame.offset.x, y: found.rect.y + frame.offset.y };
@@ -233,7 +240,7 @@ async function checkOwners(ctx: ActionContext, frames: FrameHandle[], frame: Fra
   for (const owner of frame.owners) {
     const root = frames.find((f) => f.sessionId === owner.sessionId && f.frameId === owner.rootFrameId);
     if (!root) throw new StepError('stale', 'its frame changed or is off-screen');
-    const shown = await (async () => {
+    const check = (async () => {
       const { backendNodeId } = await ctx.conn.send<{ backendNodeId: number }>(
         'DOM.getFrameOwner',
         { frameId: owner.frameId },
@@ -247,7 +254,8 @@ async function checkOwners(ctx: ActionContext, frames: FrameHandle[], frame: Fra
       if (!object.objectId) return false;
       const at = { x: point.x - root.offset.x, y: point.y - root.offset.y };
       return callIn(ctx.conn, root, OWNER_HIT, [{ objectId: object.objectId }, ...values(at.x, at.y)]);
-    })().catch(staleUnlessPaused);
+    })();
+    const shown = await withTimeout(check, FRAME_TIMEOUT_MS, 'The cover check').catch(staleUnlessPaused);
     if (shown !== true) throw new StepError('stale', 'the target is covered by another element');
   }
 }
@@ -257,8 +265,15 @@ const mouse = (ctx: ActionContext, type: string, at: Point, extra: Record<string
 
 const click = async (ctx: ActionContext, at: Point): Promise<void> => {
   await mouse(ctx, 'mouseMoved', at);
-  await mouse(ctx, 'mousePressed', at, LEFT);
-  await mouse(ctx, 'mouseReleased', at, LEFT);
+  let released = false;
+  try {
+    await mouse(ctx, 'mousePressed', at, LEFT); // a press that fails or times out may still have landed
+    await mouse(ctx, 'mouseReleased', at, LEFT);
+    released = true;
+  } finally {
+    // Best effort: a button left down would break the user's own clicks; the first error is the one thrown.
+    if (!released) await mouse(ctx, 'mouseReleased', at, LEFT).catch((): void => undefined);
+  }
 };
 
 const pressKey = async (ctx: ActionContext, spec: KeySpec, extra: Record<string, unknown> = {}): Promise<void> => {
@@ -489,7 +504,12 @@ async function selectOption(ctx: ActionContext, first: Target, text: string): Pr
     if (signature(labelsFor(t)) !== signature(asked)) throw new StepError('stale', CHANGED_WHILE_ASKING);
   }
   // The page picks the option by its full label again, so a list that changed since the check is never misread.
-  if ((await callIn(ctx.conn, t.frame, SELECT_OPTION, values(t.node, optionFor(t, text)))) !== true) {
+  const chose = await withTimeout(
+    callIn(ctx.conn, t.frame, SELECT_OPTION, values(t.node, optionFor(t, text))),
+    FRAME_TIMEOUT_MS,
+    'Choosing the option'
+  ).catch(staleUnlessPaused);
+  if (chose !== true) {
     throw new StepError('stale', 'the dropdown changed since observe');
   }
 }
@@ -689,7 +709,7 @@ type LayoutMetrics = {
 };
 
 const layoutMetrics = (ctx: ActionContext): Promise<LayoutMetrics> =>
-  ctx.conn.send<LayoutMetrics>('Page.getLayoutMetrics', {}, ctx.sessionId);
+  sendBounded<LayoutMetrics>(ctx, 'Page.getLayoutMetrics', {}, FRAME_TIMEOUT_MS);
 
 /**
  * A JPEG (base64) of the tab's visible area in CSS px, or of one observed control. Vision fallback only.
@@ -740,11 +760,12 @@ export async function clickPoint(ctx: ActionContext, x: number, y: number): Prom
         throw new StepError('stale', CHANGED_WHILE_ASKING);
       }
     }
+    await click(ctx, { x, y });
   } catch (error) {
     if (error instanceof StepError) return { result: error.result, reason: error.message };
+    if (isPausedRefusal(error)) return { result: 'paused', reason: stopNote({ result: 'paused' }, 0) };
     throw error;
   }
-  await click(ctx, { x, y });
   await reportSafely(ctx, {
     op: 'click_point',
     label: `(${Math.round(x)}, ${Math.round(y)})`,

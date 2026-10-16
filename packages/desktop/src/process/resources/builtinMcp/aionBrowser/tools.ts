@@ -37,6 +37,7 @@ const NOT_AVAILABLE = 'AionUi browser is not available in this session. Start or
 const NO_PANE = 'Open a conversation in AionUi so the browser pane is available, then retry.';
 const CONNECTION_LOST = 'The connection to the AionUi browser was lost. Retry the call; it will reconnect.';
 const UNSAFE_URL = 'tabs open only accepts http(s) urls or about:blank.';
+const TOO_MANY_SESSIONS = 'Too many agent sessions are connected to the browser. Close some chats and try again.';
 const NO_TAB = 'No current tab. Open one with tabs open, or pick one with tabs list and tabs switch.';
 
 /** Actions per act call; the agent observes again between batches anyway. */
@@ -54,6 +55,7 @@ const describeError = (error: unknown): string => {
   if (message === RELAY_ENV_MISSING) return NOT_AVAILABLE;
   if (message === 'tab-create-timeout') return NO_PANE;
   if (error instanceof RelayConnectError) {
+    if (/\b503\b/.test(message)) return TOO_MANY_SESSIONS; // the relay is at its connection cap
     return `Could not reach the AionUi browser (${message}). Make sure AionUi is running, then retry.`;
   }
   if (error instanceof CdpError) return message;

@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -83,6 +85,17 @@ describe('aion-browser server', () => {
       expect(textOf(reply)).toBe(NOT_AVAILABLE);
     }
     expect((await client.listTools()).tools).toHaveLength(6); // still serving
+  });
+
+  it('says too many agent sessions are connected when the relay refuses with 503', async () => {
+    const full = createServer();
+    full.on('upgrade', (_req, socket) => socket.end('HTTP/1.1 503 Service Unavailable\r\n\r\n'));
+    await new Promise<void>((resolve) => full.listen(0, '127.0.0.1', resolve));
+    closers.push(() => new Promise<void>((resolve) => full.close(() => resolve())));
+    const env = { ...relay.env, AION_BROWSER_RELAY_URL: `ws://127.0.0.1:${(full.address() as AddressInfo).port}/` };
+    const reply = await callTabs(await connectClient(env), { action: 'list' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toBe('Too many agent sessions are connected to the browser. Close some chats and try again.');
   });
 
   it('turns an unreachable relay into a tool error instead of throwing', async () => {
