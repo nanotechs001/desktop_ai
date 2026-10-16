@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildHookScript,
@@ -153,7 +153,7 @@ describe('buildLauncherScript', () => {
     return { file, ...spawnSync('/bin/sh', [file, ...args], { encoding: 'utf8', env }) };
   };
 
-  it('appends --no-chrome, the three disallowedTools and --settings with the hook path', () => {
+  it('launcher settings allow mcp__aionui-browser and mcp__aionui-artifacts; appends --no-chrome, the three disallowedTools and --settings with the hook path', () => {
     const fakeBin = path.join(tmp, 'bin');
     writeExecutable(path.join(fakeBin, 'claude'), FAKE_CLAUDE);
     const hookPath = path.join(tmp, 'dir with space', "it's$hook.cjs");
@@ -173,7 +173,7 @@ describe('buildLauncherScript', () => {
       '--settings',
     ]);
     expect(JSON.parse(args[8])).toEqual({
-      permissions: { allow: [`mcp__${BUILTIN_BROWSER_MCP_NAME}`] },
+      permissions: { allow: [`mcp__${BUILTIN_BROWSER_MCP_NAME}`, `mcp__${BUILTIN_ARTIFACTS_MCP_NAME}`] },
       hooks: {
         PreToolUse: [
           { matcher: 'Bash', hooks: [{ type: 'command', command: `node "${hookPath.replace('$', '\\$')}"` }] },

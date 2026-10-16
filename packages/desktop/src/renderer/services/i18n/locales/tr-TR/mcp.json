@@ -72,5 +72,6 @@
     "high": "Yüksek",
     "urgent": "Acil"
   },
-  "browserAlwaysOn": "Her zaman açık: ajanlar AionUi tarayıcı panelini kullanır"
+  "browserAlwaysOn": "Her zaman açık: ajanlar AionUi tarayıcı panelini kullanır",
+  "artifactsAlwaysOn": "Her zaman açık: ajanlar sayfa ve belgeleri göstermek için kullanır"
 }

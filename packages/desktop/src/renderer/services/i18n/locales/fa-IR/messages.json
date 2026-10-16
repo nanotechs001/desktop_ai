@@ -97,5 +97,12 @@
   "requestDetails": "جزئیات درخواست:",
   "delivery": {
     "pending": "خوانده‌نشده"
+  },
+  "artifactCard": {
+    "title": "مصنوع",
+    "open": "باز کردن",
+    "copyLink": "کپی پیوند",
+    "copied": "پیوند کپی شد",
+    "copyFailed": "کپی پیوند ناموفق بود"
   }
 }

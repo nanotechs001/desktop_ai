@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import { getAcpImageFileName } from '@/common/chat/acpToolCallOutput';
 import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/common/chat/normalizeToolCall';
 import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
+import ArtifactCard from '@/renderer/pages/conversation/Messages/acp/ArtifactCard';
 import LocalImageView from '@/renderer/components/media/LocalImageView';
 import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import './MessageToolGroupSummary.css';
@@ -114,6 +115,11 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
               <pre className='tool-detail-content'>{displayItem.output}</pre>
             </div>
           )}
+        </div>
+      )}
+      {item.artifact && (
+        <div className='m-l-20px m-t-8px'>
+          <ArtifactCard {...item.artifact} />
         </div>
       )}
       {item.imagePath && (

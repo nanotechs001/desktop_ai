@@ -72,5 +72,6 @@
     "high": "Élevé",
     "urgent": "Urgent"
   },
-  "browserAlwaysOn": "Toujours actif : les agents utilisent le volet navigateur d'AionUi"
+  "browserAlwaysOn": "Toujours actif : les agents utilisent le volet navigateur d'AionUi",
+  "artifactsAlwaysOn": "Toujours actif : les agents s'en servent pour afficher pages et documents"
 }

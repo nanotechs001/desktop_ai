@@ -1,5 +1,6 @@
 import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup } from './chatLib';
 import { getAcpImagePath } from './acpToolCallOutput';
+import { parseArtifactToolCall, type ArtifactCardData } from './artifactToolCall';
 
 export type NormalizedToolStatus = 'pending' | 'running' | 'completed' | 'error' | 'canceled';
 
@@ -14,6 +15,8 @@ export interface NormalizedToolCall {
   messageId?: string;
   conversationId?: string;
   imagePath?: string;
+  /** Set for a finished create/update call of the artifacts MCP; the summary renders a card for it. */
+  artifact?: ArtifactCardData;
 }
 
 const formatValue = (value: unknown): string => {
@@ -79,6 +82,12 @@ export function normalizeToolGroup(message: IMessageToolGroup): NormalizedToolCa
       description: desc,
       input,
       output: getResultDisplayText(result_display),
+      artifact: parseArtifactToolCall(
+        name,
+        undefined,
+        getResultDisplayText(result_display),
+        type === 'mcp' ? confirmationDetails.server_name : undefined
+      ),
     };
   });
 }
@@ -179,6 +188,7 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
     messageId: message.id,
     conversationId: message.conversation_id,
     imagePath: getAcpImagePath(update),
+    artifact: parseArtifactToolCall(update.title, rawInput, output),
   };
 }
 
@@ -216,6 +226,7 @@ export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall
     description: description || undefined,
     input: displayInput,
     output,
+    artifact: parseArtifactToolCall(name, input ?? args, output),
   };
 }
 

@@ -97,5 +97,12 @@
   "requestDetails": "요청 내용:",
   "delivery": {
     "pending": "읽지 않음"
+  },
+  "artifactCard": {
+    "title": "아티팩트",
+    "open": "열기",
+    "copyLink": "링크 복사",
+    "copied": "링크를 복사했습니다",
+    "copyFailed": "링크를 복사하지 못했습니다"
   }
 }

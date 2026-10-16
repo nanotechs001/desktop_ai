@@ -5,7 +5,7 @@
  */
 
 import path from 'node:path';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 
 const BLOCK_REASON = 'Use the AionUi browser pane tools (aionui-browser) instead of opening an external browser.';
 const DEFAULT_FALLBACK_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
@@ -159,9 +159,9 @@ const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'
  */
 export function buildLauncherScript(hookPath: string, fallbackDirs: string[] = DEFAULT_FALLBACK_DIRS): string {
   const hookCommand = `node "${hookPath.replace(/[\\"$`]/g, '\\$&')}"`;
-  // aioncore never turns "Always allow" into a claude allow rule, so pre-approve the built-in browser server here.
+  // aioncore never turns "Always allow" into a claude allow rule, so pre-approve the built-in browser and artifacts servers here.
   const settings = JSON.stringify({
-    permissions: { allow: [`mcp__${BUILTIN_BROWSER_MCP_NAME}`] },
+    permissions: { allow: [`mcp__${BUILTIN_BROWSER_MCP_NAME}`, `mcp__${BUILTIN_ARTIFACTS_MCP_NAME}`] },
     hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: hookCommand }] }] },
   });
   const fallbackWords = fallbackDirs.map(shellQuote).join(' ');

@@ -72,5 +72,6 @@
     "high": "Hoch",
     "urgent": "Dringend"
   },
-  "browserAlwaysOn": "Immer aktiv: Agenten nutzen den AionUi-Browserbereich"
+  "browserAlwaysOn": "Immer aktiv: Agenten nutzen den AionUi-Browserbereich",
+  "artifactsAlwaysOn": "Immer aktiv: Agenten zeigen damit Seiten und Dokumente an"
 }

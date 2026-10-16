@@ -62,6 +62,13 @@ describe('BROWSER_RULE_TEXT', () => {
     }
   });
 
+  it('tells the agent to show pages with the artifacts tool, not a file, and stays within the cap', () => {
+    expect(BROWSER_RULE_TEXT).toContain(
+      'To show the user a page, document or diagram you made, use the `artifacts` tool, not a file.'
+    );
+    expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+  });
+
   it('tells the agent to refer to itself as the agent', () => {
     expect(BROWSER_RULE_TEXT).toContain(
       "You are the AionUi agent. Refer to yourself as 'the agent'; do not name your vendor, product or model unless the user asks which model is in use."

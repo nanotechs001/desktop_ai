@@ -97,5 +97,12 @@
   "requestDetails": "Anfragedetails:",
   "delivery": {
     "pending": "Ungelesen"
+  },
+  "artifactCard": {
+    "title": "Artefakt",
+    "open": "Öffnen",
+    "copyLink": "Link kopieren",
+    "copied": "Link kopiert",
+    "copyFailed": "Link konnte nicht kopiert werden"
   }
 }

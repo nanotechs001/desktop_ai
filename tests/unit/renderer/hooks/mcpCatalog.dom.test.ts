@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { IMcpServer, ISessionMcpServer } from '@/common/config/storage';
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 
 const { getClientBusinessSettingMock, mcpServiceMock } = vi.hoisted(() => ({
   getClientBusinessSettingMock: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
 }));
 
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
-import { isBuiltinBrowserMcp, withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
+import { isBuiltinBrowserMcp, isBuiltinSessionMcp, withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 
 describe('ensureBackendMcpCatalog', () => {
   beforeEach(() => {
@@ -107,6 +107,18 @@ describe('withBrowserMcp', () => {
     name: browserRecord.name,
     transport: browserRecord.transport,
   };
+  const artifactsRecord = {
+    id: 'builtin-artifacts-id',
+    name: BUILTIN_ARTIFACTS_MCP_NAME,
+    enabled: true,
+    builtin: true,
+    transport: { type: 'stdio', command: 'node', args: ['artifacts-mcp.js'] },
+  } as IMcpServer;
+  const artifactsSession: ISessionMcpServer = {
+    id: artifactsRecord.id,
+    name: artifactsRecord.name,
+    transport: artifactsRecord.transport,
+  };
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -120,6 +132,16 @@ describe('withBrowserMcp', () => {
   it('adds the aionui-browser session server when absent', () => {
     const result = withBrowserMcp([userSession], [userRecord, browserRecord]);
     expect(result).toEqual([userSession, browserSession]);
+  });
+
+  it('new conversations get both aionui-browser and aionui-artifacts', () => {
+    const available = [userRecord, browserRecord, artifactsRecord];
+    const result = withBrowserMcp([userSession], available);
+    expect(result).toEqual([userSession, browserSession, artifactsSession]);
+    expect(withBrowserMcp(result, available)).toBe(result);
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(isBuiltinSessionMcp(artifactsRecord)).toBe(true);
+    expect(isBuiltinSessionMcp({ ...artifactsRecord, builtin: false })).toBe(false);
   });
 
   it('does not duplicate it when already selected', () => {
@@ -148,7 +170,11 @@ describe('withBrowserMcp', () => {
       name: impostor.name,
       transport: browserRecord.transport,
     };
-    expect(withBrowserMcp([impostorSession], [impostor, browserRecord])).toEqual([impostorSession, browserSession]);
+    expect(withBrowserMcp([impostorSession], [impostor, browserRecord, artifactsRecord])).toEqual([
+      impostorSession,
+      browserSession,
+      artifactsSession,
+    ]);
     expect(withBrowserMcp([], [impostor])).toEqual([]);
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });

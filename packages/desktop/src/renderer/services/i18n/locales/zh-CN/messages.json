@@ -97,5 +97,12 @@
   "requestDetails": "请求内容：",
   "delivery": {
     "pending": "未读"
+  },
+  "artifactCard": {
+    "title": "成品",
+    "open": "打开",
+    "copyLink": "复制链接",
+    "copied": "链接已复制",
+    "copyFailed": "复制链接失败"
   }
 }

@@ -97,5 +97,12 @@
   "requestDetails": "Request details:",
   "delivery": {
     "pending": "Unread"
+  },
+  "artifactCard": {
+    "title": "Artifact",
+    "open": "Open",
+    "copyLink": "Copy link",
+    "copied": "Link copied",
+    "copyFailed": "Failed to copy the link"
   }
 }

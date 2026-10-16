@@ -1,23 +1,40 @@
-import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import type { IMcpServer, ISessionMcpServer } from '@/common/config/storage';
 import { toSessionMcpServer } from './catalog';
 
-/** True only for the app's built-in browser record; a user server with the same name does not count. */
-export const isBuiltinBrowserMcp = (server: Pick<IMcpServer, 'name' | 'builtin'>): boolean =>
-  server.builtin === true && server.name === BUILTIN_BROWSER_MCP_NAME;
+/** Built-in MCP servers attached to every conversation. */
+const BUILTIN_SESSION_MCP_NAMES: readonly string[] = [BUILTIN_BROWSER_MCP_NAME, BUILTIN_ARTIFACTS_MCP_NAME];
+
+type BuiltinCandidate = Pick<IMcpServer, 'name' | 'builtin'>;
+
+/** True only for an app built-in record named `name`; a user server with the same name does not count. */
+const isBuiltinNamed = (server: BuiltinCandidate, name: string): boolean =>
+  server.builtin === true && server.name === name;
+
+/** True only for the app's built-in browser record. */
+export const isBuiltinBrowserMcp = (server: BuiltinCandidate): boolean =>
+  isBuiltinNamed(server, BUILTIN_BROWSER_MCP_NAME);
+
+/** True for any built-in record attached to every conversation (browser, artifacts); its picker row is locked on. */
+export const isBuiltinSessionMcp = (server: BuiltinCandidate): boolean =>
+  BUILTIN_SESSION_MCP_NAMES.some((name) => isBuiltinNamed(server, name));
 
 /**
- * Ensure the built-in browser MCP is part of a new conversation's session servers.
- * AionCore only injects the browser tools when it is listed here, so every
- * renderer-created conversation goes through this. Returns the input untouched
- * (and warns on every call) when the browser record is not in the catalog.
+ * Ensure the built-in session MCPs (browser, artifacts) are part of a new conversation's session servers.
+ * AionCore only injects their tools when they are listed here, so every renderer-created conversation goes
+ * through this. A record missing from the catalog is skipped with one warning per call.
  */
 export const withBrowserMcp = (selected: ISessionMcpServer[], available: IMcpServer[]): ISessionMcpServer[] => {
-  const record = available.find(isBuiltinBrowserMcp);
-  if (!record) {
-    console.warn(`[withBrowserMcp] ${BUILTIN_BROWSER_MCP_NAME} is not in the MCP catalog; agents get no browser tools`);
-    return selected;
+  const records = BUILTIN_SESSION_MCP_NAMES.map((name) => ({
+    name,
+    record: available.find((server) => isBuiltinNamed(server, name)),
+  }));
+  const missing = records.filter(({ record }) => !record).map(({ name }) => name);
+  const added = records.flatMap(({ record }) =>
+    record && !selected.some((server) => server.id === record.id) ? [toSessionMcpServer(record)] : []
+  );
+  if (missing.length > 0) {
+    console.warn(`[withBrowserMcp] ${missing.join(', ')} not in the MCP catalog; agents get no such tools`);
   }
-  if (selected.some((server) => server.id === record.id)) return selected;
-  return [...selected, toSessionMcpServer(record)];
+  return added.length > 0 ? [...selected, ...added] : selected;
 };

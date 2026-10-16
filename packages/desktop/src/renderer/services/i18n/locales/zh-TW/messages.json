@@ -97,5 +97,12 @@
   "requestDetails": "請求內容：",
   "delivery": {
     "pending": "未讀"
+  },
+  "artifactCard": {
+    "title": "成品",
+    "open": "開啟",
+    "copyLink": "複製連結",
+    "copied": "連結已複製",
+    "copyFailed": "複製連結失敗"
   }
 }

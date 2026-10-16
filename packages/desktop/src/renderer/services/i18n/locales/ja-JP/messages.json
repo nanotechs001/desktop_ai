@@ -97,5 +97,12 @@
   "requestDetails": "リクエスト内容:",
   "delivery": {
     "pending": "未読"
+  },
+  "artifactCard": {
+    "title": "アーティファクト",
+    "open": "開く",
+    "copyLink": "リンクをコピー",
+    "copied": "リンクをコピーしました",
+    "copyFailed": "リンクのコピーに失敗しました"
   }
 }

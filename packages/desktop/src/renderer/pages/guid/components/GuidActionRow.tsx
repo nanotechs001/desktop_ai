@@ -16,7 +16,7 @@ import type {
 } from '@/renderer/components/chat/MobileActionSheet/types';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import type { AgentRuntimeDerivedOption } from '@/renderer/utils/model/agentRuntimeCatalog';
-import { isBuiltinBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
+import { isBuiltinBrowserMcp, isBuiltinSessionMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { getCleanFileNames, FileService } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
@@ -201,8 +201,10 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
     skill.isAuto ? !disabledBuiltinSkills.includes(skill.name) : enabledSkills.includes(skill.name);
 
   const activeSkillCount = allSkills.filter(isSkillChecked).length;
-  // The browser MCP is attached to every conversation (see withBrowserMcp), so its row is locked on.
-  const isBrowserMcp = isBuiltinBrowserMcp;
+  // The browser and artifacts MCPs are attached to every conversation (see withBrowserMcp), so their rows are locked on.
+  const isBrowserMcp = isBuiltinSessionMcp;
+  const alwaysOnText = (server: IMcpServer) =>
+    isBuiltinBrowserMcp(server) ? t('mcp.browserAlwaysOn') : t('mcp.artifactsAlwaysOn');
   const isMcpChecked = (server: IMcpServer) => isBrowserMcp(server) || selectedMcpServerIds.includes(server.id);
   const activeMcpCount = mcpServers.filter(isMcpChecked).length;
 
@@ -396,7 +398,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             key: server.id,
             label: server.name,
             description: isBrowserMcp(server)
-              ? t('mcp.browserAlwaysOn')
+              ? alwaysOnText(server)
               : server.tools?.length
                 ? `${server.tools.length} ${t('mcp.tools')}`
                 : undefined,
@@ -569,7 +571,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
                 </Menu.Item>
               );
               return locked ? (
-                <Tooltip key={`mcp-${server.id}`} content={t('mcp.browserAlwaysOn')}>
+                <Tooltip key={`mcp-${server.id}`} content={alwaysOnText(server)}>
                   {row}
                 </Tooltip>
               ) : (
