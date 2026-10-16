@@ -30,6 +30,10 @@ vi.mock('@/common', () => ({
       deleteAssistantRule: { invoke: vi.fn() },
       importSkills: { invoke: vi.fn() },
     },
+    // The rule is saved through main, which adds the managed blocks.
+    agentBrowser: {
+      ensureAgentRule: { invoke: vi.fn(async () => ({ success: true })) },
+    },
   },
 }));
 

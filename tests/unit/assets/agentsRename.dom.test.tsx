@@ -437,13 +437,14 @@ describe('a new or edited Agent gets the AionUi rule block right away', () => {
       await result.current.handleSave();
     });
 
-    expect(mocks.invoke.writeRule).toHaveBeenCalledWith(
-      expect.objectContaining({ assistant_id: 'new-agent', content: 'Write well.' })
-    );
-    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'new-agent', locale: 'zh-CN' });
-    expect(mocks.invoke.writeRule.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.invoke.ensureRule.mock.invocationCallOrder[0]
-    );
+    // One write path: main composes the user text with the managed blocks; the editor never writes rules itself.
+    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({
+      assistantId: 'new-agent',
+      locale: 'zh-CN',
+      content: 'Write well.',
+    });
+    expect(mocks.invoke.writeRule).not.toHaveBeenCalled();
+    expect(mocks.invoke.deleteRule).not.toHaveBeenCalled();
   });
 
   it('also does it for a new Agent without rules and after editing an existing one', async () => {
@@ -476,8 +477,8 @@ describe('a new or edited Agent gets the AionUi rule block right away', () => {
     await act(async () => {
       await result.current.handleSave();
     });
-    expect(mocks.invoke.deleteRule).toHaveBeenCalledWith({ assistant_id: 'bare-new' });
-    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'bare-new', locale: 'zh-CN' });
+    expect(mocks.invoke.deleteRule).not.toHaveBeenCalled();
+    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'bare-new', locale: 'zh-CN', content: '' });
 
     await act(async () => {
       await result.current.handleEdit(assistant());
@@ -486,10 +487,10 @@ describe('a new or edited Agent gets the AionUi rule block right away', () => {
     await act(async () => {
       await result.current.handleSave();
     });
-    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'mine', locale: 'zh-CN' });
+    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'mine', locale: 'zh-CN', content: 'old' });
   });
 
-  it('warns, and still saves, when main could not add the block', async () => {
+  it('reports the save as failed when main could not write the rule (the user text was not saved)', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mocks.invoke.create.mockResolvedValue({ id: 'new-agent' });
     mocks.invoke.ensureRule.mockResolvedValue({ success: false, msg: 'backend down' });
@@ -503,8 +504,8 @@ describe('a new or edited Agent gets the AionUi rule block right away', () => {
       await result.current.handleSave();
     });
 
-    expect(message.warning).toHaveBeenCalledWith(expect.stringContaining('browser rules could not be updated'));
-    expect(message.success).toHaveBeenCalled();
+    expect(message.error).toHaveBeenCalled();
+    expect(message.success).not.toHaveBeenCalled();
   });
 });
 
@@ -658,8 +659,12 @@ describe('the editor hides the AionUi managed rule blocks', () => {
     await act(async () => {
       await result.current.handleSave();
     });
-    expect(mocks.invoke.writeRule).toHaveBeenCalledWith(expect.objectContaining({ content: 'Be brief.' }));
-    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({ assistantId: 'mine', locale: 'en-US' });
+    expect(mocks.invoke.writeRule).not.toHaveBeenCalled();
+    expect(mocks.invoke.ensureRule).toHaveBeenCalledWith({
+      assistantId: 'mine',
+      locale: 'en-US',
+      content: 'Be brief.',
+    });
   });
 
   it('also hides it in a duplicate', async () => {

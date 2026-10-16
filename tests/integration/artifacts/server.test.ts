@@ -12,7 +12,15 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createArtifactStore } from '@process/artifacts/store';
 import { renderArtifactPage } from '@process/artifacts/pages';
-import { ARTIFACT_CSP, startArtifactServer, type ArtifactServer } from '@process/artifacts/server';
+import {
+  ARTIFACT_CSP,
+  MAX_BODY_BYTES,
+  MAX_DRAIN_BYTES,
+  startArtifactServer,
+  type ArtifactServer,
+} from '@process/artifacts/server';
+
+const CHUNK_BYTES = 256 * 1024;
 
 const TOKEN = 'test-token-0123456789abcdefghijklmnopqrstuv';
 const SECURITY_HEADERS = {
@@ -245,7 +253,7 @@ describe('artifact server', () => {
           }
         );
         req.on('error', (e) => (answered ? undefined : reject(e)));
-        const chunk = Buffer.alloc(256 * 1024, 'x');
+        const chunk = Buffer.alloc(CHUNK_BYTES, 'x');
         const pump = (left: number): void => {
           if (left === 0 || req.destroyed) return void req.end();
           if (req.write(chunk)) pump(left - 1);
@@ -253,10 +261,12 @@ describe('artifact server', () => {
         };
         pump(chunks);
       });
-    expect(await upload({ ...auth, 'content-length': 12 * 256 * 1024 }, 12)).toBe(413);
-    expect(await upload({ ...auth, 'transfer-encoding': 'chunked' }, 12)).toBe(413);
+    const overCap = Math.ceil(MAX_BODY_BYTES / CHUNK_BYTES) + 1;
+    expect(await upload({ ...auth, 'content-length': overCap * CHUNK_BYTES }, overCap)).toBe(413);
+    expect(await upload({ ...auth, 'transfer-encoding': 'chunked' }, overCap)).toBe(413);
     // An upload that keeps going far past the cap is cut off rather than drained.
-    await expect(upload({ ...auth, 'transfer-encoding': 'chunked' }, 48)).rejects.toThrow();
+    const pastDrain = Math.ceil(MAX_DRAIN_BYTES / CHUNK_BYTES) + 2;
+    await expect(upload({ ...auth, 'transfer-encoding': 'chunked' }, pastDrain)).rejects.toThrow();
     expect(await fs.readdir(root)).toEqual([]);
     const { id } = await create({ title: 'T', kind: 'html', content: '<p>still up</p>' });
     expect((await page(`/a/${id}`)).body).toBe('<p>still up</p>');

@@ -50,4 +50,8 @@ export const NOTE_SOURCES: readonly NoteSource[] = ['agent', 'user', 'page'];
 export const NOTE_LIMITS = {
   maxChars: 300,
   maxPerAgent: 200,
+  /** The agent's own notes plus page notes, within `maxPerAgent`: the rest is kept for the user's instructions. */
+  maxLearnedPerAgent: 100,
+  /** Notes one chat may add per app run. */
+  maxAddsPerConversation: 10,
 } as const;

@@ -24,8 +24,8 @@ The AionUi browser pane is the ONLY browser you may use.
 # Artifacts
 To show the user a page, document or diagram you made, use the \`artifacts\` tool, not a file.
 
-# Notebook
-Use \`notes.add\` to save a short lesson when you learn how the user likes something done or how a site works.`;
+# Lessons
+Use \`notes.add\` (the \`add\` tool of \`aionui-notes\`) to save a short lesson when you learn how the user likes something done or how a site works.`;
 
 export const BROWSER_RULE_MARKERS = {
   start: '<!-- aion-browser-rule:start -->',

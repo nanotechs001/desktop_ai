@@ -1530,11 +1530,12 @@ export const agentBrowser = {
   replyConfirm: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; alwaysForSite: boolean }>(
     'agent-browser.reply-confirm'
   ),
-  // an Agent was just created or edited in the app: put the AionUi rule block into its rule right away (locale = the one the editor wrote).
+  // an Agent was just created or edited in the app: main writes its rule (default and editor locale) as `content` (the
+  // user's text, managed blocks stripped; empty for none) plus the browser and notebook blocks, in one per-Agent queue.
   // `data.unbalanced` is set when the rule's block markers are broken and need the user's fix.
   ensureAgentRule: bridge.buildProvider<
     IBridgeResponse<{ unbalanced: true } | undefined>,
-    { assistantId: string; locale?: string }
+    { assistantId: string; locale?: string; content?: string }
   >('agent-browser.ensure-agent-rule'),
   // create the default Agent now if it is missing (an engine may have been connected since the app started)
   ensureDefaultAgent: bridge.buildProvider<IBridgeResponse<void>, void>('agent-browser.ensure-default-agent'),

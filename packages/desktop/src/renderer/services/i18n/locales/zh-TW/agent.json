@@ -69,7 +69,6 @@
     "label": "引擎"
   },
   "cannotDeleteDefault": "預設 Agent 無法刪除。",
-  "ruleSyncFailed": "Agent 已儲存，但無法更新其瀏覽器規則。請重新啟動應用程式後重試。",
   "ruleMarkersBroken": "請修正此 Agent 指令中的 AionUi 區塊標記。",
   "notebook": {
     "title": "筆記本",

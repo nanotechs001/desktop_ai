@@ -810,7 +810,7 @@ const handleAppReady = async (): Promise<void> => {
   try {
     const { startAgentNotes, startArtifacts } = await import('./process/artifacts');
     // Notebooks share the artifact server (agents' notes.add) and answer the editor's IPC.
-    const started = await startArtifacts({ notes: startAgentNotes() });
+    const started = await startArtifacts({ notes: await startAgentNotes() });
     if (started) {
       process.env.AION_ARTIFACTS_URL = started.server.origin;
       process.env.AION_ARTIFACTS_TOKEN = started.token;

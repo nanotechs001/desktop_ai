@@ -69,7 +69,6 @@
     "label": "Motor"
   },
   "cannotDeleteDefault": "O agente padrão não pode ser excluído.",
-  "ruleSyncFailed": "O agente foi salvo, mas as regras de navegador dele não puderam ser atualizadas. Reinicie o aplicativo para tentar novamente.",
   "ruleMarkersBroken": "Corrija os marcadores de bloco do AionUi nas instruções deste agente.",
   "notebook": {
     "title": "Caderno",

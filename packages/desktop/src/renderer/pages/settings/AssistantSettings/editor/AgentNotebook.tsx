@@ -29,22 +29,32 @@ const AgentNotebook: React.FC<AgentNotebookProps> = ({ agentId }) => {
 
   useEffect(() => {
     let live = true;
+    const load = () =>
+      ipcBridge.agentNotes.list
+        .invoke({ agentId })
+        .then((reply) => {
+          if (!live) return;
+          setNotes(reply.success ? (reply.data ?? []) : []);
+          setLoadFailed(!reply.success);
+        })
+        .catch(() => {
+          if (!live) return;
+          setNotes([]);
+          setLoadFailed(true);
+        });
+    // Agents add notes during chats, so coming back to the editor shows the current notebook.
+    const reloadWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
     setNotes(null);
     setLoadFailed(false);
-    ipcBridge.agentNotes.list
-      .invoke({ agentId })
-      .then((reply) => {
-        if (!live) return;
-        setNotes(reply.success ? (reply.data ?? []) : []);
-        setLoadFailed(!reply.success);
-      })
-      .catch(() => {
-        if (!live) return;
-        setNotes([]);
-        setLoadFailed(true);
-      });
+    void load();
+    window.addEventListener('focus', reloadWhenVisible);
+    document.addEventListener('visibilitychange', reloadWhenVisible);
     return () => {
       live = false;
+      window.removeEventListener('focus', reloadWhenVisible);
+      document.removeEventListener('visibilitychange', reloadWhenVisible);
     };
   }, [agentId]);
 

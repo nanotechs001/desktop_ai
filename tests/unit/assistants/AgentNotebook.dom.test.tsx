@@ -86,6 +86,22 @@ describe('AgentNotebook', () => {
     expect(within(rows()[0]).getByText('Instruction')).toBeInTheDocument();
   });
 
+  it('reloads when the window regains focus or the page becomes visible (the agent may have added notes)', async () => {
+    render(<AgentNotebook agentId='agent-1' />);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    mocks.list.mockResolvedValue({
+      success: true,
+      data: [...notes, { ...notes[0], id: 'n4'.padEnd(22, 'x'), text: 'Fresh', at: 9 }],
+    });
+
+    fireEvent.focus(window);
+    await waitFor(() => expect(rows()).toHaveLength(4));
+    expect(rows()[0].textContent).toContain('Fresh');
+
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(3));
+  });
+
   it('shows the empty state, and keeps a note whose delete failed', async () => {
     mocks.list.mockResolvedValueOnce({ success: true, data: [] });
     const { unmount } = render(<AgentNotebook agentId='agent-1' />);

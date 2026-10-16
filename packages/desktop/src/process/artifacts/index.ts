@@ -155,46 +155,33 @@ const strings = (request: unknown, keys: string[]): string[] | null => {
   return values.every((v) => typeof v === 'string') ? (values as string[]) : null;
 };
 
-/** Runs a handler, turning a throw into a failed reply. */
-const guardNotes = async <D>(handler: () => Promise<NotesReply<D>>): Promise<NotesReply<D>> => {
-  try {
-    return await handler();
-  } catch (error) {
-    console.error('[notes] IPC handler failed:', error);
-    return { success: false, msg: error instanceof Error ? error.message : String(error) };
-  }
-};
-
 const toNoteReply = (result: Awaited<ReturnType<NotesStore['add']>>): NotesReply<Note> =>
   'value' in result ? { success: true, data: result.value } : { success: false, msg: result.message };
 
 /**
  * The renderer's notebook IPC (`agentNotes.*`): the user lists, adds (as instructions), edits and deletes an Agent's
- * notes. Requests come from the renderer, so every field is checked; the store validates ids and text again.
+ * notes. Requests come from the renderer, so every field is checked; the store validates ids and text again. A store
+ * failure that throws (an unreadable file) rejects; `startAgentNotes` wraps each handler in `guardAsync`.
  */
 export function createNotesIpcHandlers(store: NotesStore) {
   return {
-    list: (request: unknown) =>
-      guardNotes<Note[]>(async () => {
-        const [agentId] = strings(request, ['agentId']) ?? [];
-        return agentId === undefined ? INVALID_NOTE_REQUEST : { success: true, data: await store.list(agentId) };
-      }),
-    add: (request: unknown) =>
-      guardNotes<Note>(async () => {
-        const args = strings(request, ['agentId', 'text']);
-        return args ? toNoteReply(await store.add(args[0], args[1], 'user')) : INVALID_NOTE_REQUEST;
-      }),
-    update: (request: unknown) =>
-      guardNotes<Note>(async () => {
-        const args = strings(request, ['agentId', 'id', 'text']);
-        return args ? toNoteReply(await store.update(args[0], args[1], args[2])) : INVALID_NOTE_REQUEST;
-      }),
-    delete: (request: unknown) =>
-      guardNotes(async () => {
-        const args = strings(request, ['agentId', 'id']);
-        if (!args) return INVALID_NOTE_REQUEST;
-        return (await store.remove(args[0], args[1])) ? { success: true } : { success: false, msg: 'Note not found' };
-      }),
+    list: async (request: unknown): Promise<NotesReply<Note[]>> => {
+      const [agentId] = strings(request, ['agentId']) ?? [];
+      return agentId === undefined ? INVALID_NOTE_REQUEST : { success: true, data: await store.list(agentId) };
+    },
+    add: async (request: unknown): Promise<NotesReply<Note>> => {
+      const args = strings(request, ['agentId', 'text']);
+      return args ? toNoteReply(await store.add(args[0], args[1], 'user')) : INVALID_NOTE_REQUEST;
+    },
+    update: async (request: unknown): Promise<NotesReply<Note>> => {
+      const args = strings(request, ['agentId', 'id', 'text']);
+      return args ? toNoteReply(await store.update(args[0], args[1], args[2])) : INVALID_NOTE_REQUEST;
+    },
+    delete: async (request: unknown): Promise<NotesReply> => {
+      const args = strings(request, ['agentId', 'id']);
+      if (!args) return INVALID_NOTE_REQUEST;
+      return (await store.remove(args[0], args[1])) ? { success: true } : { success: false, msg: 'Note not found' };
+    },
   };
 }
 
@@ -219,12 +206,14 @@ const getConversation = async (id: string): Promise<{ assistant?: { id: string; 
  * Sets up Agent notebooks: the store (every change re-syncs the Agent's rule), the renderer's `agentNotes` IPC, and
  * what the artifact server needs for the agents' `notes.add`. Call before `startArtifacts`.
  */
-export function startAgentNotes(): NotesApi {
+export async function startAgentNotes(): Promise<NotesApi> {
+  // Loaded here, not at the top: services.ts pulls in Electron, which this module's unit tests run without.
+  const { guardAsync } = await import('@process/services/agentBrowser/services');
   const store = createNotesStore(notesRoot(), (agentId) => syncNotesToRule(agentId));
   const handlers = createNotesIpcHandlers(store);
-  ipcBridge.agentNotes.list.provider(handlers.list);
-  ipcBridge.agentNotes.add.provider(handlers.add);
-  ipcBridge.agentNotes.update.provider(handlers.update);
-  ipcBridge.agentNotes.delete.provider(handlers.delete);
+  ipcBridge.agentNotes.list.provider((request) => guardAsync(() => handlers.list(request)));
+  ipcBridge.agentNotes.add.provider((request) => guardAsync(() => handlers.add(request)));
+  ipcBridge.agentNotes.update.provider((request) => guardAsync(() => handlers.update(request)));
+  ipcBridge.agentNotes.delete.provider((request) => guardAsync(() => handlers.delete(request)));
   return { store, resolveAgent: createAgentResolver({ getConversation, getDefaultAgentId: defaultAgentId }) };
 }

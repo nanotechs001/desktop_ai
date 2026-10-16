@@ -9,7 +9,12 @@ import fs from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
-import { ARTIFACT_LIMITS, type ArtifactResult, type ArtifactVersion } from '@/common/types/agent/artifacts';
+import {
+  ARTIFACT_LIMITS,
+  NOTE_LIMITS,
+  type ArtifactResult,
+  type ArtifactVersion,
+} from '@/common/types/agent/artifacts';
 import type { NotesApi } from './notes';
 import type { ArtifactStore } from './store';
 
@@ -54,9 +59,9 @@ const SECURITY_HEADERS = {
  * Twice the content limit plus room for the other fields: JSON escaping can double near-limit content (every quote,
  * backslash or control character costs two bytes or more). The store enforces the real content limit after parsing.
  */
-const MAX_BODY_BYTES = 2 * ARTIFACT_LIMITS.maxContentBytes + 64 * 1024;
+export const MAX_BODY_BYTES = 2 * ARTIFACT_LIMITS.maxContentBytes + 64 * 1024;
 /** Past this the upload is cut off instead of drained to its end. */
-const MAX_DRAIN_BYTES = 4 * MAX_BODY_BYTES;
+export const MAX_DRAIN_BYTES = 4 * MAX_BODY_BYTES;
 const PAGE_RE = /^\/a\/([A-Za-z0-9_-]{22})(?:\/v\/([1-9]\d{0,8}))?$/;
 const LIB_RE = /^\/lib\/([A-Za-z0-9_-][A-Za-z0-9._-]{0,127})$/;
 const API_RE = /^\/api\/artifacts\/(create|update|get)$/;
@@ -156,12 +161,26 @@ const callStore = (
 };
 
 /** Adds a note to the notebook of the chat's Agent; the Agent comes from the conversation, never from the body. */
-const addNote = async (notes: NotesApi, b: ApiBody): Promise<unknown> => {
+const addNote = async (notes: NotesApi, adds: Map<string, number>, b: ApiBody): Promise<unknown> => {
   if (typeof b.text !== 'string') return badRequest('text must be a string');
   if (b.fromPage !== undefined && typeof b.fromPage !== 'boolean') return badRequest('fromPage must be a boolean');
+  // Reserved before the first await so parallel calls can't overshoot; a refused add gives its slot back.
+  const used = adds.get(b.conversationId) ?? 0;
+  if (used >= NOTE_LIMITS.maxAddsPerConversation) {
+    return {
+      ok: false,
+      error: 'limit-reached',
+      message: `A chat saves at most ${NOTE_LIMITS.maxAddsPerConversation} notes`,
+    };
+  }
+  adds.set(b.conversationId, used + 1);
   const agent = await notes.resolveAgent(b.conversationId);
-  if (agent.ok === false) return { ok: false, error: 'not-found', message: agent.message };
-  return notes.store.add(agent.agentId, b.text, b.fromPage ? 'page' : 'agent');
+  const result =
+    agent.ok === false
+      ? { ok: false as const, error: 'not-found' as const, message: agent.message }
+      : await notes.store.add(agent.agentId, b.text, b.fromPage ? 'page' : 'agent');
+  if (!result.ok) adds.set(b.conversationId, (adds.get(b.conversationId) ?? 1) - 1);
+  return result;
 };
 
 /**
@@ -173,6 +192,8 @@ const addNote = async (notes: NotesApi, b: ApiBody): Promise<unknown> => {
 export async function startArtifactServer(opts: ArtifactServerOptions): Promise<ArtifactServer> {
   const { store, token, renderPage, libsDir } = opts;
   let port = 0;
+  /** Notes added per conversation since the server started. */
+  const noteAdds = new Map<string, number>();
 
   const servePage = async (res: ServerResponse, id: string, n: string | undefined): Promise<void> => {
     const result = await store.getById(id, n === undefined ? undefined : Number(n));
@@ -247,7 +268,8 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     if (apiMatch) return serveApi(req, res, async (b) => callStore(store, apiMatch[1], b));
     const notes = opts.notes;
     const notesMatch = req.method === 'POST' && notes ? NOTES_RE.exec(pathname) : null;
-    if (notes && notesMatch) return serveApi(req, res, notesMatch[1] === 'add' ? (b) => addNote(notes, b) : null);
+    if (notes && notesMatch)
+      return serveApi(req, res, notesMatch[1] === 'add' ? (b) => addNote(notes, noteAdds, b) : null);
     send(res, 404, TEXT_TYPE, 'Not found');
   };
 

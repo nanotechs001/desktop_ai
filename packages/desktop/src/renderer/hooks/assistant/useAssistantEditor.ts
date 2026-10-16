@@ -392,47 +392,25 @@ export const useAssistantEditor = ({
     }
   };
 
-  /** Put the AionUi rule block into the Agent's rule now; the next start would only repair it later. */
-  const syncAgentRuleBlock = useCallback(
-    async (assistantId: string) => {
-      let unbalanced = false;
-      try {
-        const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({ assistantId, locale: localeKey });
-        if (reply.success) return;
-        unbalanced = reply.data?.unbalanced === true;
-        console.error('Failed to add the AionUi rule block to the Agent:', reply.msg);
-      } catch (error) {
-        console.error('Failed to add the AionUi rule block to the Agent:', error);
-      }
-      // Broken markers need the user's fix; any other failure is repaired by the next start.
+  /**
+   * Save the user's rule text through main, which adds the AionUi blocks (browser, notebook) and writes the rule in
+   * its per-Agent queue, so a note being saved at the same moment can't overwrite the text. Throws when the text
+   * wasn't saved; broken block markers save the text as typed and ask the user to fix them.
+   */
+  const persistAssistantRules = useCallback(
+    async (assistantId: string, rules: string) => {
+      const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({
+        assistantId,
+        locale: localeKey,
+        content: rules.trim() ? rules : '',
+      });
+      if (reply.success) return;
+      if (reply.data?.unbalanced !== true) throw new Error(reply.msg ?? 'Could not save the Agent rule');
       message.warning(
-        unbalanced
-          ? t('agent.ruleMarkersBroken', {
-              defaultValue: "Fix the AionUi block markers in this Agent's instructions.",
-            })
-          : t('agent.ruleSyncFailed', {
-              defaultValue:
-                'The Agent was saved, but its browser rules could not be updated. Restart the app to retry.',
-            })
+        t('agent.ruleMarkersBroken', { defaultValue: "Fix the AionUi block markers in this Agent's instructions." })
       );
     },
     [localeKey, message, t]
-  );
-
-  const persistAssistantRules = useCallback(
-    async (assistantId: string, rules: string) => {
-      if (rules.trim()) {
-        await ipcBridge.fs.writeAssistantRule.invoke({
-          assistant_id: assistantId,
-          locale: localeKey,
-          content: rules,
-        });
-      } else {
-        await ipcBridge.fs.deleteAssistantRule.invoke({ assistant_id: assistantId });
-      }
-      await syncAgentRuleBlock(assistantId);
-    },
-    [localeKey, syncAgentRuleBlock]
   );
 
   const handleSave = async () => {

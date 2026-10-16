@@ -74,5 +74,5 @@
   },
   "browserAlwaysOn": "始终开启:智能体使用 AionUi 浏览器面板",
   "artifactsAlwaysOn": "始终开启:智能体用它展示页面和文档",
-  "notesAlwaysOn": "始终开启：智能体在笔记本中保存经验"
+  "notesAlwaysOn": "始终开启:智能体用它在笔记本中保存经验"
 }

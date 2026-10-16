@@ -23,7 +23,7 @@ export type AgentBrowserOptions = {
   blockedPorts: () => readonly number[];
 };
 
-type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
+export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
 
 const TAB_CREATE_TIMEOUT_MS = 15_000;
 /** A keyDown of one of these alone is not the user taking over (e.g. Cmd held for a shortcut). */
@@ -67,7 +67,8 @@ const guard = async <D>(handler: () => Reply<D>): Promise<Reply<D>> => {
   }
 };
 
-const guardAsync = async <D>(handler: () => Promise<Reply<D>>): Promise<Reply<D>> => {
+/** Runs an async IPC handler, turning a throw into a failed reply (and a log line). */
+export const guardAsync = async <D>(handler: () => Promise<Reply<D>>): Promise<Reply<D>> => {
   try {
     return await handler();
   } catch (error) {

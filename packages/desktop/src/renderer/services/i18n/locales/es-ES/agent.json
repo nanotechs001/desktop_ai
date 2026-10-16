@@ -69,7 +69,6 @@
     "label": "Motor"
   },
   "cannotDeleteDefault": "El agente predeterminado no se puede eliminar.",
-  "ruleSyncFailed": "El agente se guardó, pero no se pudieron actualizar sus reglas del navegador. Reinicia la aplicación para reintentarlo.",
   "ruleMarkersBroken": "Corrige los marcadores de bloque de AionUi en las instrucciones de este agente.",
   "notebook": {
     "title": "Cuaderno",

@@ -69,7 +69,6 @@
     "label": "엔진"
   },
   "cannotDeleteDefault": "기본 에이전트는 삭제할 수 없습니다.",
-  "ruleSyncFailed": "에이전트가 저장되었지만 브라우저 규칙을 업데이트하지 못했습니다. 앱을 다시 시작해 다시 시도하세요.",
   "ruleMarkersBroken": "이 에이전트 지침의 AionUi 블록 마커를 수정하세요.",
   "notebook": {
     "title": "노트",

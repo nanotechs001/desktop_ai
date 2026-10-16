@@ -6,6 +6,8 @@
 
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { notesRoot, readNotes, upsertNotesBlock } from '@process/artifacts/notes';
+import { createSerialiser } from '@process/artifacts/store';
+import type { UpsertManagedBlockResult } from '@/common/types/agent/managedRuleBlock';
 import { upsertBrowserRule } from './browserRule';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { Note } from '@/common/types/agent/artifacts';
@@ -16,6 +18,8 @@ export type AssistantRuleDeps = {
   writeRule(id: string, locale: string, content: string): Promise<void>;
   /** The Agent's notebook; without it the notes block is left as it is. */
   listNotes?(id: string): Promise<Note[]>;
+  /** The app's UI locale, the other rule the editor writes besides the default; none means the default only. */
+  currentLocale?(): Promise<string | undefined>;
 };
 
 export type AssistantRuleSyncSummary = { updated: number; skipped: number; failed: number };
@@ -49,18 +53,49 @@ export const backendAssistantRuleDeps: AssistantRuleDeps = {
     });
   },
   listNotes: (id) => readNotes(notesRoot(), id),
+  async currentLocale() {
+    // Loaded on use: initStorage pulls in the whole storage layer, which unit tests of these rules don't need.
+    const [{ ProcessConfig }, { normalizeLanguageCode }] = await Promise.all([
+      import('@process/utils/initStorage'),
+      import('@/common/config/i18n'),
+    ]);
+    const language = await ProcessConfig.get('language');
+    return language ? normalizeLanguageCode(language) : undefined;
+  },
 };
 
 type SyncOutcome = 'updated' | 'skipped' | 'failed' | 'unbalanced';
 
-/** Upsert the browser block and the notes block into one assistant's rule for one locale. One failure never throws. */
-async function syncRule(deps: AssistantRuleDeps, id: string, locale: string): Promise<SyncOutcome> {
+/**
+ * Every rule write in main runs in this per-Agent queue: the editor's save, note syncs and the startup sync. So no
+ * read-modify-write of one Agent's rule ever interleaves with another.
+ */
+const ruleQueue = createSerialiser();
+
+/** The user's text plus the browser block plus the notes block. A notebook that can't be read is left as it is. */
+async function composeRule(deps: AssistantRuleDeps, id: string, text: string): Promise<UpsertManagedBlockResult> {
+  const browser = upsertBrowserRule(text);
+  if (!browser.ok || !deps.listNotes) return browser;
+  try {
+    return upsertNotesBlock(browser.content, await deps.listNotes(id));
+  } catch (error) {
+    console.warn(`[AionUi] Notebook of assistant '${id}' unreadable; only the browser block was updated:`, error);
+    return browser;
+  }
+}
+
+/**
+ * Upsert the managed blocks into one assistant's rule for one locale; with `content` (the editor's save) the user's
+ * text is `content` instead of what is stored. Broken markers leave a stored rule untouched, but a saved text is still
+ * written as the user typed it. Never throws. Call only inside `ruleQueue`.
+ */
+async function syncRule(deps: AssistantRuleDeps, id: string, locale: string, content?: string): Promise<SyncOutcome> {
   try {
     const current = await deps.readRule(id, locale);
-    const browser = upsertBrowserRule(current);
-    const result = browser.ok && deps.listNotes ? upsertNotesBlock(browser.content, await deps.listNotes(id)) : browser;
+    const result = await composeRule(deps, id, content ?? current);
     if (result.ok === false) {
       console.warn(`[AionUi] Browser rule left untouched for assistant '${id}': ${result.reason}`);
+      if (content !== undefined && content !== current) await deps.writeRule(id, locale, content);
       return 'unbalanced';
     }
     if (result.content === current) return 'skipped';
@@ -72,7 +107,17 @@ async function syncRule(deps: AssistantRuleDeps, id: string, locale: string): Pr
   }
 }
 
-/** Make sure every assistant rule carries the browser-rule block. One failure never stops the rest. */
+/** The app's UI locale, when known; a failure to read it only narrows the sync to the default rule. */
+const currentLocaleOf = (deps: AssistantRuleDeps): Promise<string | undefined> =>
+  deps.currentLocale?.().catch((): undefined => undefined) ?? Promise.resolve(undefined);
+
+/** The default rule plus the given locale, else the app's current UI locale: the two rules the editor writes. */
+async function targetLocales(deps: AssistantRuleDeps, locale?: string): Promise<string[]> {
+  const current = locale ?? (await currentLocaleOf(deps));
+  return [...new Set([DEFAULT_LOCALE, current ?? DEFAULT_LOCALE])];
+}
+
+/** Make sure every assistant rule carries the managed blocks. One failure never stops the rest. */
 export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Promise<AssistantRuleSyncSummary> {
   const summary = { updated: 0, skipped: 0, failed: 0 };
   let assistants: Awaited<ReturnType<AssistantRuleDeps['listAssistants']>>;
@@ -82,32 +127,41 @@ export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Pr
     console.error('[AionUi] Browser rule sync could not list assistants:', error);
     return summary;
   }
+  const current = await currentLocaleOf(deps);
+  const extra = current ? [current] : [];
   for (const { id, locales } of assistants) {
-    for (const locale of locales) {
-      const outcome = await syncRule(deps, id, locale);
-      summary[outcome === 'unbalanced' ? 'failed' : outcome] += 1;
-    }
+    // eslint-disable-next-line no-await-in-loop -- one Agent at a time keeps the startup load on the backend low
+    const outcomes = await ruleQueue(id, async () => {
+      const done: SyncOutcome[] = [];
+      // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
+      for (const locale of new Set([...locales, ...extra])) done.push(await syncRule(deps, id, locale));
+      return done;
+    });
+    for (const outcome of outcomes) summary[outcome === 'unbalanced' ? 'failed' : outcome] += 1;
   }
   return summary;
 }
 
 /**
- * Put the block into one Agent's rule right after the app created or edited it: the default
- * rule plus the locale rule the editor wrote, so neither can lack the block. `unbalanced` counts
- * rules left untouched because their markers are broken (the user must fix those; a retry cannot).
+ * Put the blocks into one Agent's rule right after the app created or edited it, or a note changed: the default rule
+ * plus the editor's locale (else the current UI locale). With `content`, that is the user's text to save. `unbalanced`
+ * counts rules whose markers are broken (the user must fix those; a retry cannot).
  */
 export async function ensureBrowserRuleForAssistant(
   deps: AssistantRuleDeps,
   id: string,
-  locale?: string
+  locale?: string,
+  content?: string
 ): Promise<AssistantRuleSyncSummary & { unbalanced: number }> {
-  const summary = { updated: 0, skipped: 0, failed: 0, unbalanced: 0 };
-  for (const target of new Set([DEFAULT_LOCALE, locale ?? DEFAULT_LOCALE]))
-    summary[await syncRule(deps, id, target)] += 1;
-  return summary;
+  return ruleQueue(id, async () => {
+    const summary = { updated: 0, skipped: 0, failed: 0, unbalanced: 0 };
+    // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
+    for (const target of await targetLocales(deps, locale)) summary[await syncRule(deps, id, target, content)] += 1;
+    return summary;
+  });
 }
 
-/** Write an Agent's notebook into its (default-locale) rule after a note changed; the browser block is kept current too. */
+/** Write an Agent's notebook into its rules after a note changed; the browser block is kept current too. */
 export const syncNotesToRule = async (
   agentId: string,
   deps: AssistantRuleDeps = backendAssistantRuleDeps
@@ -117,19 +171,22 @@ export const syncNotesToRule = async (
 };
 
 const MAX_ASSISTANT_ID_LENGTH = 128;
+/** The user's own rule text from the editor; far above any real rule. */
+const MAX_RULE_CHARS = 1_000_000;
 const LOCALE_PATTERN = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 
 export type EnsureAgentRuleReply = { success: boolean; data?: { unbalanced: true }; msg?: string };
 
 /**
  * IPC handler for "an Agent was just created or edited": validates the request (it comes from the
- * renderer) and upserts the block. A rule with broken markers is reported as `unbalanced`.
+ * renderer) and writes the rule: `content` (the user's text, managed blocks stripped; empty for none) plus the
+ * browser and notes blocks. Without `content` the stored text is kept. A rule with broken markers is reported as `unbalanced`.
  */
 export async function handleEnsureAgentRule(
   request: unknown,
   deps: AssistantRuleDeps = backendAssistantRuleDeps
 ): Promise<EnsureAgentRuleReply> {
-  const { assistantId, locale } = (typeof request === 'object' && request !== null ? request : {}) as Record<
+  const { assistantId, locale, content } = (typeof request === 'object' && request !== null ? request : {}) as Record<
     string,
     unknown
   >;
@@ -139,11 +196,15 @@ export async function handleEnsureAgentRule(
   if (locale !== undefined && (typeof locale !== 'string' || !LOCALE_PATTERN.test(locale))) {
     return { success: false, msg: 'Invalid arguments' };
   }
+  if (content !== undefined && (typeof content !== 'string' || content.length > MAX_RULE_CHARS)) {
+    return { success: false, msg: 'Invalid arguments' };
+  }
 
   const summary = await ensureBrowserRuleForAssistant(
     deps,
     assistantId,
-    typeof locale === 'string' ? locale : undefined
+    typeof locale === 'string' ? locale : undefined,
+    typeof content === 'string' ? content : undefined
   );
   if (summary.unbalanced > 0) {
     return { success: false, data: { unbalanced: true }, msg: 'The AionUi block markers in this Agent are unbalanced' };
