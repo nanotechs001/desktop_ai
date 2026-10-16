@@ -157,13 +157,84 @@ describe('WebviewHost process health callbacks', () => {
   });
 
   it('stops forwarding webview events once unmounted', () => {
+    const onRenderProcessGone = vi.fn();
     const onUnresponsive = vi.fn();
-    const { container, unmount } = render(<WebviewHost url='https://example.com' onUnresponsive={onUnresponsive} />);
+    const onResponsive = vi.fn();
+    const { container, unmount } = render(
+      <WebviewHost
+        url='https://example.com'
+        onRenderProcessGone={onRenderProcessGone}
+        onUnresponsive={onUnresponsive}
+        onResponsive={onResponsive}
+      />
+    );
     const webview = getWebview(container);
 
     unmount();
+    fire(webview, Object.assign(new Event('render-process-gone'), { details: { reason: 'crashed' } }));
     fire(webview, new Event('unresponsive'));
+    fire(webview, new Event('responsive'));
 
+    expect(onRenderProcessGone).not.toHaveBeenCalled();
     expect(onUnresponsive).not.toHaveBeenCalled();
+    expect(onResponsive).not.toHaveBeenCalled();
+  });
+});
+
+const NAVIGATE_MARKER = '__WEBVIEW_HOST_NAVIGATE__';
+const FORGED_URL = 'file:///etc/passwd';
+const consoleMessage = (message: string): Event => Object.assign(new Event('console-message'), { message });
+const forgedNavigateMessage = (url: string): string =>
+  `${NAVIGATE_MARKER} ${JSON.stringify({ type: NAVIGATE_MARKER, url })}`;
+const webviewSrcProperty = (webview: HTMLElement): unknown => Reflect.get(webview, 'src');
+
+describe('WebviewHost __WEBVIEW_HOST_NAVIGATE__ marker', () => {
+  it('interceptNavigation=false: a page-forged navigate marker is swallowed and does not navigate', () => {
+    const onUrlChange = vi.fn();
+    const { container } = render(
+      <WebviewHost url='https://example.com' interceptNavigation={false} onUrlChange={onUrlChange} />
+    );
+    const webview = getWebview(container);
+
+    fire(webview, consoleMessage(forgedNavigateMessage(FORGED_URL)));
+
+    expect(webviewSrcProperty(webview)).toBeUndefined();
+    expect(webview.getAttribute('src')).toBe('https://example.com');
+    expect(onUrlChange).not.toHaveBeenCalledWith(FORGED_URL);
+  });
+
+  it('default mode: the navigate marker posted by the interceptor still navigates the webview', () => {
+    const onUrlChange = vi.fn();
+    const { container } = render(<WebviewHost url='https://example.com' onUrlChange={onUrlChange} />);
+    const webview = getWebview(container);
+
+    fire(webview, consoleMessage(forgedNavigateMessage('https://example.org/next')));
+
+    expect(webviewSrcProperty(webview)).toBe('https://example.org/next');
+    expect(webview.getAttribute('src')).toBe('https://example.org/next');
+    expect(onUrlChange).toHaveBeenCalledWith('https://example.org/next');
+  });
+});
+
+describe('WebviewHost StarOffice zoom with interceptNavigation=false', () => {
+  // isStarOfficeUrl: localhost / 127.0.0.1 on port 18791, 18888 or 19000.
+  const STAROFFICE_URL = 'http://127.0.0.1:18791/';
+
+  it('still injects the zoom script on dom-ready', () => {
+    const { container } = render(<WebviewHost url={STAROFFICE_URL} interceptNavigation={false} />);
+
+    fire(getWebview(container), new Event('dom-ready'));
+
+    expect(injectedScripts().some((script) => script.includes('__aionuiZoomInjected'))).toBe(true);
+  });
+
+  it('still applies zoom markers posted by the injected script', () => {
+    const { container, getByText } = render(
+      <WebviewHost url={STAROFFICE_URL} showNavBar interceptNavigation={false} />
+    );
+
+    fire(getWebview(container), consoleMessage('__AIONUI_WEBVIEW_ZOOM__ {"deltaY":-100}'));
+
+    expect(getByText('108%')).not.toBeNull();
   });
 });

@@ -288,9 +288,14 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     const handleConsoleMessage = (event: Electron.ConsoleMessageEvent) => {
       try {
         if (event.message.includes('__WEBVIEW_HOST_NAVIGATE__')) {
-          const match = event.message.match(/"url":"([^"]+)"/);
-          if (match && match[1]) {
-            navigateToWithHistory(match[1]);
+          // Only the injected interceptor legitimately posts this marker. In native mode no
+          // script is injected, so any marker came from the page itself and honoring it would
+          // let a page make the host load URLs (e.g. file:) that it cannot navigate to on its own.
+          if (interceptNavigation) {
+            const match = event.message.match(/"url":"([^"]+)"/);
+            if (match && match[1]) {
+              navigateToWithHistory(match[1]);
+            }
           }
           return;
         }
