@@ -185,14 +185,32 @@ describe('agent browser services: confirm gate', () => {
   it('publishes a risky ask with the tab origin, and the pane reply decides it', async () => {
     const relay = await start();
     const send = await connect(relay, 'claude');
-    newTab(21);
+    const tab = newTab(21);
+    tab.debugger.handler = (method) =>
+      method === 'Page.getFrameTree'
+        ? { frameTree: { frame: { id: 'TOP', url: 'https://example.com/', securityOrigin: 'https://example.com' } } }
+        : {};
     await call('share', { webContentsId: 21, on: true });
+    const sessionId = String(
+      (await send('Target.attachToTarget', { targetId: 'wc-21', flatten: true })).result?.sessionId
+    );
 
-    const answer = send('AionRelay.requestConfirm', { webContentsId: 21, label: 'Delete account' });
+    const answer = send('AionRelay.requestConfirm', {
+      webContentsId: 21,
+      label: 'Delete account',
+      sessionId,
+      frameId: 'TOP',
+    });
     await vi.waitFor(() => expect(confirmed().length).toBeGreaterThan(0));
     const [open] = (await call('getConfirmRequests')).data as Array<{ id: string }>;
     expect(confirmed().at(-1)?.[0]).toEqual([
-      { id: open.id, origin: 'https://example.com', label: 'Delete account', clientLabel: 'claude' },
+      {
+        id: open.id,
+        origin: 'https://example.com',
+        frameOrigin: 'https://example.com',
+        label: 'Delete account',
+        clientLabel: 'claude',
+      },
     ]);
 
     expect(await call('replyConfirm', { id: open.id, allow: true, alwaysForSite: false })).toEqual({ success: true });

@@ -40,6 +40,8 @@ export class FakeContents extends EventEmitter {
   private destroyed = false;
 
   zoom = 1;
+  /** A navigation that has started but not committed: `getURL()` shows it, the main frame does not. */
+  pendingUrl: string | null = null;
 
   constructor(
     readonly id: number,
@@ -64,7 +66,11 @@ export class FakeContents extends EventEmitter {
   }
 
   getURL(): string {
-    return this.url;
+    return this.pendingUrl ?? this.url;
+  }
+
+  get mainFrame(): { url: string } {
+    return { url: this.url };
   }
 
   getTitle(): string {

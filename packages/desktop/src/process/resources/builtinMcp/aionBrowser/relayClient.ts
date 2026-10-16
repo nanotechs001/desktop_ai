@@ -179,16 +179,23 @@ export class RelayClient {
   }
 
   /**
-   * Asks the user (AionRelay.requestConfirm) to allow a risky action on `targetId`. Waits for their answer, up to
-   * the relay's timeout; fails closed: anything but an explicit Allow, including a lost connection, is false.
+   * Asks the user (AionRelay.requestConfirm) to allow a risky action on `targetId`, in the frame `frame` names (the
+   * relay looks up that frame's origin itself). Waits for their answer, up to the relay's timeout; fails closed:
+   * anything but an explicit Allow, including a lost connection, is false.
    */
-  async requestConfirm(targetId: string, label: string): Promise<boolean> {
+  async requestConfirm(
+    targetId: string,
+    label: string,
+    frame: { sessionId: string; frameId: string }
+  ): Promise<boolean> {
     const match = TARGET_ID.exec(targetId);
     if (!match) return false;
     try {
       const reply = await this.connection.send<{ allow?: unknown }>('AionRelay.requestConfirm', {
         webContentsId: Number(match[1]),
         label,
+        sessionId: frame.sessionId,
+        frameId: frame.frameId,
       });
       return reply.allow === true;
     } catch {

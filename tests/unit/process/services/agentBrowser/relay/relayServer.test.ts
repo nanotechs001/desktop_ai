@@ -576,91 +576,141 @@ describe('relay server: AionRelay methods', () => {
   });
 
   describe('requestConfirm', () => {
-    const confirmTab = async (url = 'https://shop.test/cart?x=1#y') => {
-      const client = await connect(await start());
-      const contents = new FakeContents(40, url);
-      registry.track(contents);
-      registry.claim(40, relay?.clients()[0] as RelayClient);
-      return { client, contents };
+    const TREE = {
+      frameTree: {
+        frame: { id: 'TOP', url: 'https://shop.test/cart?x=1#y', securityOrigin: 'https://shop.test' },
+        childFrames: [
+          { frame: { id: 'PAY', url: 'https://pay.test/card', securityOrigin: 'https://pay.test' } },
+          { frame: { id: 'BLANK', url: 'about:blank', securityOrigin: 'null' } },
+        ],
+      },
     };
 
-    it('asks with the origin of the tab url and a cleaned, bounded label, and returns the answer', async () => {
-      const { client } = await confirmTab();
+    /** An agent-owned tab, an attached session, and `ask(…)` for the request the MCP would send. */
+    const confirmTab = async (url = 'https://shop.test/cart?x=1#y', id = 40) => {
+      const client = await connect(await start());
+      const contents = new FakeContents(id, url);
+      contents.debugger.handler = (method) => (method === 'Page.getFrameTree' ? TREE : {});
+      registry.track(contents);
+      registry.claim(id, relay?.clients()[0] as RelayClient);
+      const sessionId = await attach(client, id);
+      const ask = (patch: Record<string, unknown> = {}) =>
+        client.send('AionRelay.requestConfirm', {
+          webContentsId: id,
+          label: 'Send',
+          sessionId,
+          frameId: 'TOP',
+          ...patch,
+        });
+      return { client, contents, sessionId, ask };
+    };
+
+    it('asks with the tab and frame origins from its own state and a cleaned, bounded label', async () => {
+      const { ask } = await confirmTab();
       requestConfirm.mockResolvedValueOnce(true);
       const label = `Pay\u202e\n now ${'x'.repeat(300)}`;
-      const reply = await client.send('AionRelay.requestConfirm', {
-        webContentsId: 40,
-        label,
-        origin: 'https://evil.test',
-      });
+      const reply = await ask({ label, origin: 'https://evil.test', frameOrigin: 'https://evil.test' });
       expect(reply.result).toEqual({ allow: true });
-      const [ask] = requestConfirm.mock.calls[0];
-      expect(ask).toEqual({ origin: 'https://shop.test', label: `Pay now ${'x'.repeat(112)}`, clientLabel: 'claude' });
-      requestConfirm.mockResolvedValueOnce(false);
-      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' })).result).toEqual({
-        allow: false,
+      expect(requestConfirm.mock.calls[0][0]).toEqual({
+        origin: 'https://shop.test',
+        frameOrigin: 'https://shop.test',
+        label: `Pay now ${'x'.repeat(112)}`,
+        clientLabel: 'claude',
       });
+      requestConfirm.mockResolvedValueOnce(false);
+      expect((await ask()).result).toEqual({ allow: false });
     });
 
-    it('denies without asking for opaque origins, a tab that is gone, or an erroring gate', async () => {
-      const { client } = await confirmTab('about:blank');
-      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' })).result).toEqual({
-        allow: false,
+    it('takes the origin of a control in a cross-origin frame from the frame tree', async () => {
+      const { ask } = await confirmTab();
+      requestConfirm.mockResolvedValue(true);
+      await ask({ frameId: 'PAY' });
+      expect(requestConfirm.mock.calls[0][0]).toMatchObject({
+        origin: 'https://shop.test',
+        frameOrigin: 'https://pay.test',
       });
+      // A frame the tree does not know, or one without a web origin, is a denial without asking.
+      expect((await ask({ frameId: 'GONE' })).result).toEqual({ allow: false });
+      expect((await ask({ frameId: 'BLANK' })).result).toEqual({ allow: false });
+      expect(requestConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses the committed main-frame url, not a pending navigation', async () => {
+      const { ask, contents } = await confirmTab();
+      contents.pendingUrl = 'https://evil.test/';
+      requestConfirm.mockResolvedValue(true);
+      await ask();
+      expect(requestConfirm.mock.calls[0][0]).toMatchObject({ origin: 'https://shop.test' });
+    });
+
+    it('denies without asking when the tab has no web origin, and when the gate errors', async () => {
+      const blank = await confirmTab('about:blank');
+      expect((await blank.ask()).result).toEqual({ allow: false });
       expect(requestConfirm).not.toHaveBeenCalled();
 
-      const gone = ownedTab(41, 'claude');
-      gone.destroy();
-      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 41, label: 'Send' })).error).toBeDefined();
-
+      const { client } = blank;
       const web = new FakeContents(42, 'https://shop.test/');
+      web.debugger.handler = (method) => (method === 'Page.getFrameTree' ? TREE : {});
       registry.track(web);
       registry.claim(42, relay?.clients()[0] as RelayClient);
+      const sessionId = await attach(client, 42);
       requestConfirm.mockRejectedValueOnce(new Error('renderer gone'));
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 42, label: 'Send' })).result).toEqual({
-        allow: false,
+      const reply = await client.send('AionRelay.requestConfirm', {
+        webContentsId: 42,
+        label: 'Send',
+        sessionId,
+        frameId: 'TOP',
       });
+      expect(reply.result).toEqual({ allow: false });
       warn.mockRestore();
     });
 
-    it('refuses malformed params and tabs the client may not act on', async () => {
-      const { client } = await confirmTab();
-      const bad = [{ label: 'Send' }, { webContentsId: '40', label: 'Send' }, { webContentsId: 40, label: 5 }];
-      const replies = await Promise.all(bad.map((params) => client.send('AionRelay.requestConfirm', params)));
-      expect(replies.map((reply) => reply.error !== undefined)).toEqual([true, true, true]);
+    it('refuses malformed params, foreign sessions and tabs the client may not act on', async () => {
+      const { client, ask, sessionId } = await confirmTab();
+      const bad = [
+        { sessionId: undefined },
+        { frameId: undefined },
+        { webContentsId: '40' },
+        { label: 5 },
+        { sessionId: 'nope' },
+        { webContentsId: 41 },
+      ];
+      const replies = await Promise.all(bad.map((patch) => ask(patch)));
+      expect(replies.map((reply) => reply.error !== undefined)).toEqual(bad.map(() => true));
       registry.track(new FakeContents(43, 'https://a.test/'));
-      const other = await client.send('AionRelay.requestConfirm', { webContentsId: 43, label: 'Send' });
+      const other = await client.send('AionRelay.requestConfirm', {
+        webContentsId: 43,
+        label: 'Send',
+        sessionId,
+        frameId: 'TOP',
+      });
       expect(other.error?.message).toMatch(/not shared/);
       expect(requestConfirm).not.toHaveBeenCalled();
     });
 
     it('denies the third pending confirm of a client', async () => {
-      const { client } = await confirmTab();
+      const { ask } = await confirmTab();
       const answers: Array<(allow: boolean) => void> = [];
       requestConfirm.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
-      const first = client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' });
-      const second = client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Pay' });
+      const first = ask();
+      const second = ask({ label: 'Pay' });
       await vi.waitFor(() => expect(answers).toHaveLength(2));
-      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Delete' })).result).toEqual({
-        allow: false,
-      });
+      expect((await ask({ label: 'Delete' })).result).toEqual({ allow: false });
       expect(requestConfirm).toHaveBeenCalledTimes(2);
       answers.forEach((answer) => answer(true));
       expect((await first).result).toEqual({ allow: true });
       expect((await second).result).toEqual({ allow: true });
       // The slots are free again.
       requestConfirm.mockResolvedValueOnce(true);
-      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' })).result).toEqual({
-        allow: true,
-      });
+      expect((await ask()).result).toEqual({ allow: true });
     });
 
     it.each([
       ['the tab navigates', (c: FakeContents) => c.navigate('https://evil.test/')],
       ['the tab closes', (c: FakeContents) => c.destroy()],
     ])('aborts the pending confirm when %s', async (_name, trigger) => {
-      const { client, contents } = await confirmTab();
+      const { ask, contents } = await confirmTab();
       let signal: AbortSignal | undefined;
       requestConfirm.mockImplementation(
         (_ask, s) =>
@@ -669,7 +719,7 @@ describe('relay server: AionRelay methods', () => {
             s.addEventListener('abort', () => resolve(false));
           })
       );
-      const reply = client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' });
+      const reply = ask();
       await vi.waitFor(() => expect(signal).toBeDefined());
       expect(signal?.aborted).toBe(false);
       // A subframe or same-document navigation leaves the confirmed control where it is.
@@ -682,13 +732,13 @@ describe('relay server: AionRelay methods', () => {
     });
 
     it('aborts the pending confirm when the client disconnects', async () => {
-      const { client } = await confirmTab();
+      const { client, ask } = await confirmTab();
       let signal: AbortSignal | undefined;
       requestConfirm.mockImplementation((_ask, s) => {
         signal = s;
         return new Promise(() => {});
       });
-      void client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' });
+      void ask();
       await vi.waitFor(() => expect(signal).toBeDefined());
       client.ws.terminate();
       await vi.waitFor(() => expect(signal?.aborted).toBe(true));

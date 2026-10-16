@@ -39,6 +39,7 @@ const KEY = 'preview.browserChrome.confirm';
 const request = (id: string, patch: Partial<ConfirmRequest> = {}): ConfirmRequest => ({
   id,
   origin: `https://${id}.test`,
+  frameOrigin: `https://${id}.test`,
   label: `Publish ${id}`,
   clientLabel: 'aion-browser-claude',
   ...patch,
@@ -49,6 +50,9 @@ const mount = async (initial: ConfirmRequest[] = []) => {
   render(<ConfirmPrompt />);
   await act(async () => {});
 };
+
+/** Waits out the delay before Allow turns on. */
+const armAllow = () => act(async () => new Promise((resolve) => setTimeout(resolve, 520)));
 
 const push = (open: ConfirmRequest[]) => act(() => mocks.handler?.(open));
 
@@ -77,12 +81,43 @@ describe('ConfirmPrompt', () => {
 
   it('Allow replies allow without always-allow unless the box is checked', async () => {
     await mount([request('a')]);
+    await armAllow();
     fireEvent.click(screen.getByText(`${KEY}.allow`));
     expect(mocks.replyConfirm).toHaveBeenLastCalledWith({ id: 'a', allow: true, alwaysForSite: false });
 
     fireEvent.click(screen.getByText(`${KEY}.always`));
     fireEvent.click(screen.getByText(`${KEY}.allow`));
     expect(mocks.replyConfirm).toHaveBeenLastCalledWith({ id: 'a', allow: true, alwaysForSite: true });
+  });
+
+  it('gives the first focus to Deny, not to the always-allow box or Allow', async () => {
+    await mount([request('a')]);
+    expect(document.activeElement?.textContent).toBe(`${KEY}.deny`);
+  });
+
+  it('keeps Allow off for 500 ms after an ask appears, and again when the next ask replaces it', async () => {
+    await mount([request('a'), request('b')]);
+    const allow = () => screen.getByText(`${KEY}.allow`).closest('button') as HTMLButtonElement;
+    expect(allow().disabled).toBe(true);
+    fireEvent.click(allow());
+    expect(mocks.replyConfirm).not.toHaveBeenCalled();
+
+    await armAllow();
+    expect(allow().disabled).toBe(false);
+    await push([request('b')]);
+    expect(allow().disabled).toBe(true);
+    fireEvent.click(allow());
+    expect(mocks.replyConfirm).not.toHaveBeenCalled();
+    // Deny is never delayed.
+    fireEvent.click(screen.getByText(`${KEY}.deny`));
+    expect(mocks.replyConfirm).toHaveBeenCalledWith({ id: 'b', allow: false, alwaysForSite: false });
+  });
+
+  it('names the frame origin only when the control sits in a frame of another origin', async () => {
+    await mount([request('a')]);
+    expect(screen.queryByText(/confirm\.frame/)).toBeNull();
+    await push([request('a', { frameOrigin: 'https://pay.test' })]);
+    expect(screen.getByText(`${KEY}.frame @ https://pay.test`)).toBeTruthy();
   });
 
   it('Deny never asks to remember the site, even with the box checked', async () => {
@@ -120,6 +155,7 @@ describe('ConfirmPrompt', () => {
 
     await push([request('b')]);
     expect(screen.getByText('Publish b')).toBeTruthy();
+    await armAllow();
     fireEvent.click(screen.getByText(`${KEY}.allow`));
     expect(mocks.replyConfirm).toHaveBeenCalledWith({ id: 'b', allow: true, alwaysForSite: false });
   });

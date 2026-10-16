@@ -1298,6 +1298,7 @@ export type I18nKey =
   | 'preview.browserChrome.confirm.allow'
   | 'preview.browserChrome.confirm.always'
   | 'preview.browserChrome.confirm.deny'
+  | 'preview.browserChrome.confirm.frame'
   | 'preview.browserChrome.confirm.message'
   | 'preview.browserChrome.confirm.title'
   | 'preview.browserChrome.crash.crashed'

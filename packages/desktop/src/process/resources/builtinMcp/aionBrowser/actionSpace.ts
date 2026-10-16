@@ -14,7 +14,7 @@ import {
   type FrameFailure,
   type FrameHandle,
 } from './frames';
-import { sanitizePageText } from './pageText';
+import { sanitizePageText } from '@/common/utils/utils';
 import SNAPSHOT_SOURCE from './snapshot.js?raw';
 
 /** Rows per observe; the rest is counted and the agent narrows with `scope`. */

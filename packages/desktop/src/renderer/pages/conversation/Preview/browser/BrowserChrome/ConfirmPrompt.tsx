@@ -12,6 +12,9 @@ import type { ConfirmRequest } from '@/common/types/browser';
 
 const KEY = 'preview.browserChrome.confirm';
 
+/** Allow stays disabled this long after an ask appears, so a click or Enter aimed at the previous one cannot allow it. */
+const ARM_DELAY_MS = 500;
+
 const reply = (id: string, allow: boolean, alwaysForSite: boolean): void => {
   // A request that timed out or was withdrawn meanwhile is already gone, so a failed reply needs no feedback.
   void ipcBridge.agentBrowser.replyConfirm.invoke({ id, allow, alwaysForSite }).catch((): void => undefined);
@@ -20,18 +23,30 @@ const reply = (id: string, allow: boolean, alwaysForSite: boolean): void => {
 const PromptBody: React.FC<{ request: ConfirmRequest }> = ({ request }) => {
   const { t } = useTranslation();
   const [always, setAlways] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const deny = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    // Enter or Space on the freshly opened dialog must never allow: Deny has the focus, Allow waits.
+    deny.current?.focus();
+    const timer = setTimeout(() => setArmed(true), ARM_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className='flex flex-col gap-16px'>
       <div>{t(`${KEY}.message`, { origin: request.origin })}</div>
+      {request.frameOrigin !== request.origin && <div>{t(`${KEY}.frame`, { origin: request.frameOrigin })}</div>}
       {/* The label is the page's own text: shown as plain text, never as markup. */}
       <div className='break-all font-bold'>{request.label}</div>
       <Checkbox checked={always} onChange={setAlways}>
         {t(`${KEY}.always`)}
       </Checkbox>
       <div className='flex justify-end gap-8px'>
-        <Button onClick={() => reply(request.id, false, false)}>{t(`${KEY}.deny`)}</Button>
-        <Button type='primary' onClick={() => reply(request.id, true, always)}>
+        <Button ref={deny} onClick={() => reply(request.id, false, false)}>
+          {t(`${KEY}.deny`)}
+        </Button>
+        <Button type='primary' disabled={!armed} onClick={() => reply(request.id, true, always)}>
           {t(`${KEY}.allow`)}
         </Button>
       </div>
@@ -62,7 +77,13 @@ const ConfirmPrompt: React.FC = () => {
 
   return (
     // Esc, the close button and a mask click all count as Deny.
-    <Modal visible title={t(`${KEY}.title`)} footer={null} onCancel={() => reply(current.id, false, false)}>
+    <Modal
+      visible
+      autoFocus={false}
+      title={t(`${KEY}.title`)}
+      footer={null}
+      onCancel={() => reply(current.id, false, false)}
+    >
       <PromptBody key={current.id} request={current} />
     </Modal>
   );

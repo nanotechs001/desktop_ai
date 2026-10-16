@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizePageText } from '@process/resources/builtinMcp/aionBrowser/pageText';
+import { sanitizePageText } from '@/common/utils/utils';
 
 describe('sanitizePageText', () => {
   it('does not split a surrogate pair at the cut', () => {

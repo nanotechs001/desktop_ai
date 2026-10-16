@@ -22,7 +22,7 @@ import {
   type ActionContext,
 } from './actions';
 import { formatObservation, observePage } from './actionSpace';
-import { sanitizePageText } from './pageText';
+import { sanitizePageText } from '@/common/utils/utils';
 import { RELAY_ENV_MISSING, RelayConnectError, type RelayClient } from './relayClient';
 
 /** Same value as BUILTIN_BROWSER_MCP_NAME; common/config/constants is not imported to keep the bundle small. */
@@ -174,7 +174,7 @@ const screenshotInput = {
   target: targetId.optional(),
 };
 
-const CLICK_POINT_DESCRIPTION = `${PANE_SENTENCE} Fallback only: click at x, y in CSS px of the tab's visible area (the pixels of a screenshot without target). It skips the freshness checks act makes, so prefer act with an observed id; use this for canvases or controls observe does not list. ${UNTRUSTED_SENTENCE}`;
+const CLICK_POINT_DESCRIPTION = `${PANE_SENTENCE} Fallback only: click at x, y in CSS px of the tab's visible area (the pixels of a screenshot without target). It skips the freshness checks act makes, so prefer act with an observed id; use this for canvases or controls observe does not list. On a risky control (Publish, Send, Pay, Delete…) the user is asked first: denied means they refused, so do not retry or work around it unless they ask. Returns done, stale (observe again), denied or paused. ${UNTRUSTED_SENTENCE}`;
 
 const clickPointInput = {
   tab: z.string().optional().describe('A tab id from tabs. Defaults to the current tab.'),
@@ -213,7 +213,7 @@ const onTab = async (
       conn: relay.connection,
       sessionId,
       report: (action) => relay.reportAction(target, action),
-      confirm: (label) => relay.requestConfirm(target, label),
+      confirm: (label, frame) => relay.requestConfirm(target, label, frame),
     });
   });
 };

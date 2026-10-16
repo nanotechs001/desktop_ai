@@ -51,30 +51,74 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
 }`;
 
 /**
- * (node) → labels of what an Enter press may activate: the control (the observed `node`, or the focused element
- * when `node` is null) unless it is a text field, and the submit button of its form, which Enter submits. Needs
- * no snapshot state, so an unobserved page is covered too. Labels are the page's own text, cut to 200 chars.
+ * The one in-page source of "what does this control say it does", shared by {@link ENTER_LABELS} and
+ * {@link POINT_LABELS}: `labelsOf(e)` is the observe name (window.__aionFast.guard) when the frame was observed,
+ * plus the control's own text (aria-label, value of a button input, text, title, alt); a text field says only what
+ * it is labelled as (aria-label, labels, title, placeholder), never what is typed in it. Page text, cut to 200 chars.
  */
-export const ENTER_LABELS = `function (node) {
+const LABELS_OF = `const buttonLike = ['button', 'submit', 'reset', 'image'];
+  const isField = (e) =>
+    e.matches('textarea,select,[contenteditable]:not([contenteditable="false"])') ||
+    (e.tagName === 'INPUT' && !buttonLike.includes(e.type) && e.type !== 'checkbox' && e.type !== 'radio');
+  const labelsOf = (e) => {
+    let named = '';
+    try {
+      const c = window.__aionFast;
+      const g = c && c.guard ? c.guard(e) : null;
+      named = g && g[2] ? String(g[2]) : '';
+    } catch {
+      named = '';
+    }
+    const parts = isField(e)
+      ? [e.getAttribute('aria-label'), [...(e.labels || [])].map((l) => l.textContent).join(' '), e.title, e.placeholder]
+      : [e.getAttribute('aria-label'), buttonLike.includes(e.type) ? e.value : '', e.innerText || e.textContent, e.title, e.alt];
+    const text = parts.filter((part) => typeof part === 'string' && part.trim()).join(' ');
+    return [...new Set([named, text].filter(Boolean).map((label) => label.slice(0, 200)))];
+  };`;
+
+/**
+ * (node, key) → `{labels, framed, focused}` for a Space or Enter press. The control is the observed `node` or, when
+ * node is null, the focused element (through open shadow roots). Enter: its labels (a text field's own label too,
+ * e.g. a composer) and those of every submit button its form has, `form="id"` buttons and image inputs included.
+ * Space: the control's labels, unless it is a text field (a space typed there activates nothing). `framed`: the
+ * focus is on an iframe element, so the real target is in another frame; `focused`: this document has focus.
+ */
+export const ENTER_LABELS = `function (node, key) {
   const c = window.__aionFast;
+  ${LABELS_OF}
   let e = node === null ? document.activeElement : c && c.nodes.get(node);
   while (node === null && e && e.shadowRoot && e.shadowRoot.activeElement) e = e.shadowRoot.activeElement;
-  if (!e || e === document.body || e === document.documentElement) return [];
-  const buttonLike = ['button', 'submit', 'reset', 'image'];
-  const label = (x) =>
-    [x.getAttribute('aria-label'), buttonLike.includes(x.type) ? x.value : '', x.innerText || x.textContent, x.title, x.alt]
-      .filter((part) => typeof part === 'string' && part.trim())
-      .join(' ')
-      .slice(0, 200);
-  const field = e.matches('textarea,select,[contenteditable]:not([contenteditable="false"]),input:not(' +
-    buttonLike.map((type) => '[type="' + type + '"]').join(',') + ',[type="checkbox"],[type="radio"])');
-  const labels = field ? [] : [label(e)];
-  const form = e.form || e.closest('form');
-  const submit = form && e.tagName !== 'TEXTAREA' && form.querySelector(
-    'button:not([type]),button[type="submit"],input[type="submit"],input[type="image"]'
-  );
-  if (submit) labels.push(label(submit));
-  return labels;
+  const none = { labels: [], framed: false, focused: document.hasFocus() };
+  if (!e || e === document.body || e === document.documentElement) return none;
+  if (e.tagName === 'IFRAME' || e.tagName === 'FRAME') return { ...none, framed: true };
+  const labels = key === 'Enter' || !isField(e) ? labelsOf(e) : [];
+  const form = key === 'Enter' && e.tagName !== 'TEXTAREA' && !e.isContentEditable && (e.form || e.closest('form'));
+  if (form) {
+    const submit = [...form.elements].find((x) => x.type === 'submit');
+    if (submit) labels.push(...labelsOf(submit));
+    for (const image of form.querySelectorAll('input[type="image"]')) labels.push(...labelsOf(image));
+  }
+  return { ...none, labels };
+}`;
+
+/**
+ * (x, y) → labels of the control under the frame-local point, for a click_point: the topmost element there
+ * (through open shadow roots), then the nearest button, link, input or button/link/menuitem role up its ancestors
+ * (through shadow hosts). Empty when the point is on no such control.
+ */
+export const POINT_LABELS = `function (x, y) {
+  ${LABELS_OF}
+  let hit = document.elementFromPoint(x, y);
+  while (hit && hit.shadowRoot) {
+    const inner = hit.shadowRoot.elementFromPoint(x, y);
+    if (!inner || inner === hit) break;
+    hit = inner;
+  }
+  const control = 'button,a,input,[role="button"],[role="link"],[role="menuitem"]';
+  for (let node = hit; node; node = node.parentNode || node.host) {
+    if (node.nodeType === 1 && node.matches(control)) return labelsOf(node);
+  }
+  return [];
 }`;
 
 /** (node, label) → true once the first enabled option of a native select with exactly that label is chosen. */

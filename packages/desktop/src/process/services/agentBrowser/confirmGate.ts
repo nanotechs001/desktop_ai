@@ -6,7 +6,7 @@
 
 // Also bundled into the standalone aion-browser MCP (isRiskyLabel): no electron imports here.
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { ConfirmRequest } from '@/common/types/browser';
@@ -32,16 +32,38 @@ export const webOriginOf = (url: string): string | null => {
 
 const defaultAllowFile = (): string => path.join(homedir(), '.aionui', 'browser-allow.json');
 
-/** Origins the user chose "Always allow" for; empty when the file is missing or corrupt. */
+/** The file is a short list; anything bigger is not ours and reads as empty. */
+const MAX_ALLOW_FILE_BYTES = 64 * 1024;
+const MAX_ALLOWED_ENTRIES = 500;
+
+/**
+ * What "Always allow" remembers: the page origin, and, for a control in a frame of another origin, the pair
+ * `page|frame`, so a site allowed at the top never covers a risky control inside an embedded cross-origin frame.
+ */
+export const allowKey = ({ origin, frameOrigin }: Pick<ConfirmRequest, 'origin' | 'frameOrigin'>): string =>
+  origin === frameOrigin ? origin : `${origin}|${frameOrigin}`;
+
+/** Origin keys the user chose "Always allow" for; empty when the file is missing, oversized or corrupt. */
 export function loadAllowedOrigins(file: string): ReadonlySet<string> {
   try {
+    if (statSync(file).size > MAX_ALLOW_FILE_BYTES) return new Set();
     const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
     const origins = (parsed as { origins?: unknown } | null)?.origins;
-    return new Set(Array.isArray(origins) ? origins.filter((o): o is string => typeof o === 'string') : []);
+    const strings = Array.isArray(origins) ? origins.filter((o): o is string => typeof o === 'string') : [];
+    return new Set(strings.slice(0, MAX_ALLOWED_ENTRIES));
   } catch {
     return new Set();
   }
 }
+
+/** When the file last changed; -1 when it is missing. */
+const mtimeOf = (file: string): number => {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return -1;
+  }
+};
 
 /** Writes the allowed origins atomically (temp file, then rename). */
 function saveAllowedOrigins(file: string, origins: ReadonlySet<string>): void {
@@ -62,7 +84,8 @@ export class PendingConfirms {
   private readonly open = new Map<string, Open>();
   private readonly listeners = new Set<(open: ConfirmRequest[]) => void>();
   private readonly file: string;
-  private allowed: ReadonlySet<string> | undefined;
+  /** The allow list as of the file's `mtime`; read again whenever the file changed. */
+  private allowed: { mtime: number; origins: ReadonlySet<string> } | undefined;
 
   constructor({ file = defaultAllowFile() }: { file?: string } = {}) {
     this.file = file;
@@ -74,7 +97,7 @@ export class PendingConfirms {
    */
   request(req: Omit<ConfirmRequest, 'id'>, timeoutMs = CONFIRM_TIMEOUT_MS, signal?: AbortSignal): Promise<boolean> {
     if (signal?.aborted) return Promise.resolve(false);
-    if (this.allowedOrigins().has(req.origin)) return Promise.resolve(true);
+    if (this.allowedOrigins().has(allowKey(req))) return Promise.resolve(true);
     return new Promise((resolve) => {
       const id = randomUUID();
       const deny = (): void => void this.reply(id, false, false);
@@ -95,7 +118,7 @@ export class PendingConfirms {
     if (!entry) return false;
     entry.release();
     this.open.delete(id);
-    if (allow && alwaysForSite) this.remember(entry.request.origin);
+    if (allow && alwaysForSite) this.remember(allowKey(entry.request));
     this.notify();
     entry.resolve(allow);
     return true;
@@ -113,15 +136,20 @@ export class PendingConfirms {
   }
 
   private allowedOrigins(): ReadonlySet<string> {
-    return (this.allowed ??= loadAllowedOrigins(this.file));
+    const mtime = mtimeOf(this.file);
+    if (this.allowed?.mtime !== mtime) this.allowed = { mtime, origins: loadAllowedOrigins(this.file) };
+    return this.allowed.origins;
   }
 
-  private remember(origin: string): void {
-    this.allowed = new Set([...this.allowedOrigins(), origin]);
+  private remember(key: string): void {
+    // The newest entries win once the list is full.
+    const origins = new Set([...this.allowedOrigins(), key].slice(-MAX_ALLOWED_ENTRIES));
     try {
-      saveAllowedOrigins(this.file, this.allowed);
+      saveAllowedOrigins(this.file, origins);
+      this.allowed = { mtime: mtimeOf(this.file), origins };
     } catch (error) {
-      // The answer still holds for this run.
+      // The answer still holds for this run: the unchanged file keeps the cached list.
+      this.allowed = { mtime: this.allowed?.mtime ?? mtimeOf(this.file), origins };
       console.error('[AgentBrowser] failed to save allowed sites:', error);
     }
   }

@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ENTER_LABELS } from '@process/resources/builtinMcp/aionBrowser/inPage';
+import { ENTER_LABELS, POINT_LABELS } from '@process/resources/builtinMcp/aionBrowser/inPage';
 import { RelayClient } from '@process/resources/builtinMcp/aionBrowser/relayClient';
 import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
 import { FakeRelay } from './fakeRelay';
@@ -21,6 +21,9 @@ const snapshotValue = {
   page_key: 'pk',
   guards: { 3: 'g3' },
 };
+
+/** What ENTER_LABELS reports: the labels, and whether focus is on an iframe element / in this document. */
+const focusReport = (labels: string[], framed = false, focused = true) => ({ labels, framed, focused });
 
 let relay: FakeRelay;
 let client: Client;
@@ -56,11 +59,14 @@ beforeEach(async () => {
   }));
   relay.on('Page.createIsolatedWorld', () => ({ executionContextId: 41 }));
   relay.on('Runtime.evaluate', () => ({ result: { type: 'object', value: snapshotValue } }));
-  relay.on('Runtime.callFunctionOn', (params) =>
-    String(params.functionDeclaration).includes('elementFromPoint')
+  relay.on('Runtime.callFunctionOn', (params) => {
+    const fn = String(params.functionDeclaration);
+    if (fn === ENTER_LABELS) return { result: { type: 'object', value: focusReport([]) } };
+    if (fn === POINT_LABELS) return { result: { type: 'object', value: [] } };
+    return fn.includes('elementFromPoint')
       ? { result: { type: 'object', value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label: 'Save', role: 'button' } } }
-      : { result: { type: 'undefined' } }
-  );
+      : { result: { type: 'undefined' } };
+  });
   relay.on('Input.dispatchMouseEvent', () => ({}));
   relay.on('AionRelay.reportAction', () => ({}));
   relayClient = new RelayClient(relay.env, () => 'test-agent');
@@ -185,37 +191,54 @@ describe('act tool', () => {
 });
 
 describe('confirm gate', () => {
-  /** What the in-page resolve reports for the target; `enter` is what ENTER_LABELS finds around a key press. */
-  const page = (label: string, enter: string[] = []) =>
-    relay.on('Runtime.callFunctionOn', (params) => {
+  type Reply = { result: { type: string; value?: unknown } };
+  /**
+   * What the in-page checks report: `label` for the resolve of an observed target; `enter` for ENTER_LABELS (one
+   * report, or a function of the call number); `point` for POINT_LABELS.
+   */
+  const page = (
+    label: string,
+    enter: string[] | ((call: number) => unknown) = [],
+    point: string[] | (() => unknown) = []
+  ) => {
+    let calls = 0;
+    relay.on('Runtime.callFunctionOn', (params): Reply => {
       const fn = String(params.functionDeclaration);
-      if (fn === ENTER_LABELS) return { result: { type: 'object', value: enter } };
+      if (fn === ENTER_LABELS) {
+        const value = typeof enter === 'function' ? enter(calls++) : focusReport(enter);
+        return { result: { type: 'object', value } };
+      }
+      if (fn === POINT_LABELS)
+        return { result: { type: 'object', value: typeof point === 'function' ? point() : point } };
       return fn.includes('elementFromPoint')
         ? { result: { type: 'object', value: { rect: { x: 10, y: 20, w: 80, h: 30 }, label, role: 'button' } } }
         : { result: { type: 'undefined' } };
     });
+  };
   const answerWith = (allow: boolean) => relay.on('AionRelay.requestConfirm', () => ({ allow }));
+  const asked = () => relay.callsTo('AionRelay.requestConfirm');
   const resolves = () =>
     relay.callsTo('Runtime.callFunctionOn').filter((p) => String(p.functionDeclaration).includes('elementFromPoint'));
   const results = async (actions: Array<Record<string, unknown>>) =>
     JSON.parse(textOf(await call('act', { actions }))) as {
-      results: Array<{ result: string }>;
+      results: Array<{ result: string; reason?: string }>;
       stopped?: string;
     };
+  const FRAME = { sessionId: 's1', frameId: 'F1' };
 
   beforeEach(() => {
     relay.on('Input.dispatchKeyEvent', () => ({}));
   });
 
-  it('a risky click waits for the answer, asks with the observed label, and re-checks the target after Allow', async () => {
+  it('a risky click waits for the answer, asks with the observed label and frame, and re-checks the target after Allow', async () => {
     const id = await openAndObserve();
     page('Publish');
     const answer = Promise.withResolvers<{ allow: boolean }>();
     relay.on('AionRelay.requestConfirm', () => answer.promise);
 
     const acting = results([{ op: 'click', target: id }]);
-    await vi.waitFor(() => expect(relay.callsTo('AionRelay.requestConfirm')).toHaveLength(1));
-    expect(relay.callsTo('AionRelay.requestConfirm')[0]).toEqual({ webContentsId: 7, label: 'Publish' });
+    await vi.waitFor(() => expect(asked()).toHaveLength(1));
+    expect(asked()[0]).toEqual({ webContentsId: 7, label: 'Publish', ...FRAME });
     expect(inputRequests()).toEqual([]);
 
     answer.resolve({ allow: true });
@@ -258,32 +281,92 @@ describe('confirm gate', () => {
       { op: 'hover', target: id },
       { op: 'type', target: id, text: 'x' },
     ]);
-    expect(relay.callsTo('AionRelay.requestConfirm')).toEqual([]);
+    expect(asked()).toEqual([]);
   });
 
-  it('Enter on a target asks when the target or its form submit button is risky, and clicks nothing on Deny', async () => {
+  it('Enter on a target asks when the target or its form submit button is risky, and sends nothing on Deny', async () => {
     const id = await openAndObserve();
     answerWith(false);
     page('Search', ['Search', 'Pay now']);
     expect((await results([{ op: 'press', key: 'Enter', target: id }])).results[0].result).toBe('denied');
-    expect(relay.callsTo('AionRelay.requestConfirm')[0]).toMatchObject({ label: 'Pay now' });
+    expect(asked()[0]).toMatchObject({ label: 'Pay now' });
     page('Remove item', []);
     expect((await results([{ op: 'press', key: 'Escape', target: id }])).results[0].result).toBe('denied');
     expect(inputRequests()).toEqual([]);
   });
 
-  it('Enter without a target asks about the focused control and its form, and only for a risky one', async () => {
-    await openAndObserve();
-    page('Save', ['Delete account']);
-    answerWith(false);
-    expect((await results([{ op: 'press', key: 'Enter' }])).results[0].result).toBe('denied');
-    expect(relay.callsTo('AionRelay.requestConfirm')).toEqual([{ webContentsId: 7, label: 'Delete account' }]);
+  it.each(['Enter', 'Space'])(
+    '%s without a target asks about the focused control, and only for a risky one',
+    async (key) => {
+      await openAndObserve();
+      page('Save', ['Delete account']);
+      answerWith(false);
+      expect((await results([{ op: 'press', key }])).results[0].result).toBe('denied');
+      expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete account', ...FRAME }]);
+      expect(inputRequests()).toEqual([]);
 
-    page('Save', ['Search']);
-    expect((await results([{ op: 'press', key: 'Enter' }])).results[0].result).toBe('done');
-    page('Save', ['Delete account']);
-    expect((await results([{ op: 'press', key: 'Tab' }])).results[0].result).toBe('done');
-    expect(relay.callsTo('AionRelay.requestConfirm')).toHaveLength(1);
+      page('Save', ['Search']);
+      expect((await results([{ op: 'press', key }])).results[0].result).toBe('done');
+      page('Save', ['Delete account']);
+      expect((await results([{ op: 'press', key: 'Tab' }])).results[0].result).toBe('done');
+      expect(asked()).toHaveLength(1);
+    }
+  );
+
+  it('tells the page which key is pressed, so a Space can skip the form submit', async () => {
+    await openAndObserve();
+    await results([{ op: 'press', key: 'Space' }]);
+    const call = relay.requests.find((r) => r.params.functionDeclaration === ENTER_LABELS);
+    expect(call?.params.arguments).toEqual([{ value: null }, { value: 'Space' }]);
+  });
+
+  it.each([
+    [
+      'fails',
+      () => {
+        throw new Error('Execution context was destroyed');
+      },
+    ],
+    ['returns nothing usable', () => ({ labels: 'Delete', framed: false, focused: true })],
+  ])('a focus check that %s ends the press as stale, with no input', async (_name, enter) => {
+    await openAndObserve();
+    page('Save', enter);
+    const reply = await results([{ op: 'press', key: 'Enter' }]);
+    expect(reply.results[0].result).toBe('stale');
+    expect(inputRequests()).toEqual([]);
+  });
+
+  it('a focus check that never answers ends the press as stale', async () => {
+    await openAndObserve();
+    relay.on('Runtime.callFunctionOn', (params) =>
+      params.functionDeclaration === ENTER_LABELS
+        ? new Promise(() => {})
+        : { result: { type: 'object', value: focusReport([]) } }
+    );
+    expect((await results([{ op: 'press', key: 'Enter' }])).results[0].result).toBe('stale');
+    expect(inputRequests()).toEqual([]);
+  }, 10_000);
+
+  it('with the focus on an iframe no reported frame sees into, an untargeted press is stale', async () => {
+    await openAndObserve();
+    page('Save', () => focusReport([], true, true));
+    const hidden = await results([{ op: 'press', key: 'Enter' }]);
+    expect(hidden.results[0].result).toBe('stale');
+    expect(inputRequests()).toEqual([]);
+  });
+
+  it('asks again about what the press would activate after Allow, and goes stale when it changed', async () => {
+    await openAndObserve();
+    answerWith(true);
+    // The focus moves from a Delete button to a harmless one while the user decides.
+    page('Save', (call) => focusReport([call === 0 ? 'Delete account' : 'Cancel']));
+    const reply = await results([{ op: 'press', key: 'Space' }]);
+    expect(reply.results[0].result).toBe('stale');
+    expect(reply.results[0].reason).toMatch(/changed while/);
+    expect(inputRequests()).toEqual([]);
+
+    page('Save', () => focusReport(['Delete account']));
+    expect((await results([{ op: 'press', key: 'Space' }])).results[0].result).toBe('done');
   });
 
   it('asks with a sanitized label, not the page text verbatim', async () => {
@@ -291,9 +374,53 @@ describe('confirm gate', () => {
     page(`Pay\u202e\n now ${'x'.repeat(300)}`);
     answerWith(true);
     await results([{ op: 'click', target: id }]);
-    const { label } = relay.callsTo('AionRelay.requestConfirm')[0] as { label: string };
+    const { label } = asked()[0] as { label: string };
     expect(label.startsWith('Pay now ')).toBe(true);
     expect(label.length).toBeLessThanOrEqual(120);
+  });
+
+  describe('click_point', () => {
+    const clickAt = async () => JSON.parse(textOf(await call('click_point', { x: 5, y: 6 }))) as Record<string, string>;
+    beforeEach(async () => {
+      await call('tabs', { action: 'open' });
+    });
+
+    it('asks about a risky control under the point, sends nothing on Deny, and clicks after Allow', async () => {
+      page('Save', [], ['Delete account']);
+      answerWith(false);
+      expect(await clickAt()).toMatchObject({ result: 'denied' });
+      expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete account', ...FRAME }]);
+      expect(inputRequests()).toEqual([]);
+      expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+
+      answerWith(true);
+      expect(await clickAt()).toEqual({ result: 'done' });
+      expect(inputRequests()).toHaveLength(3);
+    });
+
+    it('probes the frame-local point, and does not ask about a harmless control', async () => {
+      page('Save', [], ['Search']);
+      expect(await clickAt()).toEqual({ result: 'done' });
+      expect(asked()).toEqual([]);
+      const probe = relay.requests.find((r) => r.params.functionDeclaration === POINT_LABELS);
+      expect(probe?.params.arguments).toEqual([{ value: 5 }, { value: 6 }]);
+    });
+
+    it('goes stale, with no input, when the control under the point changed after Allow or the probe fails', async () => {
+      answerWith(true);
+      let calls = 0;
+      page('Save', [], () => (calls++ === 0 ? ['Delete account'] : ['Cancel']));
+      expect(await clickAt()).toMatchObject({ result: 'stale' });
+      expect(inputRequests()).toEqual([]);
+
+      page('Save', [], () => {
+        throw new Error('Execution context was destroyed');
+      });
+      expect(await clickAt()).toMatchObject({ result: 'stale' });
+      page('Save', [], () => 'not a list');
+      expect(await clickAt()).toMatchObject({ result: 'stale' });
+      expect(inputRequests()).toEqual([]);
+    });
   });
 });
 

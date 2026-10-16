@@ -1,9 +1,10 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PendingConfirms,
+  allowKey,
   isRiskyLabel,
   loadAllowedOrigins,
   webOriginOf,
@@ -22,7 +23,12 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const ask = { origin: 'https://shop.test', label: 'Place order', clientLabel: 'aion-browser-x' };
+const ask = {
+  origin: 'https://shop.test',
+  frameOrigin: 'https://shop.test',
+  label: 'Place order',
+  clientLabel: 'aion-browser-x',
+};
 
 describe('isRiskyLabel', () => {
   it.each(['Publish', 'Send message', 'Place order', 'Delete page', 'Submit', 'PAY now', 'Check-out: checkout'])(
@@ -98,6 +104,50 @@ describe('PendingConfirms', () => {
     expect(readdirSync(path.dirname(file))).toEqual(['browser-allow.json']);
     // A new instance reads the saved allowance.
     expect(await new PendingConfirms({ file }).request(ask)).toBe(true);
+  });
+
+  it('keys the allowance on the frame too: a top-origin allowance never covers a cross-origin frame', async () => {
+    const confirms = new PendingConfirms({ file });
+    const first = confirms.request(ask);
+    confirms.reply(confirms.list()[0].id, true, true);
+    await first;
+
+    const inFrame = { ...ask, frameOrigin: 'https://pay.test' };
+    void confirms.request(inFrame);
+    expect(confirms.list().map((r) => r.frameOrigin)).toEqual(['https://pay.test']);
+    confirms.reply(confirms.list()[0].id, true, true);
+
+    expect(allowKey(inFrame)).toBe('https://shop.test|https://pay.test');
+    expect(JSON.parse(readFileSync(file, 'utf8')).origins).toEqual([
+      'https://shop.test',
+      'https://shop.test|https://pay.test',
+    ]);
+    expect(await confirms.request(inFrame)).toBe(true);
+    // The frame's own origin at the top is a different page again.
+    void confirms.request({ ...ask, origin: 'https://pay.test', frameOrigin: 'https://pay.test' });
+    expect(confirms.list()).toHaveLength(1);
+  });
+
+  it('reads the allow file again when it changes, and ignores one over 64 KB', async () => {
+    const confirms = new PendingConfirms({ file });
+    void confirms.request(ask);
+    confirms.reply(confirms.list()[0].id, false, false);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ origins: ['https://shop.test'] }));
+    expect(await confirms.request(ask)).toBe(true);
+
+    writeFileSync(file, JSON.stringify({ origins: ['https://shop.test'], pad: 'x'.repeat(70_000) }));
+    const later = new Date(Date.now() + 5000);
+    utimesSync(file, later, later);
+    void confirms.request(ask);
+    expect(confirms.list()).toHaveLength(1);
+  });
+
+  it('keeps at most 500 allowed entries, the newest', () => {
+    mkdirSync(path.dirname(file), { recursive: true });
+    const many = Array.from({ length: 600 }, (_, i) => `https://s${i}.test`);
+    writeFileSync(file, JSON.stringify({ origins: many }));
+    expect([...loadAllowedOrigins(file)]).toEqual(many.slice(0, 500));
   });
 
   it('an unanswered confirm denies after 120 s', async () => {

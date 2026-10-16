@@ -29,6 +29,8 @@ export type RelayContents = {
   readonly id: number;
   readonly debugger: RelayDebugger;
   getURL(): string;
+  /** The committed main frame; `getURL()` may already show a navigation that has not committed. */
+  readonly mainFrame: { readonly url: string };
   getTitle(): string;
   isDestroyed(): boolean;
   reload(): void;

@@ -9,7 +9,7 @@ import { createServer, type IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { AgentActionEvent, ConfirmRequest } from '@/common/types/browser';
-import { sanitizePageText } from '@process/resources/builtinMcp/aionBrowser/pageText';
+import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
 import { createDebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
@@ -78,6 +78,7 @@ const DIALOG_METHOD = 'Page.handleJavaScriptDialog';
 const MAX_DIALOGS_IN_FLIGHT = 2;
 const MAX_CONFIRMS_IN_FLIGHT = 2;
 const MAX_CONFIRM_LABEL_LENGTH = 120;
+const FRAME_LOOKUP_TIMEOUT_MS = 5000;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -235,22 +236,53 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return {};
   };
 
+  /** The origin of frame `frameId` in the tab session's own frame tree; null when it is not found or not a web page. */
+  const frameOriginOf = async (relaySessionId: string, frameId: string): Promise<string | null> => {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Page.getFrameTree timed out')), FRAME_LOOKUP_TIMEOUT_MS);
+    });
+    try {
+      const reply = await Promise.race([sessions.send(relaySessionId, 'Page.getFrameTree', {}), timeout]);
+      const find = (tree: unknown): Params | null => {
+        const node = asParams(tree);
+        const frame = asParams(node?.frame);
+        if (frame?.id === frameId) return frame;
+        const children = Array.isArray(node?.childFrames) ? node.childFrames : [];
+        return children.reduce<Params | null>((found, child) => found ?? find(child), null);
+      };
+      const frame = find(asParams(reply)?.frameTree);
+      if (!frame) return null;
+      const secure = typeof frame.securityOrigin === 'string' ? webOriginOf(frame.securityOrigin) : null;
+      return secure ?? (typeof frame.url === 'string' ? webOriginOf(frame.url) : null);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   /**
-   * Asks the user before the agent clicks or presses Enter on a risky control. The origin comes from the tab's own
-   * url, never from the agent. Fails closed: anything but an explicit Allow (no tab, no web origin, too many
-   * pending asks, an error, a navigation or close meanwhile, a timeout) answers `{ allow: false }`.
+   * Asks the user before the agent clicks or presses a key on a risky control. Both origins come from main's own
+   * state, never from the agent: the tab's committed main-frame url, and the frame (`sessionId` + `frameId`) looked
+   * up in that session's frame tree. Fails closed: anything but an explicit Allow (no tab, no web origin, an
+   * unknown frame, too many pending asks, an error, a navigation or close meanwhile, a timeout) is `{ allow: false }`.
    */
   const requestConfirm = async (conn: Connection, params: Params): Promise<Params> => {
-    const { webContentsId, label } = params;
-    if (!Number.isInteger(webContentsId) || typeof label !== 'string') {
+    const { webContentsId, label, sessionId, frameId } = params;
+    if (
+      !Number.isInteger(webContentsId) ||
+      typeof label !== 'string' ||
+      typeof sessionId !== 'string' ||
+      typeof frameId !== 'string'
+    ) {
       throw new Error('Invalid AionRelay.requestConfirm params');
     }
     const id = webContentsId as number;
     if (!mayAct(registry.ownership(id), conn.client)) throw new Error('This tab is not shared with agents');
+    const session = ownSession(conn, sessionId);
+    if (session.webContentsId !== id) throw new Error(`Unknown sessionId: ${sessionId}`);
     const contents = registry.contents(id);
     if (!contents) throw new Error(`No such target: ${targetIdFor(id)}`);
-    const origin = webOriginOf(contents.getURL());
-    if (!origin || contents.isDestroyed() || conn.confirmsInFlight >= MAX_CONFIRMS_IN_FLIGHT) return { allow: false };
+    if (contents.isDestroyed() || conn.confirmsInFlight >= MAX_CONFIRMS_IN_FLIGHT) return { allow: false };
 
     const moot = new AbortController();
     const onNavigate = (details: { isMainFrame: boolean; isSameDocument?: boolean }): void => {
@@ -262,13 +294,17 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     });
     conn.confirmsInFlight += 1;
     try {
+      const origin = webOriginOf(contents.mainFrame.url);
+      const frameOrigin = origin ? await frameOriginOf(sessionId, frameId) : null;
+      if (!origin || !frameOrigin) return { allow: false };
       const request = {
         origin,
+        frameOrigin,
         label: sanitizePageText(label, MAX_CONFIRM_LABEL_LENGTH),
         clientLabel: conn.client.label,
       };
       const allow = await deps.requestConfirm(request, AbortSignal.any([moot.signal, conn.closed.signal]));
-      return { allow: allow === true };
+      return { allow: allow === true && !moot.signal.aborted };
     } catch (error) {
       console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
       return { allow: false };

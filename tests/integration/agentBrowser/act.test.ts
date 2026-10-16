@@ -26,7 +26,7 @@ const evaluate = async (sessionId: string, expression: string): Promise<unknown>
 /** An action context on `sessionId` that records what it reports. */
 const contextFor = (
   sessionId: string,
-  confirm: (label: string) => Promise<boolean> = async () => true
+  confirm: ActionContext['confirm'] = async () => true
 ): { ctx: ActionContext; reported: ReportedAction[] } => {
   const reported: ReportedAction[] = [];
   const report = async (action: ReportedAction): Promise<void> => {
@@ -139,6 +139,104 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(await evaluate(session, 'window.deleted')).toBe(0);
     await act(contextFor(session, ask(true)).ctx, [{ op: 'press', key: 'Enter' }]);
     expect(await evaluate(session, 'window.deleted')).toBe(1);
+  });
+
+  it('gates Space on a Tab-focused risky button, and not Space typed into a text field', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const ask = (allow: boolean) => async (label: string) => {
+      asked.push(label);
+      return allow;
+    };
+    // To, Send message, Query, Search, Delete account.
+    const tabs = Array.from({ length: 5 }, () => ({ op: 'press' as const, key: 'Tab' }));
+    await act(contextFor(session, ask(false)).ctx, tabs, { stopOnChange: false });
+    expect(await evaluate(session, 'document.activeElement.id')).toBe('del');
+
+    const input = await inputSentDuring(() =>
+      act(contextFor(session, ask(false)).ctx, [{ op: 'press', key: 'Space' }])
+    );
+    expect(input).toEqual([]);
+    expect(asked).toEqual(['Delete account']);
+    expect(await evaluate(session, 'window.deleted')).toBe(0);
+    await act(contextFor(session, ask(true)).ctx, [{ op: 'press', key: 'Space' }]);
+    expect(await evaluate(session, 'window.deleted')).toBe(1);
+
+    // A space typed into a text field activates nothing, so it is not asked about.
+    const typed = await act(contextFor(session, ask(false)).ctx, [
+      { op: 'press', key: 'Space', target: row(obs, 'To').id },
+    ]);
+    expect(typed.results[0].result).toBe('done');
+    expect(asked).toHaveLength(2);
+  });
+
+  it('asks for a composer labelled Send and for a dialog-footer submit button outside its form', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const ctx = contextFor(session, async (label) => {
+      asked.push(label);
+      return false;
+    }).ctx;
+    await act(ctx, [{ op: 'press', key: 'Enter', target: row(obs, 'Send a message').id }]);
+    await act(ctx, [{ op: 'press', key: 'Enter', target: row(obs, 'Dialog title').id }]);
+    expect(asked).toEqual(['Send a message', 'Publish']);
+    expect(await evaluate(session, 'window.submits')).toEqual([]);
+  });
+
+  it('presses Enter with the focus inside a cross-origin frame, asking about that frame and not going stale', async () => {
+    const session = await chrome.openPage(`${servers.originA}/builder-crossorigin.html`);
+    const ready = (o: Observation) => rowsIn(o, servers.originB, 'Page title').length > 0;
+    const first = await observeUntil(chrome.conn, session, ready);
+    const child = frameByKey(chrome.conn, session, rowsIn(first, servers.originB, 'Page title')[0].frameKey);
+    if (!child) throw new Error('no OOPIF frame');
+    await evaluate(child.sessionId, `document.getElementById('publish').focus()`);
+    const asked: Array<{ label: string; frameId: string }> = [];
+    const { ctx } = contextFor(session, async (label, frame) => {
+      asked.push({ label, frameId: frame.frameId });
+      return false;
+    });
+    const { results } = await act(ctx, [{ op: 'press', key: 'Enter' }]);
+    expect(results[0].result).toBe('denied');
+    expect(asked).toEqual([{ label: 'Publish', frameId: child.frameId }]);
+    expect(await evaluate(child.sessionId, 'window.clicks')).toBe(0);
+  });
+
+  it('gates click_point on a risky control, in the top page and inside a cross-origin frame', async () => {
+    const top = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, top);
+    const del = row(obs, 'Delete account').rect;
+    const asked: string[] = [];
+    const deny = async (label: string) => {
+      asked.push(label);
+      return false;
+    };
+    const centre = { x: del.x + del.w / 2, y: del.y + del.h / 2 };
+    expect(await clickPoint(contextFor(top, deny).ctx, centre.x, centre.y)).toMatchObject({ result: 'denied' });
+    expect(asked).toEqual(['Delete account']);
+    expect(await evaluate(top, 'window.deleted')).toBe(0);
+    const harmless = row(obs, 'Search').rect;
+    expect(await clickPoint(contextFor(top, deny).ctx, harmless.x + 2, harmless.y + 2)).toEqual({ result: 'done' });
+    expect(asked).toHaveLength(1);
+    expect(await clickPoint(contextFor(top).ctx, centre.x, centre.y)).toEqual({ result: 'done' });
+    expect(await evaluate(top, 'window.deleted')).toBe(1);
+
+    const session = await chrome.openPage(`${servers.originA}/builder-crossorigin.html`);
+    const ready = (o: Observation) => rowsIn(o, servers.originB, 'Publish').length > 0;
+    const framed = await observeUntil(chrome.conn, session, ready);
+    const [publish] = rowsIn(framed, servers.originB, 'Publish');
+    const child = frameByKey(chrome.conn, session, publish.frameKey);
+    if (!child) throw new Error('no OOPIF frame');
+    const inFrame: Array<{ label: string; frameId: string }> = [];
+    const denyFrame = contextFor(session, async (label, frame) => {
+      inFrame.push({ label, frameId: frame.frameId });
+      return false;
+    });
+    // The OOPIF sits at (30, 20) and the button at (10, 20) inside it, 80 by 30.
+    expect(await clickPoint(denyFrame.ctx, 80, 55)).toMatchObject({ result: 'denied' });
+    expect(inFrame).toContainEqual({ label: 'Publish', frameId: child.frameId });
+    expect(await evaluate(child.sessionId, 'window.clicks')).toBe(0);
   });
 
   it('a denied risky click sends no input and leaves the page alone', async () => {

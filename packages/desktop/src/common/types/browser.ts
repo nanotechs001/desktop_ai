@@ -74,8 +74,10 @@ export type AgentActionEvent = {
 /** A risky agent action waiting for the user's Allow or Deny (see agentBrowser/confirmGate). */
 export type ConfirmRequest = {
   id: string;
-  /** The page's origin, derived by main from the tab's url, never taken from the agent. */
+  /** The tab's page origin, derived by main from the tab's committed url, never taken from the agent. */
   origin: string;
+  /** The origin of the frame the control sits in, looked up by main; equal to `origin` for the top frame. */
+  frameOrigin: string;
   /** The control's label as the page names it, sanitized and bounded. Untrusted text: show it as text only. */
   label: string;
   clientLabel: string;

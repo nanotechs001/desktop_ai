@@ -238,6 +238,7 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
+      "frame": "The control is inside a frame from {{origin}}",
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site"

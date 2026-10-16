@@ -14,9 +14,17 @@ import {
   rememberBaselines,
   snapshotFrame,
 } from './actionSpace';
-import { collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
-import { sanitizePageText } from './pageText';
-import { DEVICE_PIXEL_RATIO, ENTER_LABELS, OWNER_HIT, RESOLVE_TARGET, SELECT_OPTION, SETTLE } from './inPage';
+import { FRAME_TIMEOUT_MS, collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
+import { sanitizePageText } from '@/common/utils/utils';
+import {
+  DEVICE_PIXEL_RATIO,
+  ENTER_LABELS,
+  OWNER_HIT,
+  POINT_LABELS,
+  RESOLVE_TARGET,
+  SELECT_OPTION,
+  SETTLE,
+} from './inPage';
 
 /** An executed action as the pane shows it (AgentActionEvent): code-owned op, a bounded label, top-viewport rect. */
 export type ReportedAction = {
@@ -27,13 +35,14 @@ export type ReportedAction = {
 
 /**
  * Where actions go: the tab's page session, the relay path that tells the pane what ran, and the one that asks the
- * user before a risky click or Enter. `confirm` resolves false (never rejects) for anything but an explicit Allow.
+ * user before a risky click or key. `confirm` names the frame the control sits in (the relay looks up its origin
+ * itself) and resolves false (never rejects) for anything but an explicit Allow.
  */
 export type ActionContext = {
   conn: CdpConnection;
   sessionId: string;
   report(action: ReportedAction): Promise<void>;
-  confirm(label: string): Promise<boolean>;
+  confirm(label: string, frame: Pick<FrameHandle, 'sessionId' | 'frameId'>): Promise<boolean>;
 };
 
 export const ACT_OPS = ['click', 'type', 'select', 'press', 'scroll', 'hover'] as const;
@@ -297,28 +306,93 @@ const need = (value: string | undefined, what: string, op: string): string => {
   return value;
 };
 
+/** A label the user would be asked about, and the frame its control sits in. */
+type Labeled = { label: string; frame: FrameHandle };
+/** Keys that activate the focused control; the gate reads what has focus before sending them. */
+const ACTIVATING_KEYS = new Set(['Enter', 'Space']);
+const CHECK_FAILED = 'could not check what this input would activate; observe again';
+const CHANGED_WHILE_ASKING = 'the page changed while the user was asked; observe again';
+
 /**
- * Asks the user before input when any of `labels` (what the step will click or activate) is risky; throws
+ * Asks the user before input when any of `items` (what the step will click or activate) is risky; throws
  * {@link StepError} `denied` unless they allow. True when it asked: the page may have changed while they decided.
  */
-async function confirmRisky(ctx: ActionContext, labels: string[]): Promise<boolean> {
-  const risky = labels.find(isRiskyLabel);
+async function confirmRisky(ctx: ActionContext, items: Labeled[]): Promise<boolean> {
+  const risky = items.find((item) => isRiskyLabel(item.label));
   if (risky === undefined) return false;
-  if (!(await ctx.confirm(sanitizePageText(risky, MAX_CONFIRM_LABEL)))) {
+  if (!(await ctx.confirm(sanitizePageText(risky.label, MAX_CONFIRM_LABEL), risky.frame))) {
     throw new StepError('denied', 'the user denied this action');
   }
   return true;
 }
 
-/** Labels of what Enter would activate: in the target's frame, or the focused control of every frame. */
-async function enterLabels(ctx: ActionContext, t: Target | null): Promise<string[]> {
+/** Order-free identity of what a step would activate, to tell whether it changed while the user decided. */
+const signature = (items: Labeled[]): string =>
+  items
+    .map(({ label, frame }) => `${frame.frameId}\u0000${label}`)
+    .sort()
+    .join('\n');
+
+/**
+ * Runs one of our in-page checks for the gate. One that fails or times out ends the step as `stale`: input never
+ * goes out unchecked. The user taking over stays `paused`.
+ */
+const checkIn = (ctx: ActionContext, frame: FrameHandle, fn: string, args: CallArgument[]): Promise<unknown> =>
+  withTimeout(callIn(ctx.conn, frame, fn, args), FRAME_TIMEOUT_MS, 'The check').catch((error: unknown): never => {
+    if (isPausedRefusal(error)) throw error;
+    throw new StepError('stale', CHECK_FAILED);
+  });
+
+const strings = (value: unknown): string[] | null =>
+  Array.isArray(value) && value.every((v) => typeof v === 'string') ? (value as string[]) : null;
+
+/**
+ * What a key press would activate, per frame: `t`'s frame, or (no target) every frame's focused control. With no
+ * target and the focus on an iframe element no reported frame sees into, the press is unchecked: `stale`.
+ */
+async function focusLabels(ctx: ActionContext, t: Target | null, key: string): Promise<Labeled[]> {
   const frames = t ? [t.frame] : (await collectFramesReport(ctx.conn, ctx.sessionId)).frames;
+  const reports = await Promise.all(
+    frames.map(async (frame) => {
+      const v = (await checkIn(ctx, frame, ENTER_LABELS, values(t ? t.node : null, key))) as Record<
+        string,
+        unknown
+      > | null;
+      const labels = strings(v?.labels);
+      if (!labels || typeof v?.framed !== 'boolean' || typeof v.focused !== 'boolean') {
+        throw new StepError('stale', CHECK_FAILED);
+      }
+      return { frame, labels, framed: v.framed, focused: v.focused };
+    })
+  );
+  const reached = reports.some((r) => r.focused && !r.framed);
+  if (!t && reports.some((r) => r.framed) && !reached) {
+    throw new StepError('stale', 'keyboard focus is in a frame observe cannot see; observe again');
+  }
+  return reports.flatMap((r) => r.labels.map((label) => ({ label, frame: r.frame })));
+}
+
+/** Everything a press would click or activate: the target's own click, and for Enter or Space the focused control. */
+const pressLabels = async (ctx: ActionContext, t: Target | null, key: string): Promise<Labeled[]> => [
+  ...(t ? [{ label: t.label, frame: t.frame }] : []),
+  ...(ACTIVATING_KEYS.has(key) ? await focusLabels(ctx, t, key) : []),
+];
+
+/** The controls under a top-viewport point in every frame showing it (a cover in an outer page counts as well). */
+async function pointLabels(ctx: ActionContext, at: Point): Promise<Labeled[]> {
+  const { frames } = await collectFramesReport(ctx.conn, ctx.sessionId);
+  const here = frames.filter((frame) => inside(at, frame.clip));
+  if (here.length === 0) throw new StepError('stale', 'the point is not on a frame observe can see');
   const found = await Promise.all(
-    frames.map((frame) => callIn(ctx.conn, frame, ENTER_LABELS, values(t ? t.node : null)).catch((): unknown => []))
+    here.map(async (frame) => {
+      const labels = strings(
+        await checkIn(ctx, frame, POINT_LABELS, values(at.x - frame.offset.x, at.y - frame.offset.y))
+      );
+      if (!labels) throw new StepError('stale', CHECK_FAILED);
+      return labels.map((label) => ({ label, frame }));
+    })
   );
-  return found.flatMap((labels) =>
-    Array.isArray(labels) ? labels.filter((l): l is string => typeof l === 'string') : []
-  );
+  return found.flat();
 }
 
 /** Runs one step's input; returns the frame whose baseline the step may have changed. */
@@ -327,7 +401,9 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle |
   if (op === 'press' || op === 'scroll') return op === 'press' ? press(ctx, step) : scroll(ctx, step);
   const id = need(step.target, 'a target id from observe', op);
   let t = await resolveTarget(ctx, id);
-  if (op === 'click' && (await confirmRisky(ctx, [t.label]))) t = await resolveTarget(ctx, id);
+  if (op === 'click' && (await confirmRisky(ctx, [{ label: t.label, frame: t.frame }]))) {
+    t = await resolveTarget(ctx, id);
+  }
   if (op === 'hover') {
     await mouse(ctx, 'mouseMoved', t.point);
   } else if (op === 'click') {
@@ -367,9 +443,13 @@ async function press(ctx: ActionContext, step: ActStep): Promise<FrameHandle | n
   if (!Object.hasOwn(PRESS_KEYS, key)) throw new StepError('error', `press cannot send ${key}.`);
   const spec = PRESS_KEYS[key];
   let t = step.target ? await resolveTarget(ctx, step.target) : null;
-  // A target is clicked first, and Enter activates the focused control or submits its form.
-  const labels = [...(t ? [t.label] : []), ...(key === 'Enter' ? await enterLabels(ctx, t) : [])];
-  if ((await confirmRisky(ctx, labels)) && step.target) t = await resolveTarget(ctx, step.target);
+  // A target is clicked first; Enter and Space activate the focused control, and Enter submits its form.
+  const asked = await pressLabels(ctx, t, key);
+  if (await confirmRisky(ctx, asked)) {
+    if (step.target) t = await resolveTarget(ctx, step.target);
+    if (signature(await pressLabels(ctx, t, key)) !== signature(asked))
+      throw new StepError('stale', CHANGED_WHILE_ASKING);
+  }
   if (t) await click(ctx, t.point);
   await pressKey(ctx, spec);
   const label = t ? `${spec.code} on ${targetLabel(t)}` : spec.code;
@@ -581,6 +661,17 @@ export async function clickPoint(ctx: ActionContext, x: number, y: number): Prom
   const { cssLayoutViewport: v } = await layoutMetrics(ctx);
   if (x < 0 || y < 0 || x >= v.clientWidth || y >= v.clientHeight) {
     throw new Error(`(${x}, ${y}) is outside the ${v.clientWidth}x${v.clientHeight} viewport.`);
+  }
+  try {
+    const asked = await pointLabels(ctx, { x, y });
+    if (await confirmRisky(ctx, asked)) {
+      if (signature(await pointLabels(ctx, { x, y })) !== signature(asked)) {
+        throw new StepError('stale', CHANGED_WHILE_ASKING);
+      }
+    }
+  } catch (error) {
+    if (error instanceof StepError) return { result: error.result, reason: error.message };
+    throw error;
   }
   await click(ctx, { x, y });
   await reportSafely(ctx, {
