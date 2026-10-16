@@ -62,6 +62,20 @@ describe('targetRegistry', () => {
     end();
   });
 
+  it('suppresses the frame-local mouseDown Electron reports for an agent click inside an OOPIF, once', () => {
+    const registry = createTargetRegistry();
+    registry.track(new FakeContents(2));
+    registry.claim(2, agent);
+    // Measured on Electron 37.10.3: a click at (124, 100.75) in an OOPIF placed at (30, 20) reports (94, 80.75).
+    const end = registry.beginAgentInput(2, { x: 124, y: 100.75 });
+
+    registry.noteUserInput(2, { kind: 'mouse', x: 94, y: 80.75 });
+    expect(registry.ownership(2)?.paused).toBe(false);
+    registry.noteUserInput(2, { kind: 'mouse', x: 94, y: 80.75 });
+    expect(registry.ownership(2)?.paused).toBe(true);
+    end();
+  });
+
   it('never suppresses a user keyDown or a click elsewhere during an agent click', () => {
     const registry = createTargetRegistry();
     registry.track(new FakeContents(2));

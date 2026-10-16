@@ -84,19 +84,22 @@ export type UserInput = { kind: 'key'; key: string; code: string } | { kind: 'mo
 export type AgentInput = { x: number; y: number } | { key: string; code: string };
 
 const TARGET_PREFIX = 'wc-';
-/** How far (CSS px) Electron's report of an agent click may land from the CDP coordinates. */
+/** How far (CSS px) below or right of the CDP coordinates Electron's report of an agent click may land. */
 const AGENT_CLICK_TOLERANCE_PX = 2;
 /** An in-flight agent click is forgotten after this even if its command never settles. */
 const AGENT_INPUT_TTL_MS = 5000;
 
-/** True when Electron's report `input` is the agent's own in-flight `agent` input. */
+/**
+ * True when Electron's report `input` can be the agent's own in-flight `agent` input. A click inside a cross-origin
+ * iframe is reported in that frame's own coordinates (measured on 37.10.3), i.e. up and left of the agent's
+ * top-level point by the frame's offset, so any such point matches.
+ * shortcut: a frame whose origin is scrolled above or left of the page reports a point below or right of the agent's,
+ * so that agent click pauses its tab (fails safe); compute frame offsets in the relay if builders hit it. A user click
+ * during the agent's still pauses: each agent click consumes one report, and its own report always arrives.
+ */
 const isOwnInput = (agent: AgentInput, input: UserInput): boolean => {
   if (input.kind === 'key') return 'key' in agent && agent.key === input.key && agent.code === input.code;
-  return (
-    'x' in agent &&
-    Math.abs(agent.x - input.x) <= AGENT_CLICK_TOLERANCE_PX &&
-    Math.abs(agent.y - input.y) <= AGENT_CLICK_TOLERANCE_PX
-  );
+  return 'x' in agent && input.x <= agent.x + AGENT_CLICK_TOLERANCE_PX && input.y <= agent.y + AGENT_CLICK_TOLERANCE_PX;
 };
 
 const logListenerError = (error: unknown): void => {
