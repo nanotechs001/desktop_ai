@@ -22,7 +22,7 @@ export const claudeLauncherDeps: ClaudeLauncherDeps = {
   homeDir: os.homedir(),
   async listAgents() {
     const agents = await httpRequest<ManagedAgent[]>('GET', '/api/agents/management');
-    return (agents ?? []).map((a) => ({ id: a.id, backend: a.backend ?? '' }));
+    return (agents ?? []).map((a) => ({ id: a.id, backend: a.backend ?? '', source: a.agent_source }));
   },
   getOverrides: (id) => httpRequest<AgentOverrides>('GET', overridesUrl(id)),
   async setOverride(id, cmd) {

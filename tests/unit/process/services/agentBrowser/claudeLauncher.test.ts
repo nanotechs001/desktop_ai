@@ -49,6 +49,25 @@ describe('isBrowserOpenCommand', () => {
     'cmd /c start http://x.com',
     'nohup open https://x.com',
     'FOO=1 nohup exec open https://x.com',
+    'sudo open https://x.com',
+    'sudo -n open https://x.com',
+    'env FOO=1 open https://x.com',
+    '/usr/bin/env open https://x.com',
+    'time open https://x.com',
+    'nice -n 10 open https://x.com',
+    'echo https://x.com | xargs open',
+    'if true; then open https://x.com; fi',
+    'for u in a b; do open $u; done',
+    '{ open https://x.com; }',
+    '! open https://x.com',
+    'bash -c "open https://x.com"',
+    "sh -c 'open https://x.com'",
+    'zsh -lc "cd a && open https://x.com"',
+    'sudo bash -c "xdg-open https://x.com"',
+    'eval "open https://x.com"',
+    'eval open https://x.com',
+    'python3 -c "import webbrowser; webbrowser.open(\'https://x.com\')"',
+    'cat <<EOF > f\nhi\nEOF\nopen https://x.com',
   ])('%s is a browser-open command', (command) => {
     expect(isBrowserOpenCommand(command)).toBe(true);
   });
@@ -63,6 +82,16 @@ describe('isBrowserOpenCommand', () => {
     'git commit -m "docs; open the file"',
     'osascript -e \'tell application "Finder" to activate\'',
     'python3 script.py',
+    'python3 -c "print(1)"',
+    './open',
+    './scripts/open https://x.com',
+    'scripts/open https://x.com',
+    '/home/me/project/bin/open https://x.com',
+    'bash -c "echo hi"',
+    'eval "echo open"',
+    'cat <<EOF\nopen https://x.com\nEOF',
+    "cat > notes.md <<'EOF'\nopen https://x.com\nEOF\nls",
+    'cat <<-EOF\n\topen https://x.com\n\tEOF',
     '',
   ])('%s is not', (command) => {
     expect(isBrowserOpenCommand(command)).toBe(false);
@@ -164,11 +193,24 @@ describe('buildLauncherScript', () => {
     expect(result.stdout.split('\n')[0]).toBe(path.join(nvm, 'v24.22.0', 'bin', 'claude'));
   });
 
-  it('exits non-zero with a message when no other claude is on PATH', () => {
+  it.each([
+    ['.local', 'bin', 'claude'],
+    ['.claude', 'local', 'claude'],
+  ])('falls back to the native installer location ~/%s/%s/%s', (...parts) => {
+    const claude = writeExecutable(path.join(tmp, ...parts), FAKE_CLAUDE);
+    const result = runLauncher(buildLauncherScript('/h.cjs', []), [], { PATH: '', HOME: tmp });
+    expect(result.status).toBe(0);
+    expect(result.stdout.split('\n')[0]).toBe(claude);
+  });
+
+  it('exits non-zero with a how-to-fix message when no other claude is on PATH', () => {
     const selfDir = path.join(tmp, 'launcher');
     const result = runLauncher(buildLauncherScript('/h.cjs', []), [], { PATH: selfDir, HOME: tmp });
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/could not find the claude CLI/);
+    expect(result.stderr).toMatch(/could not find Claude Code/);
+    expect(result.stderr).toMatch(/Install it/);
+    expect(result.stderr).toMatch(/override/);
+    expect(result.stderr).not.toMatch(/skipped/);
   });
 });
 
@@ -223,6 +265,17 @@ describe('ensureClaudeLauncher', () => {
     expect(deps.writeFile).not.toHaveBeenCalled();
   });
 
+  it('prefers the builtin Claude agent over a custom one with backend claude', async () => {
+    const { deps } = makeDeps({
+      listAgents: async () => [
+        { id: 'custom-claude', backend: 'claude', source: 'custom' },
+        { id: 'builtin-claude', backend: 'claude', source: 'builtin' },
+      ],
+    });
+    await expect(ensureClaudeLauncher(deps)).resolves.toBe('installed');
+    expect(deps.setOverride).toHaveBeenCalledWith('builtin-claude', launcherPath());
+  });
+
   it('reports no-claude-agent and failed', async () => {
     const none = makeDeps({ listAgents: async () => [{ id: 'g', backend: 'gemini' }] });
     await expect(ensureClaudeLauncher(none.deps)).resolves.toBe('no-claude-agent');
@@ -232,5 +285,49 @@ describe('ensureClaudeLauncher', () => {
       },
     });
     await expect(ensureClaudeLauncher(broken.deps)).resolves.toBe('failed');
+  });
+});
+
+describe('hook script from a bundled build', () => {
+  // The hook inlines isBrowserOpenCommand.toString(), so a bundler that renames or rewrites the function
+  // must not change how it classifies. Bundle the real module with esbuild (the minifier behind Vite) and
+  // run the hook generated from that output.
+  it.each([
+    ['minified', { minify: true }],
+    ['minified with keepNames', { minify: true, keepNames: true }],
+  ])('classifies correctly when the module is bundled %s', async (_label, options) => {
+    const { build } = await import('esbuild');
+    const bundled = await build({
+      entryPoints: [
+        path.resolve(__dirname, '../../../../../packages/desktop/src/process/services/agentBrowser/claudeLauncher.ts'),
+      ],
+      bundle: true,
+      write: false,
+      platform: 'node',
+      format: 'cjs',
+      target: 'es2022',
+      ...options,
+    });
+    const moduleFile = path.join(tmp, 'bundle.cjs');
+    writeFileSync(moduleFile, bundled.outputFiles[0].text);
+    const hookFile = path.join(tmp, 'hook.cjs');
+    const generator = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        `require(${JSON.stringify(moduleFile)}); require('fs').writeFileSync(${JSON.stringify(hookFile)}, require(${JSON.stringify(moduleFile)}).buildHookScript())`,
+      ],
+      { encoding: 'utf8' }
+    );
+    expect(generator.status, generator.stderr).toBe(0);
+
+    const run = (command: string) =>
+      spawnSync(process.execPath, [hookFile], {
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
+        encoding: 'utf8',
+      });
+    expect(JSON.parse(run('cd x && bash -c "open https://x.com"').stdout).decision).toBe('block');
+    expect(run('git commit -m "docs; open the file"').stdout).toBe('');
+    expect(run('./scripts/open x').stdout).toBe('');
   });
 });

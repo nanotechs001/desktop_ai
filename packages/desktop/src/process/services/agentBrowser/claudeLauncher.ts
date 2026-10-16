@@ -13,51 +13,74 @@ const DENIED_BASH_TOOLS = ['Bash(open:*)', 'Bash(xdg-open:*)', 'Bash(osascript:*
 /**
  * True when a shell command would open an external browser (open, xdg-open, gio open, osascript, ...).
  * Must stay self-contained: buildHookScript() inlines it through toString(), so it may not reference
- * module-scope names or call itself.
- * shortcut: quote-aware split only; `sh -c "open x"` and `$(...)` inside double quotes are not looked into.
+ * module-scope names or nested named functions.
+ * shortcut: quote-aware split only; `$(...)` inside double quotes is not looked into, wrappers that take a
+ * value flag other than a number (`sudo -u root`) are not stripped, and heredoc bodies are skipped even when a
+ * shell reads them (`bash <<EOF`). Only one level of `sh -c` / `eval` is unwrapped.
  */
 export function isBrowserOpenCommand(command: string): boolean {
-  const segments: string[] = [];
-  let current = '';
-  let quote = '';
-  for (const ch of command) {
-    if (quote) {
-      if (ch === quote) quote = '';
-    } else if (ch === '"' || ch === "'") {
-      quote = ch;
-    } else if ('&|;\n`()'.includes(ch)) {
-      segments.push(current);
-      current = '';
-      continue;
-    }
-    current += ch;
-  }
-  segments.push(current);
-
   const browsers = 'Safari|Google Chrome|Chromium|Firefox|Arc|Brave Browser|Microsoft Edge|Opera|Vivaldi';
   const osascriptBrowser = new RegExp(`open location|tell\\s+application\\s+\\\\?["']?(?:${browsers})`, 'i');
+  const heredoc = /(?<!<)(<<-?\s*(['"]?)(\w+)\2[^\n]*)\n[\s\S]*?\n[ \t]*\3[ \t]*(?=\n|$)/g;
   const assignment = /^[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s+/;
-  const wrapper = /^(?:nohup|command|exec)\s+/;
+  const wrapper =
+    /^(?:(?:\S*\/)?(?:nohup|command|exec|sudo|env|time|nice|xargs)\s+(?:-\S+\s+(?:\d+\s+)?)*|(?:then|do|else)\s+|[{!]\s+)/;
+  const systemDir = /^\/(?:usr\/(?:local\/)?|opt\/homebrew\/)?s?bin\//;
+  const quoted = /^(["'])([\s\S]*)\1\s*$/;
 
-  return segments.some((segment) => {
-    let rest = segment.trim();
-    let before: string;
-    do {
-      before = rest;
-      rest = rest.replace(assignment, '').replace(wrapper, '');
-    } while (rest !== before);
+  // A worklist instead of nested functions: the body is inlined into the hook script, and a bundler's
+  // keepNames helper (`__name(...)`, renamed by the minifier) would not exist there.
+  const queue = [{ text: command, depth: 0 }];
+  for (const { text, depth } of queue) {
+    const segments: string[] = [];
+    let current = '';
+    let quote = '';
+    for (const ch of text.replace(heredoc, '$1\n')) {
+      if (quote) {
+        if (ch === quote) quote = '';
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if ('&|;\n`()'.includes(ch)) {
+        segments.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    segments.push(current);
 
-    const match = /^(\S+)\s*([\s\S]*)$/.exec(rest);
-    if (!match) return false;
-    const name = match[1].replace(/^.*\//, '');
-    const args = match[2];
-    if (name === 'open' || name === 'xdg-open' || name === 'sensible-browser') return true;
-    if (name === 'gio') return /^open\b/.test(args);
-    if (name === 'osascript') return osascriptBrowser.test(args);
-    if (/^python[\d.]*$/.test(name)) return /(?:^|\s)-m\s+webbrowser\b/.test(args);
-    if (/^cmd(?:\.exe)?$/i.test(name)) return /(?:^|\s)\/c\s+start\s+(?:"[^"]*"\s+)?https?/i.test(args);
-    return false;
-  });
+    for (const segment of segments) {
+      let rest = segment.trim();
+      let before: string;
+      do {
+        before = rest;
+        rest = rest.replace(assignment, '').replace(wrapper, '');
+      } while (rest !== before);
+
+      const match = /^(\S+)\s*([\s\S]*)$/.exec(rest);
+      if (!match) continue;
+      const [, word, args] = match;
+      // A relative path (./open, scripts/open) is a local script, not the system opener.
+      if (word.includes('/') && !systemDir.test(word)) continue;
+      const name = word.replace(/^.*\//, '');
+      if (name === 'open' || name === 'xdg-open' || name === 'sensible-browser') return true;
+      if (name === 'gio' && /^open\b/.test(args)) return true;
+      if (name === 'osascript' && osascriptBrowser.test(args)) return true;
+      if (/^python[\d.]*$/.test(name)) {
+        if (/(?:^|\s)-m\s+webbrowser\b/.test(args)) return true;
+        if (/(?:^|\s)-c\s/.test(args) && /webbrowser/.test(args)) return true;
+      }
+      if (/^cmd(?:\.exe)?$/i.test(name) && /(?:^|\s)\/c\s+start\s+(?:"[^"]*"\s+)?https?/i.test(args)) return true;
+      if (depth > 0) continue;
+      if (name === 'eval') {
+        queue.push({ text: quoted.exec(args.trim())?.[2] ?? args, depth: 1 });
+      } else if (/^(?:ba|z|da)?sh$/.test(name)) {
+        const inner = /^(?:-\S+\s+)*?-\w*c\s+(["'])([\s\S]*)\1\s*$/.exec(args);
+        if (inner) queue.push({ text: inner[2], depth: 1 });
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -68,7 +91,6 @@ export function isBrowserOpenCommand(command: string): boolean {
 export function buildHookScript(): string {
   return `'use strict';
 // Generated by AionUi. Do not edit.
-const __name = (fn) => fn;
 const isBrowserOpenCommand = ${isBrowserOpenCommand.toString()};
 const reason = ${JSON.stringify(BLOCK_REASON)};
 let raw = '';
@@ -133,6 +155,7 @@ candidates() {
   done
   unset IFS
   ls -d "$HOME"/.nvm/versions/node/*/bin/claude 2>/dev/null | sort -rV
+  printf '%s\\n' "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"
   for d in ${fallbackWords}; do
     printf '%s\\n' "$d/claude"
   done
@@ -147,7 +170,7 @@ real=$(candidates | while IFS= read -r c; do
 done)
 
 if [ -z "$real" ]; then
-  echo "AionUi launcher: could not find the claude CLI (searched PATH, ~/.nvm and common install dirs; this launcher is skipped). Install Claude Code or put it on PATH." >&2
+  echo "AionUi: could not find Claude Code. Install it (https://claude.com/claude-code), or clear the Claude command override in AionUi's agent settings to launch it without browser safeguards." >&2
   exit 127
 fi
 
@@ -160,7 +183,7 @@ exec "$real" "$@" --no-chrome --disallowedTools ${DENIED_BASH_TOOLS.map((tool) =
 
 export type ClaudeLauncherDeps = {
   homeDir: string;
-  listAgents(): Promise<{ id: string; backend: string }[]>;
+  listAgents(): Promise<{ id: string; backend: string; source?: string }[]>;
   getOverrides(id: string): Promise<{ command_override?: string }>;
   setOverride(id: string, cmd: string): Promise<void>;
   /** Returns null when the file does not exist. */
@@ -179,7 +202,8 @@ const SCRIPT_MODE = 0o755;
  */
 export async function ensureClaudeLauncher(deps: ClaudeLauncherDeps): Promise<ClaudeLauncherResult> {
   try {
-    const agent = (await deps.listAgents()).find((a) => a.backend === 'claude');
+    const claudeAgents = (await deps.listAgents()).filter((a) => a.backend === 'claude');
+    const agent = claudeAgents.find((a) => a.source === 'builtin') ?? claudeAgents[0];
     if (!agent) return 'no-claude-agent';
 
     const current = (await deps.getOverrides(agent.id)).command_override;
