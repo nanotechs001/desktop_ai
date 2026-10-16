@@ -20,17 +20,50 @@ type DownloadEvent = { type: 'started' | 'updated' | 'done'; item: DownloadItem 
 type ActionResult = { success: boolean; msg?: string };
 
 // eslint-disable-next-line no-control-regex -- stripping control characters is the point
-const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f\u007f/\\]|\.\./g;
+const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f\u007f/\\<>:"|?*]/g;
+const WINDOWS_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+const COMPOUND_EXTENSION = /\.tar\.(gz|bz2|xz|zst)$/i;
+const MAX_FILENAME_BYTES = 200;
 
-/** Removes path separators, `..` and control characters; `download` when nothing is left. */
+const byteLength = (text: string): number => Buffer.byteLength(text, 'utf8');
+
+/** Longest prefix of `text` within `maxBytes` UTF-8 bytes, never splitting a code point. */
+const truncateBytes = (text: string, maxBytes: number): string => {
+  let out = '';
+  for (const char of text) {
+    if (byteLength(out + char) > maxBytes) break;
+    out += char;
+  }
+  return out;
+};
+
+/** Extension including the dot; `.tar.gz`-style archives count as one. Dotfiles have none. */
+const extensionOf = (filename: string): string => COMPOUND_EXTENSION.exec(filename)?.[0] ?? path.extname(filename);
+
+/**
+ * Makes a server-supplied name safe to save: no path separators, `..`, control or Windows-illegal
+ * characters, trailing dots/spaces or device names; at most 200 UTF-8 bytes (extension kept).
+ * Returns `download` when nothing is left.
+ */
 export function sanitizeFilename(name: string): string {
-  const cleaned = name.replace(UNSAFE_FILENAME_CHARS, '').trim();
-  return /^\.*$/.test(cleaned) ? FALLBACK_FILENAME : cleaned;
+  const cleaned = name
+    .replace(UNSAFE_FILENAME_CHARS, '')
+    .replace(/\.{2,}/g, '')
+    .replace(/[. ]+$/, '')
+    .trim();
+  if (/^\.*$/.test(cleaned)) return FALLBACK_FILENAME;
+  const named = WINDOWS_DEVICE_NAME.test(cleaned) ? `_${cleaned}` : cleaned;
+  if (byteLength(named) <= MAX_FILENAME_BYTES) return named;
+  const ext = extensionOf(named);
+  const keepExt = byteLength(ext) < MAX_FILENAME_BYTES / 2;
+  const stem = keepExt ? named.slice(0, named.length - ext.length) : named;
+  const suffix = keepExt ? ext : '';
+  return truncateBytes(stem, MAX_FILENAME_BYTES - byteLength(suffix)) + suffix;
 }
 
 /** `dir/name.ext`, or the first free `dir/name (n).ext` (n >= 1). Dotfiles count as having no extension. */
 export function uniqueDownloadPath(dir: string, filename: string, exists: (p: string) => boolean): string {
-  const ext = path.extname(filename);
+  const ext = extensionOf(filename);
   const base = filename.slice(0, filename.length - ext.length);
   let candidate = path.join(dir, filename);
   for (let n = 1; exists(candidate); n++) candidate = path.join(dir, `${base} (${n})${ext}`);
@@ -50,6 +83,8 @@ export function reduceDownloads(items: DownloadItem[], event: DownloadEvent): Do
 let downloads: DownloadItem[] = [];
 /** Live Electron items, kept only while a download is in progress (needed for cancel). */
 const activeItems = new Map<string, Electron.DownloadItem>();
+/** Save paths chosen for downloads still in flight; `existsSync` cannot see them yet. */
+const reservedPaths = new Set<string>();
 
 const downloadsDir = (): string => process.env.AIONUI_BROWSER_DOWNLOADS_DIR || app.getPath('downloads');
 
@@ -67,7 +102,12 @@ const removePartialFile = (savePath: string): void => {
 /** Saves a `will-download` item into the downloads folder and tracks it until it finishes. */
 export function handleWillDownload(item: Electron.DownloadItem): void {
   const id = randomUUID();
-  const savePath = uniqueDownloadPath(downloadsDir(), sanitizeFilename(item.getFilename()), existsSync);
+  const savePath = uniqueDownloadPath(
+    downloadsDir(),
+    sanitizeFilename(item.getFilename()),
+    (p) => existsSync(p) || reservedPaths.has(p)
+  );
+  reservedPaths.add(savePath);
   item.setSavePath(savePath);
   activeItems.set(id, item);
 
@@ -98,6 +138,7 @@ export function handleWillDownload(item: Electron.DownloadItem): void {
 
   item.on('done', (_event, state) => {
     activeItems.delete(id);
+    reservedPaths.delete(savePath);
     apply({ type: 'done', item: snapshot(state) });
     if (state === 'cancelled') removePartialFile(savePath);
   });
@@ -110,11 +151,13 @@ export function getDownloads(): DownloadItem[] {
 
 const find = (id: string): DownloadItem | undefined => downloads.find((i) => i.id === id);
 const unknown: ActionResult = { success: false, msg: 'Unknown download' };
+const notCompleted: ActionResult = { success: false, msg: 'Download is not completed' };
 
-/** Opens a downloaded file with the system default app. */
+/** Opens a completed download with the system default app. */
 export async function openDownload(id: string): Promise<ActionResult> {
   const found = find(id);
   if (!found) return unknown;
+  if (found.state !== 'completed') return notCompleted;
   try {
     const error = await shell.openPath(found.savePath);
     return error ? { success: false, msg: error } : { success: true };
@@ -123,10 +166,11 @@ export async function openDownload(id: string): Promise<ActionResult> {
   }
 }
 
-/** Reveals a downloaded file in the system file manager. */
+/** Reveals a completed download in the system file manager. */
 export function showDownloadInFolder(id: string): ActionResult {
   const found = find(id);
   if (!found) return unknown;
+  if (found.state !== 'completed') return notCompleted;
   try {
     shell.showItemInFolder(found.savePath);
     return { success: true };

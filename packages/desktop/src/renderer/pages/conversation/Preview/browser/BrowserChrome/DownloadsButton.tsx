@@ -5,38 +5,62 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, List, Popover, Progress } from '@arco-design/web-react';
+import { Button, List, Message, Popover, Progress } from '@arco-design/web-react';
 import { Download } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { DownloadItem } from '@/common/types/browser';
 
 const percentOf = (item: DownloadItem): number =>
-  item.totalBytes > 0 ? Math.min(100, Math.round((item.receivedBytes / item.totalBytes) * 100)) : 0;
+  Math.min(100, Math.round((item.receivedBytes / item.totalBytes) * 100));
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+const formatBytes = (bytes: number): string => {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 ? value : value.toFixed(1)} ${BYTE_UNITS[unit]}`;
+};
 
 const DownloadRow: React.FC<{ item: DownloadItem }> = ({ item }) => {
   const { t } = useTranslation();
   const { id } = item;
+  const run = (action: Promise<{ success: boolean }>): void => {
+    void action
+      .then((res) => res.success)
+      .catch(() => false)
+      .then((ok) => {
+        if (!ok) Message.error(t('preview.browserChrome.downloads.actionFailed'));
+      });
+  };
   return (
-    <List.Item key={id}>
+    <List.Item>
       <div className='flex flex-col gap-4px w-260px'>
         <span className='truncate text-t-primary' title={item.filename}>
           {item.filename}
         </span>
         {item.state === 'progressing' && (
           <div className='flex items-center gap-8px'>
-            <Progress className='flex-1' size='small' percent={percentOf(item)} />
-            <Button size='mini' onClick={() => void ipcBridge.browser.cancelDownload.invoke({ id })}>
+            {item.totalBytes > 0 ? (
+              <Progress className='flex-1' size='small' percent={percentOf(item)} />
+            ) : (
+              <span className='flex-1 text-t-secondary'>{formatBytes(item.receivedBytes)}</span>
+            )}
+            <Button size='mini' onClick={() => run(ipcBridge.browser.cancelDownload.invoke({ id }))}>
               {t('preview.browserChrome.downloads.cancel')}
             </Button>
           </div>
         )}
         {item.state === 'completed' && (
           <div className='flex gap-8px'>
-            <Button size='mini' onClick={() => void ipcBridge.browser.openDownload.invoke({ id })}>
+            <Button size='mini' onClick={() => run(ipcBridge.browser.openDownload.invoke({ id }))}>
               {t('preview.browserChrome.downloads.open')}
             </Button>
-            <Button size='mini' onClick={() => void ipcBridge.browser.showDownloadInFolder.invoke({ id })}>
+            <Button size='mini' onClick={() => run(ipcBridge.browser.showDownloadInFolder.invoke({ id }))}>
               {t('preview.browserChrome.downloads.showInFolder')}
             </Button>
           </div>
@@ -77,7 +101,7 @@ const DownloadsButton: React.FC = () => {
           size='small'
           bordered={false}
           dataSource={items.toReversed()}
-          render={(item) => <DownloadRow item={item} />}
+          render={(item) => <DownloadRow key={item.id} item={item} />}
         />
       )}
     </div>

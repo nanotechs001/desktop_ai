@@ -1286,6 +1286,7 @@ export type I18nKey =
   | 'preview.browser.agentFirstUseTitle'
   | 'preview.browser.newTab'
   | 'preview.browser.tabLimitReached'
+  | 'preview.browserChrome.downloads.actionFailed'
   | 'preview.browserChrome.downloads.cancel'
   | 'preview.browserChrome.downloads.empty'
   | 'preview.browserChrome.downloads.failed'

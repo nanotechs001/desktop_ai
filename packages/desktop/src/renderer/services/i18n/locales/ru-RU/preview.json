@@ -186,7 +186,8 @@
       "open": "Open",
       "showInFolder": "Show in folder",
       "cancel": "Cancel",
-      "failed": "Failed"
+      "failed": "Failed",
+      "actionFailed": "Couldn't complete that action"
     }
   }
 }

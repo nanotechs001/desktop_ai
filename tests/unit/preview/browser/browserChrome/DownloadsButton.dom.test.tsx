@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DownloadItem } from '@/common/types/browser';
 
@@ -16,7 +16,14 @@ const mocks = vi.hoisted(() => ({
   cancelDownload: vi.fn(() => Promise.resolve({ success: true })),
   handler: null as ((items: DownloadItem[]) => void) | null,
   unsubscribe: vi.fn(),
+  messageError: vi.fn(),
 }));
+
+// Arco's imperative Message needs a legacy ReactDOM.render, which React 19 lacks in jsdom.
+vi.mock('@arco-design/web-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@arco-design/web-react')>();
+  return { ...actual, Message: { ...actual.Message, error: mocks.messageError } };
+});
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -88,6 +95,19 @@ describe('DownloadsButton', () => {
     await openMenu([item('busy', { state: 'progressing', receivedBytes: 10 })]);
     fireEvent.click(await screen.findByText(`${KEY}.cancel`));
     expect(mocks.cancelDownload).toHaveBeenCalledWith({ id: 'busy' });
+  });
+
+  it('shows the received size instead of a 0% bar when the total is unknown', async () => {
+    await openMenu([item('stream', { state: 'progressing', receivedBytes: 1258291, totalBytes: 0 })]);
+    expect(await screen.findByText('1.2 MB')).toBeTruthy();
+    expect(screen.queryByText('0%')).toBeNull();
+  });
+
+  it('shows an error message when an action fails', async () => {
+    mocks.openDownload.mockResolvedValueOnce({ success: false });
+    await openMenu([item('done')]);
+    fireEvent.click(await screen.findByText(`${KEY}.open`));
+    await waitFor(() => expect(mocks.messageError).toHaveBeenCalledWith(`${KEY}.actionFailed`));
   });
 
   it('marks interrupted downloads as failed', async () => {
