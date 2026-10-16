@@ -186,17 +186,18 @@ describe.skipIf(!chromePath)('artifact pages in headless Chrome', () => {
   it('without the libraries a page says they are missing', async () => {
     const bare = await startArtifactServer({ store, token: 'unused', renderPage: renderArtifactPage, libsDir: null });
     try {
-      for (const [kind, content] of [
+      const pages = [
         ['react', 'export default () => <p>x</p>;'],
         ['markdown', '# x'],
         ['mermaid', 'graph TD; A-->B'],
-      ] as const) {
-        const id = await create(kind, content);
-        const page = await open(id, bare);
-        expect(await waitFor(page, "document.querySelector('#root pre')?.textContent")).toBe(
-          'The artifact libraries are missing. Rebuild the app.'
-        );
-      }
+      ] as const;
+      const texts = await Promise.all(
+        pages.map(async ([kind, content]) => {
+          const page = await open(await create(kind, content), bare);
+          return waitFor(page, "document.querySelector('#root pre')?.textContent");
+        })
+      );
+      expect(texts).toEqual(pages.map(() => 'The artifact libraries are missing. Rebuild the app.'));
     } finally {
       await bare.close();
     }
