@@ -65,6 +65,9 @@ export {
   openHistoryPanel,
   goToNewChat,
   runConversationCycle,
+  startWorkspaceChat,
+  openProjectPanel,
+  type WorkspaceChat,
 } from './conversation';
 export { startAutoApprovePermissionMessages, waitForPermissionMessageCard } from './permissions';
 export { TEAM_SUPPORTED_BACKENDS } from './teamConfig';

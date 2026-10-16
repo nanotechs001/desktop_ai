@@ -4,10 +4,13 @@
  * Provides utilities for creating, waiting on, and deleting ACP conversations
  * through the actual UI flow (guid page → conversation page → cleanup).
  */
-import type { Locator, Page } from '@playwright/test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { ElectronApplication, Locator, Page } from '@playwright/test';
 import { expect } from '../fixtures';
 import { goToGuid } from './navigation';
-import { httpGet } from './httpBridge';
+import { httpGet, httpInvoke } from './httpBridge';
 import {
   GUID_INPUT,
   AGENT_STATUS_MESSAGE,
@@ -399,4 +402,84 @@ export async function runConversationCycle(
   const durationMs = Date.now() - wallStart;
   await deleteConversation(page, conversationId);
   return { conversationId, durationMs };
+}
+
+/** A chat started by {@link startWorkspaceChat}; `cleanup` restores the agent override and deletes the chat. */
+export type WorkspaceChat = { conversationId: string; cleanup: () => Promise<void> };
+
+/**
+ * Create a single chat whose workspace is `workspace`, through the real guid flow: pick the claude assistant, choose
+ * the folder with `workspace-selector-btn` (the native folder dialog is mocked), type in `guid-input` and send.
+ *
+ * The claude command is pointed at a stub that exits at once (the technique of agent-browser-pane.e2e.ts), so no real
+ * model session starts; the chat and its project panel exist all the same. Returns null (after `test.skip`-worthy
+ * conditions) when no claude agent is installed so the caller can skip with a reason.
+ */
+export async function startWorkspaceChat(
+  page: Page,
+  electronApp: ElectronApplication,
+  workspace: string,
+  message: string
+): Promise<WorkspaceChat | null> {
+  await goToGuid(page);
+  const agents = await httpGet<{ id: string; backend?: string; agent_source?: string }[]>(
+    page,
+    '/api/agents/management'
+  );
+  const claude =
+    agents.find((a) => a.backend === 'claude' && a.agent_source === 'builtin') ??
+    agents.find((a) => a.backend === 'claude');
+  if (!claude) return null;
+
+  const overridesUrl = `/api/agents/${encodeURIComponent(claude.id)}/overrides`;
+  const before = await httpGet<{ command_override?: string; env_override?: unknown[] }>(page, overridesUrl);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-claude-'));
+  const stub = path.join(dir, 'claude');
+  fs.writeFileSync(
+    stub,
+    `#!${process.execPath}\nif (process.argv.includes('--version')) console.log('2.1.0 (Claude Code)');\n`,
+    { mode: 0o755 }
+  );
+  let conversationId = '';
+  const cleanup = async (): Promise<void> => {
+    await httpInvoke(page, 'PUT', overridesUrl, {
+      command_override: before.command_override ?? '',
+      env_override: before.env_override ?? [],
+    }).catch(() => undefined);
+    if (conversationId) await httpInvoke(page, 'DELETE', `/api/conversations/${conversationId}`).catch(() => undefined);
+    fs.rmSync(dir, { recursive: true, force: true });
+  };
+
+  try {
+    await httpInvoke(page, 'PUT', overridesUrl, { command_override: stub, env_override: before.env_override ?? [] });
+    await electronApp.evaluate(async ({ dialog }, target) => {
+      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
+    }, workspace);
+
+    await selectAgent(page, 'claude');
+
+    // With no recent workspaces the button opens the (mocked) folder dialog straight away; with recents it opens
+    // a menu whose "Choose a different folder" item does.
+    await page.locator('[data-testid="workspace-selector-btn"]').click();
+    const chooseFolder = page.getByText(/Choose a different folder|选择其他目录/).first();
+    if (await chooseFolder.isVisible({ timeout: 2_000 }).catch(() => false)) await chooseFolder.click();
+    await expect(page.getByText(path.basename(workspace)).first()).toBeVisible({ timeout: 10_000 });
+
+    conversationId = await sendMessageFromGuid(page, message);
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+  return { conversationId, cleanup };
+}
+
+/**
+ * Show the project panel (Files / Changes tabs) of the chat on screen. The workspace column starts collapsed;
+ * its titlebar toggle (right of the title) is labelled "Expand More" only while collapsed.
+ */
+export async function openProjectPanel(page: Page): Promise<void> {
+  // Scoped to the titlebar's right-hand toolbar: the sidebar toggle on the left carries the same label.
+  const expand = page.locator('.app-titlebar__toolbar').getByRole('button', { name: /Expand More|展开更多/ });
+  if (await expand.isVisible({ timeout: 5_000 }).catch(() => false)) await expand.click();
+  await expect(page.getByRole('button', { name: /^(Files|文件)$/ }).first()).toBeVisible({ timeout: 30_000 });
 }

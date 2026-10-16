@@ -12,11 +12,12 @@
  * The staging pipeline itself is covered by the integration suite; this file only asserts the
  * rendered UI state.
  *
- * NOTE: written without being run (e2e is not run in Task 7); selectors come from ScmPanel,
- * ScmChangesView and ExplorerContainer (`data-scm-*` attributes), not from a recorded session.
+ * Entry: `startWorkspaceChat` (guid page → claude assistant → `workspace-selector-btn` → `guid-input` → send, with the
+ * claude command stubbed so no model runs), then `openProjectPanel` for the Files/Changes tabs.
+ * Ran green on a fresh profile (AIONUI_MULTI_INSTANCE=1, throwaway AIONUI_E2E_USER_DATA_DIR).
  */
 import { test, expect } from '../../fixtures';
-import { goToGuid } from '../../helpers';
+import { openProjectPanel, startWorkspaceChat, type WorkspaceChat } from '../../helpers';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -39,51 +40,27 @@ test.describe('Workspace Changes — single chat', () => {
     fs.rmSync(workspace, { recursive: true, force: true });
   });
 
+  let chat: WorkspaceChat | null = null;
+
+  test.afterEach(async () => {
+    await chat?.cleanup();
+    chat = null;
+  });
+
   test('changes tab lists a newly written file and Stage all moves it to staged', async ({ page, electronApp }) => {
     test.setTimeout(180_000);
 
-    await electronApp.evaluate(async ({ dialog }, target) => {
-      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
-    }, workspace);
-
-    await goToGuid(page);
-
-    // ── Create a single chat whose workspace is the seeded repository ────
-    const agentPill = page.locator('[data-testid^="agent-pill-"]').first();
-    if (!(await agentPill.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      test.skip(true, 'No agent pills available on guid page');
+    // Real entry path: guid page → choose the folder → type → send (claude is a stub, see startWorkspaceChat).
+    chat = await startWorkspaceChat(page, electronApp, workspace, 'show me the changes in this project');
+    if (!chat) {
+      test.skip(true, 'Needs an installed claude agent to start a chat');
       return;
     }
-    await agentPill.click();
-
-    const wsBtn = page.locator('[data-testid="workspace-selector-btn"]');
-    if (await wsBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await wsBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    const guidInput = page.locator('[data-testid="guid-input"] textarea, [data-testid="guid-input"] input').first();
-    await expect(guidInput).toBeVisible({ timeout: 10_000 });
-    await guidInput.fill('list files in this project');
-    await page.locator('[data-testid="guid-send-btn"]').click();
-
-    await page.waitForURL(/\/conversation\//, { timeout: 30_000 });
 
     // ── Open the project panel's Changes tab ─────────────────────────────
+    await openProjectPanel(page);
     const changesTab = page.getByRole('button', { name: /^(Changes|变更)$/ }).first();
-    if (!(await changesTab.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      // The workspace column starts collapsed on some layouts; the titlebar toggle opens it.
-      await page
-        .getByRole('button', { name: /Expand More|展开更多/ })
-        .first()
-        .click()
-        .catch(() => {});
-    }
-    if (!(await changesTab.isVisible({ timeout: 30_000 }).catch(() => false))) {
-      await page.screenshot({ path: 'tests/e2e/results/workspace-snapshot-00-no-panel.png' });
-      test.skip(true, 'Project panel did not appear — backend may not support workspace browse yet');
-      return;
-    }
+    await expect(changesTab).toBeVisible({ timeout: 10_000 });
 
     // ── Seed a diff on disk, then show it ────────────────────────────────
     fs.writeFileSync(path.join(workspace, 'created.txt'), 'hello-snapshot');
