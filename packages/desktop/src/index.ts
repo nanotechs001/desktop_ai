@@ -360,6 +360,16 @@ const scheduleBackendMigrations = (): void => {
         )
         .then((summary) => console.info('[AionUi] Browser rule sync:', summary))
         .catch((error) => console.error('[AionUi] Browser rule sync failed:', error));
+      // The launcher is a POSIX sh script, so it is not installed on Windows.
+      if (process.platform !== 'win32') {
+        void Promise.all([
+          import('./process/services/agentBrowser/claudeLauncher'),
+          import('./process/services/agentBrowser/claudeLauncherDeps'),
+        ])
+          .then(([{ ensureClaudeLauncher }, { claudeLauncherDeps }]) => ensureClaudeLauncher(claudeLauncherDeps))
+          .then((result) => console.info('[AionUi] Claude launcher:', result))
+          .catch((error) => console.error('[AionUi] Claude launcher setup failed:', error));
+      }
     } catch (error) {
       console.error('[AionUi] Backend migration hook threw:', error);
     }
@@ -746,6 +756,9 @@ const handleAppReady = async (): Promise<void> => {
     app.exit(1);
     return;
   }
+
+  // Disables Claude in Chrome for agents AionUi launches only; the user's own terminal Claude is unaffected.
+  process.env.CLAUDE_CODE_ENABLE_CFC = '0';
 
   /**
    * 启动单目标 CDP 通道，并把端口/口令写进自己的 env。

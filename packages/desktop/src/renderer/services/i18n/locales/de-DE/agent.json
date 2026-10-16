@@ -55,5 +55,6 @@
     "failed": "Agent konnte nicht neu verbunden werden",
     "initializingTooltip": "Der Agent wird initialisiert. Verbinden Sie ihn erneut, sobald er bereit ist",
     "processingTooltip": "Warten Sie auf das Ende der aktuellen Antwort, bevor Sie neu verbinden"
-  }
+  },
+  "claudeLauncherSkipped": "Du hast einen eigenen Claude-Befehl festgelegt, daher hat AionUi seine Browser-Schutzmaßnahmen nicht hinzugefügt."
 }

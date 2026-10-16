@@ -55,5 +55,6 @@
     "failed": "Failed to reconnect agent",
     "initializingTooltip": "The agent is initializing. Reconnect when it is ready",
     "processingTooltip": "Wait for the current reply to finish before reconnecting"
-  }
+  },
+  "claudeLauncherSkipped": "You set your own Claude command, so AionUi did not add its browser safeguards."
 }

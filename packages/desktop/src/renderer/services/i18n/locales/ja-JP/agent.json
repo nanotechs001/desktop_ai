@@ -55,5 +55,6 @@
     "failed": "エージェントの再接続に失敗しました",
     "initializingTooltip": "エージェントを初期化中です。完了してから再接続してください",
     "processingTooltip": "現在の返信が完了してから再接続してください"
-  }
+  },
+  "claudeLauncherSkipped": "独自の Claude コマンドが設定されているため、AionUi はブラウザ保護を追加しませんでした。"
 }

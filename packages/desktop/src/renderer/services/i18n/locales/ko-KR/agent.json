@@ -55,5 +55,6 @@
     "failed": "에이전트 다시 연결에 실패했습니다",
     "initializingTooltip": "에이전트를 초기화하는 중입니다. 완료된 후 다시 연결하세요",
     "processingTooltip": "현재 답변이 완료된 후 다시 연결하세요"
-  }
+  },
+  "claudeLauncherSkipped": "직접 설정한 Claude 명령이 있어 AionUi가 브라우저 보호 장치를 추가하지 않았습니다."
 }

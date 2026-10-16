@@ -23,6 +23,7 @@ export type I18nKey =
   | 'acp.status.error'
   | 'acp.status.session_active'
   | 'acp.status.unknown'
+  | 'agent.claudeLauncherSkipped'
   | 'agent.config.busy'
   | 'agent.config.commandAck'
   | 'agent.config.failed'

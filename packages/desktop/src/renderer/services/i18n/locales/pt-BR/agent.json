@@ -55,5 +55,6 @@
     "failed": "Falha ao reconectar o agente",
     "initializingTooltip": "O agente está sendo inicializado. Reconecte quando estiver pronto",
     "processingTooltip": "Aguarde a resposta atual terminar antes de reconectar"
-  }
+  },
+  "claudeLauncherSkipped": "Você definiu seu próprio comando do Claude, então o AionUi não adicionou suas proteções de navegador."
 }

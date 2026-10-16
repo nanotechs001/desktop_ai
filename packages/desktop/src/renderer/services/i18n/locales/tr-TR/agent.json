@@ -55,5 +55,6 @@
     "failed": "Aracı yeniden bağlanamadı",
     "initializingTooltip": "Aracı başlatılıyor. Hazır olduğunda yeniden bağlanın",
     "processingTooltip": "Yeniden bağlanmadan önce mevcut yanıtın bitmesini bekleyin"
-  }
+  },
+  "claudeLauncherSkipped": "Kendi Claude komutunuzu ayarladığınız için AionUi tarayıcı korumalarını eklemedi."
 }

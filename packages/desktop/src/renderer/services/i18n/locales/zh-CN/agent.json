@@ -55,5 +55,6 @@
     "failed": "代理重连失败",
     "initializingTooltip": "代理正在初始化，请稍后再重连",
     "processingTooltip": "请等当前回复结束后再重连"
-  }
+  },
+  "claudeLauncherSkipped": "你已设置了自己的 Claude 命令，因此 AionUi 未添加浏览器保护措施。"
 }
