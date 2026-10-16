@@ -19,12 +19,17 @@ const mocks = vi.hoisted(() => {
       on: vi.fn(),
     },
     fromPartition: vi.fn(() => browserSession),
+    installWindowOpenHandler: vi.fn(),
   };
 });
 
 vi.mock('electron', () => ({
   app: mocks.app,
   session: { fromPartition: mocks.fromPartition },
+}));
+
+vi.mock('@process/services/browserSession/windowOpen', () => ({
+  installWindowOpenHandler: mocks.installWindowOpenHandler,
 }));
 
 const CHROME_UA =
@@ -65,6 +70,7 @@ beforeEach(() => {
   mocks.fromPartition.mockClear();
   mocks.browserSession.setUserAgent.mockClear();
   mocks.browserSession.webRequest.onBeforeSendHeaders.mockClear();
+  mocks.installWindowOpenHandler.mockClear();
 });
 
 afterEach(() => {
@@ -193,6 +199,23 @@ describe('initBrowserSession', () => {
       handler({}, makeContents('webview', mocks.otherSession));
 
       expect(listener.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
+    });
+
+    it('installs the window-open handler on browser webviews and popups, with the main window as parent', async () => {
+      const { initBrowserSession } = await loadModule();
+      const main = makeMainWindow(makeContents('window', mocks.otherSession));
+      initBrowserSession({ getMainWindow: () => asWindow(main) });
+      const handler = getCreatedHandler();
+
+      const webview = makeContents('webview');
+      const popup = makeContents('window');
+      handler({}, webview);
+      handler({}, popup);
+      handler({}, main.webContents);
+      handler({}, makeContents('webview', mocks.otherSession));
+
+      expect(mocks.installWindowOpenHandler.mock.calls.map(([contents]) => contents)).toEqual([webview, popup]);
+      expect(mocks.installWindowOpenHandler.mock.calls[0][1]()).toBe(main);
     });
 
     it('stops notifying a listener once it is unsubscribed', async () => {

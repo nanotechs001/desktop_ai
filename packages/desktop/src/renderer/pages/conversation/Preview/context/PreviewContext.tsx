@@ -881,6 +881,11 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [openPreview]
   );
 
+  // Main process asked for a new browser tab (target=_blank / window.open from a browser page).
+  // `background` is ignored for now: openBrowserTab always activates the new tab.
+  // `?.` follows the responseStream guard below: a harness mocking only part of ipcBridge must not break the panel.
+  useEffect(() => ipcBridge.browser?.openTabRequested.on(({ url }) => openBrowserTab(url)), [openBrowserTab]);
+
   /**
    * Hide the preview panel, keeping its tabs.
    *

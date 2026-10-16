@@ -7,6 +7,7 @@
 import { app, session } from 'electron';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
+import { installWindowOpenHandler } from './windowOpen';
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
 
@@ -79,6 +80,9 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
     );
     callback({ requestHeaders });
   });
+
+  // Popups are browser contents too, so they get the same window-open rules as the webview that opened them.
+  onBrowserContentsCreated((contents) => installWindowOpenHandler(contents, deps.getMainWindow));
 
   app.on('web-contents-created', (_event, contents) => {
     if (!isBrowserContents(contents, deps.getMainWindow())) return;

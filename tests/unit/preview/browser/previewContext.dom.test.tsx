@@ -19,10 +19,25 @@ import React from 'react';
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type OpenTabRequest = { url: string; background: boolean };
+
+const openTabRequested = vi.hoisted(() => ({
+  handler: null as ((request: OpenTabRequest) => void) | null,
+  unsubscribe: vi.fn(),
+}));
+
 vi.mock('@/common', () => ({
   ipcBridge: {
     fileStream: { contentUpdate: { on: () => () => {} } },
     preview: { open: { on: () => () => {} } },
+    browser: {
+      openTabRequested: {
+        on: (handler: (request: OpenTabRequest) => void) => {
+          openTabRequested.handler = handler;
+          return openTabRequested.unsubscribe;
+        },
+      },
+    },
     conversation: { responseStream: { on: () => () => {} } },
     fs: { getFileContent: { invoke: vi.fn() }, writeFile: { invoke: vi.fn() } },
   },
@@ -57,6 +72,7 @@ const browserTabs = () => ctx.tabs.filter((tab) => tab.content_type === 'browser
 
 beforeEach(() => {
   localStorage.clear();
+  openTabRequested.handler = null;
 });
 
 describe('PreviewContext browser tabs', () => {
@@ -132,6 +148,34 @@ describe('PreviewContext browser tabs', () => {
       act(() => ctx.openBrowserTab(`https://example.com/${i}`));
     }
     expect(ctx.browserTabLimitHitAt).toBeNull();
+  });
+});
+
+describe('PreviewContext browser tab requests from the main process', () => {
+  const requestTab = (request: OpenTabRequest) => {
+    if (!openTabRequested.handler) throw new Error('PreviewProvider did not subscribe to openTabRequested');
+    const { handler } = openTabRequested;
+    act(() => handler(request));
+  };
+
+  it('opens a new browser preview tab with the requested url', () => {
+    renderProvider();
+
+    requestTab({ url: 'https://example.com/popup', background: false });
+
+    expect(browserTabs()).toHaveLength(1);
+    expect(browserTabs()[0].content).toBe('https://example.com/popup');
+    expect(ctx.activeTabId).toBe(browserTabs()[0].id);
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('stops listening when the provider unmounts', () => {
+    const { unmount } = renderProvider();
+    openTabRequested.unsubscribe.mockClear();
+
+    unmount();
+
+    expect(openTabRequested.unsubscribe).toHaveBeenCalled();
   });
 });
 

@@ -1475,6 +1475,15 @@ export const deepLink = {
 };
 
 // ---------------------------------------------------------------------------
+// In-app browser — stays IPC (main-process window-open handler → preview panel)
+// ---------------------------------------------------------------------------
+
+export const browser = {
+  // main → renderer: a browser page asked for a new tab (target=_blank, window.open)
+  openTabRequested: bridge.buildEmitter<{ url: string; background: boolean }>('browser.open-tab-requested'),
+};
+
+// ---------------------------------------------------------------------------
 // Window Controls — stays IPC (Electron-native)
 // ---------------------------------------------------------------------------
 
