@@ -1,0 +1,86 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>phase0 viewer</title>
+<style>
+  html,
+  body {
+    margin: 0;
+    background: #222;
+    overflow: hidden;
+  }
+  img {
+    display: block;
+    width: 1280px;
+    height: 800px;
+  }
+</style>
+<canvas id="c" width="1" height="1" hidden></canvas>
+<script>
+  const v = new Image(); // screencast target; src is set per frame
+  document.body.append(v);
+  const ctx = document.getElementById('c').getContext('2d', { willReadFrequently: true });
+  let sample = null; // CSS-px point in the page whose colour we read back (latency probe)
+  spike.on('sample', (p) => (sample = p));
+  spike.on('frame', async ({ data, token, sess }) => {
+    v.src = 'data:image/jpeg;base64,' + data;
+    try {
+      await v.decode();
+    } catch {}
+    let rgb = null;
+    if (sample) {
+      const k = v.naturalWidth / 1280;
+      ctx.drawImage(v, sample.x * k, sample.y * k, 1, 1, 0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      rgb = d[3] === 255 ? [...d] : null; // alpha 0 = frame was replaced before it decoded: not a sample
+    }
+    spike.send('shown', { token, sess, rgb, w: v.naturalWidth }); // main acks the frame only now
+  });
+
+  const cdp = (m, p) => spike.send('cdp', m, p);
+  const mods = (e) => (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
+  const TYPE = { mousedown: 'mousePressed', mouseup: 'mouseReleased', mousemove: 'mouseMoved' };
+  for (const t in TYPE) {
+    v.addEventListener(t, (e) =>
+      cdp('Input.dispatchMouseEvent', {
+        type: TYPE[t],
+        x: e.offsetX,
+        y: e.offsetY,
+        buttons: e.buttons,
+        modifiers: mods(e),
+        button: t === 'mousemove' ? 'none' : ['left', 'middle', 'right'][e.button],
+        clickCount: e.detail || 1,
+      })
+    );
+  }
+  v.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      cdp('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        x: e.offsetX,
+        y: e.offsetY,
+        deltaX: e.deltaX,
+        deltaY: e.deltaY,
+        modifiers: mods(e),
+      });
+    },
+    { passive: false }
+  );
+  for (const t of ['keydown', 'keyup']) {
+    addEventListener(t, (e) => {
+      e.preventDefault();
+      const cmd = e.metaKey && { KeyV: 'paste', KeyC: 'copy', KeyX: 'cut', KeyA: 'selectAll', KeyZ: 'undo' }[e.code];
+      const text = e.key === 'Enter' ? '\r' : e.key.length === 1 && !e.ctrlKey && !e.metaKey ? e.key : undefined;
+      cdp('Input.dispatchKeyEvent', {
+        type: t === 'keyup' ? 'keyUp' : text ? 'keyDown' : 'rawKeyDown',
+        key: e.key,
+        code: e.code,
+        windowsVirtualKeyCode: e.keyCode,
+        modifiers: mods(e),
+        text,
+        commands: cmd ? [cmd] : undefined,
+      });
+    });
+  }
+</script>

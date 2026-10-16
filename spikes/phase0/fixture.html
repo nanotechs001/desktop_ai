@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>phase0 fixture</title>
+<style>
+  body {
+    margin: 0;
+    padding: 16px;
+    width: 760px;
+    font: 16px/1.5 system-ui;
+  }
+  #panel {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 420px;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #888;
+  }
+  #block {
+    width: 400px;
+    height: 400px;
+    margin-top: 8px;
+  }
+  .red {
+    background: #e11;
+  }
+  .blue {
+    background: #11e;
+  }
+</style>
+<div id="panel">
+  <select id="sel">
+    <option>Alpha</option>
+    <option>Beta</option>
+    <option>Gamma</option>
+    <option>Delta</option>
+  </select>
+  <button id="toggle">toggle</button> <button id="counter">count</button> <b id="count">0</b>
+  <input id="txt" placeholder="paste here" />
+  <div id="block" class="red"></div>
+</div>
+<div id="article"></div>
+<script>
+  const $ = (s) => document.querySelector(s);
+  $('#toggle').onclick = () => {
+    const b = $('#block');
+    b.className = b.className === 'red' ? 'blue' : 'red';
+  };
+  $('#counter').onclick = () => {
+    $('#count').textContent = +$('#count').textContent + 1;
+  };
+  addEventListener(
+    'mousedown',
+    (e) => {
+      window.md = [e.screenX - e.clientX, e.screenY - e.clientY];
+    },
+    true
+  );
+  $('#article').innerHTML = Array.from(
+    { length: 500 },
+    (_, i) =>
+      `<p style="background:hsl(${(i * 13) % 360} 70% 92%)"><b>Section ${i}.</b> ${'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(3 + (i % 4))}</p>`
+  ).join('');
+</script>
