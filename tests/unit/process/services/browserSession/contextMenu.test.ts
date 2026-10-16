@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, expect, it, vi } from 'vitest';
-
-// windowOpen.ts pulls in the IPC bridge for `isSafeUrl`; the builder itself never touches it.
-vi.mock('@/common', () => ({ ipcBridge: {} }));
+import { describe, expect, it } from 'vitest';
 
 import {
   buildContextMenuEntries,
@@ -36,7 +33,9 @@ const build = (overrides: Partial<ContextMenuParams> = {}, nav = NAV) =>
 
 const actionsOf = (entries: MenuEntry[]) => entries.map((entry) => ('separator' in entry ? '-' : entry.action));
 const find = (entries: MenuEntry[], action: string) =>
-  entries.find((entry): entry is Exclude<MenuEntry, { separator: true }> => 'action' in entry && entry.action === action);
+  entries.find(
+    (entry): entry is Exclude<MenuEntry, { separator: true }> => 'action' in entry && entry.action === action
+  );
 
 describe('buildContextMenuEntries', () => {
   it('plain page → Back (disabled when !canGoBack), Forward, Reload, separator, Inspect', () => {

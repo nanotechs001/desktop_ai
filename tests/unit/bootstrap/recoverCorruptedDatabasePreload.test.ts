@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@sentry/electron/preload', () => ({}));
+vi.mock('electron-chrome-extensions/browser-action', () => ({ injectBrowserAction: vi.fn() }));
 
 const invoke = vi.fn();
 const send = vi.fn();

@@ -164,8 +164,9 @@ export default defineConfig(({ mode }) => {
       // context. Externalized dependencies leave a runtime require('...') in
       // the output, which Electron's sandbox-mode preload cannot resolve from
       // node_modules (→ "module not found"). Bundling inlines the few hundred
-      // bytes of IPC wiring we actually need.
-      plugins: [externalizeDepsPlugin({ exclude: ['@sentry/electron'] })],
+      // bytes of IPC wiring we actually need. electron-chrome-extensions is bundled for the
+      // same reason (its browser-action entry defines <browser-action-list>).
+      plugins: [externalizeDepsPlugin({ exclude: ['@sentry/electron', 'electron-chrome-extensions'] })],
       resolve: {
         alias: {
           '@': resolve('packages/desktop/src'),

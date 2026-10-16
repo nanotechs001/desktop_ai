@@ -231,6 +231,9 @@
       "unresponsive": "This page isn't responding.",
       "reload": "Reload",
       "wait": "Wait"
+    },
+    "extensions": {
+      "get": "Get extensions"
     }
   }
 }

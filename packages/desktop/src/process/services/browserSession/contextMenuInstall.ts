@@ -7,13 +7,15 @@
 import { BrowserWindow, Menu, clipboard } from 'electron';
 import { ipcBridge } from '@/common';
 import { buildContextMenuEntries, type MenuEntry, type MenuTranslate } from './contextMenu';
-import { isSafeUrl } from './windowOpen';
+import { isSafeUrl } from './urlSafety';
 
 const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q=';
 const MAX_SEARCH_CHARS = 500;
 
 type ActionEntry = Exclude<MenuEntry, { separator: true }>;
 type ContextMenuEvent = Electron.ContextMenuParams;
+/** Extension items come from electron-chrome-extensions as ready-made `MenuItem`s. */
+type ExtraItems = (params: ContextMenuEvent) => Array<Electron.MenuItemConstructorOptions | Electron.MenuItem>;
 
 /** Lazily loads i18n to avoid pulling the initStorage chain in at module load (same as updateBridge). */
 const loadTranslate = async (): Promise<MenuTranslate> => {
@@ -76,7 +78,8 @@ const toTemplate = (
   entries.map((entry) => {
     if ('separator' in entry) return { type: 'separator' };
     return {
-      label: entry.label,
+      // Native menus treat '&' as a mnemonic marker on Windows/Linux; '&&' shows a literal '&'.
+      label: entry.label.replaceAll('&', '&&'),
       enabled: entry.enabled,
       click: () => {
         try {
@@ -101,7 +104,7 @@ const showMenu = async (
   contents: Electron.WebContents,
   params: ContextMenuEvent,
   getMainWindow: () => Electron.BrowserWindow | null,
-  extraItems: () => Electron.MenuItemConstructorOptions[]
+  extraItems: ExtraItems
 ): Promise<void> => {
   const t = await loadTranslate();
   if (contents.isDestroyed()) return;
@@ -111,7 +114,7 @@ const showMenu = async (
     { canGoBack: navigationHistory.canGoBack(), canGoForward: navigationHistory.canGoForward() },
     t
   );
-  const extra = extraItems();
+  const extra = extraItems(params);
   const template = [
     ...toTemplate(entries, contents, params),
     ...(extra.length > 0 ? [{ type: 'separator' as const }, ...extra] : []),
@@ -121,12 +124,12 @@ const showMenu = async (
 
 /**
  * Gives a browser page a Chrome-style right-click menu (webviews have none by default).
- * @param extraItems extension point: returns items appended after the built-in ones
+ * @param extraItems extension point: returns items for this right-click, appended after the built-in ones
  */
 export function installContextMenu(
   contents: Electron.WebContents,
   getMainWindow: () => Electron.BrowserWindow | null,
-  extraItems: () => Electron.MenuItemConstructorOptions[] = () => []
+  extraItems: ExtraItems = () => []
 ): void {
   contents.on('context-menu', (_event, params) => {
     showMenu(contents, params, getMainWindow, extraItems).catch((error) => {

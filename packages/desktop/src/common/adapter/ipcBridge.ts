@@ -1498,6 +1498,8 @@ export const browser = {
   permissionRequested: bridge.buildEmitter<PermissionRequest[]>('browser.permission-requested'),
   // main → renderer: a browser shortcut (find, address bar, new/close tab, escape) pressed while a page has focus
   shortcut: bridge.buildEmitter<BrowserShortcutRequest>('browser.shortcut'),
+  // main → renderer: an extension closed a tab (chrome.tabs.remove); the tab whose webview has this id closes
+  closeTabRequested: bridge.buildEmitter<{ webContentsId: number }>('browser.close-tab-requested'),
 };
 
 // ---------------------------------------------------------------------------

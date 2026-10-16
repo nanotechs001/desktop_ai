@@ -25,6 +25,7 @@ vi.mock('@/common', () => ({
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },
       shortcut: { on: () => () => {} },
+      closeTabRequested: { on: () => () => {} },
     },
   },
 }));

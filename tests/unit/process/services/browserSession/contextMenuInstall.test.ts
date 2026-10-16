@@ -56,21 +56,29 @@ const makeContents = () => {
     copyImageAt: vi.fn(),
     downloadURL: vi.fn(),
   };
-  const fire = (overrides: Record<string, unknown>) => handlers.get('context-menu')?.({}, { ...PARAMS, ...overrides } as unknown as Params);
+  const fire = (overrides: Record<string, unknown>) =>
+    handlers.get('context-menu')?.({}, { ...PARAMS, ...overrides } as unknown as Params);
   return { contents, host, fire };
 };
 
 const popupWindow = { isDestroyed: () => false };
 const mainWindow = { isDestroyed: () => false };
 
-const install = (extra?: () => Electron.MenuItemConstructorOptions[]) => {
+const install = (extra?: (params: Electron.ContextMenuParams) => Electron.MenuItemConstructorOptions[]) => {
   const stub = makeContents();
-  installContextMenu(stub.contents as unknown as Electron.WebContents, () => mainWindow as unknown as Electron.BrowserWindow, extra);
+  installContextMenu(
+    stub.contents as unknown as Electron.WebContents,
+    () => mainWindow as unknown as Electron.BrowserWindow,
+    extra
+  );
   return stub;
 };
 
 const lastTemplate = (): Template[] => mocks.buildFromTemplate.mock.calls.at(-1)?.[0] ?? [];
-const clickItem = (label: string) => lastTemplate().find((item) => item.label === label)?.click?.();
+const clickItem = (label: string) =>
+  lastTemplate()
+    .find((item) => item.label === label)
+    ?.click?.();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -121,7 +129,9 @@ describe('installContextMenu', () => {
     const { fire } = install();
     fire({ selectionText: `  a b&c${'x'.repeat(600)}` });
     await vi.waitFor(() => expect(mocks.popup).toHaveBeenCalled());
-    const label = lastTemplate().find((item) => item.label?.startsWith('preview.browserChrome.menu.searchSelection'))?.label;
+    const label = lastTemplate().find((item) =>
+      item.label?.startsWith('preview.browserChrome.menu.searchSelection')
+    )?.label;
     clickItem(label ?? '');
     const query = `a b&c${'x'.repeat(600)}`.slice(0, 500);
     expect(mocks.emit).toHaveBeenCalledWith({
@@ -149,11 +159,21 @@ describe('installContextMenu', () => {
     expect(contents.session.addWordToSpellCheckerDictionary).toHaveBeenCalledWith('helo');
   });
 
-  it('appends extension items after the built-in ones', async () => {
-    const { fire } = install(() => [{ label: 'Ext item' }]);
-    fire({});
+  it('appends extension items for this right-click after the built-in ones', async () => {
+    const extra = vi.fn(() => [{ label: 'Ext item' }]);
+    const { fire } = install(extra);
+    fire({ linkURL: 'https://a.test/' });
     await vi.waitFor(() => expect(mocks.popup).toHaveBeenCalled());
     const labels = lastTemplate().map((item) => item.label ?? item.type);
     expect(labels.slice(-2)).toEqual(['separator', 'Ext item']);
+    expect(extra).toHaveBeenCalledWith(expect.objectContaining({ linkURL: 'https://a.test/', x: 10, y: 20 }));
+  });
+
+  it('escapes "&" in built-in labels so native menus show it instead of a mnemonic', async () => {
+    const { fire } = install();
+    fire({ selectionText: 'R&D' });
+    await vi.waitFor(() => expect(mocks.popup).toHaveBeenCalled());
+    const labels = lastTemplate().map((item) => item.label);
+    expect(labels).toContain('preview.browserChrome.menu.searchSelection|R&&D');
   });
 });

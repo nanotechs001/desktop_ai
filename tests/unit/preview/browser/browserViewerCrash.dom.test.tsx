@@ -22,6 +22,7 @@ vi.mock('@/common', () => ({
           return () => {};
         },
       },
+      closeTabRequested: { on: () => () => {} },
     },
   },
 }));

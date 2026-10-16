@@ -10,7 +10,13 @@
 // Electron's sandbox-mode preload doesn't try to resolve it from node_modules.
 import '@sentry/electron/preload';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+// Bundled like @sentry/electron (see electron.vite.config.ts) so the sandboxed preload can load it.
+import { injectBrowserAction } from 'electron-chrome-extensions/browser-action';
 import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
+
+// Defines <browser-action-list> (extension icons in the in-app browser's nav bar). This preload
+// only runs in the main window, so no other page gets the element.
+injectBrowserAction();
 
 /**
  * @description 注入到renderer进程中, 用于与main进程通信

@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
+import { isSafeUrl } from './urlSafety';
 
 /** What to do with a page's `window.open` / `target=_blank` request. */
 export type WindowOpenDecision =
@@ -24,17 +25,6 @@ const POPUP_OFF_VALUES = new Set(['0', 'no', 'false']);
 
 const clamp = (value: number, { min, max }: { min: number; max: number }): number =>
   Math.min(max, Math.max(min, value));
-
-/** Only web pages and the blank page that sign-in flows open and then navigate are allowed. */
-export const isSafeUrl = (url: string): boolean => {
-  if (url === 'about:blank') return true;
-  try {
-    const { protocol } = new URL(url);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
 
 /** Parses a `window.open` features string ("width=500, popup") into lower-cased key/value pairs. */
 const parseFeatures = (features: string): Map<string, string> =>

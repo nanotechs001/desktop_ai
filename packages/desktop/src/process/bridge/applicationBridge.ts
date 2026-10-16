@@ -13,6 +13,7 @@ import { getZoomFactor, setZoomFactor } from '@process/utils/zoom';
 import { getCdpStatus, updateCdpConfig } from '@process/utils/configureChromium';
 import { getCdpBridgeHandle } from '@process/utils/cdpBridgeRegistry';
 import { getGpuStatus, setGpuUserOverride } from '@process/utils/gpuRecovery';
+import { selectBrowserTab } from '@process/services/browserSession/browserSession';
 import { initApplicationBridgeCore } from './applicationBridgeCore';
 import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { restartApplication } from './restartApplication';
@@ -236,6 +237,12 @@ export function initApplicationBridge(): void {
      * multiple tabs this is a deliberate trade-off — exposing only the active webContents
      * rather than all ten at once.
      */
+    try {
+      // Extensions track the active tab regardless of whether agent control is enabled.
+      selectBrowserTab(webContentsId);
+    } catch (e) {
+      console.warn('[applicationBridge] could not report the active tab to extensions:', e);
+    }
     try {
       const handle = getCdpBridgeHandle();
       if (!handle) return { success: false, msg: 'Agent browser control is not enabled.' };

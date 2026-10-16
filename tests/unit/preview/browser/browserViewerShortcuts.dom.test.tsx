@@ -12,6 +12,7 @@ import type { BrowserShortcutRequest } from '@/common/types/browser';
 const mocks = vi.hoisted(() => ({
   openBrowserTab: vi.fn(),
   emit: null as ((request: BrowserShortcutRequest) => void) | null,
+  closeTabRequested: null as ((request: { webContentsId: number }) => void) | null,
 }));
 
 vi.mock('@/common', () => ({
@@ -25,6 +26,14 @@ vi.mock('@/common', () => ({
           mocks.emit = handler;
           return () => {
             mocks.emit = null;
+          };
+        },
+      },
+      closeTabRequested: {
+        on: (handler: (request: { webContentsId: number }) => void) => {
+          mocks.closeTabRequested = handler;
+          return () => {
+            mocks.closeTabRequested = null;
           };
         },
       },
@@ -144,5 +153,17 @@ describe('BrowserViewer shortcuts', () => {
     send('focus-address');
 
     expect(document.activeElement).toBe(screen.getByPlaceholderText('preview.browser.addressPlaceholder'));
+  });
+});
+
+describe('BrowserViewer closeTabRequested', () => {
+  it('closes this tab for its own webContents id and ignores another id', () => {
+    const { onRequestClose } = mount();
+
+    act(() => mocks.closeTabRequested?.({ webContentsId: OWN_ID + 1 }));
+    expect(onRequestClose).not.toHaveBeenCalled();
+
+    act(() => mocks.closeTabRequested?.({ webContentsId: OWN_ID }));
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
   });
 });

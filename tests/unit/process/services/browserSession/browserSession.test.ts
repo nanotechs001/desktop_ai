@@ -24,13 +24,27 @@ const mocks = vi.hoisted(() => {
     installBrowserShortcuts: vi.fn(),
     installDownloads: vi.fn(),
     installPermissions: vi.fn(),
+    extensions: { addTab: vi.fn(), selectTab: vi.fn(), getContextMenuItems: vi.fn(() => ['ext item']) },
+    initBrowserExtensions: vi.fn(),
+    fromId: vi.fn(),
+    openTabEmit: vi.fn(),
+    closeTabEmit: vi.fn(),
   };
 });
 
 vi.mock('electron', () => ({
   app: mocks.app,
   session: { fromPartition: mocks.fromPartition },
+  webContents: { fromId: mocks.fromId },
 }));
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    browser: { openTabRequested: { emit: mocks.openTabEmit }, closeTabRequested: { emit: mocks.closeTabEmit } },
+  },
+}));
+
+vi.mock('@process/services/browserSession/extensions', () => ({ initBrowserExtensions: mocks.initBrowserExtensions }));
 
 vi.mock('@process/services/browserSession/downloads', () => ({ installDownloads: mocks.installDownloads }));
 
@@ -91,6 +105,9 @@ beforeEach(() => {
   mocks.installBrowserShortcuts.mockClear();
   mocks.installDownloads.mockClear();
   mocks.installPermissions.mockClear();
+  vi.clearAllMocks();
+  mocks.extensions.getContextMenuItems.mockReturnValue(['ext item']);
+  mocks.initBrowserExtensions.mockImplementation(() => Promise.resolve(mocks.extensions));
 });
 
 afterEach(() => {
@@ -392,5 +409,90 @@ describe('initBrowserSession', () => {
       handler({}, makeContents('webview'));
       expect(listener).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('Chrome extensions wiring', () => {
+  type Deps = {
+    session: unknown;
+    getMainWindow: () => unknown;
+    openTab: (url: string) => void;
+    closeTab: (id: number) => void;
+  };
+
+  const setup = async () => {
+    const mod = await loadModule();
+    const main = makeMainWindow(makeContents('window', mocks.otherSession));
+    mod.initBrowserSession({ getMainWindow: () => asWindow(main) });
+    // Let the extensions promise settle so the handle is in place.
+    await Promise.resolve();
+    await Promise.resolve();
+    const deps = mocks.initBrowserExtensions.mock.calls[0][0] as Deps;
+    return { mod, main, deps, handler: getCreatedHandler() };
+  };
+
+  it('starts extensions on the browser session and routes tab open/close through the IPC bridge', async () => {
+    const { deps, main } = await setup();
+
+    expect(mocks.initBrowserExtensions).toHaveBeenCalledTimes(1);
+    expect(deps.session).toBe(mocks.browserSession);
+    expect(deps.getMainWindow()).toBe(main);
+    deps.openTab('https://a.test/');
+    deps.closeTab(9);
+    expect(mocks.openTabEmit).toHaveBeenCalledWith({ url: 'https://a.test/', background: false });
+    expect(mocks.closeTabEmit).toHaveBeenCalledWith({ webContentsId: 9 });
+  });
+
+  it('tracks browser webviews as extension tabs, but not popups', async () => {
+    const { handler } = await setup();
+    const webview = makeContents('webview');
+
+    handler({}, webview);
+    handler({}, makeContents('window'));
+
+    expect(mocks.extensions.addTab.mock.calls).toEqual([[webview]]);
+  });
+
+  it('appends extension context-menu items for the right-clicked contents', async () => {
+    const { handler } = await setup();
+    const webview = makeContents('webview');
+    handler({}, webview);
+    const extraItems = mocks.installContextMenu.mock.calls[0][2] as (params: unknown) => unknown[];
+    const params = { x: 1 };
+
+    expect(extraItems(params)).toEqual(['ext item']);
+    expect(mocks.extensions.getContextMenuItems).toHaveBeenCalledWith(webview, params);
+  });
+
+  it('logs a failed extensions start and keeps the browser working without extensions', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = new Error('license');
+    mocks.initBrowserExtensions.mockImplementation(() => Promise.reject(failure));
+    const { mod, handler } = await setup();
+    const webview = makeContents('webview');
+
+    await vi.waitFor(() =>
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('[BrowserSession]'), failure)
+    );
+    expect(() => handler({}, webview)).not.toThrow();
+    expect(mocks.installWindowOpenHandler).toHaveBeenCalledWith(webview, expect.any(Function));
+    expect((mocks.installContextMenu.mock.calls[0][2] as (p: unknown) => unknown[])({})).toEqual([]);
+    mocks.fromId.mockReturnValue({ ...webview, isDestroyed: () => false });
+    expect(() => mod.selectBrowserTab(1)).not.toThrow();
+  });
+
+  it('selectBrowserTab forwards live browser-session contents only', async () => {
+    const { mod } = await setup();
+    const browserTab = { ...makeContents('webview'), isDestroyed: () => false };
+    const otherTab = { ...makeContents('webview', mocks.otherSession), isDestroyed: () => false };
+    const deadTab = { ...makeContents('webview'), isDestroyed: () => true };
+    mocks.fromId.mockImplementation((id: number) => ({ 1: browserTab, 2: otherTab, 3: deadTab })[id]);
+
+    mod.selectBrowserTab(2);
+    mod.selectBrowserTab(3);
+    mod.selectBrowserTab(4);
+    mod.selectBrowserTab(1);
+
+    expect(mocks.extensions.selectTab.mock.calls).toEqual([[browserTab]]);
   });
 });

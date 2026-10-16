@@ -10,6 +10,7 @@ import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
 import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
+import ExtensionActions from './BrowserChrome/ExtensionActions';
 import FindBar from './BrowserChrome/FindBar';
 import {
   BROWSER_BLANK_URL,
@@ -166,6 +167,14 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     });
   }, [webview, tabId, findOpen, preview, onRequestClose, closeFind]);
 
+  // An extension closed a tab (chrome.tabs.remove); only the webview it names closes.
+  useEffect(() => {
+    if (!webview) return;
+    return ipcBridge.browser.closeTabRequested.on(({ webContentsId }) => {
+      if (webContentsId === ownWebContentsId(webview)) onRequestClose?.(tabId);
+    });
+  }, [webview, tabId, onRequestClose]);
+
   return (
     <div className='relative h-full w-full'>
       <WebviewHost
@@ -173,7 +182,12 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         partition={BROWSER_SESSION_PARTITION}
         showNavBar
         interceptNavigation={false}
-        navBarExtra={<DownloadsButton />}
+        navBarExtra={
+          <>
+            <ExtensionActions />
+            <DownloadsButton />
+          </>
+        }
         className='bg-bg-1'
         resolveUrlInput={resolveAddressBarInput}
         onUrlChange={handleUrlChange}

@@ -1297,6 +1297,7 @@ export type I18nKey =
   | 'preview.browserChrome.downloads.open'
   | 'preview.browserChrome.downloads.showInFolder'
   | 'preview.browserChrome.downloads.title'
+  | 'preview.browserChrome.extensions.get'
   | 'preview.browserChrome.find.close'
   | 'preview.browserChrome.find.next'
   | 'preview.browserChrome.find.noMatches'
