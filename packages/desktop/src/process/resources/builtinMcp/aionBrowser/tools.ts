@@ -122,7 +122,7 @@ const observeInput = {
   text: z.boolean().optional().describe('Include the visible page text. Defaults to true.'),
 };
 
-const ACT_DESCRIPTION = `${PANE_SENTENCE} Act on controls from the latest observe, by id only (f<k>:<n>); works inside iframes, also cross-origin. Runs the actions in order and returns one result per action run: done, stale (the page or target changed, is covered or off-screen: observe again), paused (the user took over the tab) or error.
+const ACT_DESCRIPTION = `${PANE_SENTENCE} Act on controls from the latest observe, by id only (f<k>:<n>); works inside iframes, also cross-origin. Runs the actions in order and returns one result per action run: done, stale (the page or target changed, is covered or off-screen: observe again), paused (the user took over the tab), denied (the user refused a risky click or Enter, such as Publish, Send, Pay or Delete: do not retry or work around it unless they ask) or error.
 - click {target} · hover {target}
 - type {target, text}: replaces the field's text.
 - select {target, text}: picks the option with that label in a native dropdown. For other dropdowns click them open, observe, then click the option.
@@ -209,7 +209,12 @@ const onTab = async (
   if (!target) return fail(NO_TAB);
   return queue(target, async () => {
     const sessionId = await relay.session(target);
-    return run({ conn: relay.connection, sessionId, report: (action) => relay.reportAction(target, action) });
+    return run({
+      conn: relay.connection,
+      sessionId,
+      report: (action) => relay.reportAction(target, action),
+      confirm: (label) => relay.requestConfirm(target, label),
+    });
   });
 };
 

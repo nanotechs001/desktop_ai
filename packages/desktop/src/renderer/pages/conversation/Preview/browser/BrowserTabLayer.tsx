@@ -6,6 +6,7 @@
 
 import React, { useCallback } from 'react';
 import { useOptionalPreviewContext, type PreviewTab, type PreviewTabPatch } from '../context/PreviewContext';
+import ConfirmPrompt from './BrowserChrome/ConfirmPrompt';
 import PermissionPrompt from './BrowserChrome/PermissionPrompt';
 import BrowserViewer from './BrowserViewer';
 
@@ -90,6 +91,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
         );
       })}
       <PermissionPrompt />
+      <ConfirmPrompt />
     </div>
   );
 };

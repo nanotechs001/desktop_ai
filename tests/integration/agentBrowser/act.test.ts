@@ -24,12 +24,15 @@ const evaluate = async (sessionId: string, expression: string): Promise<unknown>
     .value;
 
 /** An action context on `sessionId` that records what it reports. */
-const contextFor = (sessionId: string): { ctx: ActionContext; reported: ReportedAction[] } => {
+const contextFor = (
+  sessionId: string,
+  confirm: (label: string) => Promise<boolean> = async () => true
+): { ctx: ActionContext; reported: ReportedAction[] } => {
   const reported: ReportedAction[] = [];
   const report = async (action: ReportedAction): Promise<void> => {
     reported.push(action);
   };
-  return { ctx: { conn: chrome.conn, sessionId, report }, reported };
+  return { ctx: { conn: chrome.conn, sessionId, report, confirm }, reported };
 };
 
 /** The Input.* methods sent while `run` ran. */
@@ -97,6 +100,58 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     // The OOPIF sits at (30, 20) and the button at (10, 20) inside it.
     expect(reported[0].rect).toEqual({ x: 40, y: 40, width: 80, height: 30 });
     expect(reported[0].label).toContain('Publish');
+  });
+
+  it('asks before Enter submits a risky form or activates a risky focused control, and Deny sends no input', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const asked: string[] = [];
+    const ask = (allow: boolean) => async (label: string) => {
+      asked.push(label);
+      return allow;
+    };
+
+    // Enter in a text field submits its form, whose button says Send.
+    const denied = await act(contextFor(session, ask(false)).ctx, [
+      { op: 'press', key: 'Enter', target: row(obs, 'To').id },
+    ]);
+    expect(denied.results[0].result).toBe('denied');
+    expect(await evaluate(session, 'window.submits')).toEqual([]);
+    const allowed = await act(contextFor(session, ask(true)).ctx, [
+      { op: 'press', key: 'Enter', target: row(obs, 'To').id },
+    ]);
+    expect(allowed.results[0].result).toBe('done');
+    expect(await evaluate(session, 'window.submits')).toEqual(['mail']);
+    expect(asked).toEqual(['Send message', 'Send message']);
+
+    // A harmless form is not asked about.
+    await act(contextFor(session, ask(false)).ctx, [{ op: 'press', key: 'Enter', target: row(obs, 'Query').id }]);
+    expect(await evaluate(session, 'window.submits')).toEqual(['mail', 'find']);
+    expect(asked).toHaveLength(2);
+
+    // Enter with no target goes to the focused control.
+    await evaluate(session, `document.getElementById('del').focus()`);
+    const input = await inputSentDuring(() =>
+      act(contextFor(session, ask(false)).ctx, [{ op: 'press', key: 'Enter' }])
+    );
+    expect(input).toEqual([]);
+    expect(asked.at(-1)).toBe('Delete account');
+    expect(await evaluate(session, 'window.deleted')).toBe(0);
+    await act(contextFor(session, ask(true)).ctx, [{ op: 'press', key: 'Enter' }]);
+    expect(await evaluate(session, 'window.deleted')).toBe(1);
+  });
+
+  it('a denied risky click sends no input and leaves the page alone', async () => {
+    const session = await chrome.openPage(`${servers.originA}/confirm.html`);
+    const obs = await observePage(chrome.conn, session);
+    const { ctx, reported } = contextFor(session, async () => false);
+    const input = await inputSentDuring(async () => {
+      const { results } = await act(ctx, [{ op: 'click', target: row(obs, 'Delete account').id }]);
+      expect(results[0].result).toBe('denied');
+    });
+    expect(input).toEqual([]);
+    expect(reported).toEqual([]);
+    expect(await evaluate(session, 'window.deleted')).toBe(0);
   });
 
   it('clicks through two levels of frames (an A frame inside a B builder inside A), each owner hit-tested', async () => {

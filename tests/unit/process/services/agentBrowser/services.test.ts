@@ -19,6 +19,9 @@ const h = vi.hoisted(() => {
         share: provider('share'),
         resume: provider('resume'),
         getOwnership: provider('getOwnership'),
+        confirmRequested: emitter(),
+        getConfirmRequests: provider('getConfirmRequests'),
+        replyConfirm: provider('replyConfirm'),
       },
       browser: { openTabRequested: emitter(), closeTabRequested: emitter() },
     },
@@ -26,6 +29,13 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('@/common', () => ({ ipcBridge: h.ipcBridge }));
+// The "Always allow" file lives under the home directory; keep a test run away from the user's own.
+vi.mock('node:os', async (importOriginal) => {
+  const os = await importOriginal<typeof import('node:os')>();
+  const { mkdtempSync } = await import('node:fs');
+  const home = mkdtempSync(os.tmpdir() + '/services-test-home-');
+  return { ...os, homedir: () => home, default: { ...os, homedir: () => home } };
+});
 vi.mock('@process/services/browserSession/browserSession', () => ({
   onBrowserContentsCreated: (listener: (contents: unknown) => void) => {
     h.created.push(listener);
@@ -166,6 +176,42 @@ describe('agent browser services: tabs', () => {
     expect((await createdB).result).toEqual({ targetId: 'wc-2' });
     expect((await ownership(1))?.owner).toBe('user');
     expect((await ownership(2))?.owner).toMatchObject({ label: 'b' });
+  });
+});
+
+describe('agent browser services: confirm gate', () => {
+  const confirmed = () => h.ipcBridge.agentBrowser.confirmRequested.emit.mock.calls;
+
+  it('publishes a risky ask with the tab origin, and the pane reply decides it', async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude');
+    newTab(21);
+    await call('share', { webContentsId: 21, on: true });
+
+    const answer = send('AionRelay.requestConfirm', { webContentsId: 21, label: 'Delete account' });
+    await vi.waitFor(() => expect(confirmed().length).toBeGreaterThan(0));
+    const [open] = (await call('getConfirmRequests')).data as Array<{ id: string }>;
+    expect(confirmed().at(-1)?.[0]).toEqual([
+      { id: open.id, origin: 'https://example.com', label: 'Delete account', clientLabel: 'claude' },
+    ]);
+
+    expect(await call('replyConfirm', { id: open.id, allow: true, alwaysForSite: false })).toEqual({ success: true });
+    expect((await answer).result).toEqual({ allow: true });
+    expect(confirmed().at(-1)?.[0]).toEqual([]);
+    expect(await call('replyConfirm', { id: open.id, allow: true, alwaysForSite: false })).toMatchObject({
+      success: false,
+    });
+  });
+
+  it('validates the reply arguments', async () => {
+    await start();
+    for (const args of [
+      { id: 1, allow: true, alwaysForSite: false },
+      { id: 'a', allow: 'y', alwaysForSite: false },
+      { id: 'a', allow: true },
+    ]) {
+      expect(await call('replyConfirm', args)).toMatchObject({ success: false, msg: 'Invalid arguments' });
+    }
   });
 });
 

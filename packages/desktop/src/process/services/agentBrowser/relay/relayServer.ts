@@ -8,7 +8,9 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { AgentActionEvent } from '@/common/types/browser';
+import type { AgentActionEvent, ConfirmRequest } from '@/common/types/browser';
+import { sanitizePageText } from '@process/resources/builtinMcp/aionBrowser/pageText';
+import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
 import { createDebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
 import { POLICY_ERROR_CODE, decideRelayCommand, mayAct } from './relayPolicy';
@@ -42,6 +44,8 @@ export type RelayServerDeps = {
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
+  /** Asks the user to allow a risky action; resolves with the answer. `signal` aborts when the ask is moot. */
+  requestConfirm(request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal): Promise<boolean>;
   /** Loopback ports agents must not navigate to besides the relay's own (e.g. the backend's). */
   blockedPorts?: () => readonly number[];
   limits?: Partial<RelayLimits>;
@@ -57,6 +61,9 @@ type Connection = {
   pendingCreates: number;
   inFlight: number;
   dialogsInFlight: number;
+  confirmsInFlight: number;
+  /** Aborts when the socket closes, so a confirm nobody is waiting for leaves the pane. */
+  closed: AbortController;
   queue: string[];
   queuedBytes: number;
   bufferTimer: NodeJS.Timeout | null;
@@ -69,6 +76,8 @@ const MAX_ACTION_LABEL_LENGTH = 120;
 const AUTO_ATTACH_METHOD = 'Target.setAutoAttach';
 const DIALOG_METHOD = 'Page.handleJavaScriptDialog';
 const MAX_DIALOGS_IN_FLIGHT = 2;
+const MAX_CONFIRMS_IN_FLIGHT = 2;
+const MAX_CONFIRM_LABEL_LENGTH = 120;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -226,6 +235,50 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return {};
   };
 
+  /**
+   * Asks the user before the agent clicks or presses Enter on a risky control. The origin comes from the tab's own
+   * url, never from the agent. Fails closed: anything but an explicit Allow (no tab, no web origin, too many
+   * pending asks, an error, a navigation or close meanwhile, a timeout) answers `{ allow: false }`.
+   */
+  const requestConfirm = async (conn: Connection, params: Params): Promise<Params> => {
+    const { webContentsId, label } = params;
+    if (!Number.isInteger(webContentsId) || typeof label !== 'string') {
+      throw new Error('Invalid AionRelay.requestConfirm params');
+    }
+    const id = webContentsId as number;
+    if (!mayAct(registry.ownership(id), conn.client)) throw new Error('This tab is not shared with agents');
+    const contents = registry.contents(id);
+    if (!contents) throw new Error(`No such target: ${targetIdFor(id)}`);
+    const origin = webOriginOf(contents.getURL());
+    if (!origin || contents.isDestroyed() || conn.confirmsInFlight >= MAX_CONFIRMS_IN_FLIGHT) return { allow: false };
+
+    const moot = new AbortController();
+    const onNavigate = (details: { isMainFrame: boolean; isSameDocument?: boolean }): void => {
+      if (details.isMainFrame && !details.isSameDocument) moot.abort();
+    };
+    contents.on('did-start-navigation', onNavigate);
+    const offDestroyed = registry.onDestroyed((last) => {
+      if (last.webContentsId === id) moot.abort();
+    });
+    conn.confirmsInFlight += 1;
+    try {
+      const request = {
+        origin,
+        label: sanitizePageText(label, MAX_CONFIRM_LABEL_LENGTH),
+        clientLabel: conn.client.label,
+      };
+      const allow = await deps.requestConfirm(request, AbortSignal.any([moot.signal, conn.closed.signal]));
+      return { allow: allow === true };
+    } catch (error) {
+      console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
+      return { allow: false };
+    } finally {
+      conn.confirmsInFlight -= 1;
+      offDestroyed();
+      contents.removeListener('did-start-navigation', onNavigate);
+    }
+  };
+
   /** Tabs this client may act on with who owns each: `Target.getTargets` cannot tell agent from shared. */
   const listTabs = (conn: Connection): Params => ({
     tabs: registry.listTargets().flatMap(({ targetId, title, url }) => {
@@ -268,7 +321,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       case 'AionRelay.reportAction':
         return reportAction(conn, params);
       case 'AionRelay.requestConfirm':
-        return { allow: false }; // TODO(Task 10): route to the in-pane confirm gate; fail closed until then.
+        return requestConfirm(conn, params);
       default:
         throw new Error(`${method} is not allowed for agents`);
     }
@@ -396,6 +449,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       pendingCreates: 0,
       inFlight: 0,
       dialogsInFlight: 0,
+      confirmsInFlight: 0,
+      closed: new AbortController(),
       queue: [],
       queuedBytes: 0,
       bufferTimer: null,
@@ -404,6 +459,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     ws.on('message', (data) => enqueue(conn, data.toString()));
     ws.on('close', () => {
       if (conn.bufferTimer) clearTimeout(conn.bufferTimer);
+      conn.closed.abort();
       conn.queue = [];
       conn.queuedBytes = 0;
       connections.delete(conn.client.clientId);

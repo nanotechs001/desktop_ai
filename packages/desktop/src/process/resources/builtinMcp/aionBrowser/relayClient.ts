@@ -178,6 +178,24 @@ export class RelayClient {
     await this.connection.send('AionRelay.reportAction', { webContentsId: Number(match[1]), ...action });
   }
 
+  /**
+   * Asks the user (AionRelay.requestConfirm) to allow a risky action on `targetId`. Waits for their answer, up to
+   * the relay's timeout; fails closed: anything but an explicit Allow, including a lost connection, is false.
+   */
+  async requestConfirm(targetId: string, label: string): Promise<boolean> {
+    const match = TARGET_ID.exec(targetId);
+    if (!match) return false;
+    try {
+      const reply = await this.connection.send<{ allow?: unknown }>('AionRelay.requestConfirm', {
+        webContentsId: Number(match[1]),
+        label,
+      });
+      return reply.allow === true;
+    } catch {
+      return false;
+    }
+  }
+
   /** True once after the connection was re-established, so callers can tell the agent its old tabs are gone. */
   takeReconnected(): boolean {
     const reconnected = this.reconnected;

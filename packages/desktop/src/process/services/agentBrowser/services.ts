@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
+import { PendingConfirms } from './confirmGate';
 import { startRelayServer } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
 import { CreateTabWaiter, offerNewTab } from './tabWaiter';
@@ -27,6 +28,7 @@ const MODIFIER_KEYS = new Set(['Meta', 'Shift', 'Alt', 'Control']);
 const OFF: Reply = { success: false, msg: 'Agent browser control is off' };
 const UNKNOWN_TAB: Reply = { success: false, msg: 'No such browser tab' };
 const INVALID: Reply = { success: false, msg: 'Invalid arguments' };
+const UNKNOWN_CONFIRM: Reply = { success: false, msg: 'No such confirmation' };
 
 /** Pauses agent input on a tab the user types or clicks in (agent-owned or shared tabs only). */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
@@ -53,7 +55,7 @@ const guard = async <D>(handler: () => Reply<D>): Promise<Reply<D>> => {
 };
 
 /** The pane's IPC: answered always, with an error while the relay is off. WebUI clients count as the owner. */
-const registerProviders = (getRegistry: () => TargetRegistry | null): void => {
+const registerProviders = (getRegistry: () => TargetRegistry | null, confirms: PendingConfirms): void => {
   ipcBridge.agentBrowser.getOwnership.provider(() =>
     guard(() => {
       const registry = getRegistry();
@@ -80,6 +82,13 @@ const registerProviders = (getRegistry: () => TargetRegistry | null): void => {
       return { success: true };
     })
   );
+  ipcBridge.agentBrowser.getConfirmRequests.provider(() => guard(() => ({ success: true, data: confirms.list() })));
+  ipcBridge.agentBrowser.replyConfirm.provider(({ id, allow, alwaysForSite }) =>
+    guard(() => {
+      if (typeof id !== 'string' || typeof allow !== 'boolean' || typeof alwaysForSite !== 'boolean') return INVALID;
+      return confirms.reply(id, allow, alwaysForSite) ? { success: true } : UNKNOWN_CONFIRM;
+    })
+  );
 };
 
 /**
@@ -89,7 +98,8 @@ const registerProviders = (getRegistry: () => TargetRegistry | null): void => {
  */
 export async function startAgentBrowserServices(options: AgentBrowserOptions): Promise<AgentBrowserServices | null> {
   let active: TargetRegistry | null = null;
-  registerProviders(() => active);
+  const confirms = new PendingConfirms();
+  registerProviders(() => active, confirms);
   if (!options.enabled) return null;
 
   const registry = createTargetRegistry();
@@ -101,6 +111,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     if (contents.getType() === 'webview') offerNewTab(waiter, contents);
   });
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
+  confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));
 
   const relay = await startRelayServer({
     registry,
@@ -108,6 +119,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     waitForTab: (url) => waiter.wait(url, TAB_CREATE_TIMEOUT_MS),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
+    requestConfirm: (request, signal) => confirms.request(request, undefined, signal),
     blockedPorts: options.blockedPorts,
   });
   active = registry;

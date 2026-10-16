@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Confirm gate</title>
+  </head>
+  <body>
+    <form id="mail">
+      <input id="to" type="text" aria-label="To" />
+      <button type="submit">Send message</button>
+    </form>
+    <form id="find">
+      <input id="q" type="search" aria-label="Query" />
+      <button type="submit">Search</button>
+    </form>
+    <button id="del" type="button">Delete account</button>
+    <script>
+      window.submits = [];
+      window.deleted = 0;
+      for (const form of document.forms) {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          window.submits.push(form.id);
+        });
+      }
+      document.getElementById('del').addEventListener('click', () => {
+        window.deleted += 1;
+      });
+    </script>
+  </body>
+</html>

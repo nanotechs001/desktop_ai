@@ -34,7 +34,12 @@ export type RelayContents = {
   reload(): void;
   reloadIgnoringCache(): void;
   once(event: 'destroyed', listener: () => void): unknown;
+  on(event: 'did-start-navigation', listener: NavigationListener): unknown;
+  removeListener(event: 'did-start-navigation', listener: NavigationListener): unknown;
 };
+
+/** A navigation starting in the tab; `isSameDocument` is a fragment or history-API change. */
+export type NavigationListener = (details: { isMainFrame: boolean; isSameDocument?: boolean }) => void;
 
 /** A CDP `TargetInfo` for one browser tab. */
 export type RelayTargetInfo = {

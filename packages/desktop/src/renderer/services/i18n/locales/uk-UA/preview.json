@@ -237,6 +237,13 @@
       "actions": "Agent actions",
       "actionFailed": "Couldn't update the agent. Try again."
     },
+    "confirm": {
+      "title": "Allow this agent action?",
+      "message": "The agent wants to use this control on {{origin}}:",
+      "allow": "Allow",
+      "deny": "Deny",
+      "always": "Always allow on this site"
+    },
     "crash": {
       "crashed": "This tab crashed.",
       "unresponsive": "This page isn't responding.",

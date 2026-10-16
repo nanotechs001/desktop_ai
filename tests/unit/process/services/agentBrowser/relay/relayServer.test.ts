@@ -2,10 +2,16 @@ import { connect as netConnect } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
-import type { AgentActionEvent } from '@/common/types/browser';
+import type { AgentActionEvent, ConfirmRequest } from '@/common/types/browser';
 import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
-import { createTargetRegistry, type TargetRegistry } from '@process/services/agentBrowser/relay/targetRegistry';
+import {
+  createTargetRegistry,
+  type RelayClient,
+  type TargetRegistry,
+} from '@process/services/agentBrowser/relay/targetRegistry';
 import { FakeContents } from './fakes';
+
+type ConfirmAsk = Omit<ConfirmRequest, 'id'>;
 
 type Message = {
   id?: number;
@@ -58,11 +64,20 @@ const sockets: WebSocket[] = [];
 const openTab = vi.fn();
 const closeTab = vi.fn();
 const onAgentAction = vi.fn<(event: AgentActionEvent) => void>();
+const requestConfirm = vi.fn<(req: ConfirmAsk, signal: AbortSignal) => Promise<boolean>>();
 let nextTab: () => Promise<FakeContents> = () => new Promise(() => {});
 
 const start = async (limits: Partial<RelayLimits> = {}): Promise<RelayHandle> => {
   registry = createTargetRegistry();
-  relay = await startRelayServer({ registry, openTab, closeTab, onAgentAction, waitForTab: () => nextTab(), limits });
+  relay = await startRelayServer({
+    registry,
+    openTab,
+    closeTab,
+    onAgentAction,
+    requestConfirm,
+    waitForTab: () => nextTab(),
+    limits,
+  });
   return relay;
 };
 
@@ -560,10 +575,123 @@ describe('relay server: AionRelay methods', () => {
     expect((await client.send('AionRelay.reportAction', notFinite)).error).toBeDefined();
   });
 
-  it('requestConfirm fails closed until the confirm gate lands', async () => {
-    const client = await connect(await start());
-    expect((await client.send('AionRelay.requestConfirm', { webContentsId: 1, summary: 'x' })).result).toEqual({
-      allow: false,
+  describe('requestConfirm', () => {
+    const confirmTab = async (url = 'https://shop.test/cart?x=1#y') => {
+      const client = await connect(await start());
+      const contents = new FakeContents(40, url);
+      registry.track(contents);
+      registry.claim(40, relay?.clients()[0] as RelayClient);
+      return { client, contents };
+    };
+
+    it('asks with the origin of the tab url and a cleaned, bounded label, and returns the answer', async () => {
+      const { client } = await confirmTab();
+      requestConfirm.mockResolvedValueOnce(true);
+      const label = `Pay\u202e\n now ${'x'.repeat(300)}`;
+      const reply = await client.send('AionRelay.requestConfirm', {
+        webContentsId: 40,
+        label,
+        origin: 'https://evil.test',
+      });
+      expect(reply.result).toEqual({ allow: true });
+      const [ask] = requestConfirm.mock.calls[0];
+      expect(ask).toEqual({ origin: 'https://shop.test', label: `Pay now ${'x'.repeat(112)}`, clientLabel: 'claude' });
+      requestConfirm.mockResolvedValueOnce(false);
+      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' })).result).toEqual({
+        allow: false,
+      });
+    });
+
+    it('denies without asking for opaque origins, a tab that is gone, or an erroring gate', async () => {
+      const { client } = await confirmTab('about:blank');
+      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' })).result).toEqual({
+        allow: false,
+      });
+      expect(requestConfirm).not.toHaveBeenCalled();
+
+      const gone = ownedTab(41, 'claude');
+      gone.destroy();
+      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 41, label: 'Send' })).error).toBeDefined();
+
+      const web = new FakeContents(42, 'https://shop.test/');
+      registry.track(web);
+      registry.claim(42, relay?.clients()[0] as RelayClient);
+      requestConfirm.mockRejectedValueOnce(new Error('renderer gone'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 42, label: 'Send' })).result).toEqual({
+        allow: false,
+      });
+      warn.mockRestore();
+    });
+
+    it('refuses malformed params and tabs the client may not act on', async () => {
+      const { client } = await confirmTab();
+      const bad = [{ label: 'Send' }, { webContentsId: '40', label: 'Send' }, { webContentsId: 40, label: 5 }];
+      const replies = await Promise.all(bad.map((params) => client.send('AionRelay.requestConfirm', params)));
+      expect(replies.map((reply) => reply.error !== undefined)).toEqual([true, true, true]);
+      registry.track(new FakeContents(43, 'https://a.test/'));
+      const other = await client.send('AionRelay.requestConfirm', { webContentsId: 43, label: 'Send' });
+      expect(other.error?.message).toMatch(/not shared/);
+      expect(requestConfirm).not.toHaveBeenCalled();
+    });
+
+    it('denies the third pending confirm of a client', async () => {
+      const { client } = await confirmTab();
+      const answers: Array<(allow: boolean) => void> = [];
+      requestConfirm.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+      const first = client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' });
+      const second = client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Pay' });
+      await vi.waitFor(() => expect(answers).toHaveLength(2));
+      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Delete' })).result).toEqual({
+        allow: false,
+      });
+      expect(requestConfirm).toHaveBeenCalledTimes(2);
+      answers.forEach((answer) => answer(true));
+      expect((await first).result).toEqual({ allow: true });
+      expect((await second).result).toEqual({ allow: true });
+      // The slots are free again.
+      requestConfirm.mockResolvedValueOnce(true);
+      expect((await client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' })).result).toEqual({
+        allow: true,
+      });
+    });
+
+    it.each([
+      ['the tab navigates', (c: FakeContents) => c.navigate('https://evil.test/')],
+      ['the tab closes', (c: FakeContents) => c.destroy()],
+    ])('aborts the pending confirm when %s', async (_name, trigger) => {
+      const { client, contents } = await confirmTab();
+      let signal: AbortSignal | undefined;
+      requestConfirm.mockImplementation(
+        (_ask, s) =>
+          new Promise((resolve) => {
+            signal = s;
+            s.addEventListener('abort', () => resolve(false));
+          })
+      );
+      const reply = client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' });
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      expect(signal?.aborted).toBe(false);
+      // A subframe or same-document navigation leaves the confirmed control where it is.
+      contents.emit('did-start-navigation', { url: 'https://ads.test/', isMainFrame: false });
+      contents.emit('did-start-navigation', { url: 'https://shop.test/#a', isMainFrame: true, isSameDocument: true });
+      expect(signal?.aborted).toBe(false);
+      trigger(contents);
+      expect(signal?.aborted).toBe(true);
+      expect((await reply).result).toEqual({ allow: false });
+    });
+
+    it('aborts the pending confirm when the client disconnects', async () => {
+      const { client } = await confirmTab();
+      let signal: AbortSignal | undefined;
+      requestConfirm.mockImplementation((_ask, s) => {
+        signal = s;
+        return new Promise(() => {});
+      });
+      void client.send('AionRelay.requestConfirm', { webContentsId: 40, label: 'Send' });
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      client.ws.terminate();
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
     });
   });
 });

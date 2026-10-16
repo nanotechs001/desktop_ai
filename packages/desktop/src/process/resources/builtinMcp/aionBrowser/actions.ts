@@ -5,6 +5,7 @@
  */
 
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
+import { isRiskyLabel } from '@process/services/agentBrowser/confirmGate';
 import {
   MAX_OPTION_LENGTH,
   baselineOf,
@@ -15,7 +16,7 @@ import {
 } from './actionSpace';
 import { collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
 import { sanitizePageText } from './pageText';
-import { DEVICE_PIXEL_RATIO, OWNER_HIT, RESOLVE_TARGET, SELECT_OPTION, SETTLE } from './inPage';
+import { DEVICE_PIXEL_RATIO, ENTER_LABELS, OWNER_HIT, RESOLVE_TARGET, SELECT_OPTION, SETTLE } from './inPage';
 
 /** An executed action as the pane shows it (AgentActionEvent): code-owned op, a bounded label, top-viewport rect. */
 export type ReportedAction = {
@@ -24,11 +25,15 @@ export type ReportedAction = {
   rect: { x: number; y: number; width: number; height: number } | null;
 };
 
-/** Where actions go: the tab's page session, and the relay path that tells the pane what ran. */
+/**
+ * Where actions go: the tab's page session, the relay path that tells the pane what ran, and the one that asks the
+ * user before a risky click or Enter. `confirm` resolves false (never rejects) for anything but an explicit Allow.
+ */
 export type ActionContext = {
   conn: CdpConnection;
   sessionId: string;
   report(action: ReportedAction): Promise<void>;
+  confirm(label: string): Promise<boolean>;
 };
 
 export const ACT_OPS = ['click', 'type', 'select', 'press', 'scroll', 'hover'] as const;
@@ -58,7 +63,7 @@ export const ACT_KEYS = Object.keys(PRESS_KEYS).concat(SCROLL_DIRECTIONS) as [st
 export type ActOp = (typeof ACT_OPS)[number];
 export type DragPosition = (typeof DRAG_POSITIONS)[number];
 export type ActStep = { op: ActOp; target?: string; text?: string; key?: string };
-export type Outcome = { result: 'done' | 'stale' | 'paused' | 'error'; reason?: string };
+export type Outcome = { result: 'done' | 'stale' | 'paused' | 'denied' | 'error'; reason?: string };
 export type StepResult = { op: ActOp; target?: string } & Outcome;
 
 /** Wait after input when the page shows no frame (spec §4: two animation frames or 50 ms). */
@@ -79,6 +84,8 @@ const DROP_AT: Readonly<Record<DragPosition, number>> = { before: 0.25, inside: 
 const SCROLL_SHARE = 0.8;
 const MAX_REPORT_LABEL = 80;
 const MAX_REPORT_FRAME = 40;
+/** Longest risky label shown to the user (the relay bounds it again). */
+const MAX_CONFIRM_LABEL = 120;
 const TEXT_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobox']);
 const LEFT = { button: 'left', clickCount: 1 } as const;
 // Select-all is Cmd+A on macOS and Ctrl+A elsewhere; the MCP runs on the same OS as AionUi.
@@ -104,7 +111,7 @@ type Target = {
 /** A step that did not run for a reason the agent can act on (observe again, fix the call). */
 class StepError extends Error {
   constructor(
-    readonly result: 'stale' | 'error',
+    readonly result: 'stale' | 'denied' | 'error',
     message: string
   ) {
     super(message);
@@ -290,11 +297,37 @@ const need = (value: string | undefined, what: string, op: string): string => {
   return value;
 };
 
+/**
+ * Asks the user before input when any of `labels` (what the step will click or activate) is risky; throws
+ * {@link StepError} `denied` unless they allow. True when it asked: the page may have changed while they decided.
+ */
+async function confirmRisky(ctx: ActionContext, labels: string[]): Promise<boolean> {
+  const risky = labels.find(isRiskyLabel);
+  if (risky === undefined) return false;
+  if (!(await ctx.confirm(sanitizePageText(risky, MAX_CONFIRM_LABEL)))) {
+    throw new StepError('denied', 'the user denied this action');
+  }
+  return true;
+}
+
+/** Labels of what Enter would activate: in the target's frame, or the focused control of every frame. */
+async function enterLabels(ctx: ActionContext, t: Target | null): Promise<string[]> {
+  const frames = t ? [t.frame] : (await collectFramesReport(ctx.conn, ctx.sessionId)).frames;
+  const found = await Promise.all(
+    frames.map((frame) => callIn(ctx.conn, frame, ENTER_LABELS, values(t ? t.node : null)).catch((): unknown => []))
+  );
+  return found.flatMap((labels) =>
+    Array.isArray(labels) ? labels.filter((l): l is string => typeof l === 'string') : []
+  );
+}
+
 /** Runs one step's input; returns the frame whose baseline the step may have changed. */
 async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle | null> {
   const { op } = step;
   if (op === 'press' || op === 'scroll') return op === 'press' ? press(ctx, step) : scroll(ctx, step);
-  const t = await resolveTarget(ctx, need(step.target, 'a target id from observe', op));
+  const id = need(step.target, 'a target id from observe', op);
+  let t = await resolveTarget(ctx, id);
+  if (op === 'click' && (await confirmRisky(ctx, [t.label]))) t = await resolveTarget(ctx, id);
   if (op === 'hover') {
     await mouse(ctx, 'mouseMoved', t.point);
   } else if (op === 'click') {
@@ -333,7 +366,10 @@ async function press(ctx: ActionContext, step: ActStep): Promise<FrameHandle | n
   const key = need(step.key, 'a key', 'press');
   if (!Object.hasOwn(PRESS_KEYS, key)) throw new StepError('error', `press cannot send ${key}.`);
   const spec = PRESS_KEYS[key];
-  const t = step.target ? await resolveTarget(ctx, step.target) : null;
+  let t = step.target ? await resolveTarget(ctx, step.target) : null;
+  // A target is clicked first, and Enter activates the focused control or submits its form.
+  const labels = [...(t ? [t.label] : []), ...(key === 'Enter' ? await enterLabels(ctx, t) : [])];
+  if ((await confirmRisky(ctx, labels)) && step.target) t = await resolveTarget(ctx, step.target);
   if (t) await click(ctx, t.point);
   await pressKey(ctx, spec);
   const label = t ? `${spec.code} on ${targetLabel(t)}` : spec.code;
@@ -392,6 +428,9 @@ const notRun = (left: number): string => (left ? ` ${left} more action${left ===
 const stopNote = (outcome: Outcome, left: number): string => {
   if (outcome.result === 'paused')
     return `The user took over this tab; wait for them to resume, then observe again.${notRun(left)}`;
+  if (outcome.result === 'denied') {
+    return `The user denied this action; do not retry it or work around it unless they ask.${notRun(left)}`;
+  }
   if (outcome.result === 'stale') return `Stale target: observe again before acting.${notRun(left)}`;
   return `Stopped at an error.${notRun(left)}`;
 };

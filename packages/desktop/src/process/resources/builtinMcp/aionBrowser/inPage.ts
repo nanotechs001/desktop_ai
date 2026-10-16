@@ -50,6 +50,33 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   };
 }`;
 
+/**
+ * (node) → labels of what an Enter press may activate: the control (the observed `node`, or the focused element
+ * when `node` is null) unless it is a text field, and the submit button of its form, which Enter submits. Needs
+ * no snapshot state, so an unobserved page is covered too. Labels are the page's own text, cut to 200 chars.
+ */
+export const ENTER_LABELS = `function (node) {
+  const c = window.__aionFast;
+  let e = node === null ? document.activeElement : c && c.nodes.get(node);
+  while (node === null && e && e.shadowRoot && e.shadowRoot.activeElement) e = e.shadowRoot.activeElement;
+  if (!e || e === document.body || e === document.documentElement) return [];
+  const buttonLike = ['button', 'submit', 'reset', 'image'];
+  const label = (x) =>
+    [x.getAttribute('aria-label'), buttonLike.includes(x.type) ? x.value : '', x.innerText || x.textContent, x.title, x.alt]
+      .filter((part) => typeof part === 'string' && part.trim())
+      .join(' ')
+      .slice(0, 200);
+  const field = e.matches('textarea,select,[contenteditable]:not([contenteditable="false"]),input:not(' +
+    buttonLike.map((type) => '[type="' + type + '"]').join(',') + ',[type="checkbox"],[type="radio"])');
+  const labels = field ? [] : [label(e)];
+  const form = e.form || e.closest('form');
+  const submit = form && e.tagName !== 'TEXTAREA' && form.querySelector(
+    'button:not([type]),button[type="submit"],input[type="submit"],input[type="image"]'
+  );
+  if (submit) labels.push(label(submit));
+  return labels;
+}`;
+
 /** (node, label) → true once the first enabled option of a native select with exactly that label is chosen. */
 export const SELECT_OPTION = `function (node, label) {
   const e = window.__aionFast && window.__aionFast.nodes.get(node);

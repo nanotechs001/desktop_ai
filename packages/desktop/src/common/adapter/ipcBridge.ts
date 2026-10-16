@@ -15,6 +15,7 @@
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type {
   AgentActionEvent,
+  ConfirmRequest,
   BrowserShortcutRequest,
   DownloadItem,
   PermissionRequest,
@@ -1509,6 +1510,15 @@ export const agentBrowser = {
   // clears the take-over pause so agents may send input to the tab again
   resume: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>('agent-browser.resume'),
   getOwnership: bridge.buildProvider<IBridgeResponse<TabOwnership[]>, void>('agent-browser.get-ownership'),
+  // main → renderer: every risky agent action waiting for Allow or Deny, on every change
+  confirmRequested: bridge.buildEmitter<ConfirmRequest[]>('agent-browser.confirm-requested'),
+  getConfirmRequests: bridge.buildProvider<IBridgeResponse<ConfirmRequest[]>, void>(
+    'agent-browser.get-confirm-requests'
+  ),
+  // Allow or Deny a waiting action; alwaysForSite on an Allow skips future prompts for that origin
+  replyConfirm: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; alwaysForSite: boolean }>(
+    'agent-browser.reply-confirm'
+  ),
 };
 
 // ---------------------------------------------------------------------------
