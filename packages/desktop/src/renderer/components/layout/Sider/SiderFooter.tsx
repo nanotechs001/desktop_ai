@@ -54,7 +54,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
       style={{ lineHeight: 0 }}
     />
   );
-  const showThemeToggle = isSettings && !collapsed;
+  const showThemeToggle = isSettings;
   const themeTooltip = theme === 'dark' ? t('settings.lightMode') : t('settings.darkMode');
 
   return (
@@ -104,14 +104,15 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
             </div>
           </Tooltip>
         )}
-        {/* Theme toggle — lightweight icon button, only while inside Settings page (not in collapsed mode) */}
+        {/* Theme toggle — lightweight icon button, only while inside Settings page; stays in the icon rail */}
         {showThemeToggle && (
           <Tooltip {...siderTooltipProps} content={themeTooltip} position='right'>
             <div
               onClick={onThemeToggle}
               data-testid='theme-toggle'
               className={classNames(
-                'h-32px w-40px shrink-0 flex items-center justify-center cursor-pointer rd-0.5rem transition-colors text-t-secondary hover:bg-fill-2 hover:text-t-primary active:bg-fill-3',
+                'h-32px shrink-0 flex items-center justify-center cursor-pointer rd-0.5rem transition-colors text-t-secondary hover:bg-fill-2 hover:text-t-primary active:bg-fill-3',
+                collapsed ? 'w-full' : 'w-40px',
                 isMobile && 'sider-footer-btn-mobile'
               )}
               aria-label={themeTooltip}

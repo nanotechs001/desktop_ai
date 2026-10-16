@@ -46,7 +46,7 @@ const mount = (): void => {
   );
 };
 
-const enterScope = (scope: string, options?: { openBrowserIfEmpty?: boolean }) =>
+const enterScope = (scope: string, options?: { openBrowserIfEmpty?: boolean; carryFromScope?: string }) =>
   act(() => ctx.closePreviewIfScopeChanged(scope, options));
 
 const storedScope = (scope: string) => JSON.parse(localStorage.getItem(previewScopeStorageKey(scope)) ?? 'null');
@@ -91,8 +91,17 @@ describe('conversation scopes open the browser pane by default', () => {
   it('keeps a scope closed after the user closed the panel', () => {
     mount();
     enterScope('/ws/a', OPEN_BROWSER);
-    act(() => ctx.closePreview());
+    act(() => ctx.collapsePreview());
     enterScope('/ws/b', OPEN_BROWSER);
+    enterScope('/ws/a', OPEN_BROWSER);
+
+    expect(ctx.isOpen).toBe(false);
+  });
+
+  it('keeps a scope closed on re-entry of the same scope after the user closed the panel', () => {
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.collapsePreview());
     enterScope('/ws/a', OPEN_BROWSER);
 
     expect(ctx.isOpen).toBe(false);
@@ -110,10 +119,55 @@ describe('conversation scopes open the browser pane by default', () => {
     expect(ctx.tabs).toHaveLength(0);
   });
 
-  it('keeps a scope closed when its stored state says the default was already applied', () => {
+  it('reopens the same scope after a route-change close (closePreview) on re-entry', () => {
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    const tabId = ctx.tabs[0].id;
+    act(() => ctx.closePreview());
+    expect(ctx.isOpen).toBe(false);
+
+    enterScope('/ws/a', OPEN_BROWSER);
+
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([tabId]);
+  });
+
+  it('reopens a scope that was system-closed, after switching away and back', () => {
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.closePreview());
+    enterScope('/ws/b', OPEN_BROWSER);
+    enterScope('/ws/a', OPEN_BROWSER);
+
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs).toHaveLength(1);
+  });
+
+  it('shows the browser for a new chat in a project the user left via new chat', () => {
+    mount();
+    enterScope('proj-1', OPEN_BROWSER);
+    act(() => ctx.closePreview()); // Sider "new chat"
+    enterScope('proj-1', OPEN_BROWSER); // the new conversation of the same project
+
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs[0]).toMatchObject({ content_type: 'browser' });
+  });
+
+  it('opening a tab after a user close clears the closed flag', () => {
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.collapsePreview());
+    act(() => ctx.openBrowserTab());
+    act(() => ctx.closePreview());
+    enterScope('/ws/a', OPEN_BROWSER);
+
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('keeps a scope closed when its stored state says the user closed it', () => {
     localStorage.setItem(
       previewScopeStorageKey('/ws/done'),
-      JSON.stringify({ isOpen: false, tabs: [], activeTabId: null, autoOpened: true })
+      JSON.stringify({ isOpen: false, tabs: [], activeTabId: null, userClosed: true })
     );
     mount();
     enterScope('/ws/done', OPEN_BROWSER);
@@ -122,15 +176,53 @@ describe('conversation scopes open the browser pane by default', () => {
     expect(ctx.tabs).toHaveLength(0);
   });
 
-  it('persists the default so a reload does not open a second tab', () => {
+  it('persists the user-closed flag only for a user close', () => {
     mount();
     enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.closePreview());
     act(() => {
       vi.advanceTimersByTime(200);
     });
+    expect(storedScope('/ws/a').userClosed).toBeUndefined();
 
-    expect(storedScope('/ws/a')).toMatchObject({ isOpen: true, autoOpened: true });
-    expect(storedScope('/ws/a').tabs).toHaveLength(1);
+    enterScope('/ws/c', OPEN_BROWSER);
+    act(() => ctx.collapsePreview());
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedScope('/ws/c')).toMatchObject({ isOpen: false, userClosed: true });
+  });
+
+  it('carries live tabs, visibility and the closed flag when the scope goes from workspace to project', () => {
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.openPreview('# doc', 'markdown', { title: 'Doc' }));
+    const tabIds = ctx.tabs.map((tab) => tab.id);
+    expect(tabIds).toHaveLength(2);
+
+    act(() => ctx.closePreviewIfScopeChanged('proj-1', { ...OPEN_BROWSER, carryFromScope: '/ws/a' }));
+
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(tabIds);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedScope('proj-1').tabs).toHaveLength(2);
+  });
+
+  it('carries a user close across the workspace to project switch', () => {
+    mount();
+    enterScope('/ws/a', OPEN_BROWSER);
+    act(() => ctx.collapsePreview());
+
+    act(() => ctx.closePreviewIfScopeChanged('proj-1', { ...OPEN_BROWSER, carryFromScope: '/ws/a' }));
+
+    expect(ctx.isOpen).toBe(false);
+    expect(ctx.tabs).toHaveLength(1);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedScope('proj-1')).toMatchObject({ isOpen: false, userClosed: true });
   });
 
   it('does not open a browser tab when the caller does not ask for it (team and other routes)', () => {

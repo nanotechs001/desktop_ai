@@ -26,16 +26,25 @@ const ChatConversationIndex: React.FC = () => {
     return getConversationOrNull(id!);
   });
 
-  // Close preview only when the isolation scope changes, not on every
-  // conversation switch. Same-scope conversations keep the preview open. The
-  // scope is `previewScopeKey` = project (falling back to workspace until the
-  // backend populates project_id). The ref lives in PreviewContext (app-root
-  // level) so it survives remounts.
+  // Enter the preview scope once per conversation and scope, not on every render or data refresh.
+  // The scope is `previewScopeKey` = project (falling back to workspace until the backend populates
+  // project_id). Same-scope conversations keep their preview; entering one reopens it unless the
+  // user closed it. When project_id arrives for the conversation we are already in, the live tabs
+  // follow the scope change (`carryFromScope`) instead of being swapped for the project's saved ones.
+  // The ref lives in PreviewContext (app-root level) so it survives remounts.
+  const enterScopeRef = useRef(closePreviewIfScopeChanged);
+  enterScopeRef.current = closePreviewIfScopeChanged;
+  const lastEnteredRef = useRef<{ conversationId: string; scope: string | null } | null>(null);
+  const conversationId = data?.id;
+  const workspace = (data?.extra as { workspace?: string } | undefined)?.workspace ?? null;
+  const scope = data ? previewScopeKey(data.project_id ?? null, workspace) : null;
   useEffect(() => {
-    if (!data) return;
-    const workspace = (data.extra as { workspace?: string } | undefined)?.workspace ?? null;
-    closePreviewIfScopeChanged(previewScopeKey(data.project_id ?? null, workspace), { openBrowserIfEmpty: true });
-  }, [data, closePreviewIfScopeChanged]);
+    if (!conversationId) return;
+    const last = lastEnteredRef.current;
+    const carryFromScope = last?.conversationId === conversationId ? (last.scope ?? undefined) : undefined;
+    lastEnteredRef.current = { conversationId, scope };
+    enterScopeRef.current(scope, { openBrowserIfEmpty: true, carryFromScope });
+  }, [conversationId, scope]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async

@@ -132,7 +132,10 @@ export interface PreviewContextValue {
    * Open a browser tab; blank page when url is omitted.
    */
   openBrowserTab: (url?: string) => void;
+  /** Hide the panel without recording a user choice (route changes, "new chat"). */
   closePreview: () => void;
+  /** Hide the panel because the user closed it: the scope then stays closed until a tab is opened again. */
+  collapsePreview: () => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
   /** Discard this scope's tabs entirely (see closePreview for the difference). */
@@ -224,13 +227,15 @@ type PersistedScopeState = {
   isOpen: boolean;
   tabs: PreviewTab[];
   activeTabId: string | null;
-  /** The browser-first default was applied once; a scope that has it is never auto-opened again. */
-  autoOpened?: boolean;
+  /** The user closed the panel (or its last tab); conversation routes must not reopen it. */
+  userClosed?: boolean;
 };
 
 type ScopeChangeOptions = {
-  /** Conversation routes: a scope with nothing saved (and no earlier auto-open) starts with a blank browser tab. */
+  /** Conversation routes: (re)open the panel unless the user closed it, with a blank browser tab when it has none. */
   openBrowserIfEmpty?: boolean;
+  /** The scope this same conversation was in before (workspace fallback before project_id arrived): its live state moves to the new scope. */
+  carryFromScope?: string;
 };
 
 // 仅持久化小体积文本预览，避免大文本导致 localStorage 写入卡顿
@@ -435,7 +440,12 @@ const loadScopeState = (scope: string): PersistedScopeState => {
   try {
     const raw = localStorage.getItem(previewScopeStorageKey(scope));
     if (!raw) return EMPTY_SCOPE_STATE;
-    const parsed = JSON.parse(raw) as { isOpen?: unknown; tabs?: unknown; activeTabId?: unknown };
+    const parsed = JSON.parse(raw) as {
+      isOpen?: unknown;
+      tabs?: unknown;
+      activeTabId?: unknown;
+      userClosed?: unknown;
+    };
     const tabs = parsePersistedTabs(parsed.tabs);
     let activeTabId = typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null;
     if (activeTabId && !tabs.some((tab) => tab.id === activeTabId)) activeTabId = tabs[0]?.id || null;
@@ -443,7 +453,7 @@ const loadScopeState = (scope: string): PersistedScopeState => {
       isOpen: parsed.isOpen === true && tabs.length > 0,
       tabs,
       activeTabId,
-      autoOpened: (parsed as { autoOpened?: unknown }).autoOpened === true,
+      userClosed: parsed.userClosed === true,
     };
   } catch {
     return EMPTY_SCOPE_STATE;
@@ -510,7 +520,7 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
   const write = (): void => {
     const tabs = sanitizeTabsForPersistence(state.tabs);
     const activeTabId = tabs.some((t) => t.id === state.activeTabId) ? state.activeTabId : (tabs[0]?.id ?? null);
-    const payload = { isOpen: state.isOpen, tabs, activeTabId, ...(state.autoOpened ? { autoOpened: true } : {}) };
+    const payload = { isOpen: state.isOpen, tabs, activeTabId, ...(state.userClosed ? { userClosed: true } : {}) };
 
     // `savedAt` drives LRU eviction, so it has to mean "the tabs here last changed",
     // not "this key was last written". Writes also happen for visibility-only changes
@@ -554,8 +564,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // The preview scope currently loaded into state (project id / workspace / null).
   const currentScopeRef = useRef<PreviewScopeKey>(null);
-  // Whether the current scope already got the browser-first default (persisted with the scope).
-  const autoOpenedRef = useRef(false);
+  // Whether the user closed the current scope's panel (persisted with the scope).
+  const userClosedRef = useRef(false);
   // Mirror activeTabId in a ref so setTabs updaters can read the latest value
   // without adding activeTabId to their dependencies.
   const activeTabIdRef = useRef<string | null>(null);
@@ -643,7 +653,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const scope = currentScopeRef.current;
     if (scope == null) return undefined;
     const timer = setTimeout(() => {
-      persistScopeState(scope, { isOpen, tabs, activeTabId, autoOpened: autoOpenedRef.current });
+      persistScopeState(scope, { isOpen, tabs, activeTabId, userClosed: userClosedRef.current });
     }, 150);
     return () => clearTimeout(timer);
   }, [tabs, activeTabId, isOpen]);
@@ -876,6 +886,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       setActiveTabId(targetTabId);
       setIsOpen(true);
+      userClosedRef.current = false;
     },
     [extractFileName, findPreviewTabInList]
   );
@@ -942,6 +953,12 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setDomSnippets([]);
   }, []);
 
+  /** The user's own close (panel close button): same as {@link closePreview}, but remembered. */
+  const collapsePreview = useCallback(() => {
+    userClosedRef.current = true;
+    closePreview();
+  }, [closePreview]);
+
   /**
    * Discard this scope's tabs outright — the panel closes and nothing is restored.
    *
@@ -967,8 +984,25 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const closePreviewIfScopeChanged = useCallback(
     (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
       const prev = currentScopeRef.current;
-      if (prev === scopeKey) return;
-      if (prev != null) persistScopeState(prev, { isOpen, tabs, activeTabId, autoOpened: autoOpenedRef.current });
+      // Entering a conversation reopens its panel unless the user closed it: restore what is
+      // there, or start with a blank browser tab.
+      const reopenUnlessUserClosed = () => {
+        if (!options?.openBrowserIfEmpty || scopeKey == null || isOpen || userClosedRef.current) return;
+        if (tabsRef.current.length > 0) setIsOpen(true);
+        else openBrowserTab();
+      };
+      if (prev === scopeKey) {
+        reopenUnlessUserClosed();
+        return;
+      }
+      if (prev != null && prev === options?.carryFromScope && scopeKey != null) {
+        // Same conversation, new scope key: keep the live tabs instead of swapping them out.
+        currentScopeRef.current = scopeKey;
+        persistScopeState(scopeKey, { isOpen, tabs, activeTabId, userClosed: userClosedRef.current });
+        reopenUnlessUserClosed();
+        return;
+      }
+      if (prev != null) persistScopeState(prev, { isOpen, tabs, activeTabId, userClosed: userClosedRef.current });
       // Release the leaving scope's directory subscriptions.
       //
       // Placed before the state updates as a matter of habit, not because the position
@@ -991,12 +1025,15 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsOpen(loaded.isOpen);
       setIsMaximized(false);
       setDomSnippets([]);
-      autoOpenedRef.current = loaded.autoOpened === true;
-      if (options?.openBrowserIfEmpty && scopeKey != null && loaded.tabs.length === 0 && !loaded.autoOpened) {
-        autoOpenedRef.current = true;
-        // openPreview decides from tabsRef, which only catches up on the next render.
-        tabsRef.current = loaded.tabs;
-        openBrowserTab();
+      userClosedRef.current = loaded.userClosed === true;
+      if (options?.openBrowserIfEmpty && scopeKey != null && !userClosedRef.current) {
+        if (loaded.tabs.length > 0) {
+          setIsOpen(true);
+        } else {
+          // openPreview decides from tabsRef, which only catches up on the next render.
+          tabsRef.current = loaded.tabs;
+          openBrowserTab();
+        }
       }
     },
     [isOpen, tabs, activeTabId, openBrowserTab]
@@ -1022,6 +1059,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // 没有 tab 了，关闭预览面板 / No more tabs, close preview panel
             setIsOpen(false);
             setActiveTabId(null);
+            userClosedRef.current = true;
           }
         }
 
@@ -1404,6 +1442,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       activeTab,
       openPreview,
       closePreview,
+      collapsePreview,
       toggleMaximized,
       clearPreviewForScope,
       closeTab,
@@ -1435,6 +1474,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     activeTab,
     openPreview,
     closePreview,
+    collapsePreview,
     toggleMaximized,
     clearPreviewForScope,
     closeTab,

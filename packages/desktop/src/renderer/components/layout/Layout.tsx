@@ -419,7 +419,7 @@ const Layout: React.FC<{
               <ArcoLayout.Header
                 className={classNames(
                   'flex items-center pt-8px pb-8px layout-sider-header',
-                  collapsed ? 'justify-center px-0 cursor-pointer group' : 'justify-start ps-18px pe-16px gap-12px',
+                  collapsed ? 'justify-center px-0' : 'justify-start ps-18px pe-16px gap-12px',
                   isMobile && 'layout-sider-header--mobile'
                 )}
               >

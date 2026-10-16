@@ -94,7 +94,7 @@ const PreviewPanel: React.FC = () => {
     activeTab,
     closeTab,
     switchTab,
-    closePreview,
+    collapsePreview,
     toggleMaximized,
     updateContent,
     saveContent,
@@ -599,8 +599,8 @@ const PreviewPanel: React.FC = () => {
   // it still has to pass the dirty check: otherwise "collapse" becomes another
   // route that silently discards unsaved edits.
   const handleClosePanel = useCallback(() => {
-    requestCloseBatch(tabs, closePreview);
-  }, [tabs, requestCloseBatch, closePreview]);
+    requestCloseBatch(tabs, collapsePreview);
+  }, [tabs, requestCloseBatch, collapsePreview]);
 
   // Cmd/Ctrl+W 的目标是当前 tab；没有当前 tab 时什么也不做，让按键落回默认行为。
   // Cmd/Ctrl+W targets the active tab; with none open it does nothing and lets
