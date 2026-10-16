@@ -42,6 +42,25 @@ export interface WebviewHostProps {
    * which keeps existing embedded consumers behaving exactly as before.
    */
   resolveUrlInput?: (raw: string) => string | null;
+  /**
+   * Whether to hijack link clicks, `window.open` and form submits via an injected script
+   * and re-route them through `src` (default `true`, the URL/HTML preview behavior).
+   * Pass `false` for a regular browsing surface: the page navigates natively (POST
+   * bodies, SPA routing and OAuth popups keep working) and the webview gets
+   * `allowpopups="true"`.
+   *
+   * Fixed per instance: React sets `<webview>` attributes only at mount, so `allowpopups`
+   * cannot change on a live webview. Do not toggle it after mount.
+   */
+  interceptNavigation?: boolean;
+  /** Extra content rendered at the right end of the navigation bar (needs `showNavBar`) */
+  navBarExtra?: React.ReactNode;
+  /** Called when the page's renderer process exits abnormally or is killed */
+  onRenderProcessGone?: (details: { reason: string }) => void;
+  /** Called when the page stops responding to input */
+  onUnresponsive?: () => void;
+  /** Called when a previously unresponsive page responds again */
+  onResponsive?: () => void;
 }
 
 const MIN_ZOOM_FACTOR = 0.75;
@@ -51,7 +70,7 @@ const MAX_ZOOM_FACTOR = 1.5;
  * Shared webview host component — extracted from URLViewer.
  *
  * Features:
- * - Link/window.open/form interception → internal navigation
+ * - Link/window.open/form interception → internal navigation (unless `interceptNavigation` is false)
  * - Self-managed history stacks (back / forward)
  * - Loading indicator
  * - Partition support for cache isolation
@@ -70,6 +89,11 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onTitleChange,
   onFaviconChange,
   resolveUrlInput,
+  interceptNavigation = true,
+  navBarExtra,
+  onRenderProcessGone,
+  onUnresponsive,
+  onResponsive,
 }) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -85,6 +109,12 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onTitleChangeRef.current = onTitleChange;
   const onFaviconChangeRef = useRef(onFaviconChange);
   onFaviconChangeRef.current = onFaviconChange;
+  const onRenderProcessGoneRef = useRef(onRenderProcessGone);
+  onRenderProcessGoneRef.current = onRenderProcessGone;
+  const onUnresponsiveRef = useRef(onUnresponsive);
+  onUnresponsiveRef.current = onUnresponsive;
+  const onResponsiveRef = useRef(onResponsive);
+  onResponsiveRef.current = onResponsive;
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(url);
@@ -299,7 +329,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     const handleDomReady = () => {
       setWebviewReady(true);
       syncNavState();
-      injectClickInterceptor();
+      if (interceptNavigation) injectClickInterceptor();
 
       /**
        * 把这个 webview 的 webContents id 报给主进程，让单目标 CDP 通道附加到它。
@@ -343,19 +373,21 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
         )
         .catch(() => {});
 
-      // Set up message listener inside webview
-      webviewEl
-        .executeJavaScript(
-          `
-        window.addEventListener('message', function(e) {
-          if (e.data && e.data.type === '__WEBVIEW_HOST_NAVIGATE__') {
-            console.log('__WEBVIEW_HOST_NAVIGATE__', JSON.stringify(e.data));
-          }
-        });
-        true;
-      `
-        )
-        .catch(() => {});
+      // Set up message listener inside webview (only the interceptor posts these messages)
+      if (interceptNavigation) {
+        webviewEl
+          .executeJavaScript(
+            `
+          window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === '__WEBVIEW_HOST_NAVIGATE__') {
+              console.log('__WEBVIEW_HOST_NAVIGATE__', JSON.stringify(e.data));
+            }
+          });
+          true;
+        `
+          )
+          .catch(() => {});
+      }
 
       if (isStarOfficeUrl(currentUrl)) {
         webviewEl
@@ -436,6 +468,12 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       if (Array.isArray(favicons) && favicons[0]) onFaviconChangeRef.current?.(favicons[0]);
     };
 
+    const handleRenderProcessGone = (event: Electron.RenderProcessGoneEvent) => {
+      onRenderProcessGoneRef.current?.(event.details);
+    };
+    const handleUnresponsive = () => onUnresponsiveRef.current?.();
+    const handleResponsive = () => onResponsiveRef.current?.();
+
     webviewEl.addEventListener('did-start-loading', handleStartLoading);
     webviewEl.addEventListener('did-stop-loading', handleStopLoading);
     webviewEl.addEventListener('dom-ready', handleDomReady);
@@ -446,6 +484,9 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     webviewEl.addEventListener('did-fail-load', handleDidFailLoad as EventListener);
     webviewEl.addEventListener('page-title-updated', handlePageTitleUpdated as EventListener);
     webviewEl.addEventListener('page-favicon-updated', handlePageFaviconUpdated as EventListener);
+    webviewEl.addEventListener('render-process-gone', handleRenderProcessGone as EventListener);
+    webviewEl.addEventListener('unresponsive', handleUnresponsive);
+    webviewEl.addEventListener('responsive', handleResponsive);
 
     return () => {
       webviewEl.removeEventListener('did-start-loading', handleStartLoading);
@@ -458,8 +499,11 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       webviewEl.removeEventListener('did-fail-load', handleDidFailLoad as EventListener);
       webviewEl.removeEventListener('page-title-updated', handlePageTitleUpdated as EventListener);
       webviewEl.removeEventListener('page-favicon-updated', handlePageFaviconUpdated as EventListener);
+      webviewEl.removeEventListener('render-process-gone', handleRenderProcessGone as EventListener);
+      webviewEl.removeEventListener('unresponsive', handleUnresponsive);
+      webviewEl.removeEventListener('responsive', handleResponsive);
     };
-  }, [navigateToWithHistory, currentUrl, onDidFinishLoad, onDidFailLoad, isStarOfficeUrl]);
+  }, [navigateToWithHistory, currentUrl, onDidFinishLoad, onDidFailLoad, isStarOfficeUrl, interceptNavigation]);
 
   // Resize observer for content area
   useEffect(() => {
@@ -607,9 +651,15 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
    * which stays entirely in the page world and works with isolation enabled. Do not flip
    * this back to `no` for convenience: any future preload or IPC surface would then be
    * directly reachable by untrusted pages.
+   *
+   * allowpopups follows `interceptNavigation`. With interception on (URL/HTML preview)
+   * `window.open` is rewritten into an in-place navigation, so popups stay off. With it
+   * off (browser tabs) the page opens popups natively — OAuth sign-in windows need a real
+   * `window.open` that returns a window handle. React only applies this attribute at mount,
+   * so it is fixed per instance.
    */
   const webviewAttrs: Record<string, string> = {
-    allowpopups: 'false',
+    allowpopups: interceptNavigation ? 'false' : 'true',
     webpreferences: 'contextIsolation=yes, nodeIntegration=no, nativeWindowOpen=no',
   };
   if (partition) {
@@ -765,6 +815,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
               placeholder={t('preview.browser.addressPlaceholder')}
             />
           </form>
+          {navBarExtra}
         </div>
       )}
 

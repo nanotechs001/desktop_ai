@@ -70,6 +70,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({ url, tabId, onUrlChange, 
       url={url || BROWSER_BLANK_URL}
       partition={BROWSER_SESSION_PARTITION}
       showNavBar
+      interceptNavigation={false}
       className='bg-bg-1'
       resolveUrlInput={resolveAddressBarInput}
       onUrlChange={handleUrlChange}
