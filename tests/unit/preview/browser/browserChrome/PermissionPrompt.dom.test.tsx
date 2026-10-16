@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PermissionRequest } from '@/common/types/browser';
 
@@ -95,6 +95,24 @@ describe('PermissionPrompt', () => {
 
     await push([]);
     expect(screen.queryByText(`${KEY}.block`)).toBeNull();
+  });
+
+  const wrapper = () => document.querySelector('.arco-modal-wrapper') as HTMLElement;
+  it.each([
+    ['the close button', () => fireEvent.click(document.querySelector('.arco-modal-close-icon') as HTMLElement)],
+    [
+      'a mask click',
+      () => {
+        fireEvent.mouseDown(wrapper());
+        fireEvent.click(wrapper());
+      },
+    ],
+    ['Esc', () => fireEvent.keyDown(screen.getByText(`${KEY}.remember`), { key: 'Escape' })],
+  ])('dismissing with %s replies Block without remembering', async (_name, dismiss) => {
+    await mount([request('a')]);
+    dismiss();
+    // Arco defers a mask-click close by 100 ms.
+    await waitFor(() => expect(mocks.replyPermission).toHaveBeenCalledWith({ id: 'a', allow: false, remember: false }));
   });
 
   it('honours an unchecked remember box', async () => {

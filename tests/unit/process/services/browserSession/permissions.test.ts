@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ import {
   getPermissionRequests,
   installPermissions,
   loadPermissionStore,
+  MAX_OPEN_PERMISSION_PROMPTS,
   PendingPermissions,
   rememberPermission,
   replyPermission,
@@ -96,6 +97,13 @@ describe('permission store', () => {
     expect(loadPermissionStore(file)).toEqual({ [ORIGIN]: { media: 'allow' } });
   });
 
+  it('savePermissionStore removes its temp file and rethrows when the rename fails', () => {
+    const file = path.join(mocks.home, 'blocked');
+    mkdirSync(file); // renaming a file over a directory fails
+    expect(() => savePermissionStore(file, {})).toThrow();
+    expect(readdirSync(mocks.home).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+  });
+
   it('savePermissionStore round-trips and creates the parent directory', () => {
     const file = path.join(mocks.home, 'nested', 'store.json');
     const store: PermissionStore = { [ORIGIN]: { media: 'deny' } };
@@ -161,6 +169,47 @@ describe('PendingPermissions', () => {
     await expect(other).resolves.toBe(true);
   });
 
+  it('auto-denies a request beyond the open-prompt cap without listing it', async () => {
+    const pending = new PendingPermissions();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (let i = 0; i < MAX_OPEN_PERMISSION_PROMPTS; i++) {
+      void pending.request({ ...req, origin: `https://o${i}.test` }, 60_000);
+    }
+    const onChange = vi.fn();
+    pending.onChange(onChange);
+
+    await expect(pending.request({ ...req, origin: 'https://extra.test' }, 60_000)).resolves.toBe(false);
+    expect(pending.list()).toHaveLength(MAX_OPEN_PERMISSION_PROMPTS);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('https://extra.test');
+    expect(warn.mock.calls[0][0]).toContain('media');
+    warn.mockRestore();
+  });
+
+  it('still shares an already-open request when the cap is reached', () => {
+    const pending = new PendingPermissions();
+    for (let i = 0; i < MAX_OPEN_PERMISSION_PROMPTS; i++) {
+      void pending.request({ ...req, origin: `https://o${i}.test` }, 60_000);
+    }
+    void pending.request({ ...req, origin: 'https://o0.test' }, 60_000);
+    expect(pending.list()).toHaveLength(MAX_OPEN_PERMISSION_PROMPTS);
+  });
+
+  it('unions mediaTypes into the open request and re-emits the list', () => {
+    const pending = new PendingPermissions();
+    const onChange = vi.fn();
+    void pending.request({ ...req, mediaTypes: ['video'] }, 60_000);
+    pending.onChange(onChange);
+    void pending.request({ ...req, mediaTypes: ['audio'] }, 60_000);
+    void pending.request({ ...req, mediaTypes: ['audio'] }, 60_000);
+
+    expect(pending.list()).toHaveLength(1);
+    expect(pending.list()[0].mediaTypes).toEqual(['video', 'audio']);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(pending.list());
+  });
+
   it('onChange returns an unsubscribe function', () => {
     const pending = new PendingPermissions();
     const onChange = vi.fn();
@@ -217,6 +266,14 @@ describe('installPermissions', () => {
     expect(replyPermission(getPermissionRequests()[0].id, true, false)).toBe(true);
     await vi.advanceTimersByTimeAsync(0);
     expect(callback).toHaveBeenLastCalledWith(true);
+  });
+
+  it('attributes the prompt to the requesting frame, not the top-level page', () => {
+    const { request } = setup();
+    request({ getURL: () => 'https://top.test/page' }, 'geolocation', vi.fn(), {
+      requestingUrl: 'https://frame.test/x',
+    });
+    expect(getPermissionRequests()[0].origin).toBe('https://frame.test');
   });
 
   it('falls back to the webContents URL when details has no requestingUrl', () => {

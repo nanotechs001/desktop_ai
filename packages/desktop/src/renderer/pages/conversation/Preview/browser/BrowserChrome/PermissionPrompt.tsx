@@ -13,7 +13,7 @@ import type { PermissionRequest } from '@/common/types/browser';
 const KEY = 'preview.browserChrome.permission';
 
 /** i18n key suffix for what a request asks for; `media` says camera, microphone or both. */
-const messageKey = ({ permission, mediaTypes }: PermissionRequest): string => {
+const messageKey = ({ permission, mediaTypes }: PermissionRequest): string | null => {
   switch (permission) {
     case 'media': {
       const video = mediaTypes.includes('video');
@@ -31,27 +31,30 @@ const messageKey = ({ permission, mediaTypes }: PermissionRequest): string => {
     case 'midiSysex':
       return 'midi';
     default:
-      return 'other';
+      return null;
   }
+};
+
+const reply = (id: string, allow: boolean, remember: boolean): void => {
+  // A request that timed out meanwhile is already gone from the list, so a failed reply needs no feedback.
+  void ipcBridge.browser.replyPermission.invoke({ id, allow, remember }).catch((): void => undefined);
 };
 
 const PromptBody: React.FC<{ request: PermissionRequest }> = ({ request }) => {
   const { t } = useTranslation();
   const [remember, setRemember] = useState(true);
-  const reply = (allow: boolean): void => {
-    // A request that timed out meanwhile is already gone from the list, so a failed reply needs no feedback.
-    void ipcBridge.browser.replyPermission.invoke({ id: request.id, allow, remember }).catch((): void => undefined);
-  };
+  const key = messageKey(request);
 
   return (
     <div className='flex flex-col gap-16px'>
-      <div>{t(`${KEY}.${messageKey(request)}`, { origin: request.origin, permission: request.permission })}</div>
+      {/* Only ask-set permissions reach here, all mapped; the raw name is a safe fallback for any other. */}
+      <div>{key ? t(`${KEY}.${key}`, { origin: request.origin }) : `${request.origin}: ${request.permission}`}</div>
       <Checkbox checked={remember} onChange={setRemember}>
         {t(`${KEY}.remember`)}
       </Checkbox>
       <div className='flex justify-end gap-8px'>
-        <Button onClick={() => reply(false)}>{t(`${KEY}.block`)}</Button>
-        <Button type='primary' onClick={() => reply(true)}>
+        <Button onClick={() => reply(request.id, false, remember)}>{t(`${KEY}.block`)}</Button>
+        <Button type='primary' onClick={() => reply(request.id, true, remember)}>
           {t(`${KEY}.allow`)}
         </Button>
       </div>
@@ -81,7 +84,8 @@ const PermissionPrompt: React.FC = () => {
   if (!current) return null;
 
   return (
-    <Modal visible title={t(`${KEY}.title`)} footer={null} closable={false} maskClosable={false} escToExit={false}>
+    // Esc, the close button and a mask click all count as Block, and are not remembered.
+    <Modal visible title={t(`${KEY}.title`)} footer={null} onCancel={() => reply(current.id, false, false)}>
       <PromptBody key={current.id} request={current} />
     </Modal>
   );

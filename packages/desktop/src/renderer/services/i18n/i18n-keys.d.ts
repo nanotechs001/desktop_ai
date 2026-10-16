@@ -1302,7 +1302,6 @@ export type I18nKey =
   | 'preview.browserChrome.permission.mediaMicrophone'
   | 'preview.browserChrome.permission.midi'
   | 'preview.browserChrome.permission.notifications'
-  | 'preview.browserChrome.permission.other'
   | 'preview.browserChrome.permission.remember'
   | 'preview.browserChrome.permission.title'
   | 'preview.close'

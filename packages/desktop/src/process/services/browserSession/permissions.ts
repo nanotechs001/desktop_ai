@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { ipcBridge } from '@/common';
@@ -18,6 +18,8 @@ export type PermissionStore = Record<string, Record<string, 'allow' | 'deny'>>;
 const ASK_PERMISSIONS = new Set(['media', 'geolocation', 'notifications', 'clipboard-read', 'midi', 'midiSysex']);
 const ALWAYS_ALLOW_PERMISSIONS = new Set(['fullscreen', 'pointerLock', 'clipboard-sanitized-write']);
 const PROMPT_TIMEOUT_MS = 60_000;
+/** Bounds the prompt queue so a page cannot stack prompts (e.g. iframes on endless origins). */
+export const MAX_OPEN_PERMISSION_PROMPTS = 3;
 
 /** Always-allow permissions first, then a remembered answer for the origin; anything outside the ask set is denied. */
 export function decidePermission(permission: string, origin: string, store: PermissionStore): PermissionDecision {
@@ -60,8 +62,13 @@ export function loadPermissionStore(file: string): PermissionStore {
 export function savePermissionStore(file: string, store: PermissionStore): void {
   mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(store, null, 2));
-  renameSync(tmp, file);
+  try {
+    writeFileSync(tmp, JSON.stringify(store, null, 2));
+    renameSync(tmp, file);
+  } finally {
+    // After a successful rename the temp file is gone; after a failure this removes the leftover.
+    rmSync(tmp, { force: true });
+  }
 }
 
 type OpenRequest = { request: PermissionRequest; waiters: Array<(allow: boolean) => void>; timer: NodeJS.Timeout };
@@ -79,6 +86,17 @@ export class PendingPermissions {
       );
       if (existing) {
         existing.waiters.push(resolve);
+        const mediaTypes = [...new Set([...existing.request.mediaTypes, ...req.mediaTypes])];
+        if (mediaTypes.length > existing.request.mediaTypes.length) {
+          // Replace rather than mutate so earlier snapshots stay intact; the prompt must show what Allow grants.
+          this.open.set(existing.request.id, { ...existing, request: { ...existing.request, mediaTypes } });
+          this.notify();
+        }
+        return;
+      }
+      if (this.open.size >= MAX_OPEN_PERMISSION_PROMPTS) {
+        console.warn(`[BrowserSession] too many open permission prompts; denied ${req.permission} for ${req.origin}`);
+        resolve(false);
         return;
       }
       const id = randomUUID();
