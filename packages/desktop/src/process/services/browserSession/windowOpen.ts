@@ -85,16 +85,37 @@ export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecisi
 /**
  * Window options for a popup: a child of `parent` on the browser partition, so cookies and
  * `window.opener` are shared with the page that opened it. The size is clamped to a usable range.
+ *
+ * Electron spreads the page's `window.open` features (frame, alwaysOnTop, fullscreen, kiosk,
+ * transparent, left/top, ...) into the window options underneath this result, so every option a
+ * page could abuse to spoof an overlay is pinned here. Position is set explicitly (centered on the
+ * parent) because only an own `x`/`y` key overrides the page's left/top.
  */
 export function popupWindowOptions(
   size: PopupSize,
   parent: Electron.BrowserWindow | null
 ): Electron.BrowserWindowConstructorOptions {
+  const width = clamp(size.width, POPUP_WIDTH_RANGE);
+  const height = clamp(size.height, POPUP_HEIGHT_RANGE);
+  const bounds = parent?.getBounds();
   return {
     parent: parent ?? undefined,
-    width: clamp(size.width, POPUP_WIDTH_RANGE),
-    height: clamp(size.height, POPUP_HEIGHT_RANGE),
+    width,
+    height,
+    x: bounds ? Math.round(bounds.x + (bounds.width - width) / 2) : undefined,
+    y: bounds ? Math.round(bounds.y + (bounds.height - height) / 2) : undefined,
     autoHideMenuBar: true,
+    frame: true,
+    alwaysOnTop: false,
+    fullscreen: false,
+    fullscreenable: true,
+    kiosk: false,
+    transparent: false,
+    skipTaskbar: false,
+    resizable: true,
+    movable: true,
+    minimizable: true,
+    closable: true,
     webPreferences: {
       partition: BROWSER_SESSION_PARTITION,
       contextIsolation: true,
@@ -108,6 +129,7 @@ export function popupWindowOptions(
  * Routes `window.open` and `target=_blank` from a browser webContents: tabs are requested from
  * the renderer (the native window is denied), popups open as child windows, and unsafe URLs are
  * denied. Popup windows are browser contents too, so they get this same handler.
+ * This owns `setWindowOpenHandler` for browser contents: later code must not call it on them.
  * @param getParent returns the window popups attach to, or null when there is none
  */
 export function installWindowOpenHandler(

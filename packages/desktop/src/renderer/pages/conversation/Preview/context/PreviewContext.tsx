@@ -883,7 +883,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Main process asked for a new browser tab (target=_blank / window.open from a browser page).
   // `background` is ignored for now: openBrowserTab always activates the new tab.
-  // `?.` follows the responseStream guard below: a harness mocking only part of ipcBridge must not break the panel.
+  // `?.` only tolerates test mocks that omit `browser`; production always defines the namespace.
   useEffect(() => ipcBridge.browser?.openTabRequested.on(({ url }) => openBrowserTab(url)), [openBrowserTab]);
 
   /**

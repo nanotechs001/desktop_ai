@@ -130,14 +130,33 @@ describe('classifyWindowOpen', () => {
     expect(classify(url, 'new-window', 'width=500,height=600')).toEqual({ kind: 'deny' });
   });
 
-  it.each(['about:srcdoc', 'about:blank#x', '', 'not a url'])('%j is denied', (url) => {
-    expect(classify(url, 'foreground-tab')).toEqual({ kind: 'deny' });
-  });
+  it.each(['about:srcdoc', 'about:blank#x', '', 'not a url', 'JAVASCRIPT:alert(1)', '  javascript:alert(1)'])(
+    '%j is denied',
+    (url) => {
+      expect(classify(url, 'foreground-tab')).toEqual({ kind: 'deny' });
+    }
+  );
 });
 
 describe('popupWindowOptions', () => {
-  it('clamps 3000x50 to 1400x300 and uses the browser partition', () => {
-    const parent = { id: 1 } as unknown as Electron.BrowserWindow;
+  const PINNED = {
+    frame: true,
+    alwaysOnTop: false,
+    fullscreen: false,
+    fullscreenable: true,
+    kiosk: false,
+    transparent: false,
+    skipTaskbar: false,
+    resizable: true,
+    movable: true,
+    minimizable: true,
+    closable: true,
+  };
+  const makeParent = (bounds = { x: 100, y: 50, width: 1000, height: 800 }) =>
+    ({ getBounds: () => bounds }) as unknown as Electron.BrowserWindow;
+
+  it('clamps 3000x50 to 1400x300, uses the browser partition and centers on the parent', () => {
+    const parent = makeParent();
 
     const options = popupWindowOptions({ width: 3000, height: 50 }, parent);
 
@@ -145,7 +164,10 @@ describe('popupWindowOptions', () => {
       parent,
       width: 1400,
       height: 300,
+      x: -100,
+      y: 300,
       autoHideMenuBar: true,
+      ...PINNED,
       webPreferences: {
         partition: 'persist:aionui-browser',
         contextIsolation: true,
@@ -153,6 +175,27 @@ describe('popupWindowOptions', () => {
         nodeIntegration: false,
       },
     });
+  });
+
+  it('neutralizes hostile page features: Electron spreads them under these options', () => {
+    // Electron turns "left=5,top=7,frame=no,alwaysOnTop=yes,..." into BrowserWindow options and then
+    // spreads ours over them, so every key a page can set must be present here with a safe value.
+    const hostile = { x: 5, y: 7, frame: false, alwaysOnTop: true, fullscreen: true, kiosk: true, transparent: true };
+    const hostileOnly = { skipTaskbar: true, resizable: false, movable: false, minimizable: false, closable: false };
+    const pageParsed = { ...hostile, ...hostileOnly, fullscreenable: false };
+
+    const merged = { ...pageParsed, ...popupWindowOptions({ width: 500, height: 600 }, makeParent()) };
+
+    expect(merged).toMatchObject({ ...PINNED, x: 350, y: 150 });
+  });
+
+  it('leaves position to the OS rather than the page without a parent, as own keys that override left/top', () => {
+    const options = popupWindowOptions({ width: 500, height: 600 }, null);
+
+    expect(Object.keys(options)).toEqual(expect.arrayContaining(['x', 'y']));
+    expect(options.x).toBeUndefined();
+    expect(options.y).toBeUndefined();
+    expect({ x: 5, y: 7, ...options }.x).toBeUndefined();
   });
 
   it('clamps the small end of width and the large end of height', () => {
@@ -193,7 +236,7 @@ describe('installWindowOpenHandler', () => {
   });
 
   it('allows a popup as a child window of the parent on the browser partition', () => {
-    const parent = { isDestroyed: () => false };
+    const parent = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }) };
     const handler = install(parent);
 
     const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'width=500,height=600' });
