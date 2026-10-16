@@ -6,7 +6,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ emit: vi.fn() }));
+const mocks = vi.hoisted(() => ({ emit: vi.fn(), fromWebContents: vi.fn() }));
+
+vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: mocks.fromWebContents } }));
 
 vi.mock('@/common', () => ({ ipcBridge: { browser: { shortcut: { emit: mocks.emit } } } }));
 
@@ -52,6 +54,17 @@ describe('classifyBrowserShortcut', () => {
     expect(classifyBrowserShortcut(key('+', { meta: true, shift: true }), 'darwin')).toBe('zoom-in');
   });
 
+  it('falls back to the physical key code when key is not ASCII (Cyrillic, Persian layouts)', () => {
+    const cyrillic = (k: string, code: string, mods: Partial<Input> = {}) =>
+      classifyBrowserShortcut({ ...key(k, { meta: true, ...mods }), code }, 'darwin');
+    expect(cyrillic('а', 'KeyF')).toBe('find');
+    expect(cyrillic('к', 'KeyR', { shift: true })).toBe('hard-reload');
+    expect(cyrillic('ش', 'KeyA')).toBeNull();
+    expect(cyrillic('х', 'BracketLeft')).toBe('back');
+    expect(cyrillic('+', 'NumpadAdd')).toBe('zoom-in');
+    expect(cyrillic('а', 'Unidentified')).toBeNull();
+  });
+
   it('uses the platform modifier only: darwin ignores control, win32 and linux ignore meta', () => {
     expect(classifyBrowserShortcut(key('r', { control: true }), 'darwin')).toBeNull();
     expect(classifyBrowserShortcut(key('r', { meta: true }), 'win32')).toBeNull();
@@ -74,7 +87,7 @@ describe('classifyBrowserShortcut', () => {
 });
 
 describe('installBrowserShortcuts', () => {
-  const setup = () => {
+  const setup = (type = 'webview') => {
     let handler: (event: Electron.Event, input: Input) => void = vi.fn();
     const navigationHistory = {
       canGoBack: vi.fn(() => true),
@@ -85,6 +98,7 @@ describe('installBrowserShortcuts', () => {
     let zoom = 0;
     const contents = {
       id: 42,
+      getType: () => type,
       on: vi.fn((_name: string, listener: typeof handler) => {
         handler = listener;
       }),
@@ -106,7 +120,10 @@ describe('installBrowserShortcuts', () => {
     return { contents, navigationHistory, press };
   };
 
-  beforeEach(() => mocks.emit.mockClear());
+  beforeEach(() => {
+    mocks.emit.mockClear();
+    mocks.fromWebContents.mockReset();
+  });
 
   it('meta+r prevents the default (no app-menu reload) and reloads the page', () => {
     const { contents, press } = setup();
@@ -175,5 +192,39 @@ describe('installBrowserShortcuts', () => {
     const event = press(key('Escape'));
     expect(mocks.emit).toHaveBeenCalledWith({ webContentsId: 42, action: 'escape' });
     expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  describe('popup windows (no tab to act on)', () => {
+    it('Cmd+W closes the popup window and does not emit', () => {
+      const close = vi.fn();
+      mocks.fromWebContents.mockReturnValue({ close });
+      const { contents, press } = setup('window');
+      const event = press(key('w', { meta: true }));
+      expect(mocks.fromWebContents).toHaveBeenCalledWith(contents);
+      expect(close).toHaveBeenCalledOnce();
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(mocks.emit).not.toHaveBeenCalled();
+    });
+
+    it('find, focus-address, new-tab and escape pass through untouched', () => {
+      const { press } = setup('window');
+      for (const input of [
+        key('f', { meta: true }),
+        key('l', { meta: true }),
+        key('t', { meta: true }),
+        key('Escape'),
+      ]) {
+        expect(press(input).preventDefault).not.toHaveBeenCalled();
+      }
+      expect(mocks.emit).not.toHaveBeenCalled();
+    });
+
+    it('reload and zoom still work on a popup', () => {
+      const { contents, press } = setup('window');
+      expect(press(key('r', { meta: true })).preventDefault).toHaveBeenCalledOnce();
+      press(key('=', { meta: true }));
+      expect(contents.reload).toHaveBeenCalledOnce();
+      expect(contents.setZoomLevel).toHaveBeenLastCalledWith(0.5);
+    });
   });
 });

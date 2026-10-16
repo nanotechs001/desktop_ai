@@ -89,6 +89,17 @@ describe('FindBar', () => {
     expect(screen.getByText(`${KEY}.noMatches`)).toBeTruthy();
   });
 
+  it('stops listening to found-in-page after unmount', () => {
+    const removeSpy = vi.spyOn(webview, 'removeEventListener');
+    const { unmount } = render(
+      <FindBar webview={webview as unknown as Electron.WebviewTag} onClose={vi.fn()} focusToken={0} />
+    );
+
+    unmount();
+
+    expect(removeSpy).toHaveBeenCalledWith('found-in-page', expect.any(Function));
+  });
+
   it('Escape and the close button call stopFindInPage("clearSelection") and hide the bar', () => {
     const { input, onClose } = renderBar(webview);
 

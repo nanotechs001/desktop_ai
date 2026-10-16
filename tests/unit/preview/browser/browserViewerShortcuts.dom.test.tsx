@@ -116,6 +116,28 @@ describe('BrowserViewer shortcuts', () => {
     expect(WEBVIEW_STUBS.stopFindInPage).toHaveBeenCalledWith('clearSelection');
   });
 
+  it('escape while the find bar is closed does nothing', () => {
+    const { send } = mount();
+
+    send('escape');
+
+    expect(WEBVIEW_STUBS.stopFindInPage).not.toHaveBeenCalled();
+    expect(WEBVIEW_STUBS.focus).not.toHaveBeenCalled();
+  });
+
+  it('a webview whose getWebContentsId throws never matches', () => {
+    const { onRequestClose, send } = mount();
+    const original = HTMLUnknownElement.prototype as unknown as { getWebContentsId: () => number };
+    original.getWebContentsId = () => {
+      throw new Error(
+        'The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.'
+      );
+    };
+
+    expect(() => send('close-tab')).not.toThrow();
+    expect(onRequestClose).not.toHaveBeenCalled();
+  });
+
   it('focus-address focuses the address bar input', () => {
     const { send } = mount();
 

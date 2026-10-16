@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { BrowserWindow } from 'electron';
 import { ipcBridge } from '@/common';
 import type { BrowserShortcutAction, BrowserShortcutRequest } from '@/common/types/browser';
 
-type ShortcutInput = Pick<Electron.Input, 'type' | 'key' | 'meta' | 'control' | 'shift' | 'alt'>;
+type ShortcutInput = Pick<Electron.Input, 'type' | 'key' | 'meta' | 'control' | 'shift' | 'alt'> & {
+  code?: Electron.Input['code'];
+};
 
 const ZOOM_STEP = 0.5;
 const MIN_ZOOM_LEVEL = -3;
@@ -28,9 +31,42 @@ const SHORTCUT_BY_KEY: Record<string, BrowserShortcutAction> = {
   p: 'print',
 };
 
+/** Physical keys, for layouts whose `key` is not ASCII (Cyrillic, Persian, ...): code -> the ASCII key it stands for. */
+const KEY_BY_CODE: Record<string, string> = {
+  KeyF: 'f',
+  KeyL: 'l',
+  KeyT: 't',
+  KeyW: 'w',
+  KeyR: 'r',
+  KeyP: 'p',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Equal: '=',
+  Minus: '-',
+  Digit0: '0',
+  NumpadAdd: '+',
+  NumpadSubtract: '-',
+  Numpad0: '0',
+};
+
+const ASCII_LIMIT = 128;
+
+/** The shortcuts main cannot finish itself; the renderer acts on the tab whose webContents id matches. */
+const RENDERER_ACTIONS: ReadonlySet<BrowserShortcutAction> = new Set<BrowserShortcutRequest['action']>([
+  'find',
+  'focus-address',
+  'new-tab',
+  'close-tab',
+  'escape',
+]);
+
+const isRendererAction = (action: BrowserShortcutAction): action is BrowserShortcutRequest['action'] =>
+  RENDERER_ACTIONS.has(action);
+
 /**
  * Maps a key press to a browser shortcut: Cmd on macOS, Ctrl elsewhere. Pure.
  * Anything else (Cmd+Q, plain keys, Alt combos, key-up) returns null and is left to the page and the app menu.
+ * A non-ASCII `key` (e.g. Cmd+F on a Russian layout arrives as "а") falls back to the physical `code`.
  */
 export function classifyBrowserShortcut(input: ShortcutInput, platform: NodeJS.Platform): BrowserShortcutAction | null {
   if (input.type !== 'keyDown') return null;
@@ -41,52 +77,49 @@ export function classifyBrowserShortcut(input: ShortcutInput, platform: NodeJS.P
   const hasOtherModifier = isDarwin ? input.control : input.meta;
   if (!hasPlatformModifier || hasOtherModifier || input.alt) return null;
 
-  const key = input.key.toLowerCase();
+  const isAscii = input.key.length === 1 && input.key.charCodeAt(0) < ASCII_LIMIT;
+  const key = isAscii ? input.key.toLowerCase() : (KEY_BY_CODE[input.code ?? ''] ?? '');
   // Shift is only meaningful for hard-reload, and for "+" which US layouts type as Shift+=.
   if (input.shift) {
     if (key === 'r') return 'hard-reload';
-    return key === '+' ? 'zoom-in' : null;
+    return key === '+' || key === '=' ? 'zoom-in' : null;
   }
   return SHORTCUT_BY_KEY[key] ?? null;
 }
 
 const clampZoom = (level: number): number => Math.min(MAX_ZOOM_LEVEL, Math.max(MIN_ZOOM_LEVEL, level));
 
-/** Runs the shortcuts main can finish alone; returns false for the ones the renderer owns. */
-const runLocal = (contents: Electron.WebContents, action: BrowserShortcutAction): boolean => {
+/** Runs the shortcuts main can finish alone. */
+const runLocal = (
+  contents: Electron.WebContents,
+  action: Exclude<BrowserShortcutAction, BrowserShortcutRequest['action']>
+) => {
   switch (action) {
     case 'reload':
-      contents.reload();
-      return true;
+      return contents.reload();
     case 'hard-reload':
-      contents.reloadIgnoringCache();
-      return true;
+      return contents.reloadIgnoringCache();
     case 'back':
-      if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
-      return true;
+      return contents.navigationHistory.canGoBack() ? contents.navigationHistory.goBack() : undefined;
     case 'forward':
-      if (contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
-      return true;
+      return contents.navigationHistory.canGoForward() ? contents.navigationHistory.goForward() : undefined;
     case 'zoom-in':
-      contents.setZoomLevel(clampZoom(contents.getZoomLevel() + ZOOM_STEP));
-      return true;
+      return contents.setZoomLevel(clampZoom(contents.getZoomLevel() + ZOOM_STEP));
     case 'zoom-out':
-      contents.setZoomLevel(clampZoom(contents.getZoomLevel() - ZOOM_STEP));
-      return true;
+      return contents.setZoomLevel(clampZoom(contents.getZoomLevel() - ZOOM_STEP));
     case 'zoom-reset':
-      contents.setZoomLevel(0);
-      return true;
+      return contents.setZoomLevel(0);
     case 'print':
-      contents.print();
-      return true;
-    default:
-      return false;
+      return contents.print();
   }
 };
 
 /**
  * Makes browser shortcuts work while a page has focus. Without this the keys go to the guest page,
  * or fall through to the app menu, where Cmd+R would reload and Cmd+= would zoom the whole AionUi window.
+ *
+ * A popup window has no tab in the preview panel to act on, so its renderer-owned shortcuts are
+ * handled here (Cmd+W closes the window) or left to pass through (find, address bar, new tab).
  */
 export function installBrowserShortcuts(
   contents: Electron.WebContents,
@@ -96,17 +129,21 @@ export function installBrowserShortcuts(
     const action = classifyBrowserShortcut(input, platform);
     if (!action) return;
 
-    // Escape is only reported: the page may need it (closing a dialog, leaving fullscreen).
-    if (action !== 'escape') event.preventDefault();
     try {
-      if (runLocal(contents, action)) return;
+      if (!isRendererAction(action)) {
+        event.preventDefault();
+        runLocal(contents, action);
+      } else if (contents.getType() === 'window') {
+        if (action !== 'close-tab') return;
+        event.preventDefault();
+        BrowserWindow.fromWebContents(contents)?.close();
+      } else {
+        // Escape is only reported: the page may need it (closing a dialog, leaving fullscreen).
+        if (action !== 'escape') event.preventDefault();
+        ipcBridge.browser.shortcut.emit({ webContentsId: contents.id, action });
+      }
     } catch (error) {
       console.error(`[BrowserSession] shortcut "${action}" failed:`, error);
-      return;
     }
-    ipcBridge.browser.shortcut.emit({
-      webContentsId: contents.id,
-      action: action as BrowserShortcutRequest['action'],
-    });
   });
 }

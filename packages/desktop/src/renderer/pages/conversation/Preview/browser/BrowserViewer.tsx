@@ -17,6 +17,15 @@ import {
   resolveAddressBarInput,
 } from './constants';
 
+/** `getWebContentsId()` throws before dom-ready and after the page crashed; that means "not this one". */
+const ownWebContentsId = (webview: Electron.WebviewTag): number | null => {
+  try {
+    return webview.getWebContentsId();
+  } catch {
+    return null;
+  }
+};
+
 export interface BrowserViewerProps {
   /** 该 tab 当前地址 / Current address of this tab */
   url: string;
@@ -93,7 +102,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   useEffect(() => {
     if (!webview) return;
     return ipcBridge.browser.shortcut.on(({ webContentsId, action }) => {
-      if (webContentsId !== webview.getWebContentsId()) return;
+      if (webContentsId !== ownWebContentsId(webview)) return;
       switch (action) {
         case 'find':
           setFindOpen(true);
