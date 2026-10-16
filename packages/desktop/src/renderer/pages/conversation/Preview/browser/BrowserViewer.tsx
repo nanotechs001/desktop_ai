@@ -252,6 +252,16 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     });
   }, [active, webview]);
 
+  // A hidden tab (another tab, another chat, the panel closed) is silent; the tab on screen plays.
+  useEffect(() => {
+    if (!webview) return;
+    try {
+      webview.setAudioMuted(!active);
+    } catch (error) {
+      console.warn('[BrowserViewer] could not set the tab audio:', error);
+    }
+  }, [webview, active]);
+
   // An extension closed a tab (chrome.tabs.remove); only the webview it names closes.
   useEffect(() => {
     if (!webview) return;

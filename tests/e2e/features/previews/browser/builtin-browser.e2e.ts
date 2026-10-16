@@ -23,6 +23,7 @@ import { findAssistantIdForBackend, goToGuid } from '../../../helpers';
 const MOD = process.platform === 'darwin' ? 'meta' : 'control';
 const BRIDGE_EVENT_KEY = 'office-ai-bridge-adapter';
 const OPEN_TAB_EVENT = 'browser.open-tab-requested';
+const CLOSE_TAB_EVENT = 'browser.close-tab-requested';
 
 type Fixture = {
   origin: string;
@@ -244,20 +245,23 @@ test.describe('Built-in browser behaves like a regular browser', () => {
   });
 
   test.afterEach(async ({ electronApp, page }) => {
-    // Close every tab with the browser's own Cmd/Ctrl+W so tabs do not pile up across tests. Addressed by
-    // webContents, not url: other chats' tabs stay mounted in the background, and several may be about:blank.
-    // One at a time and focused first, like a user: a key sent while another guest holds focus lands there.
-    await electronApp.evaluate(async ({ webContents }, modifier) => {
-      for (const tab of webContents.getAllWebContents().filter((wc) => wc.getType() === 'webview')) {
-        tab.focus();
-        for (const type of ['rawKeyDown', 'keyUp'] as const) {
-          tab.sendInputEvent({ type, keyCode: 'w', modifiers: [modifier] });
+    // Close every tab so tabs do not pile up across tests, through the pane's close request addressed by
+    // webContents (what chrome.tabs.remove uses). Not by url or key press: other chats' tabs stay mounted
+    // in the background, several may be about:blank, and hidden tabs are inert so keys never reach them.
+    // One at a time, re-asked until it is gone: a tab only hears close requests once its page is
+    // dom-ready, and a test can end before a just-opened tab gets there.
+    await electronApp.evaluate(
+      async ({ BrowserWindow, webContents }, { key, name }) => {
+        const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().startsWith('devtools://'));
+        for (const tab of webContents.getAllWebContents().filter((wc) => wc.getType() === 'webview')) {
+          for (let waited = 0; !tab.isDestroyed() && waited < 3000; waited += 200) {
+            win?.webContents.send(key, JSON.stringify({ name, data: { webContentsId: tab.id } }));
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
         }
-        for (let waited = 0; !tab.isDestroyed() && waited < 2000; waited += 50) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-      }
-    }, MOD);
+      },
+      { key: BRIDGE_EVENT_KEY, name: CLOSE_TAB_EVENT }
+    );
     await expect.poll(() => page.locator('webview').count(), { timeout: 10_000 }).toBe(0);
   });
 

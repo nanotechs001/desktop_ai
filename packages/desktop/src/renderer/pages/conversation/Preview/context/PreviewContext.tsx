@@ -611,6 +611,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     backgroundRef.current = next;
     setBackgroundTabs(next);
   }, []);
+  // Bumped by logout, so a tab request still looking up its chat is dropped instead of reaching the next account.
+  const accountSessionRef = useRef(0);
   // The blank tab a conversation route opened only because its scope was empty (see the scope carry).
   const autoOpenedTabIdRef = useRef<string | null>(null);
   // Whether the user closed the current scope's panel (persisted with the scope).
@@ -1007,14 +1009,16 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     () =>
       ipcBridge.browser?.openTabRequested.on(({ url, conversationId }) => {
         void (async () => {
+          const session = accountSessionRef.current;
           const scope = conversationId ? await scopeOfConversation(conversationId) : null;
+          if (accountSessionRef.current !== session) return;
           const opened =
             scope != null && scope !== currentScopeRef.current
               ? openAgentTabInBackground(scope, url)
               : openRequestedTabOnScreen(url, Boolean(conversationId));
           if (opened) return;
           ipcBridge.agentBrowser?.refuseTab
-            .invoke({ url, max: MAX_BROWSER_TABS })
+            .invoke({ url, max: MAX_BROWSER_TABS, ...(conversationId ? { conversationId } : {}) })
             .catch((error: unknown) => console.warn('[PreviewContext] could not refuse a tab request:', error));
         })();
       }),
@@ -1070,6 +1074,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setDomSnippets([]);
     // Other chats' live tabs go too: the only caller is logout, and they belong to the same account.
     setBackground([]);
+    accountSessionRef.current += 1;
   }, [setBackground]);
 
   // Switch the preview scope (project id / workspace fallback / null). Persists
@@ -1251,12 +1256,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!tabId) return;
 
       // Background tabs keep reporting (title, address, agent badge) while another chat is on screen.
-      if (backgroundRef.current.some((entry) => entry.tab.id === tabId)) {
-        setBackground(
-          backgroundRef.current.map((entry) =>
-            entry.tab.id === tabId ? { ...entry, tab: patchTab(entry.tab, patch) } : entry
-          )
-        );
+      const parked = backgroundRef.current.findIndex((entry) => entry.tab.id === tabId);
+      if (parked >= 0) {
+        const entry = backgroundRef.current[parked];
+        setBackground(backgroundRef.current.with(parked, { ...entry, tab: patchTab(entry.tab, patch) }));
       }
       setTabs((prevTabs) => prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab)));
     },

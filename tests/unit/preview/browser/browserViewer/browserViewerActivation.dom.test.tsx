@@ -39,6 +39,7 @@ const stubs = {
   canGoBack: () => false,
   canGoForward: () => false,
   setZoomFactor: () => {},
+  setAudioMuted: vi.fn(),
 };
 
 beforeEach(() => {
@@ -80,6 +81,20 @@ describe('BrowserViewer tab activation', () => {
     expect(mocks.report).not.toHaveBeenCalled();
     rerender(viewer(true));
     expect(mocks.report).toHaveBeenCalledTimes(1);
+  });
+
+  it('mutes its page while hidden and unmutes it when shown', () => {
+    const { container, rerender } = render(viewer(false));
+    act(() => {
+      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+    });
+    expect(stubs.setAudioMuted).toHaveBeenLastCalledWith(true);
+
+    rerender(viewer(true));
+    expect(stubs.setAudioMuted).toHaveBeenLastCalledWith(false);
+
+    rerender(viewer(false));
+    expect(stubs.setAudioMuted).toHaveBeenLastCalledWith(true);
   });
 
   it('does not report before the webview is ready', () => {

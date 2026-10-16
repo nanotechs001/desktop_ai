@@ -40,7 +40,7 @@ export type RelayServerDeps = {
   /** Asks the pane to open a browser tab (ipcBridge.browser.openTabRequested) in the agent's chat, when known. */
   openTab(url: string, conversationId?: string): void;
   /** Resolves with the next browser tab that attaches, in request order; rejects on timeout or a pane refusal. */
-  waitForTab(url: string): Promise<RelayContents>;
+  waitForTab(url: string, conversationId?: string): Promise<RelayContents>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
@@ -172,7 +172,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     conn.pendingCreates += 1;
     let contents: RelayContents;
     try {
-      const waiting = deps.waitForTab(url);
+      const waiting = deps.waitForTab(url, conn.conversationId);
       deps.openTab(url, conn.conversationId);
       contents = await waiting;
     } finally {

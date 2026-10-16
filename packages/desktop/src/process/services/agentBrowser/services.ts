@@ -9,6 +9,7 @@ import { onBrowserContentsCreated } from '@process/services/browserSession/brows
 import { PendingConfirms } from './confirmGate';
 import { startRelayServer } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
+import { parseConversationId } from './relay/relayTransport';
 import { CreateTabWaiter, offerNewTab } from './tabWaiter';
 
 export type AgentBrowserServices = { url: string; token: string; close(): Promise<void> };
@@ -100,10 +101,11 @@ const registerProviders = (
     })
   );
   // The pane refused a requested tab at its cap: the agent waiting for it gets the reason now, not a 15 s timeout.
-  ipcBridge.agentBrowser.refuseTab.provider(({ url, max }) =>
+  ipcBridge.agentBrowser.refuseTab.provider(({ url, max, conversationId }) =>
     guard(() => {
       if (typeof url !== 'string' || !Number.isInteger(max) || max < 1 || max > MAX_REPORTED_TAB_CAP) return INVALID;
-      getWaiter()?.refuse(url, new Error(tabCapMessage(max)));
+      if (conversationId !== undefined && parseConversationId(conversationId) === undefined) return INVALID;
+      getWaiter()?.refuse(url, conversationId, new Error(tabCapMessage(max)));
       return { success: true };
     })
   );
@@ -144,7 +146,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
         background: false,
         ...(conversationId ? { conversationId } : {}),
       }),
-    waitForTab: (url) => waiter.wait(url, TAB_CREATE_TIMEOUT_MS),
+    waitForTab: (url, conversationId) => waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
     requestConfirm: (request, signal) => confirms.request(request, undefined, signal),

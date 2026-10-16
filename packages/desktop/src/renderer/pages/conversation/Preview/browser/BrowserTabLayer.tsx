@@ -4,37 +4,64 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
 import ConfirmPrompt from './BrowserChrome/ConfirmPrompt';
 import PermissionPrompt from './BrowserChrome/PermissionPrompt';
 import BrowserViewer from './BrowserViewer';
-
-const SLOT_ATTRIBUTE = 'data-browser-slot';
 
 type Box = { left: number; top: number; width: number; height: number };
 
 /** Hidden tabs keep the last slot's size; before any slot they get a common window size, never zero. */
 const DEFAULT_BOX: Box = { left: 0, top: 0, width: 1024, height: 768 };
 
+/** How long to keep measuring each frame after a layout event: covers the panel and sider transitions. */
+const SETTLE_MS = 300;
+
+/** The mounted {@link BrowserSlot}, if any; at most one preview panel is on screen. */
+let slotElement: HTMLElement | null = null;
+const slotListeners = new Set<() => void>();
+const setSlot = (element: HTMLElement | null): void => {
+  slotElement = element;
+  slotListeners.forEach((listener) => listener());
+};
+const subscribeSlot = (listener: () => void): (() => void) => {
+  slotListeners.add(listener);
+  return () => slotListeners.delete(listener);
+};
+const registerSlot = (element: HTMLDivElement | null) => {
+  if (!element) return;
+  setSlot(element);
+  return () => {
+    if (slotElement === element) setSlot(null);
+  };
+};
+
 /**
  * Where the browser tab on screen goes: the preview panel renders this while its active tab is a
  * browser tab. The webview itself lives in {@link BrowserTabLayer} and is laid over this box.
  */
-export const BrowserSlot: React.FC = () => <div data-browser-slot='' className='relative flex-1 overflow-hidden' />;
+export const BrowserSlot: React.FC = () => (
+  <div ref={registerSlot} data-browser-slot='' className='relative flex-1 overflow-hidden' />
+);
 
-/** The slot's box while it is on screen (polled each frame: the panel moves and resizes without telling). */
-const useSlotBox = (active: boolean): { box: Box; visible: boolean } => {
+/**
+ * The slot's box, measured only while a slot is mounted: once, then on its (and the app shell's)
+ * ResizeObserver, window resize and CSS transitions/animations, each followed by a short burst of
+ * per-frame measuring, since a panel can move without resizing (sider collapse, maximize).
+ */
+const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } => {
   const [state, setState] = useState<{ box: Box; visible: boolean }>({ box: DEFAULT_BOX, visible: false });
   useEffect(() => {
-    if (!active) return;
-    let frame = 0;
+    if (!slot) {
+      setState((prev) => (prev.visible ? { box: prev.box, visible: false } : prev));
+      return;
+    }
     const measure = () => {
-      const rect = document.querySelector(`[${SLOT_ATTRIBUTE}]`)?.getBoundingClientRect();
-      const visible = Boolean(rect && rect.width > 0 && rect.height > 0);
+      const rect = slot.getBoundingClientRect();
+      const visible = rect.width > 0 && rect.height > 0;
       setState((prev) => {
-        const box =
-          visible && rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : prev.box;
+        const box = visible ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : prev.box;
         const same =
           prev.visible === visible &&
           prev.box.left === box.left &&
@@ -43,13 +70,38 @@ const useSlotBox = (active: boolean): { box: Box; visible: boolean } => {
           prev.box.height === box.height;
         return same ? prev : { box, visible };
       });
-      frame = requestAnimationFrame(measure);
+    };
+    let frame = 0;
+    let settleUntil = 0;
+    const tick = () => {
+      measure();
+      frame = performance.now() < settleUntil ? requestAnimationFrame(tick) : 0;
+    };
+    const burst = () => {
+      measure();
+      settleUntil = performance.now() + SETTLE_MS;
+      if (!frame) frame = requestAnimationFrame(tick);
     };
     measure();
-    return () => cancelAnimationFrame(frame);
-  }, [active]);
+    const observer = new ResizeObserver(burst);
+    observer.observe(slot);
+    observer.observe(slot.closest('.app-shell') ?? document.body);
+    const layoutEvents = ['transitionrun', 'transitionend', 'animationend'] as const;
+    window.addEventListener('resize', burst);
+    layoutEvents.forEach((type) => document.addEventListener(type, burst, true));
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('resize', burst);
+      layoutEvents.forEach((type) => document.removeEventListener(type, burst, true));
+    };
+  }, [slot]);
   return state;
 };
+
+/** The `<webview>` of a tab in the layer, if mounted. */
+const webviewOf = (layer: HTMLElement, tabId: string): HTMLElement | null =>
+  layer.querySelector<HTMLElement>(`[data-browser-tab="${tabId}"] webview`);
 
 /**
  * 常驻挂载的浏览器层 / Always-mounted browser layer.
@@ -64,7 +116,12 @@ const useSlotBox = (active: boolean): { box: Box; visible: boolean } => {
 const BrowserTabLayer: React.FC = () => {
   const preview = useOptionalPreviewContext();
   const tabs = preview?.liveBrowserTabs ?? [];
-  const { box, visible } = useSlotBox(tabs.length > 0);
+  const slot = useSyncExternalStore(subscribeSlot, () => slotElement);
+  const { box, visible } = useSlotBox(tabs.length > 0 ? slot : null);
+  const layerRef = useRef<HTMLDivElement>(null);
+  const shownTab = visible ? tabs.find((tab) => tab.id === preview?.activeTabId) : undefined;
+  const shownId = shownTab?.id ?? null;
+  const shownByAgent = Boolean(shownTab?.metadata?.agentOwned);
   const updateTab = preview?.updateTab;
   const closeTab = preview?.closeTab;
 
@@ -83,15 +140,30 @@ const BrowserTabLayer: React.FC = () => {
     [updateTab]
   );
 
+  // Keyboard focus never stays in a hidden page. When the focus was in the browser and a page opened
+  // the tab now shown (target=_blank), the new tab takes it, as in a browser; an agent's tab never does.
+  useEffect(() => {
+    const layer = layerRef.current;
+    const focused = document.activeElement;
+    if (!layer || !(focused instanceof HTMLElement) || focused.tagName !== 'WEBVIEW' || !layer.contains(focused))
+      return;
+    const shownWebview = shownId ? webviewOf(layer, shownId) : null;
+    if (focused === shownWebview) return;
+    focused.blur();
+    if (!shownByAgent) shownWebview?.focus();
+  }, [shownId, shownByAgent]);
+
   if (!preview || tabs.length === 0) return null;
 
   return (
-    <div className='fixed overflow-hidden z-10 pointer-events-none' style={box}>
+    <div ref={layerRef} className='fixed overflow-hidden z-10 pointer-events-none' style={box}>
       {tabs.map((tab) => {
-        const shown = visible && tab.id === preview.activeTabId;
+        const shown = tab.id === shownId;
         return (
           <div
             key={tab.id}
+            data-browser-tab={tab.id}
+            inert={!shown}
             className='absolute inset-0 flex flex-col'
             style={{
               visibility: shown ? 'visible' : 'hidden',

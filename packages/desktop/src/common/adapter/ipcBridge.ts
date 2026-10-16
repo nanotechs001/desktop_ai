@@ -1522,8 +1522,10 @@ export const agentBrowser = {
   replyConfirm: bridge.buildProvider<IBridgeResponse<void>, { id: string; allow: boolean; alwaysForSite: boolean }>(
     'agent-browser.reply-confirm'
   ),
-  // the pane refused an openTabRequested at its tab cap (max); an agent waiting for that url fails at once
-  refuseTab: bridge.buildProvider<IBridgeResponse<void>, { url: string; max: number }>('agent-browser.refuse-tab'),
+  // the pane refused an openTabRequested at its tab cap (max); the agent of that chat waiting for that url fails at once
+  refuseTab: bridge.buildProvider<IBridgeResponse<void>, { url: string; max: number; conversationId?: string }>(
+    'agent-browser.refuse-tab'
+  ),
 };
 
 // ---------------------------------------------------------------------------

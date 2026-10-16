@@ -123,6 +123,7 @@ describe('RelayClient', () => {
     client.currentTab = 'wc-7';
     // A child (OOPIF) detach carries the parent session; even with the tab's own session id in its params it is no tab detach.
     relay.emit('Target.detachedFromTarget', { sessionId: 's-wc-7', targetId: 'FRAME' }, 's-wc-7');
+    await client.listTabs(); // its reply follows the event on the socket, so the event has been handled
     await client.session('wc-7');
     expect(relay.callsTo('Target.attachToTarget')).toHaveLength(1);
     relay.emit('Target.detachedFromTarget', { sessionId: 's-wc-7', targetId: 'wc-7' });

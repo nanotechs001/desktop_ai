@@ -170,17 +170,38 @@ describe('agent browser services: tabs', () => {
       })
     );
 
-    expect(await call('refuseTab', { url: 'https://a.test/', max: 10 })).toEqual({ success: true });
+    expect(await call('refuseTab', { url: 'https://a.test/', max: 10, conversationId: 'conv-1' })).toEqual({
+      success: true,
+    });
 
     expect((await created).error?.message).toBe(
       'The browser has too many tabs open (max 10). Close some tabs and try again.'
     );
   });
 
+  it('refuses only the request of the chat the pane refused, when two chats ask for the same url', async () => {
+    const relay = await start();
+    const sendA = await connect(relay, 'a', { 'X-Aion-Conversation': 'conv-a' });
+    const sendB = await connect(relay, 'b', { 'X-Aion-Conversation': 'conv-b' });
+    const createdA = sendA('Target.createTarget', { url: 'https://same.test/' });
+    const createdB = sendB('Target.createTarget', { url: 'https://same.test/' });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(2));
+
+    await call('refuseTab', { url: 'https://same.test/', max: 10, conversationId: 'conv-b' });
+    expect((await createdB).error?.message).toMatch(/too many tabs/);
+
+    const tab = newTab(9);
+    tab.navigate('https://same.test/');
+    expect((await createdA).result).toEqual({ targetId: 'wc-9' });
+  });
+
   it('validates a tab refusal and ignores one nobody is waiting for', async () => {
     await start();
     expect(await call('refuseTab', { url: 5, max: 10 })).toMatchObject({ success: false, msg: 'Invalid arguments' });
     expect(await call('refuseTab', { url: 'https://a.test/', max: 0 })).toMatchObject({ success: false });
+    expect(await call('refuseTab', { url: 'https://a.test/', max: 10, conversationId: 'a/b' })).toMatchObject({
+      success: false,
+    });
     expect(await call('refuseTab', { url: 'https://nobody.test/', max: 10 })).toEqual({ success: true });
   });
 

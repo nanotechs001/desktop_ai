@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   openTab: null as ((request: OpenTabRequest) => void) | null,
   refuseTab: vi.fn(async () => ({ success: true })),
   mounts: new Map<string, number>(),
+  /** While set, chat lookups wait for it (to interleave a logout). */
+  lookupGate: null as Promise<void> | null,
   unmounted: [] as string[],
 }));
 
@@ -42,8 +44,10 @@ vi.mock('@/common', () => ({
 
 const PROJECT_OF: Record<string, string> = { 'chat-a': 'proj-a', 'chat-b': 'proj-b' };
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
-  getConversationOrNull: async (id: string) =>
-    PROJECT_OF[id] ? { id, project_id: PROJECT_OF[id], extra: { workspace: `/ws/${id}` } } : null,
+  getConversationOrNull: async (id: string) => {
+    if (h.lookupGate) await h.lookupGate;
+    return PROJECT_OF[id] ? { id, project_id: PROJECT_OF[id], extra: { workspace: `/ws/${id}` } } : null;
+  },
 }));
 vi.mock('@/renderer/pages/conversation/Preview/browser/firstUseNotice', () => ({
   maybeNotifyFirstAgentBrowserUse: vi.fn(),
@@ -129,6 +133,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   h.refuseTab.mockClear();
+  h.lookupGate = null;
   h.mounts.clear();
   h.unmounted.length = 0;
 });
@@ -204,12 +209,20 @@ describe('agent browser tabs outlive the panel', () => {
     for (let i = 0; i < MAX_BROWSER_TABS; i += 1) act(() => ctx.openBrowserTab(`https://a.test/${i}`));
 
     await requestTab('https://full.test/', 'chat-a');
-    expect(h.refuseTab).toHaveBeenCalledWith({ url: 'https://full.test/', max: MAX_BROWSER_TABS });
+    expect(h.refuseTab).toHaveBeenCalledWith({
+      url: 'https://full.test/',
+      max: MAX_BROWSER_TABS,
+      conversationId: 'chat-a',
+    });
 
     // The same cap holds for chat A while another chat is on screen.
     enterScope('proj-b');
     await requestTab('https://full-too.test/', 'chat-a');
-    expect(h.refuseTab).toHaveBeenCalledWith({ url: 'https://full-too.test/', max: MAX_BROWSER_TABS });
+    expect(h.refuseTab).toHaveBeenCalledWith({
+      url: 'https://full-too.test/',
+      max: MAX_BROWSER_TABS,
+      conversationId: 'chat-a',
+    });
     expect(storedTabUrls('proj-a')).not.toContain('https://full-too.test/');
   });
 
@@ -229,5 +242,41 @@ describe('agent browser tabs outlive the panel', () => {
 
     expect(h.unmounted).toEqual([oldestUserTab]);
     expect(screen.getByTestId(`viewer-${agentTab}`)).toBeInTheDocument();
+  });
+
+  it('drops an agent tab request when the user logged out during the chat lookup', async () => {
+    render(<App />);
+    enterScope('proj-b');
+    let release: (() => void) | undefined;
+    h.lookupGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    await requestTab('https://a.test/', 'chat-a');
+
+    act(() => ctx.clearPreviewForScope()); // what logout does
+    await act(async () => release?.());
+
+    expect(ctx.liveBrowserTabs).toEqual([]);
+    expect(storedTabUrls('proj-a')).toEqual([]);
+  });
+
+  it("updates and closes another chat's tab in the background, and in its stored scope", async () => {
+    render(<App />);
+    enterScope('proj-b');
+    await requestTab('https://a.test/', 'chat-a');
+    await waitFor(() => expect(tabIdOf('https://a.test/')).toBeDefined());
+    const id = tabIdOf('https://a.test/') as string;
+
+    act(() => ctx.updateTab(id, { title: 'Inbox', content: 'https://a.test/inbox' }));
+    expect(ctx.liveBrowserTabs.find((tab) => tab.id === id)).toMatchObject({
+      title: 'Inbox',
+      content: 'https://a.test/inbox',
+    });
+    expect(ctx.tabs).toEqual([]);
+
+    act(() => ctx.closeTab(id));
+    expect(ctx.liveBrowserTabs).toEqual([]);
+    expect(h.unmounted).toEqual([id]);
+    expect(storedTabUrls('proj-a')).toEqual([]);
   });
 });
