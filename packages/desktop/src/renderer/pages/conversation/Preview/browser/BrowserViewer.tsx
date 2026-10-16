@@ -34,6 +34,9 @@ const ownWebContentsId = (webview: Electron.WebviewTag): number | null => {
   }
 };
 
+/** Close requests remembered while a tab does not know its webContents id yet; only a burst can come that fast. */
+const MAX_EARLY_CLOSES = 20;
+
 /** Shortcuts typed into the tab's own controls (address bar, find bar); keys the page gets are handled in main. */
 const CONTROL_SHORTCUTS: Record<string, BrowserShortcutAction> = {
   r: 'reload',
@@ -99,6 +102,8 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
 }) => {
   const preview = useOptionalPreviewContext();
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
+  // Known from did-attach, before dom-ready: a tab must honour a close request while its page still loads.
+  const [attachedWebview, setAttachedWebview] = useState<Electron.WebviewTag | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [findFocusToken, setFindFocusToken] = useState(0);
   const [crashState, setCrashState] = useState<CrashState>(null);
@@ -252,23 +257,24 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     });
   }, [active, webview]);
 
-  // A hidden tab (another tab, another chat, the panel closed) is silent; the tab on screen plays.
+  // An extension or an agent closed a tab (chrome.tabs.remove, Target.closeTarget); only the webview it names closes.
+  // A request can arrive before this tab knows its own webContents id (main has the tab, the renderer has not
+  // seen did-attach yet), so those are kept and checked once the id is known.
+  const closable = webview ?? attachedWebview;
+  const earlyCloseIds = useRef<number[]>([]);
   useEffect(() => {
-    if (!webview) return;
-    try {
-      webview.setAudioMuted(!active);
-    } catch (error) {
-      console.warn('[BrowserViewer] could not set the tab audio:', error);
+    const own = closable ? ownWebContentsId(closable) : null;
+    if (own !== null) {
+      const requested = earlyCloseIds.current.includes(own);
+      earlyCloseIds.current = [];
+      if (requested) onRequestClose?.(tabId);
     }
-  }, [webview, active]);
-
-  // An extension closed a tab (chrome.tabs.remove); only the webview it names closes.
-  useEffect(() => {
-    if (!webview) return;
     return ipcBridge.browser.closeTabRequested.on(({ webContentsId }) => {
-      if (webContentsId === ownWebContentsId(webview)) onRequestClose?.(tabId);
+      const current = closable ? ownWebContentsId(closable) : null;
+      if (current === null) earlyCloseIds.current = [...earlyCloseIds.current, webContentsId].slice(-MAX_EARLY_CLOSES);
+      else if (webContentsId === current) onRequestClose?.(tabId);
     });
-  }, [webview, tabId, onRequestClose]);
+  }, [closable, tabId, onRequestClose]);
 
   // Only a change is reported, so an ordinary user tab never writes to the tab list.
   useEffect(() => {
@@ -301,6 +307,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         onDidFinishLoad={handleDidFinishLoad}
         onDidFailLoad={handleDidFailLoad}
         onWebviewReady={setWebview}
+        onWebviewAttached={setAttachedWebview}
         onRenderProcessGone={handleRenderProcessGone}
         onUnresponsive={handleUnresponsive}
         onResponsive={handleResponsive}

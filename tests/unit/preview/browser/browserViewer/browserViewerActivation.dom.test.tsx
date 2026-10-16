@@ -8,7 +8,10 @@ import React from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ report: vi.fn(() => Promise.resolve({ success: true })) }));
+const mocks = vi.hoisted(() => ({
+  report: vi.fn(() => Promise.resolve({ success: true })),
+  closeHandlers: new Set<(request: { webContentsId: number }) => void>(),
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -22,7 +25,12 @@ vi.mock('@/common', () => ({
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },
       shortcut: { on: () => () => {} },
-      closeTabRequested: { on: () => () => {} },
+      closeTabRequested: {
+        on: (handler: (request: { webContentsId: number }) => void) => {
+          mocks.closeHandlers.add(handler);
+          return () => mocks.closeHandlers.delete(handler);
+        },
+      },
     },
   },
 }));
@@ -39,7 +47,6 @@ const stubs = {
   canGoBack: () => false,
   canGoForward: () => false,
   setZoomFactor: () => {},
-  setAudioMuted: vi.fn(),
 };
 
 beforeEach(() => {
@@ -54,8 +61,9 @@ afterEach(() => {
   }
 });
 
-const viewer = (active: boolean) => (
+const viewer = (active: boolean, onRequestClose?: (tabId: string) => void) => (
   <BrowserViewer
+    onRequestClose={onRequestClose}
     url='https://example.com'
     tabId='tab-1'
     active={active}
@@ -83,18 +91,31 @@ describe('BrowserViewer tab activation', () => {
     expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 
-  it('mutes its page while hidden and unmutes it when shown', () => {
-    const { container, rerender } = render(viewer(false));
+  it('honours a close request once its webview is attached, before the page is dom-ready', () => {
+    const onRequestClose = vi.fn();
+    const { container } = render(viewer(true, onRequestClose));
     act(() => {
-      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+      container.querySelector('webview')?.dispatchEvent(new Event('did-attach'));
     });
-    expect(stubs.setAudioMuted).toHaveBeenLastCalledWith(true);
 
-    rerender(viewer(true));
-    expect(stubs.setAudioMuted).toHaveBeenLastCalledWith(false);
+    act(() => mocks.closeHandlers.forEach((handler) => handler({ webContentsId: 7 })));
 
-    rerender(viewer(false));
-    expect(stubs.setAudioMuted).toHaveBeenLastCalledWith(true);
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+  });
+
+  it('honours a close request that arrived before its webview was attached, once it is', () => {
+    const onRequestClose = vi.fn();
+    const { container } = render(viewer(true, onRequestClose));
+    act(() => mocks.closeHandlers.forEach((handler) => handler({ webContentsId: 8 }))); // another tab's
+    act(() => mocks.closeHandlers.forEach((handler) => handler({ webContentsId: 7 })));
+    expect(onRequestClose).not.toHaveBeenCalled();
+
+    act(() => {
+      container.querySelector('webview')?.dispatchEvent(new Event('did-attach'));
+    });
+
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
   });
 
   it('does not report before the webview is ready', () => {

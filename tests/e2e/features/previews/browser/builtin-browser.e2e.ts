@@ -248,16 +248,11 @@ test.describe('Built-in browser behaves like a regular browser', () => {
     // Close every tab so tabs do not pile up across tests, through the pane's close request addressed by
     // webContents (what chrome.tabs.remove uses). Not by url or key press: other chats' tabs stay mounted
     // in the background, several may be about:blank, and hidden tabs are inert so keys never reach them.
-    // One at a time, re-asked until it is gone: a tab only hears close requests once its page is
-    // dom-ready, and a test can end before a just-opened tab gets there.
     await electronApp.evaluate(
-      async ({ BrowserWindow, webContents }, { key, name }) => {
+      ({ BrowserWindow, webContents }, { key, name }) => {
         const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().startsWith('devtools://'));
         for (const tab of webContents.getAllWebContents().filter((wc) => wc.getType() === 'webview')) {
-          for (let waited = 0; !tab.isDestroyed() && waited < 3000; waited += 200) {
-            win?.webContents.send(key, JSON.stringify({ name, data: { webContentsId: tab.id } }));
-            await new Promise((resolve) => setTimeout(resolve, 200));
-          }
+          win?.webContents.send(key, JSON.stringify({ name, data: { webContentsId: tab.id } }));
         }
       },
       { key: BRIDGE_EVENT_KEY, name: CLOSE_TAB_EVENT }

@@ -63,6 +63,8 @@ export interface WebviewHostProps {
   onResponsive?: () => void;
   /** Called on every `dom-ready` with the webview element, once its methods (findInPage, getWebContentsId) work */
   onWebviewReady?: (webview: Electron.WebviewTag) => void;
+  /** The webview got its guest (`did-attach`): its webContents id is known, though the page may still be loading. */
+  onWebviewAttached?: (webview: Electron.WebviewTag) => void;
   /** Receives the address bar's input element, so the owner can focus it (needs `showNavBar`) */
   addressInputRef?: React.Ref<HTMLInputElement>;
 }
@@ -99,6 +101,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onUnresponsive,
   onResponsive,
   onWebviewReady,
+  onWebviewAttached,
   addressInputRef,
 }) => {
   const { t } = useTranslation();
@@ -123,6 +126,18 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onResponsiveRef.current = onResponsive;
   const onWebviewReadyRef = useRef(onWebviewReady);
   onWebviewReadyRef.current = onWebviewReady;
+  const onWebviewAttachedRef = useRef(onWebviewAttached);
+  onWebviewAttachedRef.current = onWebviewAttached;
+
+  useEffect(() => {
+    const webviewEl = webviewRef.current;
+    if (!webviewEl) return;
+    const handleAttach = () => onWebviewAttachedRef.current?.(webviewEl);
+    webviewEl.addEventListener('did-attach', handleAttach);
+    return () => {
+      webviewEl.removeEventListener('did-attach', handleAttach);
+    };
+  }, []);
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(url);
