@@ -11,7 +11,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   closeTab: vi.fn(),
   context: { liveBrowserTabs: [] as unknown[], activeTabId: null as string | null },
-  viewerProps: [] as Array<{ tabId: string; active?: boolean; onRequestClose?: (id: string) => void }>,
+  viewerProps: [] as Array<{
+    tabId: string;
+    active?: boolean;
+    agentOwnedHint?: boolean;
+    onRequestClose?: (id: string) => void;
+  }>,
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
@@ -85,6 +90,9 @@ const layout = (tabs: PreviewTab[], activeTabId: string, withSlot = true) => {
     </>
   );
 };
+
+/** Stops an event before any listener of the layer sees it. */
+const swallow = (event: Event) => event.stopImmediatePropagation();
 
 const wrapperOf = (tabId: string) => document.querySelector(`[data-testid="webview-${tabId}"]`)?.parentElement;
 
@@ -191,5 +199,123 @@ describe('BrowserTabLayer', () => {
     );
 
     expect(document.activeElement?.getAttribute('data-testid')).toBe('chat');
+  });
+
+  it('tells each viewer whether the context already knows its tab as an agent tab', () => {
+    render(layout([TABS[0], { ...TABS[1], metadata: { agentOwned: true } }], 'tab-1'));
+
+    expect(mocks.viewerProps.slice(-2).map(({ tabId, agentOwnedHint }) => [tabId, agentOwnedHint])).toEqual([
+      ['tab-1', false],
+      ['tab-2', true],
+    ]);
+  });
+
+  it('gives the focus back when a hidden tab takes it (an agent click, a page calling focus())', () => {
+    render(
+      <>
+        <textarea data-testid='chat' />
+        {layout(TABS, 'tab-1')}
+      </>
+    );
+    const chat = document.querySelector<HTMLElement>('[data-testid="chat"]');
+    act(() => chat?.focus());
+
+    act(() => document.querySelector<HTMLElement>('[data-testid="webview-tab-2"]')?.focus());
+
+    expect(document.activeElement).toBe(chat);
+  });
+
+  it('gives the focus back when an agent click focuses a hidden webview the way Electron does', () => {
+    render(
+      <>
+        <textarea data-testid='chat' />
+        {layout(TABS, 'tab-1')}
+      </>
+    );
+    const chat = document.querySelector<HTMLElement>('[data-testid="chat"]');
+    act(() => chat?.focus());
+
+    // Seen in the e2e: the chat blurs to the body, the window blurs, then the webview gets a focus event
+    // with no relatedTarget and no focusin.
+    act(() => {
+      window.addEventListener('focusin', swallow, true);
+      chat?.blur();
+      window.dispatchEvent(new FocusEvent('blur'));
+      document.querySelector<HTMLElement>('[data-testid="webview-tab-2"]')?.focus();
+      window.removeEventListener('focusin', swallow, true);
+    });
+
+    expect(document.activeElement).toBe(chat);
+  });
+
+  it('leaves the focus on the body when a hidden tab takes it and nothing had it before', () => {
+    render(layout(TABS, 'tab-1'));
+
+    act(() => document.querySelector<HTMLElement>('[data-testid="webview-tab-2"]')?.focus());
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('gives the focus back after a window blur/focus round trip ends in a hidden tab', () => {
+    render(
+      <>
+        <textarea data-testid='chat' />
+        {layout(TABS, 'tab-1', false)}
+      </>
+    );
+    const chat = document.querySelector<HTMLElement>('[data-testid="chat"]');
+    act(() => chat?.focus());
+    // While the window has no OS focus Chromium fires no focus events, so the hidden tab takes it silently.
+    act(() => {
+      window.dispatchEvent(new FocusEvent('blur'));
+      window.addEventListener('focusin', swallow, true);
+      document.querySelector<HTMLElement>('[data-testid="webview-tab-1"]')?.focus();
+      window.removeEventListener('focusin', swallow, true);
+    });
+
+    act(() => window.dispatchEvent(new FocusEvent('focus')));
+
+    expect(document.activeElement).toBe(chat);
+  });
+
+  it('does not count focus in a hidden tab as the user being in the browser', () => {
+    const { rerender } = render(layout(TABS, 'tab-1', false));
+    act(() => document.querySelector<HTMLElement>('[data-testid="webview-tab-2"]')?.focus());
+
+    rerender(layout(TABS, 'tab-2'));
+
+    expect(document.activeElement?.getAttribute('data-testid')).not.toBe('webview-tab-2');
+  });
+
+  it('keeps the remembered box inside the window while no slot is mounted, following window resizes', () => {
+    slotBox = { left: 300, top: 200, width: 900, height: 700 };
+    const { rerender } = render(layout(TABS, 'tab-1'));
+    const layer = () => wrapperOf('tab-1')?.parentElement as HTMLElement;
+    const add = vi.spyOn(window, 'addEventListener');
+    vi.stubGlobal('innerWidth', 1000);
+    vi.stubGlobal('innerHeight', 800);
+
+    rerender(layout(TABS, 'tab-1', false));
+    expect([layer().style.left, layer().style.top, layer().style.width, layer().style.height]).toEqual([
+      '100px',
+      '100px',
+      '900px',
+      '700px',
+    ]);
+    expect(add.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(1);
+
+    vi.stubGlobal('innerWidth', 600);
+    vi.stubGlobal('innerHeight', 500);
+    act(() => window.dispatchEvent(new Event('resize')));
+    expect([layer().style.left, layer().style.top, layer().style.width, layer().style.height]).toEqual([
+      '0px',
+      '0px',
+      '600px',
+      '500px',
+    ]);
+
+    const remove = vi.spyOn(window, 'removeEventListener');
+    rerender(layout(TABS, 'tab-1'));
+    expect(remove.mock.calls.filter(([type]) => type === 'resize').length).toBeGreaterThanOrEqual(1);
   });
 });

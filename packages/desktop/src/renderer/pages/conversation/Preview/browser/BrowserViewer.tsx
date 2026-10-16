@@ -75,6 +75,8 @@ export interface BrowserViewerProps {
   active?: boolean;
   /** An agent opened this tab (or it stopped being agent-owned); lets the tab strip show an Agent badge */
   onAgentOwnedChange?: (tabId: string, agentOwned: boolean) => void;
+  /** The tab list already marks this tab as an agent's (it was opened for one); trusted until ownership is known */
+  agentOwnedHint?: boolean;
 }
 
 /**
@@ -99,6 +101,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   onRequestClose,
   active = false,
   onAgentOwnedChange,
+  agentOwnedHint = false,
 }) => {
   const preview = useOptionalPreviewContext();
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
@@ -116,13 +119,13 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   // hit-testing the window, so such a tab must stay rendered and hit-testable: transparent and covered (the
   // layer keeps it under the tab on screen, or behind the app), never inert, visibility:hidden or
   // pointer-events:none. It leaves the tab order instead, and the layer blurs it when hidden.
-  const agentReachable = agentOwned || ownership?.sharedWith === 'all';
+  const agentReachable = ownership === null ? agentOwnedHint : agentOwned || ownership.sharedWith === 'all';
   const hiddenStyle: React.CSSProperties | undefined = active
     ? undefined
     : agentReachable
       ? { visibility: 'visible', opacity: 0, pointerEvents: 'auto' }
       : { visibility: 'hidden', pointerEvents: 'none' };
-  const reportedAgentOwned = useRef(false);
+  const reportedAgentOwned = useRef(agentOwnedHint);
 
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
 
@@ -286,22 +289,27 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     });
   }, [closable, tabId, onRequestClose]);
 
-  // Only a change is reported, so an ordinary user tab never writes to the tab list.
+  // Only a change is reported, so an ordinary user tab never writes to the tab list; nor does a tab whose
+  // ownership is not known yet, which would clear the mark an agent's tab is created with.
   useEffect(() => {
-    if (reportedAgentOwned.current === agentOwned) return;
+    if (ownership === null || reportedAgentOwned.current === agentOwned) return;
     reportedAgentOwned.current = agentOwned;
     onAgentOwnedChange?.(tabId, agentOwned);
-  }, [agentOwned, tabId, onAgentOwnedChange]);
+  }, [ownership, agentOwned, tabId, onAgentOwnedChange]);
 
   return (
     <div
       className='relative h-full w-full'
       onKeyDown={handleControlKeyDown}
       inert={!active && !agentReachable}
+      aria-hidden={!active || undefined}
       style={hiddenStyle}
     >
+      {/* A hidden agent tab's page stays hit-testable for agent input, but its chrome is inert: nothing in it
+          takes the user's focus (inert on an ancestor of the webview would stop hit-testing). */}
       <WebviewHost
         webviewTabIndex={active ? undefined : -1}
+        chromeInert={!active}
         url={url || BROWSER_BLANK_URL}
         partition={BROWSER_SESSION_PARTITION}
         showNavBar
@@ -329,24 +337,32 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         onResponsive={handleResponsive}
         addressInputRef={addressInputRef}
       />
-      {/* Mounted only while crashed or hung: any element here covers the webview and eats mouse input.
-          Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}
-      {crashState && (
-        <div className='absolute inset-x-0 bottom-0 top-40px'>
-          <CrashOverlay state={crashState} reloading={reloading} onReload={handleReload} onWait={handleWait} />
-        </div>
-      )}
-      <AgentOverlay action={actions[actions.length - 1] ?? null} />
-      {tabWebContentsId !== null && ownership?.paused && (
-        <div className='absolute top-48px start-1/2 z-20 -translate-x-1/2'>
-          <AgentBanner webContentsId={tabWebContentsId} />
-        </div>
-      )}
-      {findOpen && webview && (
-        <div className='absolute top-48px end-16px z-20'>
-          <FindBar webview={webview} onClose={closeFind} focusToken={findFocusToken} />
-        </div>
-      )}
+      <div inert={!active}>
+        {/* Mounted only while crashed or hung: any element here covers the webview and eats mouse input.
+            Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}
+        {crashState && (
+          <div className='absolute inset-x-0 bottom-0 top-40px'>
+            <CrashOverlay
+              state={crashState}
+              reloading={reloading}
+              onReload={handleReload}
+              onWait={handleWait}
+              active={active}
+            />
+          </div>
+        )}
+        <AgentOverlay action={actions[actions.length - 1] ?? null} />
+        {tabWebContentsId !== null && ownership?.paused && (
+          <div className='absolute top-48px start-1/2 z-20 -translate-x-1/2'>
+            <AgentBanner webContentsId={tabWebContentsId} />
+          </div>
+        )}
+        {findOpen && webview && (
+          <div className='absolute top-48px end-16px z-20'>
+            <FindBar webview={webview} onClose={closeFind} focusToken={findFocusToken} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -45,17 +45,40 @@ export const BrowserSlot: React.FC = () => (
   <div ref={registerSlot} data-browser-slot='' className='relative flex-1 overflow-hidden' />
 );
 
+/** The box moved and shrunk to fit in the window, so agent input aimed at a hidden tab stays inside it. */
+const clampToWindow = (box: Box, viewport: { width: number; height: number }): Box => {
+  const width = Math.min(box.width, viewport.width);
+  const height = Math.min(box.height, viewport.height);
+  return {
+    left: Math.min(Math.max(box.left, 0), viewport.width - width),
+    top: Math.min(Math.max(box.top, 0), viewport.height - height),
+    width,
+    height,
+  };
+};
+
+const windowSize = () => ({ width: window.innerWidth, height: window.innerHeight });
+
 /**
  * The slot's box, measured only while a slot is mounted: once, then on its (and the app shell's)
  * ResizeObserver, window resize and CSS transitions/animations, each followed by a short burst of
- * per-frame measuring, since a panel can move without resizing (sider collapse, maximize).
+ * per-frame measuring, since a panel can move without resizing (sider collapse, maximize). With no slot,
+ * the last box is kept, clamped to the window as it resizes.
  */
 const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } => {
   const [state, setState] = useState<{ box: Box; visible: boolean }>({ box: DEFAULT_BOX, visible: false });
+  const [viewport, setViewport] = useState(windowSize);
   useEffect(() => {
     if (!slot) {
       setState((prev) => (prev.visible ? { box: prev.box, visible: false } : prev));
-      return;
+      const follow = () =>
+        setViewport((prev) => {
+          const next = windowSize();
+          return prev.width === next.width && prev.height === next.height ? prev : next;
+        });
+      follow();
+      window.addEventListener('resize', follow);
+      return () => window.removeEventListener('resize', follow);
     }
     const measure = () => {
       const rect = slot.getBoundingClientRect();
@@ -96,7 +119,7 @@ const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } =>
       layoutEvents.forEach((type) => document.removeEventListener(type, burst, true));
     };
   }, [slot]);
-  return state;
+  return slot ? state : { box: clampToWindow(state.box, viewport), visible: state.visible };
 };
 
 /** The `<webview>` of a tab in the layer, if mounted. */
@@ -140,17 +163,61 @@ const BrowserTabLayer: React.FC = () => {
     [updateTab]
   );
 
-  // Whether the user's last focus was in a page of this layer (not the chat, not the app's controls). Kept from
+  // Whether the user's last focus was in the page on screen (not the chat, not the app's controls). Kept from
   // focusin, because when a hidden page becomes inert Chromium moves the focus to the body before any effect runs.
   const focusWasInBrowser = useRef(false);
+  // The element outside hidden tabs that last lost the focus. Electron moves the focus into a webview with no
+  // relatedTarget (the chat blurs, the window blurs, the webview gets a focus event but no focusin), and so does
+  // Chromium when the window comes back. shortcut: also kept after the user clicks a blank area, so a hidden page
+  // stealing the focus later puts it back there instead of on the body; harmless, no typing is lost.
+  const lastFocus = useRef<HTMLElement | null>(null);
+  // A hidden tab never keeps the focus: an agent's click, or its page calling focus(), lands there while the
+  // user types elsewhere. It goes back where it came from (or stays on the body).
   useEffect(() => {
-    const onFocusIn = (event: FocusEvent) => {
+    /** `node` itself when it is in a tab that is not on screen, else null. */
+    const inHiddenTab = (node: EventTarget | null): HTMLElement | null => {
+      if (!(node instanceof HTMLElement)) return null;
+      const tab = node.closest('[data-browser-tab]');
+      // Read from the DOM, not render state: child effects (a crash overlay, the find bar) focus before ours run.
+      return tab && layerRef.current?.contains(tab) && !tab.hasAttribute('data-shown') ? node : null;
+    };
+    const giveBack = (target: HTMLElement, previous: EventTarget | null) => {
+      target.blur();
+      const back = previous instanceof HTMLElement ? previous : lastFocus.current;
+      if (back?.isConnected && !inHiddenTab(back)) back.focus();
+    };
+    const remember = (node: EventTarget | null) => {
+      if (node instanceof HTMLElement && node !== document.body && !inHiddenTab(node)) lastFocus.current = node;
+    };
+    const onFocus = (event: FocusEvent) => {
+      const hidden = inHiddenTab(event.target);
+      if (hidden) {
+        giveBack(hidden, event.relatedTarget);
+        return;
+      }
       const target = event.target;
+      lastFocus.current = null;
       focusWasInBrowser.current =
         target instanceof HTMLElement && target.tagName === 'WEBVIEW' && Boolean(layerRef.current?.contains(target));
     };
-    document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
+    const onFocusOut = (event: FocusEvent) => remember(event.target);
+    const onWindowBlur = () => remember(document.activeElement);
+    const onWindowFocus = () => {
+      const hidden = inHiddenTab(document.activeElement);
+      if (hidden) giveBack(hidden, null);
+    };
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('focus', onFocus, true);
+    document.addEventListener('focusout', onFocusOut);
+    window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
+    return () => {
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('focus', onFocus, true);
+      document.removeEventListener('focusout', onFocusOut);
+      window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
+    };
   }, []);
 
   // Keyboard focus never stays in a hidden page. When the user was in the browser and the tab on screen changes
@@ -190,6 +257,7 @@ const BrowserTabLayer: React.FC = () => {
           <div
             key={tab.id}
             data-browser-tab={tab.id}
+            data-shown={shown || undefined}
             className='absolute inset-0 flex flex-col'
             style={{
               // Hidden tabs are hidden by the viewer itself: user tabs invisible, agent tabs transparent.
@@ -206,6 +274,7 @@ const BrowserTabLayer: React.FC = () => {
               onFaviconChange={handleFaviconChange}
               onRequestClose={closeTab}
               onAgentOwnedChange={handleAgentOwnedChange}
+              agentOwnedHint={Boolean(tab.metadata?.agentOwned)}
               active={shown}
             />
           </div>

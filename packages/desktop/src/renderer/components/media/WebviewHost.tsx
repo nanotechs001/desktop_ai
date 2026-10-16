@@ -65,6 +65,8 @@ export interface WebviewHostProps {
   onWebviewReady?: (webview: Electron.WebviewTag) => void;
   /** `tabIndex` of the `<webview>` itself, e.g. -1 to keep a hidden page out of the tab order. */
   webviewTabIndex?: number;
+  /** Makes the navigation bar `inert` (not focusable or clickable), e.g. on a hidden tab; the page is unaffected. */
+  chromeInert?: boolean;
   /** The webview got its guest (`did-attach`): its webContents id is known, though the page may still be loading. */
   onWebviewAttached?: (webview: Electron.WebviewTag) => void;
   /** Receives the address bar's input element, so the owner can focus it (needs `showNavBar`) */
@@ -105,6 +107,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   onWebviewReady,
   onWebviewAttached,
   webviewTabIndex,
+  chromeInert,
   addressInputRef,
 }) => {
   const { t } = useTranslation();
@@ -794,7 +797,10 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       )}
       {/* Navigation bar (optional) */}
       {showNavBar && (
-        <div className='aion-url-viewer-toolbar flex items-center gap-6px h-40px px-10px bg-bg-2 border-b border-border-1 flex-shrink-0'>
+        <div
+          className='aion-url-viewer-toolbar flex items-center gap-6px h-40px px-10px bg-bg-2 border-b border-border-1 flex-shrink-0'
+          inert={chromeInert}
+        >
           <button
             onClick={handleGoBack}
             disabled={!canGoBack}

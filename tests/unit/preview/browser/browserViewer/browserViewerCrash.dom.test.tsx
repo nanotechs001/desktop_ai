@@ -62,6 +62,17 @@ afterEach(() => {
   }
 });
 
+const viewerElement = (active: boolean) => (
+  <BrowserViewer
+    active={active}
+    url={URL}
+    tabId='tab-1'
+    onUrlChange={vi.fn()}
+    onTitleChange={vi.fn()}
+    onFaviconChange={vi.fn()}
+  />
+);
+
 const mount = () => {
   const { container } = render(
     <BrowserViewer
@@ -130,6 +141,22 @@ describe('BrowserViewer crash recovery', () => {
 
     expect(screen.getByText(`${KEY}.crashed`)).toBeTruthy();
     expect(screen.getByText(`${KEY}.reload`).closest('button')?.className).not.toContain('arco-btn-loading');
+  });
+
+  it('does not focus Reload while its tab is hidden, only once the tab is shown', () => {
+    const { container, rerender } = render(viewerElement(false));
+    const webview = container.querySelector('webview') as HTMLElement;
+    act(() => {
+      webview.dispatchEvent(new Event('dom-ready'));
+      webview.dispatchEvent(Object.assign(new Event('render-process-gone'), { details: { reason: 'crashed' } }));
+    });
+    const reload = container.querySelector<HTMLElement>('[role="alert"] button');
+    expect(reload).not.toBeNull();
+    expect(document.activeElement).not.toBe(reload);
+
+    rerender(viewerElement(true));
+
+    expect(document.activeElement).toBe(reload);
   });
 
   it('moves focus to Reload when the overlay appears', () => {

@@ -140,6 +140,27 @@ async function openConversation(page: Page, assistantId: string): Promise<string
   return id;
 }
 
+/** Creates a conversation in another project (its own workspace) and opens it; resolves to its id. */
+async function openOtherProjectChat(page: Page): Promise<string> {
+  const { id } = await httpInvoke<{ id: string }>(page, 'POST', '/api/conversations', {
+    name: 'E2E agent browser pane (other project)',
+    assistant: { id: (await findAssistantIdForBackend(page, 'claude')) ?? '' },
+    extra: { workspace: fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-other-')), custom_workspace: true },
+  });
+  await page.goto(`${page.url().split('#')[0]}#/conversation/${id}`);
+  await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
+  return id;
+}
+
+/** Counts mousedown events in the frame it runs in (installing the counter on first use); returns the count. */
+const MOUSE_DOWNS = `(() => {
+  if (window.mouseDowns === undefined) {
+    window.mouseDowns = 0;
+    addEventListener('mousedown', () => { window.mouseDowns++; }, true);
+  }
+  return window.mouseDowns;
+})()`;
+
 /** Spawns the built MCP server exactly as an agent would, with the relay env main exported for AionCore. */
 async function connectAgent(electronApp: ElectronApplication): Promise<Client> {
   if (!fs.existsSync(MCP_SCRIPT)) {
@@ -340,15 +361,9 @@ test.describe('Agents in the browser pane', () => {
       );
     const prompt = page.locator('.arco-modal').filter({ hasText: 'Allow this agent action?' });
     await observeControl(client, 'textbox', 'Page title', servers.originB); // the OOPIF is attached
-    const otherChat = await httpInvoke<{ id: string }>(page, 'POST', '/api/conversations', {
-      name: 'E2E agent browser pane (other project)',
-      assistant: { id: (await findAssistantIdForBackend(page, 'claude')) ?? '' },
-      extra: { workspace: fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-other-')), custom_workspace: true },
-    });
+    // Another project's chat on screen: the agent's tab is hidden in the background.
+    const otherChat = await openOtherProjectChat(page);
     try {
-      // Another project's chat on screen: the agent's tab is hidden in the background.
-      await page.goto(`${page.url().split('#')[0]}#/conversation/${otherChat.id}`);
-      await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
       await expect.poll(hiddenNotInert).toBe(true);
 
       const clicked = act(client, [
@@ -381,7 +396,86 @@ test.describe('Agents in the browser pane', () => {
       ]);
       expect(hover.results.map((r) => r.result)).toEqual(['done']); // never paused
     } finally {
-      await httpInvoke(page, 'DELETE', `/api/conversations/${otherChat.id}`).catch(() => undefined);
+      await httpInvoke(page, 'DELETE', `/api/conversations/${otherChat}`).catch(() => undefined);
+      await page.goto(`${page.url().split('#')[0]}#/conversation/${conversationId}`);
+      await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
+    }
+  });
+
+  test('an agent clicking in its hidden tab leaves the focus, and the keys, in the chat the user is typing in', async ({
+    electronApp,
+    page,
+  }) => {
+    const client = agent as Client;
+    const wc = webContentsIdOf(builderTab);
+    const titleValue = () => evalInFrame(electronApp, wc, childUrl, `document.getElementById('title').value`);
+    await observeControl(client, 'textbox', 'Page title', servers.originB); // the OOPIF is attached
+    const otherChat = await openOtherProjectChat(page);
+    try {
+      await electronApp.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().startsWith('devtools://'));
+        win?.show();
+        win?.focus();
+        win?.webContents.focus();
+      });
+      const windowFocused = await page.evaluate(() => document.hasFocus());
+      test.skip(
+        !windowFocused,
+        'The AionUi window gets no OS focus on this machine, so no focus events fire; the jsdom tests cover the guard'
+      );
+      const chat = page.locator('textarea').first();
+      await chat.focus();
+
+      const clicked = await act(client, [
+        { op: 'click', target: await observeControl(client, 'textbox', 'Page title', servers.originB) },
+      ]);
+      expect(clicked.results.map((r) => r.result)).toEqual(['done']);
+      // The click landed: the guest's own focus moved to its input. The app's focus must not have followed it.
+      await expect.poll(() => evalInFrame(electronApp, wc, childUrl, 'document.activeElement?.id')).toBe('title');
+
+      expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('TEXTAREA');
+      await page.keyboard.type('still typing');
+      await expect(chat).toHaveValue(/still typing/);
+      expect(await titleValue()).toBe('');
+    } finally {
+      await httpInvoke(page, 'DELETE', `/api/conversations/${otherChat}`).catch(() => undefined);
+      await page.goto(`${page.url().split('#')[0]}#/conversation/${conversationId}`);
+      await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
+    }
+  });
+
+  test('a user click over an agent tab hidden behind the app never reaches it or pauses it', async ({
+    electronApp,
+    page,
+  }) => {
+    const client = agent as Client;
+    const wc = webContentsIdOf(builderTab);
+    await observeControl(client, 'button', 'Publish', servers.originB); // the OOPIF is attached
+    const mouseDowns = async () =>
+      Number(await evalInFrame(electronApp, wc, builderUrl, MOUSE_DOWNS)) +
+      Number(await evalInFrame(electronApp, wc, childUrl, MOUSE_DOWNS));
+    expect(await mouseDowns()).toBe(0);
+    try {
+      await goToGuid(page); // no panel: the layer sits behind the app
+      const layer = () =>
+        page.evaluate(() => {
+          const element = document.querySelector<HTMLElement>('[data-browser-tab]')?.parentElement;
+          const rect = element?.getBoundingClientRect();
+          return rect && { x: rect.x, y: rect.y, width: rect.width, height: rect.height, z: element?.style.zIndex };
+        });
+      await expect.poll(async () => (await layer())?.z).toBe('-1');
+      const box = (await layer()) as Box;
+
+      // Over the page, and over the OOPIF's Publish button (iframe at (30, 20), Publish at (10, 20) in it, nav bar 40px).
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.click(box.x + 30 + 10 + 20, box.y + 40 + 20 + 20 + 10);
+
+      const hover = await act(client, [
+        { op: 'hover', target: await observeControl(client, 'button', 'Publish', servers.originB) },
+      ]);
+      expect(hover.results.map((r) => r.result)).toEqual(['done']); // not paused: no user input reached the tab
+      expect(await mouseDowns()).toBe(0);
+    } finally {
       await page.goto(`${page.url().split('#')[0]}#/conversation/${conversationId}`);
       await page.locator('textarea').first().waitFor({ state: 'visible', timeout: 30_000 });
     }

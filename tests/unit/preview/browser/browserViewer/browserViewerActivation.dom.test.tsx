@@ -63,8 +63,9 @@ afterEach(() => {
   }
 });
 
-const viewer = (active: boolean, onRequestClose?: (tabId: string) => void) => (
+const viewer = (active: boolean, onRequestClose?: (tabId: string) => void, agentOwnedHint?: boolean) => (
   <BrowserViewer
+    agentOwnedHint={agentOwnedHint}
     onRequestClose={onRequestClose}
     url='https://example.com'
     tabId='tab-1'
@@ -159,6 +160,47 @@ describe('BrowserViewer tab activation', () => {
       container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
     });
     await waitFor(() => expect(container.firstElementChild?.hasAttribute('inert')).toBe(false));
+  });
+
+  it('keeps the chrome of a hidden agent tab inert, but never the page, and hides the tab from screen readers', async () => {
+    mocks.ownership = [
+      { webContentsId: 7, owner: { clientId: 'c', label: 'claude' }, sharedWith: null, paused: false },
+    ];
+    const { container, rerender } = render(viewer(false));
+    const webview = container.querySelector('webview') as HTMLElement;
+    act(() => {
+      webview.dispatchEvent(new Event('dom-ready'));
+    });
+    await waitFor(() => expect(container.firstElementChild?.hasAttribute('inert')).toBe(false));
+    const root = container.firstElementChild as HTMLElement;
+    const controls = [...container.querySelectorAll<HTMLElement>('.aion-url-viewer-toolbar button, input')];
+    expect(controls.length).toBeGreaterThan(3);
+
+    // jsdom does not implement inert; in Chromium an element under [inert] cannot take focus.
+    expect(controls.every((control) => control.closest('[inert]') !== null)).toBe(true);
+    expect(webview.closest('[inert]')).toBeNull(); // inert would also stop hit-testing for agent input
+    expect(root.getAttribute('aria-hidden')).toBe('true');
+
+    rerender(viewer(true));
+    expect(container.querySelector('[inert]')).toBeNull();
+    expect(root.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('hides a hidden user tab from screen readers, and only while hidden', () => {
+    const { container, rerender } = render(viewer(false));
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.getAttribute('aria-hidden')).toBe('true');
+
+    rerender(viewer(true));
+    expect(root.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('treats a tab the context created for an agent as agent-reachable before any ownership is known', () => {
+    const { container } = render(viewer(false, undefined, true));
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.hasAttribute('inert')).toBe(false);
+    expect([root.style.visibility, root.style.opacity, root.style.pointerEvents]).toEqual(['visible', '0', 'auto']);
   });
 
   it('does not report before the webview is ready', () => {

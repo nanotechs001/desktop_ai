@@ -20,17 +20,19 @@ export type CrashOverlayProps = {
   onReload: () => void;
   /** Dismisses the "isn't responding" overlay; Electron fires `unresponsive` again if the page stays hung. */
   onWait: () => void;
+  /** Whether the tab is on screen; a hidden tab's overlay takes the focus only once the tab is shown. */
+  active?: boolean;
 };
 
 /** Covers a browser tab's page area when its renderer crashed or stopped responding. */
-const CrashOverlay: React.FC<CrashOverlayProps> = ({ state, reloading = false, onReload, onWait }) => {
+const CrashOverlay: React.FC<CrashOverlayProps> = ({ state, reloading = false, onReload, onWait, active = true }) => {
   const { t } = useTranslation();
   const reloadRef = useRef<HTMLElement>(null);
 
   // Only a crash takes focus: a hang may clear by itself, and the user may be typing elsewhere.
   useEffect(() => {
-    if (state === 'crashed') reloadRef.current?.focus();
-  }, [state]);
+    if (state === 'crashed' && active) reloadRef.current?.focus();
+  }, [state, active]);
 
   if (!state) return null;
 

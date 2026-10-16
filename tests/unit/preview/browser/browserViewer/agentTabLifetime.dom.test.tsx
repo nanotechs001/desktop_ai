@@ -59,14 +59,14 @@ vi.mock('@/renderer/pages/conversation/Preview/browser/BrowserChrome/ConfirmProm
 // Stands in for the webview: counts mounts and unmounts per tab, which is what "the page survives" means.
 vi.mock('@/renderer/pages/conversation/Preview/browser/BrowserViewer', async () => {
   const { useEffect } = await import('react');
-  const Viewer = ({ tabId }: { tabId: string }) => {
+  const Viewer = ({ tabId, agentOwnedHint }: { tabId: string; agentOwnedHint?: boolean }) => {
     useEffect(() => {
       h.mounts.set(tabId, (h.mounts.get(tabId) ?? 0) + 1);
       return () => {
         h.unmounted.push(tabId);
       };
     }, [tabId]);
-    return <div data-testid={`viewer-${tabId}`} />;
+    return <div data-testid={`viewer-${tabId}`} data-agent-owned={String(Boolean(agentOwnedHint))} />;
   };
   return { default: Viewer };
 });
@@ -194,6 +194,22 @@ describe('agent browser tabs outlive the panel', () => {
     expect(ctx.activeTabId).toBe(id);
     await waitFor(() => expect(shown(id)).toBe(true));
     expect(h.mounts.get(id)).toBe(1);
+  });
+
+  it('marks an agent tab as agent-owned from creation, on screen or in the background, before any ownership event', async () => {
+    render(<App />);
+    enterScope('proj-a');
+
+    await requestTab('https://own.test/', 'chat-a'); // chat A is on screen
+    await requestTab('https://bg.test/', 'chat-b'); // chat B is not
+    await requestTab('https://page.test/'); // a page's target=_blank: the user's
+
+    await waitFor(() => expect(tabIdOf('https://bg.test/')).toBeDefined());
+    const agentOwned = (url: string) =>
+      screen.getByTestId(`viewer-${tabIdOf(url) as string}`).getAttribute('data-agent-owned');
+    expect([agentOwned('https://own.test/'), agentOwned('https://bg.test/'), agentOwned('https://page.test/')]).toEqual(
+      ['true', 'true', 'false']
+    );
   });
 
   it('opens a tab without a chat id (older MCP, other engines) in the chat on screen', async () => {
