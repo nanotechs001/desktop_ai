@@ -27,8 +27,9 @@ const CrashOverlay: React.FC<CrashOverlayProps> = ({ state, reloading = false, o
   const { t } = useTranslation();
   const reloadRef = useRef<HTMLElement>(null);
 
+  // Only a crash takes focus: a hang may clear by itself, and the user may be typing elsewhere.
   useEffect(() => {
-    if (state) reloadRef.current?.focus();
+    if (state === 'crashed') reloadRef.current?.focus();
   }, [state]);
 
   if (!state) return null;

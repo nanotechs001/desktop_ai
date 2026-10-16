@@ -109,7 +109,12 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   }, []);
   // A hang never downgrades a crash that is already showing.
   const handleUnresponsive = useCallback(() => setCrashState((state) => state ?? 'unresponsive'), []);
-  const handleResponsive = useCallback(() => setCrashState((state) => (state === 'unresponsive' ? null : state)), []);
+  const handleResponsive = useCallback(() => {
+    setCrashState((state) => (state === 'unresponsive' ? null : state));
+    setReloading(false);
+  }, []);
+  // A reload that ends in an error page is over too; the overlay stays until a load finishes.
+  const handleDidFailLoad = useCallback(() => setReloading(false), []);
   const handleWait = useCallback(() => {
     setCrashState(null);
     setReloading(false);
@@ -194,6 +199,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         onTitleChange={handleTitleChange}
         onFaviconChange={handleFaviconChange}
         onDidFinishLoad={handleDidFinishLoad}
+        onDidFailLoad={handleDidFailLoad}
         onWebviewReady={setWebview}
         onRenderProcessGone={handleRenderProcessGone}
         onUnresponsive={handleUnresponsive}

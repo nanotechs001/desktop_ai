@@ -128,6 +128,36 @@ describe('BrowserViewer crash recovery', () => {
     expect(document.activeElement).toBe(screen.getByText(`${KEY}.reload`).closest('button'));
   });
 
+  it('a reload that fails to load stops the loading state and keeps the overlay', () => {
+    const { emit } = mount();
+    emit('render-process-gone', { reason: 'crashed' });
+    fireEvent.click(screen.getByText(`${KEY}.reload`));
+
+    emit('did-fail-load');
+
+    expect(screen.getByText(`${KEY}.crashed`)).toBeTruthy();
+    expect(screen.getByText(`${KEY}.reload`).closest('button')?.className).not.toContain('arco-btn-loading');
+  });
+
+  it('responsive also ends a pending reload, so the next hang shows an idle Reload', () => {
+    const { emit } = mount();
+    emit('unresponsive');
+    fireEvent.click(screen.getByText(`${KEY}.reload`));
+    emit('responsive');
+
+    emit('unresponsive');
+
+    expect(screen.getByText(`${KEY}.reload`).closest('button')?.className).not.toContain('arco-btn-loading');
+  });
+
+  it('does not steal focus for a hang, only for a crash', () => {
+    const { emit } = mount();
+
+    emit('unresponsive');
+
+    expect(document.activeElement).not.toBe(screen.getByText(`${KEY}.reload`).closest('button'));
+  });
+
   it('a crash closes an open find bar', () => {
     const { emit } = mount();
     act(() => shortcut.emit?.({ webContentsId: 7, action: 'find' }));
