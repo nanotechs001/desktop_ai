@@ -231,7 +231,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   );
 
   // Switching to an already-loaded tab fires no dom-ready, so report the active tab here as well:
-  // extensions (chrome.tabs active tab) and the agent's CDP bridge follow the tab on screen.
+  // extensions (chrome.tabs active tab) follow the tab on screen.
   useEffect(() => {
     if (!active || !webview) return;
     const webContentsId = ownWebContentsId(webview);

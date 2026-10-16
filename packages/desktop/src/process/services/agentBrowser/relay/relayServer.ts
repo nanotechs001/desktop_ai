@@ -76,6 +76,15 @@ const parseRect = (value: unknown): AgentActionEvent['rect'] | undefined => {
   return { x, y, width, height };
 };
 
+/** The point of an agent mousePressed, the only agent input Electron also reports as user input. */
+const agentClickPoint = (method: string, params: Params): { x: number; y: number } | null =>
+  method === 'Input.dispatchMouseEvent' &&
+  params.type === 'mousePressed' &&
+  isFiniteNumber(params.x) &&
+  isFiniteNumber(params.y)
+    ? { x: params.x, y: params.y }
+    : null;
+
 /**
  * Starts the agent relay: a token-guarded loopback WebSocket that exposes the in-app browser's tabs
  * as CDP targets over `webContents.debugger` (spec §3.2). No HTTP endpoints exist; upgrades with an
@@ -265,7 +274,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     });
     if (decision.allow === false) throw new Error(decision.message);
     if (method === 'Page.reload') return reload(session, params);
-    const endInput = method.startsWith('Input.') ? registry.beginAgentInput(webContentsId) : null;
+    const click = agentClickPoint(method, params);
+    const endInput = click ? registry.beginAgentInput(webContentsId, click) : null;
     try {
       const result = await sessions.send(sessionId, method, params);
       const contextId = asParams(result)?.executionContextId;

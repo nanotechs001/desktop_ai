@@ -39,16 +39,28 @@ export class FakeContents extends EventEmitter {
   readonly reloadIgnoringCache = vi.fn();
   private destroyed = false;
 
+  zoom = 1;
+
   constructor(
     readonly id: number,
     private readonly url = 'https://example.com/',
-    private readonly title = 'Example'
+    private readonly title = 'Example',
+    private readonly type = 'webview'
   ) {
     super();
   }
 
   getType(): string {
-    return 'webview';
+    return this.type;
+  }
+
+  getZoomFactor(): number {
+    return this.zoom;
+  }
+
+  /** Emits the tab's first main-frame navigation the way Electron does. */
+  navigate(url: string, isMainFrame = true): void {
+    this.emit('did-start-navigation', { url, isMainFrame });
   }
 
   getURL(): string {

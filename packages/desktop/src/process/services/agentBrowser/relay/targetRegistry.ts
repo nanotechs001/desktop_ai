@@ -58,15 +58,42 @@ export type TargetRegistry = {
   setPaused(webContentsId: number, paused: boolean): void;
   /** The client disconnected: its tabs stay open under a label nobody can reclaim. */
   releaseClient(clientId: string): void;
-  /** Marks relay input to a tab as in flight; call the returned function when the command settles. */
-  beginAgentInput(webContentsId: number): () => void;
-  /** User keyDown/mouseDown on a tab: pauses agent input on agent-owned or shared tabs. */
-  noteUserInput(webContentsId: number): void;
+  /**
+   * Records an agent `Input.dispatchMouseEvent` mousePressed at `point` (CSS px) while it is in flight,
+   * because Electron reports it as a mouseDown too. Call the returned function when the command settles.
+   */
+  beginAgentInput(webContentsId: number, point: { x: number; y: number }): () => void;
+  /** User keyDown or mouseDown on a tab: pauses agent input on agent-owned or shared tabs. */
+  noteUserInput(webContentsId: number, input: UserInput): void;
   onChange(cb: (all: TabOwnership[]) => void): () => void;
   onDestroyed(cb: (last: TabOwnership) => void): () => void;
 };
 
+/** A user keyDown, or a mouseDown at CSS-px coordinates in the tab. */
+export type UserInput = { kind: 'key' } | { kind: 'mouse'; x: number; y: number };
+
 const TARGET_PREFIX = 'wc-';
+/** How far (CSS px) Electron's report of an agent click may land from the CDP coordinates. */
+const AGENT_CLICK_TOLERANCE_PX = 2;
+/** An in-flight agent click is forgotten after this even if its command never settles. */
+const AGENT_INPUT_TTL_MS = 5000;
+
+type AgentClick = { x: number; y: number };
+
+const logListenerError = (error: unknown): void => {
+  console.error('[AgentBrowserRelay] registry listener failed:', error);
+};
+
+/** Runs every listener even when one throws. */
+const callEach = <A>(listeners: Iterable<(arg: A) => void>, arg: A): void => {
+  for (const listener of listeners) {
+    try {
+      listener(arg);
+    } catch (error) {
+      logListenerError(error);
+    }
+  }
+};
 const DISCONNECTED_LABEL = 'agent (disconnected)';
 
 /** The CDP target id of a browser tab. */
@@ -81,14 +108,13 @@ export const webContentsIdFromTargetId = (targetId: string): number | null => {
 /** In-memory registry of the in-app browser's tabs and who may drive them. */
 export function createTargetRegistry(): TargetRegistry {
   const tabs = new Map<number, { contents: RelayContents; ownership: TabOwnership }>();
-  const agentInput = new Map<number, number>();
+  const agentClicks = new Map<number, AgentClick[]>();
   const changeListeners = new Set<(all: TabOwnership[]) => void>();
   const destroyedListeners = new Set<(last: TabOwnership) => void>();
 
   const all = (): TabOwnership[] => Array.from(tabs.values(), (tab) => tab.ownership);
   const notify = (): void => {
-    const snapshot = all();
-    changeListeners.forEach((cb) => cb(snapshot));
+    callEach(changeListeners, all());
   };
   const update = (webContentsId: number, patch: Partial<TabOwnership>): void => {
     const tab = tabs.get(webContentsId);
@@ -109,8 +135,8 @@ export function createTargetRegistry(): TargetRegistry {
         const tab = tabs.get(webContentsId);
         if (!tab) return;
         tabs.delete(webContentsId);
-        agentInput.delete(webContentsId);
-        destroyedListeners.forEach((cb) => cb(tab.ownership));
+        agentClicks.delete(webContentsId);
+        callEach(destroyedListeners, tab.ownership);
         notify();
       });
       notify();
@@ -139,24 +165,39 @@ export function createTargetRegistry(): TargetRegistry {
         }
       }
     },
-    beginAgentInput(webContentsId) {
-      agentInput.set(webContentsId, (agentInput.get(webContentsId) ?? 0) + 1);
-      let ended = false;
-      return () => {
-        if (ended) return;
-        ended = true;
-        const left = (agentInput.get(webContentsId) ?? 1) - 1;
-        if (left > 0) agentInput.set(webContentsId, left);
-        else agentInput.delete(webContentsId);
+    beginAgentInput(webContentsId, point) {
+      const click: AgentClick = { ...point };
+      agentClicks.set(webContentsId, [...(agentClicks.get(webContentsId) ?? []), click]);
+      const end = (): void => {
+        clearTimeout(timer);
+        const left = (agentClicks.get(webContentsId) ?? []).filter((entry) => entry !== click);
+        if (left.length > 0) agentClicks.set(webContentsId, left);
+        else agentClicks.delete(webContentsId);
       };
+      const timer = setTimeout(end, AGENT_INPUT_TTL_MS);
+      timer.unref?.();
+      return end;
     },
-    noteUserInput(webContentsId) {
-      // Electron fires before-mouse-event for the relay's own CDP mouse input too (measured on 37.10.3).
-      // shortcut: a real user click landing while an agent Input.* command is pending is ignored; acceptable.
-      if (agentInput.has(webContentsId)) return;
+    noteUserInput(webContentsId, input) {
       const ownership = tabs.get(webContentsId)?.ownership;
       if (!ownership || ownership.paused) return;
       if (ownership.owner === 'user' && ownership.sharedWith === null) return;
+      if (input.kind === 'mouse') {
+        // Electron fires before-mouse-event for the relay's own CDP mousePressed (measured on 37.10.3);
+        // that one report is consumed instead of pausing. Keys are never suppressed.
+        const clicks = agentClicks.get(webContentsId) ?? [];
+        const own = clicks.find(
+          (c) =>
+            Math.abs(c.x - input.x) <= AGENT_CLICK_TOLERANCE_PX && Math.abs(c.y - input.y) <= AGENT_CLICK_TOLERANCE_PX
+        );
+        if (own) {
+          agentClicks.set(
+            webContentsId,
+            clicks.filter((c) => c !== own)
+          );
+          return;
+        }
+      }
       update(webContentsId, { paused: true });
     },
     onChange(cb) {

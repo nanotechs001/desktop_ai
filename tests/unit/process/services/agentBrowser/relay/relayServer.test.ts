@@ -424,18 +424,26 @@ describe('relay server: sessions', () => {
     expect((await client.send('Page.reload', { scriptToEvaluateOnLoad: 'x' }, session)).error).toBeDefined();
   });
 
-  it('marks agent input in flight so its own mouse events do not pause the tab', async () => {
+  it('marks an agent mousePressed in flight so its own mouseDown does not pause the tab, but a user click does', async () => {
     const handle = await start();
     const client = await connect(handle);
     const tab = ownedTab(13, 'claude');
     const session = await attach(client, 13);
     // Electron fires before-mouse-event for CDP mouse input while the command is pending.
     tab.debugger.handler = () => {
-      registry.noteUserInput(13);
+      registry.noteUserInput(13, { kind: 'mouse', x: 10.5, y: 21 });
       return {};
     };
-    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 1, y: 1 }, session);
+    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 10, y: 20 }, session);
     expect(registry.ownership(13)?.paused).toBe(false);
+
+    // A user click elsewhere while an agent click is still pending pauses the tab.
+    tab.debugger.handler = () => {
+      registry.noteUserInput(13, { kind: 'mouse', x: 200, y: 300 });
+      return {};
+    };
+    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 10, y: 20 }, session);
+    expect(registry.ownership(13)?.paused).toBe(true);
   });
 
   it('unsharing a user tab detaches agent sessions on it', async () => {

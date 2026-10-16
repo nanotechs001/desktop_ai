@@ -9,6 +9,7 @@ import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-
 import { installChromeWebStore } from 'electron-chrome-web-store';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { loadTranslate } from './contextMenuInstall';
+import { CreateTabWaiter, offerNewTab } from '@process/services/agentBrowser/tabWaiter';
 import { isSafeUrl } from './urlSafety';
 
 export type ExtensionsDeps = {
@@ -24,7 +25,6 @@ export type BrowserExtensions = {
   getContextMenuItems(contents: Electron.WebContents, params: Electron.ContextMenuParams): Electron.MenuItem[];
 };
 
-type Waiter = { resolve: (contents: Electron.WebContents) => void };
 type BeforeInstall = NonNullable<NonNullable<Parameters<typeof installChromeWebStore>[0]>['beforeInstall']>;
 type InstallDetails = Parameters<BeforeInstall>[0];
 
@@ -100,39 +100,6 @@ const confirmInstall = async (parent: Electron.BrowserWindow | null, prompt: Ins
 };
 
 /**
- * Pairs `chrome.tabs.create` calls with the browser webviews that attach afterwards. The renderer
- * opens tabs asynchronously and reports no request id back, so the oldest waiter takes the next tab.
- */
-export class CreateTabWaiter {
-  private pending: Waiter[] = [];
-
-  /** Resolves with the next attached tab, or rejects with 'tab-create-timeout' after `timeoutMs`. */
-  wait(url: string, timeoutMs: number): Promise<Electron.WebContents> {
-    return new Promise((resolve, reject) => {
-      const waiter: Waiter = {
-        resolve: (contents) => {
-          clearTimeout(timer);
-          resolve(contents);
-        },
-      };
-      const timer = setTimeout(() => {
-        this.pending = this.pending.filter((entry) => entry !== waiter);
-        console.warn(`[BrowserExtensions] no browser tab attached for ${url}`);
-        reject(new Error('tab-create-timeout'));
-      }, timeoutMs);
-      this.pending = [...this.pending, waiter];
-    });
-  }
-
-  /** Hands a newly attached browser tab to the oldest waiter, if any. */
-  onAttached(contents: Electron.WebContents): void {
-    const [next, ...rest] = this.pending;
-    this.pending = rest;
-    next?.resolve(contents);
-  }
-}
-
-/**
  * Adds Chrome extension support to the in-app browser session: `chrome.tabs` mapped onto AionUi's
  * browser tabs, action icons/popups for `<browser-action-list>`, context-menu items, and installs
  * from the Chrome Web Store with auto-update. Throws if the extensions library cannot start; a
@@ -140,7 +107,7 @@ export class CreateTabWaiter {
  */
 export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<BrowserExtensions> {
   const { session, getMainWindow, openTab, closeTab } = deps;
-  const waiter = new CreateTabWaiter();
+  const waiter = new CreateTabWaiter<Electron.WebContents>();
   const liveMainWindow = (): Electron.BrowserWindow | null => {
     const mainWindow = getMainWindow();
     return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
@@ -192,7 +159,7 @@ export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<Brows
       const mainWindow = liveMainWindow();
       if (!mainWindow) return;
       extensions.addTab(contents, mainWindow);
-      waiter.onAttached(contents);
+      offerNewTab(waiter, contents);
     },
     selectTab: (contents) => extensions.selectTab(contents),
     getContextMenuItems: (contents, params) => extensions.getContextMenuItems(contents, params),

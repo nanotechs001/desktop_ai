@@ -1508,7 +1508,7 @@ export const agentBrowser = {
   share: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; on: boolean }>('agent-browser.share'),
   // clears the take-over pause so agents may send input to the tab again
   resume: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>('agent-browser.resume'),
-  getOwnership: bridge.buildProvider<TabOwnership[], void>('agent-browser.get-ownership'),
+  getOwnership: bridge.buildProvider<IBridgeResponse<TabOwnership[]>, void>('agent-browser.get-ownership'),
 };
 
 // ---------------------------------------------------------------------------

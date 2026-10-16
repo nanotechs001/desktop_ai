@@ -770,12 +770,14 @@ const handleAppReady = async (): Promise<void> => {
    * that fire once the browser session dispatches tabs. Only the url is logged, never the token.
    */
   const { cdpStartupEnabled, setActiveCdpPort } = await import('./process/utils/configureChromium');
-  if (cdpStartupEnabled) {
-    try {
-      const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
-      const agentBrowser = await startAgentBrowserServices({
-        blockedPorts: () => (backendManager.port > 0 ? [backendManager.port] : []),
-      });
+  try {
+    const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
+    // Always called: the pane's agent-browser IPC answers even while the user has agent control off.
+    const agentBrowser = await startAgentBrowserServices({
+      enabled: cdpStartupEnabled,
+      blockedPorts: () => (backendManager.port > 0 ? [backendManager.port] : []),
+    });
+    if (agentBrowser) {
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;
       process.env.AION_BROWSER_RELAY_TOKEN = agentBrowser.token;
       // The settings page reports agent control as on while this port is set.
@@ -786,10 +788,10 @@ const handleAppReady = async (): Promise<void> => {
         setActiveCdpPort(null);
       });
       mark('agentBrowserRelay');
-    } catch (error) {
-      // Without the env the browser MCP reports agent control as unavailable; browsing still works.
-      console.error('[AgentBrowser] Failed to start the relay; agent browser control stays off.', error);
     }
+  } catch (error) {
+    // Without the env the browser MCP reports agent control as unavailable; browsing still works.
+    console.error('[AgentBrowser] Failed to start the relay; agent browser control stays off.', error);
   }
 
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();

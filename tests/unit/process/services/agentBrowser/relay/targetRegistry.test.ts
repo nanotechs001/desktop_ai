@@ -27,29 +27,82 @@ describe('targetRegistry', () => {
     expect(onChange).toHaveBeenLastCalledWith([{ webContentsId: 5, owner: agent, sharedWith: null, paused: false }]);
   });
 
-  it('pauses an agent or shared tab on user input, but not a private user tab or during agent input', () => {
+  it('pauses an agent or shared tab on user input, but not a private user tab', () => {
     const registry = createTargetRegistry();
     registry.track(new FakeContents(1));
     registry.track(new FakeContents(2));
     registry.claim(2, agent);
 
-    registry.noteUserInput(1);
+    registry.noteUserInput(1, { kind: 'key' });
+    registry.noteUserInput(1, { kind: 'mouse', x: 1, y: 1 });
     expect(registry.ownership(1)?.paused).toBe(false);
 
-    const endAgentInput = registry.beginAgentInput(2);
-    registry.noteUserInput(2); // the agent's own CDP mouse event fires before-mouse-event too
-    expect(registry.ownership(2)?.paused).toBe(false);
-    endAgentInput();
-
-    registry.noteUserInput(2);
+    registry.noteUserInput(2, { kind: 'key' });
     expect(registry.ownership(2)?.paused).toBe(true);
 
     registry.share(1, true);
-    registry.noteUserInput(1);
+    registry.noteUserInput(1, { kind: 'mouse', x: 1, y: 1 });
     expect(registry.ownership(1)?.paused).toBe(true);
 
     registry.setPaused(2, false);
     expect(registry.ownership(2)?.paused).toBe(false);
+  });
+
+  it('suppresses only the mouseDown Electron reports for an in-flight agent click (±2 px), once', () => {
+    const registry = createTargetRegistry();
+    registry.track(new FakeContents(2));
+    registry.claim(2, agent);
+    const end = registry.beginAgentInput(2, { x: 100, y: 50 });
+
+    registry.noteUserInput(2, { kind: 'mouse', x: 101.5, y: 48 });
+    expect(registry.ownership(2)?.paused).toBe(false);
+    // The same coordinates again are the user, not the agent: one report per agent click.
+    registry.noteUserInput(2, { kind: 'mouse', x: 100, y: 50 });
+    expect(registry.ownership(2)?.paused).toBe(true);
+    end();
+  });
+
+  it('never suppresses a user keyDown or a click elsewhere during an agent click', () => {
+    const registry = createTargetRegistry();
+    registry.track(new FakeContents(2));
+    registry.track(new FakeContents(3));
+    registry.claim(2, agent);
+    registry.claim(3, agent);
+    registry.beginAgentInput(2, { x: 100, y: 50 });
+    registry.beginAgentInput(3, { x: 100, y: 50 });
+
+    registry.noteUserInput(2, { kind: 'key' });
+    registry.noteUserInput(3, { kind: 'mouse', x: 103, y: 50 });
+
+    expect(registry.ownership(2)?.paused).toBe(true);
+    expect(registry.ownership(3)?.paused).toBe(true);
+  });
+
+  it('forgets an in-flight agent click after 5 s even if its command never settles', () => {
+    vi.useFakeTimers();
+    try {
+      const registry = createTargetRegistry();
+      registry.track(new FakeContents(2));
+      registry.claim(2, agent);
+      registry.beginAgentInput(2, { x: 10, y: 10 });
+      vi.advanceTimersByTime(5000);
+      registry.noteUserInput(2, { kind: 'mouse', x: 10, y: 10 });
+      expect(registry.ownership(2)?.paused).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps notifying other listeners when one throws', () => {
+    const registry = createTargetRegistry();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const second = vi.fn();
+    registry.onChange(() => {
+      throw new Error('boom');
+    });
+    registry.onChange(second);
+    registry.track(new FakeContents(9));
+    expect(second).toHaveBeenCalled();
   });
 
   it('keeps a disconnected client tabs open but no longer reclaimable', () => {

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Impl = {
@@ -50,7 +51,6 @@ vi.mock('electron-chrome-extensions', () => ({
 vi.mock('electron-chrome-web-store', () => ({ installChromeWebStore: mocks.installChromeWebStore }));
 
 import {
-  CreateTabWaiter,
   createBeforeInstall,
   describeInstall,
   initBrowserExtensions,
@@ -59,7 +59,10 @@ import {
 
 const browserSession = { name: 'browser' } as unknown as Electron.Session;
 const mainWindow = { isDestroyed: () => false, webContents: { id: 1 } } as unknown as Electron.BrowserWindow;
-const contentsWithId = (id: number) => ({ id }) as unknown as Electron.WebContents;
+const contentsWithId = (id: number) => Object.assign(new EventEmitter(), { id }) as unknown as Electron.WebContents;
+/** The tab's first main-frame navigation, which pairs it with the createTab that asked for its url. */
+const navigate = (contents: Electron.WebContents, url: string) =>
+  (contents as unknown as EventEmitter).emit('did-start-navigation', { url, isMainFrame: true });
 
 const setup = async (getMainWindow: () => Electron.BrowserWindow | null = () => mainWindow) => {
   const openTab = vi.fn();
@@ -78,42 +81,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-});
-
-describe('CreateTabWaiter', () => {
-  it('CreateTabWaiter resolves waiters in FIFO order as browser tabs attach', async () => {
-    const waiter = new CreateTabWaiter();
-    const first = waiter.wait('https://a.test/', 1000);
-    const second = waiter.wait('https://b.test/', 1000);
-    const a = contentsWithId(1);
-    const b = contentsWithId(2);
-
-    waiter.onAttached(a);
-    waiter.onAttached(b);
-
-    await expect(first).resolves.toBe(a);
-    await expect(second).resolves.toBe(b);
-  });
-
-  it('CreateTabWaiter rejects with "tab-create-timeout" after timeoutMs and drops the waiter', async () => {
-    vi.useFakeTimers();
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const waiter = new CreateTabWaiter();
-    const timedOut = waiter.wait('https://a.test/', 100);
-    const assertion = expect(timedOut).rejects.toThrow('tab-create-timeout');
-
-    await vi.advanceTimersByTimeAsync(100);
-    await assertion;
-
-    const next = waiter.wait('https://b.test/', 100);
-    const contents = contentsWithId(3);
-    waiter.onAttached(contents);
-    await expect(next).resolves.toBe(contents);
-  });
-
-  it('ignores an attach when nobody is waiting', () => {
-    expect(() => new CreateTabWaiter().onAttached(contentsWithId(1))).not.toThrow();
-  });
 });
 
 describe('initBrowserExtensions', () => {
@@ -160,6 +127,7 @@ describe('initBrowserExtensions', () => {
     expect(openTab).toHaveBeenCalledWith('https://a.test/');
     const contents = contentsWithId(5);
     extensions.addTab(contents);
+    navigate(contents, 'https://a.test/');
 
     await expect(created).resolves.toEqual([contents, mainWindow]);
   });
@@ -169,10 +137,15 @@ describe('initBrowserExtensions', () => {
 
     const options = impl.createTab({ url: 'chrome-extension://abc/options.html' });
     const blank = impl.createTab({});
-    extensions.addTab(contentsWithId(1));
-    extensions.addTab(contentsWithId(2));
+    const blankTab = contentsWithId(1);
+    const optionsTab = contentsWithId(2);
+    extensions.addTab(blankTab);
+    extensions.addTab(optionsTab);
+    navigate(blankTab, 'about:blank');
+    navigate(optionsTab, 'chrome-extension://abc/options.html');
 
-    await Promise.all([options, blank]);
+    await expect(options).resolves.toEqual([optionsTab, mainWindow]);
+    await expect(blank).resolves.toEqual([blankTab, mainWindow]);
     expect(openTab.mock.calls).toEqual([['chrome-extension://abc/options.html'], ['about:blank']]);
   });
 
