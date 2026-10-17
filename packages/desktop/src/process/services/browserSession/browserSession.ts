@@ -138,6 +138,14 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   return browserSession;
 }
 
+/** Forgets a deleted profile's session: the next {@link ensureBrowserSession} for it starts from scratch (or refuses). */
+export function forgetBrowserSession(partition: string): void {
+  const known = sessions.get(partition);
+  if (known) extensionsBySession.delete(known);
+  sessions.delete(partition);
+  extensionsSettled.delete(partition);
+}
+
 /**
  * Resolves once the extensions of a set-up partition have started (or failed to): tabs created after it are known
  * to `chrome.tabs`. Resolves at once for a partition that was never set up.

@@ -15,6 +15,7 @@ const AGENT_PARTITION = 'persist:aionui-agent-0123456789abcdef0123456789abcdef';
 const mocks = vi.hoisted(() => ({
   assistants: vi.fn(),
   profilePartition: vi.fn(),
+  refuseTab: vi.fn(() => Promise.resolve({ success: true })),
 }));
 
 vi.mock('@/common', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/common', () => ({
       closeTabRequested: { on: () => () => {} },
     },
     agentBrowser: {
+      refuseTab: { invoke: mocks.refuseTab },
       getOwnership: { invoke: () => Promise.resolve({ success: true, data: [] }) },
       ownershipChanged: { on: () => () => {} },
       agentAction: { on: () => () => {} },
@@ -103,12 +105,13 @@ describe('the new-tab profile switcher', () => {
 });
 
 describe('a browser tab in an Agent profile', () => {
-  const renderViewer = (profile?: BrowserTabProfile) =>
+  const renderViewer = (profile?: BrowserTabProfile, agentOwnedHint = false) =>
     renderFresh(
       <BrowserViewer
         url='https://example.com/'
         tabId='tab-1'
         profile={profile}
+        agentOwnedHint={agentOwnedHint}
         onUrlChange={vi.fn()}
         onTitleChange={vi.fn()}
         onFaviconChange={vi.fn()}
@@ -130,6 +133,39 @@ describe('a browser tab in an Agent profile', () => {
     await waitFor(() => expect(container.querySelector('webview')?.getAttribute('partition')).toBe(AGENT_PARTITION));
     expect(container.querySelector('browser-action-list')?.getAttribute('partition')).toBe(AGENT_PARTITION);
     await waitFor(() => expect(screen.getByTestId('browser-profile-badge').textContent).toBe('🦊'));
+  });
+
+  it('shows why an Agent profile could not open, with Retry; Retry asks main again and then mounts the webview', async () => {
+    mocks.assistants.mockResolvedValue(AGENTS);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.profilePartition.mockResolvedValueOnce({ success: false, msg: 'Not a browser profile partition' });
+    const { container } = renderViewer({ kind: 'agent', agentId: 'bare:retry' });
+
+    expect(await screen.findByText('preview.browserChrome.profile.unavailable')).toBeTruthy();
+    expect(screen.getByText('Not a browser profile partition')).toBeTruthy();
+    expect(container.querySelector('webview')).toBeNull();
+    // A user's own tab never refuses an agent request.
+    expect(mocks.refuseTab).not.toHaveBeenCalled();
+
+    mocks.profilePartition.mockResolvedValueOnce({ success: true, data: AGENT_PARTITION });
+    fireEvent.click(screen.getByRole('button', { name: 'preview.browserChrome.profile.retry' }));
+
+    await waitFor(() => expect(container.querySelector('webview')?.getAttribute('partition')).toBe(AGENT_PARTITION));
+    expect(screen.queryByText('preview.browserChrome.profile.unavailable')).toBeNull();
+    expect(mocks.profilePartition).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses the agent's waiting tab request at once when its Agent profile can't be set up", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.profilePartition.mockRejectedValueOnce(new Error('ipc down'));
+    renderViewer({ kind: 'agent', agentId: 'bare:refuse' }, true);
+
+    await waitFor(() =>
+      expect(mocks.refuseTab).toHaveBeenCalledWith({
+        url: 'https://example.com/',
+        profile: { kind: 'agent', agentId: 'bare:refuse' },
+      })
+    );
   });
 
   it('keeps a Personal tab on the Personal partition without asking main', () => {

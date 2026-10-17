@@ -268,7 +268,9 @@
     },
     "profile": {
       "personal": "개인",
-      "newTabIn": "새 탭 열기 위치…"
+      "newTabIn": "새 탭 열기 위치…",
+      "unavailable": "이 에이전트의 브라우저 프로필을 열 수 없습니다.",
+      "retry": "다시 시도"
     }
   }
 }

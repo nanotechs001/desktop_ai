@@ -15,6 +15,7 @@ import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from 
 import { isBrowserMcpActivity, isBrowserMcpSettled } from '../browser/agentActivity';
 import { maybeNotifyFirstAgentBrowserUse } from '../browser/firstUseNotice';
 import {
+  PREVIEW_SCOPE_KEY_PREFIX,
   listPersistedPreviewScopeKeys,
   previewScopeOfConversation,
   previewScopeStorageKey,
@@ -578,6 +579,10 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
 const profileMetadata = (profile?: BrowserTabProfile): PreviewMetadata | undefined =>
   profile?.kind === 'agent' ? { profile: { kind: 'agent', agentId: profile.agentId } } : undefined;
 
+/** True for a browser tab in the given Agent's profile. */
+const isAgentProfileTab = (tab: PreviewTab, agentId: string): boolean =>
+  tab.content_type === 'browser' && tab.metadata?.profile?.kind === 'agent' && tab.metadata.profile.agentId === agentId;
+
 /** A fresh tab id; browser ids sort by creation time, which keeps their webviews' DOM order stable. */
 const createTabId = (type: PreviewContentType): string =>
   `${type}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -1035,6 +1040,35 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         })();
       }),
     [openAgentTabInBackground, openRequestedTabOnScreen]
+  );
+
+  // An Agent's browser profile is being deleted: its tabs go everywhere they live (on screen, mounted in the
+  // background, stored in other scopes), so none reopens on the deleted partition. Main closes their pages too.
+  useEffect(
+    () =>
+      ipcBridge.browser?.profileRemoved?.on(({ agentId }) => {
+        setBackground(backgroundRef.current.filter((entry) => !isAgentProfileTab(entry.tab, agentId)));
+        for (const key of listPersistedPreviewScopeKeys()) {
+          const scope = key.slice(PREVIEW_SCOPE_KEY_PREFIX.length);
+          const stored = loadScopeState(scope);
+          if (stored.tabs.some((tab) => isAgentProfileTab(tab, agentId))) {
+            persistScopeState(scope, {
+              ...stored,
+              tabs: stored.tabs.filter((tab) => !isAgentProfileTab(tab, agentId)),
+            });
+          }
+        }
+        setTabs((prevTabs) => {
+          const kept = prevTabs.filter((tab) => !isAgentProfileTab(tab, agentId));
+          if (kept.length === prevTabs.length || kept.some((tab) => tab.id === activeTabIdRef.current)) return kept;
+          const nextActive = kept.at(-1)?.id ?? null;
+          setActiveTabId(nextActive);
+          activeTabIdRef.current = nextActive;
+          if (!nextActive) setIsOpen(false);
+          return kept;
+        });
+      }),
+    [setBackground]
   );
 
   /**

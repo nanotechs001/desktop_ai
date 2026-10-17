@@ -268,7 +268,9 @@
     },
     "profile": {
       "personal": "個人",
-      "newTabIn": "在以下設定檔中新增標籤頁…"
+      "newTabIn": "在以下設定檔中新增標籤頁…",
+      "unavailable": "無法開啟此智慧體的瀏覽器設定檔。",
+      "retry": "重試"
     }
   }
 }

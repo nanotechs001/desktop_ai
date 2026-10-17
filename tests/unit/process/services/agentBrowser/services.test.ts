@@ -52,8 +52,9 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
   },
 }));
 
-const { startAgentBrowserServices } = await import('@process/services/agentBrowser/services');
-const { agentPartition, rememberBrowserSession } =
+const { agentTabProfile, liveAgentProfile, startAgentBrowserServices } =
+  await import('@process/services/agentBrowser/services');
+const { agentPartition, deleteAgentBrowserData, rememberBrowserSession } =
   await import('@process/services/browserSession/profiles/browserProfiles');
 
 /** Browser sessions as browserSession sets them up: Personal, the shared default Agent profile, and one Agent's. */
@@ -161,6 +162,31 @@ describe('agent browser services: IPC', () => {
   });
 });
 
+describe('agentTabProfile', () => {
+  it("uses the chat's Agent, and the default Agent profile once that Agent's browser data is deleted", async () => {
+    expect(await agentTabProfile(resolveAgent, 'conv-1')).toEqual({ kind: 'agent', agentId: 'bare:agent-1' });
+    const deleted = vi.fn(async () => ({ ok: true, agentId: 'bare:deleted' }) as const);
+    const folder = `/u/Partitions/${agentPartition('bare:deleted').slice('persist:'.length)}`;
+    const session = { storagePath: folder, clearStorageData: vi.fn(), clearCache: vi.fn(), clearAuthCache: vi.fn() };
+    await deleteAgentBrowserData('bare:deleted', {
+      userDataDir: '/u',
+      fromPartition: () => session,
+      closeLiveContents: async () => {},
+      unloadExtensions: () => {},
+      removeDir: async () => {},
+      forgetPartition: () => {},
+    });
+
+    expect(await agentTabProfile(deleted, 'conv-9')).toEqual(DEFAULT_AGENT_PROFILE);
+    // A client that connected before the deletion opens its next tab in the default Agent profile too.
+    expect(liveAgentProfile({ kind: 'agent', agentId: 'bare:deleted' })).toEqual(DEFAULT_AGENT_PROFILE);
+    expect(liveAgentProfile({ kind: 'agent', agentId: 'bare:agent-1' })).toEqual({
+      kind: 'agent',
+      agentId: 'bare:agent-1',
+    });
+  });
+});
+
 describe('agent browser services: tabs', () => {
   it('tracks a new tab before the createTarget waiter hands it out, then claims it', async () => {
     const relay = await start();
@@ -253,6 +279,24 @@ describe('agent browser services: tabs', () => {
     await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(2));
     const profiles = h.ipcBridge.browser.openTabRequested.emit.mock.calls.map(([event]) => event.profile);
     expect(profiles).toEqual([DEFAULT_AGENT_PROFILE, DEFAULT_AGENT_PROFILE]);
+  });
+
+  it("fails createTarget at once when the pane can't set the Agent's browser profile up", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: 'https://a.test/' });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalled());
+
+    expect(
+      await call('refuseTab', { url: 'https://a.test/', profile: { kind: 'agent', agentId: 'bare:agent-1' } })
+    ).toEqual({ success: true });
+
+    expect((await created).error?.message).toMatch(/browser profile/i);
+    expect(
+      await call('refuseTab', { url: 'https://a.test/', profile: { kind: 'agent', agentId: '../x' } })
+    ).toMatchObject({
+      success: false,
+    });
   });
 
   it('validates a tab refusal and ignores one nobody is waiting for', async () => {

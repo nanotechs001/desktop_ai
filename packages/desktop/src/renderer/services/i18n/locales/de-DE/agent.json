@@ -95,6 +95,6 @@
     "cleared": "Browserdaten gelöscht.",
     "clearFailed": "Die Browserdaten konnten nicht gelöscht werden.",
     "deleteWithAgent": "Auch seine Browserdaten löschen (Cookies, Anmeldungen, Websitedaten, Erweiterungen)",
-    "deleteFailed": "Der Agent wurde gelöscht, aber seine Browserdaten konnten nicht entfernt werden."
+    "deleteFailed": "Die Browserdaten dieses Agenten konnten nicht gelöscht werden, daher wurde der Agent behalten. Versuchen Sie es erneut."
   }
 }

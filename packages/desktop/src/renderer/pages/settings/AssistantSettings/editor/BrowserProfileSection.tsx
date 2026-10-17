@@ -22,9 +22,12 @@ const BrowserProfileSection: React.FC<BrowserProfileSectionProps> = ({ agentId }
 
   const handleClear = async () => {
     setClearing(true);
-    const reply = await ipcBridge.browser.clearProfileData.invoke({ agentId }).catch((): null => null);
+    const reply = await ipcBridge.browser.clearProfileData
+      .invoke({ agentId })
+      .catch((error: unknown) => ({ success: false, msg: error instanceof Error ? error.message : String(error) }));
     setClearing(false);
-    if (reply?.success) {
+    if (!reply.success) console.warn('[BrowserProfileSection] could not clear the browsing data:', reply.msg);
+    if (reply.success) {
       messageApi.success(t('agent.browserProfile.cleared', { defaultValue: 'Browsing data cleared.' }));
     } else {
       messageApi.error(t('agent.browserProfile.clearFailed', { defaultValue: "Couldn't clear the browsing data." }));

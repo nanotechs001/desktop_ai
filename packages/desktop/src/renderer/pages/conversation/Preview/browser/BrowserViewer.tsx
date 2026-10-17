@@ -18,6 +18,7 @@ import DownloadsButton from './BrowserChrome/DownloadsButton';
 import ExtensionActions from './BrowserChrome/ExtensionActions';
 import FindBar from './BrowserChrome/FindBar';
 import ProfileBadge from './BrowserProfiles/ProfileBadge';
+import ProfileErrorOverlay from './BrowserProfiles/ProfileErrorOverlay';
 import { useProfilePartition } from './BrowserProfiles/useBrowserProfiles';
 import { BROWSER_BLANK_URL, browserTabLabelFromUrl, resolveAddressBarInput } from './constants';
 import { useAgentBrowser } from './useAgentBrowser';
@@ -104,7 +105,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   profile,
 }) => {
   const preview = useOptionalPreviewContext();
-  const partition = useProfilePartition(profile);
+  const { partition, error: profileError, retry: retryProfile } = useProfilePartition(profile);
   const [webview, setWebview] = useState<Electron.WebviewTag | null>(null);
   // Known from did-attach, before dom-ready: a tab must honour a close request while its page still loads.
   const [attachedWebview, setAttachedWebview] = useState<Electron.WebviewTag | null>(null);
@@ -211,7 +212,8 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
           addressInputRef.current?.focus();
           break;
         case 'new-tab':
-          preview?.openBrowserTab();
+          // Like "Open link in new tab": the new tab stays in this tab's profile.
+          preview?.openBrowserTab(undefined, profile);
           break;
         case 'close-tab':
           onRequestClose?.(tabId);
@@ -236,7 +238,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
           break;
       }
     },
-    [tabId, findOpen, preview, onRequestClose, closeFind]
+    [tabId, findOpen, preview, onRequestClose, closeFind, profile]
   );
 
   // Main reports shortcuts for every browser page; only the webview whose id matches acts on them.
@@ -289,6 +291,16 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
       else if (webContentsId === current) onRequestClose?.(tabId);
     });
   }, [closable, tabId, onRequestClose]);
+
+  // An agent's tab that can't get its profile never attaches, so its agent is told now rather than at the timeout.
+  const refusedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!profileError || !agentOwnedHint || !profile || refusedFor.current === profileError) return;
+    refusedFor.current = profileError;
+    ipcBridge.agentBrowser.refuseTab
+      .invoke({ url, profile })
+      .catch((error: unknown) => console.warn('[BrowserViewer] could not refuse the agent tab request:', error));
+  }, [profileError, agentOwnedHint, profile, url]);
 
   // Only a change is reported, so an ordinary user tab never writes to the tab list; nor does a tab whose
   // ownership is not known yet, which would clear the mark an agent's tab is created with.
@@ -345,6 +357,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
       <div inert={!active}>
         {/* Mounted only while crashed or hung: any element here covers the webview and eats mouse input.
             Starts below the 40px nav bar (h-40px in WebviewHost) so the address bar stays usable. */}
+        {profileError && <ProfileErrorOverlay error={profileError} onRetry={retryProfile} />}
         {crashState && (
           <div className='absolute inset-x-0 bottom-0 top-40px'>
             <CrashOverlay

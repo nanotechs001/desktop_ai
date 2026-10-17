@@ -1404,6 +1404,8 @@ export type I18nKey =
   | 'preview.browserChrome.permission.title'
   | 'preview.browserChrome.profile.newTabIn'
   | 'preview.browserChrome.profile.personal'
+  | 'preview.browserChrome.profile.retry'
+  | 'preview.browserChrome.profile.unavailable'
   | 'preview.close'
   | 'preview.closeAll'
   | 'preview.closeLeft'

@@ -783,6 +783,9 @@ const handleAppReady = async (): Promise<void> => {
   try {
     const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
     const { resolveChatAgent } = await import('./process/artifacts');
+    const { onAgentProfileDeleted } = await import('./process/services/browserSession/profiles/browserProfiles');
+    // A deleted Agent's chats then resolve afresh (and its tabs fall back to the default Agent profile).
+    onAgentProfileDeleted((agentId) => resolveChatAgent.forgetAgent(agentId));
     // Always called: the pane's agent-browser IPC answers even while the user has agent control off.
     const agentBrowser = await startAgentBrowserServices({
       enabled: cdpStartupEnabled,

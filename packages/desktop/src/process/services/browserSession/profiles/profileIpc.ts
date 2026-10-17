@@ -5,9 +5,10 @@
  */
 
 import fs from 'node:fs/promises';
-import { app, session } from 'electron';
+import { BrowserWindow, app, session, webContents } from 'electron';
 import { ipcBridge } from '@/common';
-import { browserExtensionsSettled, ensureBrowserSession } from '../browserSession';
+import { browserExtensionsSettled, ensureBrowserSession, forgetBrowserSession } from '../browserSession';
+import { forgetPermissions } from '../permissions';
 import {
   agentPartition,
   clearBrowsingData,
@@ -17,6 +18,34 @@ import {
 } from './browserProfiles';
 
 type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
+
+/** How long a closing page may take before deletion goes on without it. */
+const CLOSE_TIMEOUT_MS = 3000;
+
+/** Closes every live page of `target` (tabs, popups, extension pages) and waits until each is gone or times out. */
+const closeSessionContents = async (target: Electron.Session): Promise<void> => {
+  const live = webContents.getAllWebContents().filter((contents) => contents.session === target);
+  await Promise.all(
+    live.map(
+      (contents) =>
+        new Promise<void>((resolve) => {
+          if (contents.isDestroyed()) return resolve();
+          const timer = setTimeout(resolve, CLOSE_TIMEOUT_MS);
+          contents.once('destroyed', () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          const popup = contents.getType() === 'window' ? BrowserWindow.fromWebContents(contents) : null;
+          if (popup) popup.destroy();
+          else contents.close();
+        })
+    )
+  );
+};
+
+const unloadExtensions = (target: Electron.Session): void => {
+  for (const extension of target.extensions.getAllExtensions()) target.extensions.removeExtension(extension.id);
+};
 
 const INVALID: Reply = { success: false, msg: 'Invalid arguments' };
 
@@ -50,7 +79,9 @@ export function registerBrowserProfileIpc(): void {
     const agentId = agentIdOf(request);
     if (agentId === null) return INVALID;
     try {
-      await clearBrowsingData(session.fromPartition(agentPartition(agentId)));
+      const partition = agentPartition(agentId);
+      await clearBrowsingData(session.fromPartition(partition));
+      forgetPermissions(partition);
       return { success: true };
     } catch (error) {
       return failure(error);
@@ -63,7 +94,17 @@ export function registerBrowserProfileIpc(): void {
       await deleteAgentBrowserData(agentId, {
         userDataDir: app.getPath('userData'),
         fromPartition: (partition) => session.fromPartition(partition),
+        closeLiveContents: async (target) => {
+          // The pane drops the profile's tabs (on screen, background and stored); main closes whatever is left.
+          ipcBridge.browser.profileRemoved.emit({ agentId });
+          await closeSessionContents(target as Electron.Session);
+        },
+        unloadExtensions: (target) => unloadExtensions(target as Electron.Session),
         removeDir: (dir) => fs.rm(dir, { recursive: true, force: true }),
+        forgetPartition: (partition) => {
+          forgetBrowserSession(partition);
+          forgetPermissions(partition);
+        },
       });
       return { success: true };
     } catch (error) {

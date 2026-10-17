@@ -9,7 +9,12 @@ import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
-import { partitionOfProfile, profileOfSession } from '@process/services/browserSession/profiles/browserProfiles';
+import {
+  isDeletedAgentProfile,
+  parseBrowserTabProfile,
+  partitionOfProfile,
+  profileOfSession,
+} from '@process/services/browserSession/profiles/browserProfiles';
 import { PendingConfirms } from './confirmGate';
 import { startRelayServer } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
@@ -38,6 +43,8 @@ const OFF: Reply = { success: false, msg: 'Agent browser control is off' };
 const UNKNOWN_TAB: Reply = { success: false, msg: 'No such browser tab' };
 const INVALID: Reply = { success: false, msg: 'Invalid arguments' };
 const UNKNOWN_CONFIRM: Reply = { success: false, msg: 'No such confirmation' };
+/** What an agent is told when the pane could not set its tab's browser profile up. */
+const PROFILE_UNAVAILABLE = "This Agent's browser profile is not available, so the tab could not open.";
 /** The pane's per-chat tab cap is small; a bigger `max` means a broken caller. */
 const MAX_REPORTED_TAB_CAP = 100;
 
@@ -131,9 +138,16 @@ const registerProviders = (
     })
   );
   // The pane refused a requested tab at its cap: the agent waiting for it gets the reason now, not a 15 s timeout.
-  ipcBridge.agentBrowser.refuseTab.provider(({ url, max, conversationId }) =>
+  ipcBridge.agentBrowser.refuseTab.provider(({ url, max, conversationId, profile }) =>
     guard(() => {
-      if (typeof url !== 'string' || !Number.isInteger(max) || max < 1 || max > MAX_REPORTED_TAB_CAP) return INVALID;
+      if (typeof url !== 'string') return INVALID;
+      if (profile !== undefined) {
+        const parsed = parseBrowserTabProfile(profile);
+        if (!parsed) return INVALID;
+        getWaiter()?.refuseInPartition(url, partitionOfProfile(parsed), new Error(PROFILE_UNAVAILABLE));
+        return { success: true };
+      }
+      if (typeof max !== 'number' || !Number.isInteger(max) || max < 1 || max > MAX_REPORTED_TAB_CAP) return INVALID;
       if (conversationId !== undefined && parseConversationId(conversationId) === undefined) return INVALID;
       getWaiter()?.refuse(url, conversationId, new Error(tabCapMessage(max)));
       return { success: true };
@@ -142,16 +156,22 @@ const registerProviders = (
 };
 
 /**
- * The profile an agent's tabs open in: its chat's Agent, else (another engine, a built-in, no chat, a failed lookup)
- * the shared default Agent profile. Never Personal.
+ * The profile an agent's tabs open in: its chat's Agent, else (another engine, a built-in, no chat, a failed lookup,
+ * an Agent whose browser data was deleted) the shared default Agent profile. Never Personal.
  */
 export async function agentTabProfile(
   resolveAgent: AgentBrowserOptions['resolveAgent'],
   conversationId: string | undefined
 ): Promise<BrowserTabProfile> {
   const resolved = conversationId && resolveAgent ? await resolveAgent(conversationId) : null;
-  return { kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID };
+  return liveAgentProfile({ kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID });
 }
+
+/** `profile`, or the default Agent profile once that Agent's browser data was deleted (a client connected before). */
+export const liveAgentProfile = (profile: BrowserTabProfile): BrowserTabProfile =>
+  profile.kind === 'agent' && isDeletedAgentProfile(profile.agentId)
+    ? { kind: 'agent', agentId: DEFAULT_AGENT_ID }
+    : profile;
 
 /**
  * Registers the agent-browser IPC and, when enabled, starts the agent relay over the in-app browser's
@@ -190,11 +210,11 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
         url,
         background: false,
         ...(conversationId ? { conversationId } : {}),
-        profile,
+        profile: liveAgentProfile(profile),
       }),
     // Only a tab in the profile's own partition answers, so a same-url tab elsewhere is never claimed.
     waitForTab: (url, conversationId, profile) =>
-      waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(profile)),
+      waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(liveAgentProfile(profile))),
     resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),

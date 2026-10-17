@@ -424,6 +424,21 @@ describe('createAgentResolver', () => {
     expect(await resolverWith({}).resolve('missing')).toEqual({ ok: false, message: 'No Agent for this chat' });
   });
 
+  it('forgetAgent drops the cached chats of a deleted Agent, so they are looked up again', async () => {
+    const { resolve, getConversation } = resolverWith({
+      c1: { assistant: { id: 'agent-1', source: 'user' } },
+      c2: { assistant: { id: 'agent-2', source: 'user' } },
+    });
+    await resolve('c1');
+    await resolve('c2');
+
+    resolve.forgetAgent('agent-1');
+    await resolve('c1');
+    await resolve('c2');
+
+    expect(getConversation.mock.calls.map(([id]) => id)).toEqual(['c1', 'c2', 'c1']);
+  });
+
   it('refuses built-in Agents (their rules are read-only) and bad conversation ids', async () => {
     const { resolve, getConversation } = resolverWith({ c1: { assistant: { id: 'word-creator', source: 'builtin' } } });
     expect(await resolve('c1')).toMatchObject({ ok: false });

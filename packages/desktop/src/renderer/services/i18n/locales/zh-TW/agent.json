@@ -95,6 +95,6 @@
     "cleared": "已清除瀏覽資料。",
     "clearFailed": "無法清除瀏覽資料。",
     "deleteWithAgent": "同時刪除它的瀏覽器資料（Cookie、登入狀態、網站資料、擴充功能）",
-    "deleteFailed": "智慧體已刪除，但無法移除它的瀏覽器資料。"
+    "deleteFailed": "無法刪除此智慧體的瀏覽器資料，因此保留了該智慧體。請重試。"
   }
 }

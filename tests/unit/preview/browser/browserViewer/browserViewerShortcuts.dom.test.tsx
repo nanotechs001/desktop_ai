@@ -5,9 +5,9 @@
  */
 
 import React from 'react';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BrowserShortcutRequest } from '@/common/types/browser';
+import type { BrowserShortcutRequest, BrowserTabProfile } from '@/common/types/browser';
 
 const mocks = vi.hoisted(() => ({
   openBrowserTab: vi.fn(),
@@ -23,7 +23,11 @@ vi.mock('@/common', () => ({
       agentAction: { on: () => () => {} },
       getOwnership: { invoke: () => Promise.resolve({ success: true, data: [] }) },
     },
+    assistants: { list: { invoke: () => Promise.resolve([]) } },
     browser: {
+      profilePartition: {
+        invoke: () => Promise.resolve({ success: true, data: 'persist:aionui-agent-0123456789abcdef0123456789abcdef' }),
+      },
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },
       shortcut: {
@@ -80,24 +84,27 @@ afterEach(() => {
   }
 });
 
-const mount = () => {
+const mount = (profile?: BrowserTabProfile) => {
   const onRequestClose = vi.fn();
   const { container } = render(
     <BrowserViewer
       url='https://example.com'
       tabId='tab-1'
+      profile={profile}
       onUrlChange={vi.fn()}
       onTitleChange={vi.fn()}
       onFaviconChange={vi.fn()}
       onRequestClose={onRequestClose}
     />
   );
-  act(() => {
-    container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
-  });
+  const ready = () =>
+    act(() => {
+      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+    });
+  ready();
   const send = (action: BrowserShortcutRequest['action'], webContentsId = OWN_ID) =>
     act(() => mocks.emit?.({ webContentsId, action }));
-  return { onRequestClose, send };
+  return { onRequestClose, send, ready, container };
 };
 
 describe('BrowserViewer shortcuts', () => {
@@ -118,7 +125,18 @@ describe('BrowserViewer shortcuts', () => {
     expect(mocks.openBrowserTab).not.toHaveBeenCalled();
 
     send('new-tab');
-    expect(mocks.openBrowserTab).toHaveBeenCalledWith();
+    expect(mocks.openBrowserTab).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  it('new-tab from a tab in an Agent profile opens the new tab in that same profile', async () => {
+    const profile = { kind: 'agent', agentId: 'bare:shortcut' } as const;
+    const { send, ready, container } = mount(profile);
+    await waitFor(() => expect(container.querySelector('webview')).not.toBeNull());
+    ready();
+
+    send('new-tab');
+
+    expect(mocks.openBrowserTab).toHaveBeenCalledWith(undefined, profile);
   });
 
   it('find shows the find bar and escape clears the search and hides it', () => {
@@ -213,7 +231,7 @@ describe('BrowserViewer shortcuts typed into its own controls', () => {
     expect(WEBVIEW_STUBS.reloadIgnoringCache).toHaveBeenCalledTimes(1);
     expect(WEBVIEW_STUBS.goBack).toHaveBeenCalledTimes(1);
     expect(WEBVIEW_STUBS.goForward).toHaveBeenCalledTimes(1);
-    expect(mocks.openBrowserTab).toHaveBeenCalledWith();
+    expect(mocks.openBrowserTab).toHaveBeenCalledWith(undefined, undefined);
     expect(onRequestClose).toHaveBeenCalledWith('tab-1');
     const findInput = screen.getByPlaceholderText('preview.browserChrome.find.placeholder');
     expect(findInput).toBeTruthy();

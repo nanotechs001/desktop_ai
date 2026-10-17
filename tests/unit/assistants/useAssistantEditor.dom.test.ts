@@ -166,7 +166,7 @@ describe('useAssistantEditor', () => {
       });
     };
 
-    it('deletes its browser data after the Agent when asked to', async () => {
+    it('deletes its browser data before the Agent when asked to', async () => {
       const order: string[] = [];
       (ipcBridge.assistants.delete.invoke as any).mockImplementation(async () => order.push('agent'));
       (ipcBridge.browser.deleteProfileData.invoke as any).mockImplementation(async () => {
@@ -177,28 +177,30 @@ describe('useAssistantEditor', () => {
       await deleteWith(true);
 
       expect(ipcBridge.browser.deleteProfileData.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
-      expect(order).toEqual(['agent', 'browser data']);
+      expect(order).toEqual(['browser data', 'agent']);
       expect(mockMessage.success).toHaveBeenCalled();
     });
 
-    it('keeps the browser data when not asked, or when the Agent could not be deleted', async () => {
+    it('keeps the browser data when not asked', async () => {
       (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
       await deleteWith(false);
-      (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('nope'));
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      await deleteWith(true);
 
       expect(ipcBridge.browser.deleteProfileData.invoke).not.toHaveBeenCalled();
+      expect(ipcBridge.assistants.delete.invoke).toHaveBeenCalledWith({ id: 'bare:gone' });
     });
 
-    it('still reports the Agent deleted, with a warning, when its browser data could not be removed', async () => {
-      (ipcBridge.assistants.delete.invoke as any).mockResolvedValue(undefined);
-      (ipcBridge.browser.deleteProfileData.invoke as any).mockResolvedValue({ success: false, msg: 'busy' });
-
+    it('keeps the Agent, and says so, when its browser data could not be removed', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      (ipcBridge.browser.deleteProfileData.invoke as any).mockResolvedValueOnce({ success: false, msg: 'busy' });
+      await deleteWith(true);
+      (ipcBridge.browser.deleteProfileData.invoke as any).mockRejectedValueOnce(new Error('ipc down'));
       await deleteWith(true);
 
-      expect(mockMessage.warning).toHaveBeenCalledWith('agent.browserProfile.deleteFailed');
-      expect(mockMessage.success).toHaveBeenCalled();
+      expect(ipcBridge.assistants.delete.invoke).not.toHaveBeenCalled();
+      expect(mockMessage.error).toHaveBeenCalledWith('agent.browserProfile.deleteFailed');
+      expect(mockMessage.success).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('browser data'), 'busy');
+      warn.mockRestore();
     });
   });
 

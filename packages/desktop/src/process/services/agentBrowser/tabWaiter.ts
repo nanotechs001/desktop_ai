@@ -83,6 +83,16 @@ export class CreateTabWaiter<T> {
     return true;
   }
 
+  /** The pane can't open `url` in that browser partition (its profile failed): the oldest such request fails now. */
+  refuseInPartition(url: string, partition: string, error: Error): boolean {
+    const normalized = normalizeTabUrl(url);
+    const match = this.pending.find((entry) => entry.url === normalized && entry.partition === partition);
+    if (!match) return false;
+    this.pending = this.pending.filter((entry) => entry !== match);
+    match.reject(error);
+    return true;
+  }
+
   /** Offers a new tab (of `partition`) whose first main-frame navigation went to `url`; true when a waiter took it. */
   offer(contents: T, url: string, partition?: string): boolean {
     const normalized = normalizeTabUrl(url);

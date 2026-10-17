@@ -595,6 +595,18 @@ describe('ensureBrowserSession (Agent profiles)', () => {
     });
   });
 
+  it('forgetBrowserSession drops the cached session, so the next ensure sets it up afresh', async () => {
+    const { mod, partition } = await setup();
+    mod.ensureBrowserSession(partition);
+    mocks.fromPartition.mockClear();
+
+    mod.forgetBrowserSession(partition);
+    mod.ensureBrowserSession(partition);
+
+    expect(mocks.fromPartition).toHaveBeenCalledWith(partition);
+    expect(mocks.initBrowserExtensions).toHaveBeenCalledTimes(3);
+  });
+
   it('refuses partitions that are not a browser profile, and any call before init', async () => {
     const mod = await loadModule();
     const { agentPartition } = await loadProfiles();

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
@@ -26,14 +26,19 @@ export function useProfileAgents(enabled = true): Assistant[] {
   return useMemo(() => (data ?? []).filter((agent) => agent.source !== 'builtin'), [data]);
 }
 
+/** A tab's partition: set once main has the profile up; `error` says why it could not be, until `retry`. */
+export type ProfilePartition = { partition: string | null; error: string | null; retry: () => void };
+
 /**
- * The partition a browser tab of `profile` must use: Personal's at once, an Agent's once main has set its session up
- * (null until then, and after a failure, which is logged). A webview's partition can't change after it attaches, so
- * the caller mounts the webview only once this is known.
+ * The partition a browser tab of `profile` must use: Personal's at once, an Agent's once main has set its session up.
+ * Until then `partition` is null; after a failure (logged) `error` holds the reason and `retry` asks again. A
+ * webview's partition can't change after it attaches, so the caller mounts the webview only once it is known.
  */
-export function useProfilePartition(profile: BrowserTabProfile | undefined): string | null {
+export function useProfilePartition(profile: BrowserTabProfile | undefined): ProfilePartition {
   const agentId = profile?.kind === 'agent' ? profile.agentId : null;
   const [, refresh] = useReducer((count: number) => count + 1, 0);
+  const [failure, setFailure] = useState<{ agentId: string; message: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (agentId === null || agentPartitions.has(agentId)) return;
@@ -45,12 +50,21 @@ export function useProfilePartition(profile: BrowserTabProfile | undefined): str
         agentPartitions.set(agentId, reply.data);
         if (live) refresh();
       })
-      .catch((error: unknown) => console.warn('[BrowserProfiles] could not set up the Agent browser profile:', error));
+      .catch((error: unknown) => {
+        console.warn('[BrowserProfiles] could not set up the Agent browser profile:', error);
+        if (live) setFailure({ agentId, message: error instanceof Error ? error.message : String(error) });
+      });
     return () => {
       live = false;
     };
-  }, [agentId]);
+  }, [agentId, attempt]);
 
-  if (agentId === null) return BROWSER_SESSION_PARTITION;
-  return agentPartitions.get(agentId) ?? null;
+  const retry = useCallback(() => {
+    setFailure(null);
+    setAttempt((count) => count + 1);
+  }, []);
+
+  if (agentId === null) return { partition: BROWSER_SESSION_PARTITION, error: null, retry };
+  const error = failure?.agentId === agentId ? failure.message : null;
+  return { partition: agentPartitions.get(agentId) ?? null, error, retry };
 }

@@ -62,6 +62,18 @@ describe('CreateTabWaiter', () => {
     await expect(agentTab).resolves.toBe(rightTab);
   });
 
+  it("refuseInPartition fails the oldest request for that url in that profile's partition", async () => {
+    const waiter = new CreateTabWaiter<FakeContents>();
+    const other = waiter.wait('https://a.test/', 1000, 'conv-1', 'persist:aionui-agent-y');
+    const target = waiter.wait('https://a.test/', 1000, 'conv-2', 'persist:aionui-agent-x');
+
+    expect(waiter.refuseInPartition('https://a.test/', 'persist:aionui-agent-x', new Error('no profile'))).toBe(true);
+    await expect(target).rejects.toThrow('no profile');
+    expect(waiter.refuseInPartition('https://a.test/', 'persist:aionui-agent-x', new Error('again'))).toBe(false);
+    expect(waiter.offer(new FakeContents(1), 'https://a.test/', 'persist:aionui-agent-y')).toBe(true);
+    await expect(other).resolves.toBeDefined();
+  });
+
   it('gives two requests for the same url one tab each, oldest first', async () => {
     const waiter = new CreateTabWaiter<FakeContents>();
     const first = waiter.wait('about:blank', 1000);

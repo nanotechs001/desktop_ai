@@ -241,13 +241,18 @@ export type AgentLookupDeps = {
 
 const NO_AGENT: AgentResolution = { ok: false, message: 'No Agent for this chat' };
 
+/** A chat → Agent lookup; `forgetAgent` drops the cached chats of an Agent that is gone. */
+export type AgentResolver = ((conversationId: string) => Promise<AgentResolution>) & {
+  forgetAgent(agentId: string): void;
+};
+
 /**
  * Resolves a chat to the Agent that owns its notebook: the chat's assistant, else the default Agent.
- * Successful answers are cached for the server's lifetime; failures are retried next time.
+ * Successful answers are cached for the server's lifetime (until `forgetAgent`); failures are retried next time.
  */
-export function createAgentResolver(deps: AgentLookupDeps): (conversationId: string) => Promise<AgentResolution> {
+export function createAgentResolver(deps: AgentLookupDeps): AgentResolver {
   const cache = new Map<string, string>();
-  return async (conversationId) => {
+  const resolve = async (conversationId: string): Promise<AgentResolution> => {
     if (!CONVERSATION_ID_RE.test(conversationId)) return NO_AGENT;
     const cached = cache.get(conversationId);
     if (cached) return { ok: true, agentId: cached };
@@ -266,6 +271,10 @@ export function createAgentResolver(deps: AgentLookupDeps): (conversationId: str
       return { ok: false, message: "Couldn't look up this chat's Agent" };
     }
   };
+  const forgetAgent = (agentId: string): void => {
+    for (const [conversationId, cached] of cache) if (cached === agentId) cache.delete(conversationId);
+  };
+  return Object.assign(resolve, { forgetAgent });
 }
 
 /** What the artifact server needs to serve `POST /api/notes/add`. */

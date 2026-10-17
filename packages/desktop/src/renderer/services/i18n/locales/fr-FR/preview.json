@@ -268,7 +268,9 @@
     },
     "profile": {
       "personal": "Personnel",
-      "newTabIn": "Nouvel onglet dans…"
+      "newTabIn": "Nouvel onglet dans…",
+      "unavailable": "Le profil de navigateur de cet Agent n'a pas pu être ouvert.",
+      "retry": "Réessayer"
     }
   }
 }

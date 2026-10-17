@@ -268,7 +268,9 @@
     },
     "profile": {
       "personal": "个人",
-      "newTabIn": "在以下资料中新建标签页…"
+      "newTabIn": "在以下资料中新建标签页…",
+      "unavailable": "无法打开此智能体的浏览器资料。",
+      "retry": "重试"
     }
   }
 }

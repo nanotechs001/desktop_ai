@@ -268,7 +268,9 @@
     },
     "profile": {
       "personal": "Pessoal",
-      "newTabIn": "Nova aba em…"
+      "newTabIn": "Nova aba em…",
+      "unavailable": "Não foi possível abrir o perfil do navegador deste Agente.",
+      "retry": "Tentar novamente"
     }
   }
 }

@@ -619,24 +619,29 @@ export const useAssistantEditor = ({
     setDeleteConfirmVisible(true);
   };
 
-  /** Deletes the Agent, then (only once it is gone, and when asked) its browser profile. */
+  /**
+   * Deletes the Agent, its browser profile first when asked: if that fails the Agent stays, so nothing is left
+   * orphaned, and the user is told.
+   */
   const handleDeleteConfirm = async (deleteBrowserData = false) => {
     if (!activeAssistant) return;
 
     try {
-      await ipcBridge.assistants.delete.invoke({ id: activeAssistant.id });
       if (deleteBrowserData) {
         const reply = await ipcBridge.browser.deleteProfileData
           .invoke({ agentId: activeAssistant.id })
-          .catch((): null => null);
-        if (!reply?.success) {
-          message.warning(
+          .catch((error: unknown) => ({ success: false, msg: error instanceof Error ? error.message : String(error) }));
+        if (!reply.success) {
+          console.warn('[useAssistantEditor] could not delete the Agent browser data:', reply.msg);
+          message.error(
             t('agent.browserProfile.deleteFailed', {
-              defaultValue: "The Agent was deleted, but its browser data couldn't be removed.",
+              defaultValue: "Couldn't delete this Agent's browser data, so the Agent was kept. Try again.",
             })
           );
+          return;
         }
       }
+      await ipcBridge.assistants.delete.invoke({ id: activeAssistant.id });
       await refreshAssistantCatalog();
       setDeleteConfirmVisible(false);
       setEditVisible(false);

@@ -1499,8 +1499,10 @@ export const browser = {
   profilePartition: bridge.buildProvider<IBridgeResponse<string>, BrowserTabProfile>('browser.profile-partition'),
   // clears an Agent profile's cookies, site data and caches (Personal has application.clearBrowserData)
   clearProfileData: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('browser.clear-profile-data'),
-  // a deleted Agent's browser data: its session is cleared, then its partition folder removed
+  // a deleted Agent's browser data: its pages closed, extensions unloaded, session cleared, partition folder removed
   deleteProfileData: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('browser.delete-profile-data'),
+  // main → renderer: an Agent's browser profile is being deleted; drop its tabs everywhere (on screen, background, stored)
+  profileRemoved: bridge.buildEmitter<{ agentId: string }>('browser.profile-removed'),
   getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
   openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),
   showDownloadInFolder: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.show-download-in-folder'),
@@ -1553,10 +1555,12 @@ export const agentBrowser = {
   ensureDefaultAgent: bridge.buildProvider<IBridgeResponse<void>, void>('agent-browser.ensure-default-agent'),
   // main → renderer: the default Agent exists with this assistant id
   defaultAgentReady: bridge.buildEmitter<{ id: string }>('agent-browser.default-agent-ready'),
-  // the pane refused an openTabRequested at its tab cap (max); the agent of that chat waiting for that url fails at once
-  refuseTab: bridge.buildProvider<IBridgeResponse<void>, { url: string; max: number; conversationId?: string }>(
-    'agent-browser.refuse-tab'
-  ),
+  // the pane refused an openTabRequested at its tab cap (max), or could not set the tab's browser profile up
+  // (profile); the agent waiting for that url (in that chat, or in that profile) fails at once
+  refuseTab: bridge.buildProvider<
+    IBridgeResponse<void>,
+    { url: string; max?: number; conversationId?: string; profile?: BrowserTabProfile }
+  >('agent-browser.refuse-tab'),
 };
 
 // An Agent's notebook, as the user sees it in the Agent editor (agents add notes through the aionui-notes MCP).

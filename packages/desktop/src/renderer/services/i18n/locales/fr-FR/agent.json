@@ -95,6 +95,6 @@
     "cleared": "Données de navigation effacées.",
     "clearFailed": "Impossible d'effacer les données de navigation.",
     "deleteWithAgent": "Supprimer aussi ses données de navigateur (cookies, connexions, données de sites, extensions)",
-    "deleteFailed": "L'Agent a été supprimé, mais ses données de navigateur n'ont pas pu être retirées."
+    "deleteFailed": "Impossible de supprimer les données de navigateur de cet Agent ; l'Agent a donc été conservé. Réessayez."
   }
 }

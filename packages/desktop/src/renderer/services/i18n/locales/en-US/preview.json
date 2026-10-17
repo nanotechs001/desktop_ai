@@ -268,7 +268,9 @@
     },
     "profile": {
       "personal": "Personal",
-      "newTabIn": "New tab in…"
+      "newTabIn": "New tab in…",
+      "unavailable": "This Agent's browser profile couldn't be opened.",
+      "retry": "Retry"
     }
   }
 }

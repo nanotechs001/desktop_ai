@@ -26,6 +26,9 @@ export const PERSONAL_PROFILE: BrowserTabProfile = { kind: 'personal' };
 const agentIdByPartition = new Map<string, string>();
 /** The partition of every browser session that was set up (see ensureBrowserSession). */
 const partitionBySession = new Map<Electron.Session, string>();
+/** Partitions whose Agent's browser data was deleted in this run: never a browser profile again. */
+const deletedPartitions = new Set<string>();
+const deletedListeners = new Set<(agentId: string) => void>();
 
 /**
  * The persistent partition of an Agent's browser profile: `persist:aionui-agent-` plus the first 32 hex chars
@@ -46,6 +49,7 @@ export const partitionOfProfile = (profile: BrowserTabProfile): string =>
 /** The profile behind a partition: Personal, an Agent this process computed the partition for, or null. */
 export function profileOfPartition(partition: string): BrowserTabProfile | null {
   if (partition === BROWSER_SESSION_PARTITION) return PERSONAL_PROFILE;
+  if (deletedPartitions.has(partition)) return null;
   const agentId = agentIdByPartition.get(partition);
   return agentId === undefined ? null : { kind: 'agent', agentId };
 }
@@ -67,6 +71,17 @@ export function rememberBrowserSession(partition: string, session: Electron.Sess
 /** The partition of a browser session that was set up; null for every other session. */
 export const partitionOfSession = (session: Electron.Session): string | null => partitionBySession.get(session) ?? null;
 
+/** True once the Agent's browser data was deleted in this run; its chats then use the default Agent profile. */
+export const isDeletedAgentProfile = (agentId: string): boolean => deletedPartitions.has(agentPartition(agentId));
+
+/** Calls `listener` with the id of each Agent whose browser data is deleted. Returns an unsubscribe. */
+export function onAgentProfileDeleted(listener: (agentId: string) => void): () => void {
+  deletedListeners.add(listener);
+  return () => {
+    deletedListeners.delete(listener);
+  };
+}
+
 /** The profile of a browser session that was set up; null for every other session. */
 export const profileOfSession = (session: Electron.Session): BrowserTabProfile | null => {
   const partition = partitionOfSession(session);
@@ -82,15 +97,25 @@ export async function clearBrowsingData(session: ClearableSession): Promise<void
   await session.clearAuthCache();
 }
 
+type DeletableSession = ClearableSession & { readonly storagePath: string | null };
+
 export type DeleteProfileDeps = {
   userDataDir: string;
-  fromPartition(partition: string): ClearableSession & { readonly storagePath: string | null };
+  fromPartition(partition: string): DeletableSession;
+  /** Drops the profile's tabs from the pane and closes every live page of the session. */
+  closeLiveContents(session: DeletableSession, profile: BrowserTabProfile): Promise<void>;
+  /** Unloads the session's extensions. */
+  unloadExtensions(session: DeletableSession): void;
   removeDir(dir: string): Promise<void>;
+  /** Forgets what main keeps for the partition elsewhere (session caches, remembered permissions). */
+  forgetPartition(partition: string): void;
 };
 
 /**
- * Deletes an Agent's browser data: clears its session, then removes `<userData>/Partitions/<name>`. Refuses (throws,
- * removing nothing) unless Electron's own storage path for the partition is exactly that folder.
+ * Deletes an Agent's browser data for good: closes its pages, unloads its extensions, clears its session, removes
+ * `<userData>/Partitions/<name>`, then forgets the partition, so it is never set up again in this run, and tells
+ * {@link onAgentProfileDeleted} listeners. Refuses (throws, touching nothing) unless Electron's own storage path for
+ * the partition is exactly that folder. A failed step throws and leaves the profile known.
  */
 export async function deleteAgentBrowserData(agentId: string, deps: DeleteProfileDeps): Promise<void> {
   const partition = agentPartition(agentId);
@@ -101,6 +126,21 @@ export async function deleteAgentBrowserData(agentId: string, deps: DeleteProfil
   if (storagePath !== folder || path.dirname(folder) !== partitionsRoot) {
     throw new Error('The Agent browser profile is not where it should be; nothing was deleted');
   }
+  await deps.closeLiveContents(session, { kind: 'agent', agentId });
+  deps.unloadExtensions(session);
   await clearBrowsingData(session);
   await deps.removeDir(folder);
+
+  deps.forgetPartition(partition);
+  deletedPartitions.add(partition);
+  for (const [known, knownPartition] of partitionBySession) {
+    if (knownPartition === partition) partitionBySession.delete(known);
+  }
+  for (const listener of deletedListeners) {
+    try {
+      listener(agentId);
+    } catch (error) {
+      console.error('[BrowserProfiles] a profile-deleted listener failed:', error);
+    }
+  }
 }

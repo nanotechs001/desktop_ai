@@ -95,6 +95,6 @@
     "cleared": "Datos de navegación borrados.",
     "clearFailed": "No se pudieron borrar los datos de navegación.",
     "deleteWithAgent": "Borrar también sus datos del navegador (cookies, sesiones, datos de sitios, extensiones)",
-    "deleteFailed": "El Agente se eliminó, pero no se pudieron quitar sus datos del navegador."
+    "deleteFailed": "No se pudieron borrar los datos del navegador de este Agente, así que se conservó el Agente. Inténtalo de nuevo."
   }
 }

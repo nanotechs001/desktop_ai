@@ -14,10 +14,16 @@ import React, { useState } from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type OpenTabRequest = { url: string; background: boolean; conversationId?: string };
+type OpenTabRequest = {
+  url: string;
+  background: boolean;
+  conversationId?: string;
+  profile?: { kind: 'personal' } | { kind: 'agent'; agentId: string };
+};
 
 const h = vi.hoisted(() => ({
   openTab: null as ((request: OpenTabRequest) => void) | null,
+  profileRemoved: null as ((event: { agentId: string }) => void) | null,
   refuseTab: vi.fn(async () => ({ success: true })),
   mounts: new Map<string, number>(),
   /** While set, chat lookups wait for it (to interleave a logout). */
@@ -33,6 +39,12 @@ vi.mock('@/common', () => ({
       openTabRequested: {
         on: (handler: (request: OpenTabRequest) => void) => {
           h.openTab = handler;
+          return () => {};
+        },
+      },
+      profileRemoved: {
+        on: (handler: (event: { agentId: string }) => void) => {
+          h.profileRemoved = handler;
           return () => {};
         },
       },
@@ -107,9 +119,9 @@ const ContextProbe: React.FC = () => {
 };
 
 const enterScope = (scope: string) => act(() => ctx.closePreviewIfScopeChanged(scope));
-const requestTab = async (url: string, conversationId?: string) => {
+const requestTab = async (url: string, conversationId?: string, profile?: OpenTabRequest['profile']) => {
   await act(async () => {
-    h.openTab?.({ url, background: false, conversationId });
+    h.openTab?.({ url, background: false, conversationId, profile });
   });
 };
 const tabIdOf = (url: string): string | undefined => ctx.liveBrowserTabs.find((tab) => tab.content === url)?.id;
@@ -210,6 +222,31 @@ describe('agent browser tabs outlive the panel', () => {
     expect([agentOwned('https://own.test/'), agentOwned('https://bg.test/'), agentOwned('https://page.test/')]).toEqual(
       ['true', 'true', 'false']
     );
+  });
+
+  it("drops a deleted Agent's tabs everywhere: on screen, in the background and in stored scopes", async () => {
+    const gone = { kind: 'agent', agentId: 'bare:gone' } as const;
+    const kept = { kind: 'agent', agentId: 'bare:kept' } as const;
+    render(<App />);
+    enterScope('proj-c');
+    act(() => ctx.openBrowserTab('https://stored-gone.test/', gone));
+    act(() => ctx.openBrowserTab('https://stored-kept.test/'));
+    enterScope('proj-a');
+    await requestTab('https://own-gone.test/', 'chat-a', gone);
+    await requestTab('https://own-kept.test/', 'chat-a', kept);
+    await requestTab('https://bg-gone.test/', 'chat-b', gone);
+    await waitFor(() => expect(tabIdOf('https://bg-gone.test/')).toBeDefined());
+    act(() => ctx.switchTab(tabIdOf('https://own-gone.test/') as string));
+
+    await act(async () => h.profileRemoved?.({ agentId: 'bare:gone' }));
+
+    expect(ctx.liveBrowserTabs.map((tab) => tab.content).toSorted()).toEqual([
+      'https://own-kept.test/',
+      'https://stored-kept.test/',
+    ]);
+    expect(ctx.activeTab?.content).toBe('https://own-kept.test/');
+    expect(storedTabUrls('proj-b')).toEqual([]);
+    expect(storedTabUrls('proj-c')).toEqual(['https://stored-kept.test/']);
   });
 
   it('opens a tab without a chat id (older MCP, other engines) in the chat on screen', async () => {
