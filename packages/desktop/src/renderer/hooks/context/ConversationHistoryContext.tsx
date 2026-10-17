@@ -24,7 +24,7 @@ export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({
   const { t } = useTranslation();
   const conversationListSync = useConversationListSync();
 
-  const { getJobStatus, markAsRead, setActiveConversation: setCronActiveConversation } = useCronJobsMap();
+  const { getJobStatus, markAsRead } = useCronJobsMap();
   const { pathname } = useLocation();
   const { setActiveConversation, clearCompletionUnread, clearManualUnread } = conversationListSync;
 
@@ -34,11 +34,12 @@ export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({
     const activeId = pathname.match(/^\/conversation\/([^/]+)/)?.[1] ?? null;
     setActiveConversation(activeId);
     if (activeId) {
-      setCronActiveConversation(activeId);
+      // Points cron tracking at the open chat and clears its unread scheduled run.
+      markAsRead(activeId);
       clearCompletionUnread(activeId);
       clearManualUnread(activeId);
     }
-  }, [pathname, setActiveConversation, setCronActiveConversation, clearCompletionUnread, clearManualUnread]);
+  }, [pathname, setActiveConversation, markAsRead, clearCompletionUnread, clearManualUnread]);
 
   const groupedHistory = useMemo(() => {
     return buildGroupedHistory(conversationListSync.conversations, t);

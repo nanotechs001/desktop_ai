@@ -46,15 +46,20 @@ const ownershipColor = {
   unknown_upstream: 'gray',
 };
 
-const resolveAgentTipBody = (
+/**
+ * A coded tip's localized body. The backend's `cli` param names the engine's CLI (a vendor name), so the body names
+ * the engine neutrally instead.
+ */
+export const resolveAgentTipBody = (
   content: string,
   code: IMessageTips['content']['code'],
   params: IMessageTips['content']['params'],
   t: ReturnType<typeof useTranslation>['t']
-) => {
+): string => {
   if (!code) return content;
   return t(`conversation.agentTip.codes.${code}.body`, {
     ...params,
+    ...(params && 'cli' in params ? { cli: t('agent.displayName') } : {}),
     defaultValue: content,
   });
 };

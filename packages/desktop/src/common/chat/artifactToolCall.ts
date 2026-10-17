@@ -1,4 +1,4 @@
-import { BUILTIN_ARTIFACTS_MCP_NAME } from '@/common/config/constants';
+import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_NOTES_MCP_NAME } from '@/common/config/constants';
 
 /** What the chat card needs from an `aionui-artifacts` create/update call. */
 export type ArtifactCardData = { title?: string; kind?: string; version: number; url: string };
@@ -6,6 +6,12 @@ export type ArtifactCardData = { title?: string; kind?: string; version: number;
 const TOOL_NAME = /^(?:create|update)$/;
 // `mcp__aionui-artifacts__create`, `aionui-artifacts.create`, `aionui-artifacts - update (MCP)`.
 const QUALIFIED_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_ARTIFACTS_MCP_NAME}[\\W_]+(?:create|update)\\b`);
+
+/** What the chat's "Saved to notebook" chip needs from an `aionui-notes` add call. */
+export type NoteChipData = { text: string; source: 'agent' | 'page' };
+
+// `mcp__aionui-notes__add`, `aionui-notes.add`, `aionui-notes - add (MCP)`.
+const QUALIFIED_NOTE_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_NOTES_MCP_NAME}[\\W_]+add\\b`);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -42,4 +48,21 @@ export const parseArtifactToolCall = (
   // Some engines hand the input over as text (a JSON string, or just a description).
   const fields = (typeof input === 'string' ? parseResult(input) : isRecord(input) ? input : undefined) ?? {};
   return { title: asText(fields.title), kind: asText(fields.kind), version: result.version, url };
+};
+
+/**
+ * Reads an add call of the built-in notes MCP: its result is the MCP's JSON `{ id, saved, text, source }`. Returns
+ * undefined for any other call and for an error or malformed result.
+ */
+export const parseNoteToolCall = (
+  name: string,
+  output: string | undefined,
+  server?: string
+): NoteChipData | undefined => {
+  if (!QUALIFIED_NOTE_TOOL_NAME.test(name) && !(server === BUILTIN_NOTES_MCP_NAME && name === 'add')) return undefined;
+  const result = parseResult(output);
+  const text = asText(result?.text);
+  const source = result?.source;
+  if (result?.saved !== true || !text || (source !== 'agent' && source !== 'page')) return undefined;
+  return { text, source };
 };

@@ -16,15 +16,9 @@ describe('resolveTeamWorkspaceView', () => {
     expect(view.isTemporaryWorkspace).toBe(true);
   });
 
-  it('marks Team-scoped temp workspace as temporary even when teams.workspace is non-empty', () => {
+  it('never guesses temporary from the folder name; only a missing teams.workspace is', () => {
     const view = resolveTeamWorkspaceView('/tmp/aion/conversations/team-temp-team123', '');
     expect(view.workspacePath).toBe('/tmp/aion/conversations/team-temp-team123');
-    expect(view.workspaceEnabled).toBe(true);
-    expect(view.isTemporaryWorkspace).toBe(true);
-  });
-
-  it('marks per-conversation temp workspace as temporary for compatibility display', () => {
-    const view = resolveTeamWorkspaceView('/tmp/aion/conversations/acp-temp-conv123', '');
-    expect(view.isTemporaryWorkspace).toBe(true);
+    expect(view.isTemporaryWorkspace).toBe(false);
   });
 });

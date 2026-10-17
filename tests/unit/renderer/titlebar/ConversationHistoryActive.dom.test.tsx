@@ -42,10 +42,11 @@ describe('ConversationHistoryProvider active conversation', () => {
     expect(sync.clearManualUnread).toHaveBeenCalledWith('abc');
   });
 
-  it('keeps cron unread tracking pointed at the open chat without any panel mounted', () => {
+  it("clears the open chat's cron unread mark and keeps cron tracking on it, without any panel mounted", () => {
     renderAt('/conversation/abc');
 
-    expect(cron.setActiveConversation).toHaveBeenLastCalledWith('abc');
+    // markAsRead both points cron tracking at the chat and clears its unread run.
+    expect(cron.markAsRead).toHaveBeenLastCalledWith('abc');
   });
 
   it('clears the active chat on other routes', () => {

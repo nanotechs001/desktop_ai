@@ -249,6 +249,20 @@ describe('agent browser tabs outlive the panel', () => {
     expect(storedTabUrls('proj-c')).toEqual(['https://stored-kept.test/']);
   });
 
+  it("closes the panel when every tab on screen was the deleted Agent's", async () => {
+    const gone = { kind: 'agent', agentId: 'bare:gone' } as const;
+    render(<App />);
+    enterScope('proj-a');
+    await requestTab('https://only-gone.test/', 'chat-a', gone);
+    expect(ctx.isOpen).toBe(true);
+
+    await act(async () => h.profileRemoved?.({ agentId: 'bare:gone' }));
+
+    expect(ctx.tabs).toEqual([]);
+    expect(ctx.activeTabId).toBeNull();
+    expect(ctx.isOpen).toBe(false);
+  });
+
   it('opens a tab without a chat id (older MCP, other engines) in the chat on screen', async () => {
     render(<App />);
     enterScope('proj-b');

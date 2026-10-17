@@ -55,7 +55,16 @@ export const useChatNavHistory = (): ChatNavHistory => {
     if (currentChatPath) setState((prev) => recordChatVisit(prev, currentChatPath));
   }, [currentChatPath]);
 
-  useEffect(() => addEventListener('conversation.deleted', (id) => setState((prev) => forgetChat(prev, id))), []);
+  // A deleted or archived chat leaves the list, so Back/Forward never land on it.
+  useEffect(() => {
+    const forget = (id: string) => setState((prev) => forgetChat(prev, id));
+    const offDeleted = addEventListener('conversation.deleted', forget);
+    const offArchived = addEventListener('conversation.archived', forget);
+    return () => {
+      offDeleted();
+      offArchived();
+    };
+  }, []);
 
   const { stack, cursor } = state;
   const onCursorChat = currentChatPath !== null && stack[cursor] === currentChatPath;

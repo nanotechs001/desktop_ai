@@ -37,5 +37,14 @@ export const entryToRootRef = (entry: ProjectEntryDto): RootRef => ({
   runtimeStatus: entry.runtime_status,
 });
 
-/** Full project detail → ordered pe roots for the projection. */
-export const toRootRefs = (detail: ProjectDetailDto): RootRef[] => detail.explorer.entries.map(entryToRootRef);
+/**
+ * Full project detail → ordered pe roots for the projection. With `temporaryWorkspaceTitle` (the chat's workspace
+ * is temporary) the workspace root shows that label instead of the backend's folder name, e.g. `claude-temp-<id>`.
+ */
+export const toRootRefs = (detail: ProjectDetailDto, temporaryWorkspaceTitle?: string): RootRef[] =>
+  detail.explorer.entries.map((entry) => {
+    const root = entryToRootRef(entry);
+    return temporaryWorkspaceTitle && entry.pe_id === detail.explorer.workspace_pe_id
+      ? { ...root, title: temporaryWorkspaceTitle }
+      : root;
+  });

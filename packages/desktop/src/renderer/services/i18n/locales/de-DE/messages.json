@@ -104,5 +104,11 @@
     "copyLink": "Link kopieren",
     "copied": "Link kopiert",
     "copyFailed": "Link konnte nicht kopiert werden"
+  },
+  "noteChip": {
+    "title": "Im Notizbuch gespeichert",
+    "fromChat": "In diesem Chat gelernt",
+    "fromPage": "Von einer Webseite · ungeprüft",
+    "open": "Notizbuch öffnen"
   }
 }

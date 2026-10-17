@@ -1,6 +1,6 @@
 import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup } from './chatLib';
 import { getAcpImagePath } from './acpToolCallOutput';
-import { parseArtifactToolCall, type ArtifactCardData } from './artifactToolCall';
+import { parseArtifactToolCall, parseNoteToolCall, type ArtifactCardData, type NoteChipData } from './artifactToolCall';
 
 export type NormalizedToolStatus = 'pending' | 'running' | 'completed' | 'error' | 'canceled';
 
@@ -17,6 +17,8 @@ export interface NormalizedToolCall {
   imagePath?: string;
   /** Set for a finished create/update call of the artifacts MCP; the summary renders a card for it. */
   artifact?: ArtifactCardData;
+  /** Set for a finished add call of the notes MCP; the summary renders a "Saved to notebook" chip for it. */
+  note?: NoteChipData;
 }
 
 const formatValue = (value: unknown): string => {
@@ -87,6 +89,11 @@ export function normalizeToolGroup(message: IMessageToolGroup): NormalizedToolCa
       artifact: parseArtifactToolCall(
         name,
         input,
+        getResultDisplayText(result_display),
+        type === 'mcp' ? confirmationDetails.server_name : undefined
+      ),
+      note: parseNoteToolCall(
+        name,
         getResultDisplayText(result_display),
         type === 'mcp' ? confirmationDetails.server_name : undefined
       ),
@@ -191,6 +198,7 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
     conversationId: message.conversation_id,
     imagePath: getAcpImagePath(update),
     artifact: parseArtifactToolCall(update.title, rawInput, output),
+    note: parseNoteToolCall(update.title, output),
   };
 }
 
@@ -229,6 +237,7 @@ export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall
     input: displayInput,
     output,
     artifact: parseArtifactToolCall(name, hasKeys(input) ? input : args, output),
+    note: parseNoteToolCall(name, output),
   };
 }
 

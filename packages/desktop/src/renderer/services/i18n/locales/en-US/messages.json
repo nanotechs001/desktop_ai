@@ -104,5 +104,11 @@
     "copyLink": "Copy link",
     "copied": "Link copied",
     "copyFailed": "Failed to copy the link"
+  },
+  "noteChip": {
+    "title": "Saved to notebook",
+    "fromChat": "Learned in this chat",
+    "fromPage": "From a web page · unverified",
+    "open": "Open notebook"
   }
 }

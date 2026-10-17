@@ -104,5 +104,11 @@
     "copyLink": "링크 복사",
     "copied": "링크를 복사했습니다",
     "copyFailed": "링크를 복사하지 못했습니다"
+  },
+  "noteChip": {
+    "title": "노트북에 저장됨",
+    "fromChat": "이 채팅에서 학습함",
+    "fromPage": "웹 페이지에서 · 확인되지 않음",
+    "open": "노트북 열기"
   }
 }

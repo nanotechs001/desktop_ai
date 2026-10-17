@@ -104,5 +104,11 @@
     "copyLink": "複製連結",
     "copied": "連結已複製",
     "copyFailed": "複製連結失敗"
+  },
+  "noteChip": {
+    "title": "已儲存到筆記本",
+    "fromChat": "在此對話中學到",
+    "fromPage": "來自網頁 · 未經核實",
+    "open": "開啟筆記本"
   }
 }

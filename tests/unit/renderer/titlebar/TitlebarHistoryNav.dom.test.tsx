@@ -32,7 +32,12 @@ vi.mock('@/renderer/components/layout/Titlebar/HistoryPanel', () => ({
     ) : null,
 }));
 vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({
-  default: ({ open }: { open?: boolean }) => <div data-testid='message-search' data-open={String(Boolean(open))} />,
+  // The popover owns Cmd/Ctrl+Shift+F and asks to open through onOpenChange(true); the span stands in for that key.
+  default: ({ open, onOpenChange }: { open?: boolean; onOpenChange?: (open: boolean) => void }) => (
+    <div data-testid='message-search' data-open={String(Boolean(open))}>
+      <span onClick={() => onOpenChange?.(true)}>shortcut-search-messages</span>
+    </div>
+  ),
 }));
 vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({ useChatNavHistory: () => nav }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
@@ -120,6 +125,17 @@ describe('Titlebar chat history controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'conversation.history.searchChats' }));
 
     fireEvent.click(screen.getByText('panel-search-messages'));
+
+    expect(screen.queryByTestId('history-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('message-search')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('closes the open history panel when Cmd+Shift+F opens message search', () => {
+    render(<Titlebar workspaceAvailable={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.history.searchChats' }));
+    expect(screen.getByTestId('history-panel')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('shortcut-search-messages'));
 
     expect(screen.queryByTestId('history-panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('message-search')).toHaveAttribute('data-open', 'true');

@@ -73,8 +73,6 @@ const renderActions = (onSessionClick?: () => void) =>
     useConversationActions({
       batchMode: false,
       onSessionClick,
-      selectedConversationIds: new Set(),
-      setSelectedConversationIds: vi.fn(),
       toggleSelectedConversation: vi.fn(),
       markAsRead: vi.fn(),
     })

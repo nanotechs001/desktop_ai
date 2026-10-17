@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   openBrowserTab: vi.fn(),
   copyText: vi.fn(),
   origin: vi.fn(),
+  getConversation: vi.fn(),
+  navigate: vi.fn(),
   preview: true,
 }));
 
@@ -20,8 +22,10 @@ vi.mock('@/common', () => ({
   ipcBridge: {
     database: { getConversationMessage: { invoke: vi.fn() } },
     artifacts: { origin: { invoke: mocks.origin } },
+    conversation: { get: { invoke: mocks.getConversation } },
   },
 }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key }),
 }));
@@ -52,6 +56,8 @@ beforeEach(() => {
   mocks.openBrowserTab.mockReset();
   mocks.copyText.mockReset().mockResolvedValue(undefined);
   mocks.origin.mockReset().mockResolvedValue({ success: true, data: ORIGIN });
+  mocks.getConversation.mockReset().mockResolvedValue({ id: 'c1', assistant: { id: 'sales-agent' } });
+  mocks.navigate.mockReset();
   mocks.preview = true;
 });
 
@@ -215,5 +221,73 @@ describe('MessageToolGroupSummary artifact cards', () => {
     expect(normalizeToolMessages(messages)[0].artifact).toBeUndefined();
     render(<MessageToolGroupSummary messages={messages} />);
     expect(screen.queryByText('v2')).toBeNull();
+  });
+});
+
+describe('MessageToolGroupSummary note chips', () => {
+  const noteCall = (over: Record<string, unknown> = {}): ToolMessage =>
+    ({
+      id: 'm3',
+      conversation_id: 'c1',
+      type: 'tool_call',
+      content: {
+        call_id: 'note-1',
+        name: 'mcp__aionui-notes__add',
+        args: { text: '<b>Prefers</b> metric units' },
+        input: { text: '<b>Prefers</b> metric units' },
+        status: 'completed',
+        output: JSON.stringify({ id: 'n1', saved: true, text: '<b>Prefers</b> metric units', source: 'agent' }),
+        ...over,
+      },
+    }) as unknown as ToolMessage;
+
+  it('shows a "Saved to notebook" chip outside the folded steps, with the note as text and its source', () => {
+    const { container } = render(<MessageToolGroupSummary messages={[noteCall()]} />);
+    expect(screen.getByText('messages.noteChip.title')).toBeInTheDocument();
+    expect(screen.getByText('<b>Prefers</b> metric units')).toBeInTheDocument();
+    expect(container.querySelector('b')).toBeNull();
+    expect(screen.getByText('messages.noteChip.fromChat')).toBeInTheDocument();
+    expect(container.querySelector('.tool-group-summary__body')).toBeNull();
+  });
+
+  it("labels a page note as from a page, and opens the chat Agent's notebook in the editor", async () => {
+    const output = JSON.stringify({ id: 'n2', saved: true, text: 'Login is at /signin', source: 'page' });
+    render(<MessageToolGroupSummary messages={[noteCall({ output })]} />);
+    expect(screen.getByText('messages.noteChip.fromPage')).toBeInTheDocument();
+
+    const open = screen.getByRole('button', { name: 'messages.noteChip.open' });
+    await waitFor(() => expect(open).not.toBeDisabled());
+    fireEvent.click(open);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/assistants', {
+        state: { openAssistantEditor: true, openAssistantId: 'sales-agent' },
+      })
+    );
+    expect(mocks.getConversation).toHaveBeenCalledWith({ id: 'c1' });
+  });
+
+  it("opens the default Agent's notebook for a chat without an Agent", async () => {
+    mocks.getConversation.mockResolvedValue({ id: 'c1' });
+    render(<MessageToolGroupSummary messages={[noteCall()]} />);
+    const open = screen.getByRole('button', { name: 'messages.noteChip.open' });
+    await waitFor(() => expect(open).not.toBeDisabled());
+    fireEvent.click(open);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/assistants', {
+        state: { openAssistantEditor: true, openAssistantId: 'aion-default-agent' },
+      })
+    );
+  });
+
+  it('shows no chip for a failed or still running add', () => {
+    render(
+      <MessageToolGroupSummary
+        messages={[
+          noteCall({ call_id: 'a', status: 'error', output: 'A chat saves at most 10 notes' }),
+          noteCall({ call_id: 'b', status: 'running' }),
+        ]}
+      />
+    );
+    expect(screen.queryByText('messages.noteChip.title')).toBeNull();
   });
 });

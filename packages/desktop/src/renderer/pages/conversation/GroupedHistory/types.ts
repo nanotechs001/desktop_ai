@@ -5,7 +5,6 @@
  */
 
 import type { TChatConversation } from '@/common/config/storage';
-import type { ReactNode } from 'react';
 
 export type WorkspaceGroup = {
   workspace: string;
@@ -61,6 +60,4 @@ export type ConversationRowProps = {
   resolveConversationName?: (conversation_id: string) => string | undefined;
   /** When true, the agent icon is dimmed by default and only shows full color on hover. Used inside project folders to reduce visual weight. */
   dimIcon?: boolean;
-  /** Hover-reveal drag handle overlaying the leading icon; supplied by the sortable wrapper for reorderable (pinned) rows. */
-  dragHandle?: ReactNode;
 };

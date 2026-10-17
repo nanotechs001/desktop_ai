@@ -118,10 +118,12 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
 
   const titlebarButtonClass = classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile');
 
-  const handleSearchMessages = () => {
-    setHistoryOpen(false);
-    setMessageSearchOpen(true);
+  // Message search opens over the chat, so the history drawer closes first (from its entry or Cmd/Ctrl+Shift+F).
+  const handleMessageSearchOpenChange = (open: boolean) => {
+    if (open) setHistoryOpen(false);
+    setMessageSearchOpen(open);
   };
+  const handleSearchMessages = () => handleMessageSearchOpenChange(true);
 
   const handleSiderToggle = () => {
     if (!showSiderToggle || !layout?.setSiderCollapsed) return;
@@ -391,7 +393,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       {!layout?.isMobile && (
         <ConversationSearchPopover
           open={messageSearchOpen}
-          onOpenChange={setMessageSearchOpen}
+          onOpenChange={handleMessageSearchOpenChange}
           renderTrigger={() => null}
         />
       )}

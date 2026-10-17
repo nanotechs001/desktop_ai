@@ -104,5 +104,11 @@
     "copyLink": "Copier le lien",
     "copied": "Lien copié",
     "copyFailed": "Échec de la copie du lien"
+  },
+  "noteChip": {
+    "title": "Enregistré dans le carnet",
+    "fromChat": "Appris dans cette discussion",
+    "fromPage": "D’une page web · non vérifié",
+    "open": "Ouvrir le carnet"
   }
 }

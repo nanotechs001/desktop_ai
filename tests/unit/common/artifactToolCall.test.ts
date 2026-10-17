@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseArtifactToolCall } from '@/common/chat/artifactToolCall';
+import { parseArtifactToolCall, parseNoteToolCall } from '@/common/chat/artifactToolCall';
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
 const url = `http://127.0.0.1:4300/a/${ID}`;
@@ -53,5 +53,41 @@ describe('parseArtifactToolCall', () => {
     expect(parseArtifactToolCall('mcp__aionui-artifacts__create', 'plain description', result)).toMatchObject({
       version: 2,
     });
+  });
+});
+
+describe('parseNoteToolCall', () => {
+  const saved = JSON.stringify({ id: 'n1', saved: true, text: 'Prefers metric units', source: 'agent' });
+
+  it.each(['mcp__aionui-notes__add', 'aionui-notes.add', 'aionui-notes - add (MCP)'])(
+    'reads the saved note of %s from its JSON result',
+    (name) => {
+      expect(parseNoteToolCall(name, saved)).toEqual({ text: 'Prefers metric units', source: 'agent' });
+    }
+  );
+
+  it('recognises a bare add when the server field names the notes server', () => {
+    expect(parseNoteToolCall('add', saved, 'aionui-notes')).toMatchObject({ text: 'Prefers metric units' });
+    expect(parseNoteToolCall('add', saved, 'other')).toBeUndefined();
+  });
+
+  it('keeps a page note marked as from a page', () => {
+    const page = JSON.stringify({ id: 'n2', saved: true, text: 'Login is at /signin', source: 'page' });
+    expect(parseNoteToolCall('mcp__aionui-notes__add', page)).toEqual({ text: 'Login is at /signin', source: 'page' });
+  });
+
+  it.each([
+    ['an error text', 'A chat saves at most 10 notes'],
+    ['an unsaved result', JSON.stringify({ saved: false, text: 'x', source: 'agent' })],
+    ['an unknown source', JSON.stringify({ saved: true, text: 'x', source: 'user' })],
+    ['a missing text', JSON.stringify({ saved: true, source: 'agent' })],
+    ['no output', undefined],
+  ])('ignores %s', (_label, output) => {
+    expect(parseNoteToolCall('mcp__aionui-notes__add', output)).toBeUndefined();
+  });
+
+  it('ignores other tools and servers', () => {
+    expect(parseNoteToolCall('mcp__aionui-artifacts__create', saved)).toBeUndefined();
+    expect(parseNoteToolCall('mcp__other-notes__add', saved)).toBeUndefined();
   });
 });

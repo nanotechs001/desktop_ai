@@ -9,6 +9,7 @@ import { getAcpImageFileName } from '@/common/chat/acpToolCallOutput';
 import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/common/chat/normalizeToolCall';
 import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
 import ArtifactCard from '@/renderer/pages/conversation/Messages/acp/ArtifactCard';
+import NoteSavedChip from '@/renderer/pages/conversation/Messages/acp/NoteSavedChip';
 import LocalImageView from '@/renderer/components/media/LocalImageView';
 import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import './MessageToolGroupSummary.css';
@@ -152,6 +153,8 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
   // Cards stay visible while the steps are folded: they are what the user asked the agent to make.
   const artifactTools = tools.filter((tool) => tool.artifact && tool.status === 'completed');
+  // Likewise a saved note: the user sees what the agent will remember.
+  const noteTools = tools.filter((tool) => tool.note && tool.status === 'completed');
 
   return (
     <div className='tool-group-summary'>
@@ -167,6 +170,11 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
       {artifactTools.map((tool) => (
         <div key={tool.key} className='m-y-8px'>
           <ArtifactCard {...tool.artifact} />
+        </div>
+      ))}
+      {noteTools.map((tool) => (
+        <div key={tool.key} className='m-y-8px'>
+          <NoteSavedChip {...tool.note} conversationId={messages[0]?.conversation_id} />
         </div>
       ))}
       {showMore && (

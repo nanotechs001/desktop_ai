@@ -11,7 +11,7 @@ import { refreshConversationCache } from '@/renderer/pages/conversation/utils/co
 import { isLegacyReadOnlyConversationType } from '@/renderer/pages/conversation/utils/conversationRuntime';
 import { emitter } from '@/renderer/utils/emitter';
 import { blockMobileInputFocus, blurActiveElement } from '@/renderer/utils/ui/focus';
-import { Message, Modal } from '@arco-design/web-react';
+import { Message } from '@arco-design/web-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -19,12 +19,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { isConversationPinned } from '../utils/groupingHelpers';
 
 type UseConversationActionsParams = {
-  /** Batch selection is optional: callers without a batch UI omit all of the batch params. */
+  /** Batch selection is optional: callers without a batch UI omit both batch params. */
   batchMode?: boolean;
   onSessionClick?: () => void;
-  onBatchModeChange?: (value: boolean) => void;
-  selectedConversationIds?: Set<string>;
-  setSelectedConversationIds?: React.Dispatch<React.SetStateAction<Set<string>>>;
   toggleSelectedConversation?: (conversation: TChatConversation) => void;
   markAsRead: (conversation_id: string) => void;
   markManualUnread: (conversation_id: string) => void;
@@ -32,15 +29,11 @@ type UseConversationActionsParams = {
   isManualUnread: (conversation_id: string) => boolean;
 };
 
-const NO_SELECTION: Set<string> = new Set();
 const ignoreSelection = () => {};
 
 export const useConversationActions = ({
   batchMode = false,
   onSessionClick,
-  onBatchModeChange,
-  selectedConversationIds = NO_SELECTION,
-  setSelectedConversationIds = ignoreSelection,
   toggleSelectedConversation = ignoreSelection,
   markAsRead,
   markManualUnread,
@@ -98,47 +91,6 @@ export const useConversationActions = ({
     },
     [id, navigate]
   );
-
-  const handleBatchArchive = useCallback(() => {
-    if (selectedConversationIds.size === 0) {
-      Message.warning(t('conversation.history.batchNoSelection'));
-      return;
-    }
-
-    Modal.confirm({
-      title: t('conversation.history.batchArchive'),
-      content: t('conversation.history.batchArchiveConfirm', { count: selectedConversationIds.size }),
-      okText: t('conversation.history.batchArchive'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        // No batch endpoint exists; archive each selected conversation on its
-        // own. The active list (both read models) drops archived rows, so the
-        // refresh clears the selection's rows and the archive page picks them up.
-        const selectedIds = Array.from(selectedConversationIds);
-        try {
-          const results = await Promise.allSettled(
-            selectedIds.map((item_id) => ipcBridge.sidebar.archive.invoke({ item_type: 'conversation', item_id }))
-          );
-          const successCount = results.filter((r) => r.status === 'fulfilled').length;
-          emitter.emit('chat.history.refresh');
-          if (successCount > 0) {
-            Message.success(t('conversation.history.batchArchiveSuccess', { count: successCount }));
-          } else {
-            Message.error(t('conversation.history.archiveFailed'));
-          }
-        } catch (error) {
-          console.error('Failed to batch archive conversations:', error);
-          Message.error(t('conversation.history.archiveFailed'));
-        } finally {
-          setSelectedConversationIds(new Set());
-          onBatchModeChange?.(false);
-        }
-      },
-      style: { borderRadius: '12px' },
-      alignCenter: true,
-      getPopupContainer: () => document.body,
-    });
-  }, [onBatchModeChange, selectedConversationIds, t, setSelectedConversationIds]);
 
   const handleEditStart = useCallback((conversation: TChatConversation) => {
     setRenameModalId(conversation.id);
@@ -253,54 +205,6 @@ export const useConversationActions = ({
     [id, navigate, onSessionClick, t]
   );
 
-  /**
-   * Archive-project state — rendered via AionModal in the GroupedHistory component.
-   * The left panel groups conversations by workspace folder (not by a bound
-   * project record), so there is no project id to hand the `archiveProject`
-   * endpoint. Archiving the group therefore archives each conversation in it —
-   * the same soft move as the per-row and batch archive actions.
-   */
-  const [archiveProjectTarget, setArchiveProjectTarget] = useState<{
-    name: string;
-    conversations: TChatConversation[];
-  } | null>(null);
-  const [archiveProjectLoading, setArchiveProjectLoading] = useState(false);
-
-  const handleArchiveProject = useCallback((projectName: string, conversations: TChatConversation[]) => {
-    if (conversations.length === 0) return;
-    setArchiveProjectTarget({ name: projectName, conversations });
-  }, []);
-
-  const handleArchiveProjectCancel = useCallback(() => {
-    if (archiveProjectLoading) return;
-    setArchiveProjectTarget(null);
-  }, [archiveProjectLoading]);
-
-  const handleArchiveProjectConfirm = useCallback(async () => {
-    if (!archiveProjectTarget) return;
-    setArchiveProjectLoading(true);
-    try {
-      const results = await Promise.allSettled(
-        archiveProjectTarget.conversations.map((c) =>
-          ipcBridge.sidebar.archive.invoke({ item_type: 'conversation', item_id: c.id })
-        )
-      );
-      const successCount = results.filter((r) => r.status === 'fulfilled').length;
-      emitter.emit('chat.history.refresh');
-      if (successCount > 0) {
-        Message.success(t('conversation.history.batchArchiveSuccess', { count: successCount }));
-      } else {
-        Message.error(t('conversation.history.archiveFailed'));
-      }
-      setArchiveProjectTarget(null);
-    } catch (error) {
-      console.error('Failed to archive project:', error);
-      Message.error(t('conversation.history.archiveFailed'));
-    } finally {
-      setArchiveProjectLoading(false);
-    }
-  }, [archiveProjectTarget, t]);
-
   const handleArchive = useCallback(
     async (conversation: TChatConversation) => {
       // Archiving moves the conversation into the archived slice (the backend
@@ -310,6 +214,7 @@ export const useConversationActions = ({
       setDropdownVisibleId(null);
       try {
         await ipcBridge.sidebar.archive.invoke({ item_type: 'conversation', item_id: conversation.id });
+        emitter.emit('conversation.archived', conversation.id);
         emitter.emit('chat.history.refresh');
         Message.success(t('conversation.history.archiveSuccess'));
       } catch (error) {
@@ -327,7 +232,6 @@ export const useConversationActions = ({
     renameLoading,
     dropdownVisibleId,
     handleConversationClick,
-    handleBatchArchive,
     handleArchive,
     handleEditStart,
     handleRenameConfirm,
@@ -337,10 +241,5 @@ export const useConversationActions = ({
     handleOpenMenu,
     handleToggleManualUnread,
     handleCreateCronTask,
-    handleArchiveProject,
-    archiveProjectTarget,
-    archiveProjectLoading,
-    handleArchiveProjectCancel,
-    handleArchiveProjectConfirm,
   };
 };

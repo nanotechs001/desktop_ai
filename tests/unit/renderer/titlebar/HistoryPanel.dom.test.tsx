@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TChatConversation } from '@/common/config/storage';
+import { addEventListener } from '@/renderer/utils/emitter';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.now();
@@ -172,9 +173,14 @@ describe('HistoryPanel', () => {
       )
     );
 
+    // Back/Forward listen for this to forget the archived chat.
+    const archived = vi.fn();
+    const stopListening = addEventListener('conversation.archived', archived);
     fireEvent.click(screen.getByTestId('conversation-row-menu-t2'));
     fireEvent.click((await screen.findAllByText('conversation.history.archive')).at(-1) as HTMLElement);
     await waitFor(() => expect(ipc.archive).toHaveBeenCalledWith({ item_type: 'conversation', item_id: 't2' }));
+    await waitFor(() => expect(archived).toHaveBeenCalledWith('t2'));
+    stopListening();
   });
 
   it('opens message search from the header entry only when one is provided', () => {

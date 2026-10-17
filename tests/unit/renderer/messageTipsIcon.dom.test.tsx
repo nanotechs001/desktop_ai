@@ -14,7 +14,7 @@
  * guarantees a missing entry can never announce itself.
  */
 import type { IMessageTips } from '@/common/chat/chatLib';
-import { icon } from '@/renderer/pages/conversation/Messages/components/MessageTips';
+import { icon, resolveAgentTipBody } from '@/renderer/pages/conversation/Messages/components/MessageTips';
 import { describe, expect, it } from 'vitest';
 
 // Every member of the union, listed so adding one to `chatLib` and forgetting
@@ -37,5 +37,21 @@ describe('MessageTips icon map', () => {
   it('keeps the severity tiers visually distinct', () => {
     expect(icon.warning).not.toBe(icon.error);
     expect(icon.success).not.toBe(icon.info);
+  });
+});
+
+describe('agent tip bodies', () => {
+  const t = ((key: string, options?: Record<string, unknown>) =>
+    key === 'agent.displayName' ? 'Agent' : `${key} cli=${String(options?.cli)}`) as unknown as Parameters<
+    typeof resolveAgentTipBody
+  >[3];
+
+  it('names the engine neutrally, never with the CLI name the backend sends', () => {
+    const body = resolveAgentTipBody('The installed claude is older', 'CLI_VERSION_OLDER', { cli: 'claude' }, t);
+    expect(body).toBe('conversation.agentTip.codes.CLI_VERSION_OLDER.body cli=Agent');
+  });
+
+  it('keeps the plain content when there is no code', () => {
+    expect(resolveAgentTipBody('plain notice', undefined, { cli: 'claude' }, t)).toBe('plain notice');
   });
 });

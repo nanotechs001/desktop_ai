@@ -57,6 +57,8 @@ import {
 } from './explorerModel';
 import { initExplorerRuntime } from './monitorTransport';
 import { toRootRefs } from './projectRoots';
+import { getConversationOrNull } from '../utils/conversationCache';
+import { getWorkspaceDisplayName } from '@/renderer/utils/workspace/workspace';
 import { collapseAll, refreshRoot, reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
 import { SearchPanel } from './search/SearchPanel';
@@ -189,6 +191,14 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // never reach the tree — a mismatch yields no roots rather than another
   // project's (宁空勿画错).
   const detail = data && data.project_id === projectId ? data : undefined;
+  // Shares the chat page's cache entry. A temporary workspace root reads neutrally, not as the backend's folder name.
+  const { data: activeConversation } = useSWR(
+    activeConversationId ? `conversation/${activeConversationId}` : null,
+    () => getConversationOrNull(activeConversationId!)
+  );
+  const isTemporaryWorkspace =
+    activeConversation?.project_id === projectId &&
+    (activeConversation.extra as { is_temporary_workspace?: boolean } | undefined)?.is_temporary_workspace === true;
 
   // Let the workspace-collapse hook (keyed per-project via workspacePreferenceKey)
   // read + restore this project's panel open/closed preference. The hook starts
@@ -464,7 +474,9 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // another project's tree.
   if (!detail && isLoading) return <Spin loading />;
 
-  const roots = detail ? toRootRefs(detail) : [];
+  const roots = detail
+    ? toRootRefs(detail, isTemporaryWorkspace ? getWorkspaceDisplayName('', true, t) : undefined)
+    : [];
   // Search roots = the project's pe roots (each folder root, rel=''). fs/search
   // spans all bound folders; the front-end ranks the merged hit stream.
   const searchRoots = roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
@@ -564,7 +576,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
               onClick={handleAddFolder}
             />
           </Tooltip>
-          {workspacePath && <WorkspaceOpenButton workspacePath={workspacePath} isTemporary={false} />}
+          {workspacePath && <WorkspaceOpenButton workspacePath={workspacePath} isTemporary={isTemporaryWorkspace} />}
           <Tooltip
             content={
               activeTab === 'changes'

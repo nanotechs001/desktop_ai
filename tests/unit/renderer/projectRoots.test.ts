@@ -75,3 +75,25 @@ describe('toRootRefs', () => {
     expect(toRootRefs(detail)).toEqual([]);
   });
 });
+
+describe('toRootRefs for a temporary workspace', () => {
+  const detail: ProjectDetailDto = {
+    project_id: 'p1',
+    name: 'p1',
+    explorer: {
+      workspace_pe_id: 'pe-ws',
+      entries: [
+        entry({ pe_id: 'pe-ws', display_path: '/Users/me/.aionui/conversations/claude-temp-1760000000' }),
+        entry({ pe_id: 'pe-extra', role: 'attached', display_path: '/Users/me/app' }),
+      ],
+    },
+  };
+
+  it("names the workspace root with the neutral label, never the backend's folder name", () => {
+    expect(toRootRefs(detail, 'Temporary Session').map((root) => root.title)).toEqual(['Temporary Session', 'app']);
+  });
+
+  it('keeps folder names when the workspace is not temporary', () => {
+    expect(toRootRefs(detail).map((root) => root.title)).toEqual(['claude-temp-1760000000', 'app']);
+  });
+});

@@ -159,4 +159,34 @@ describe('useChatNavHistory', () => {
     act(() => result.current.back());
     expect(router.pathname).toBe('/conversation/a');
   });
+
+  it('forgets a deleted chat in the Forward part and keeps the rest of Forward', () => {
+    const { result } = renderNav();
+    go('/conversation/b');
+    go('/conversation/c');
+    go('/conversation/d');
+    act(() => result.current.back());
+    act(() => result.current.back());
+    expect(router.pathname).toBe('/conversation/b');
+
+    act(() => emitter.emit('conversation.deleted', 'c'));
+
+    expect(result.current.canForward).toBe(true);
+    act(() => result.current.forward());
+    expect(router.pathname).toBe('/conversation/d');
+    expect(result.current.canForward).toBe(false);
+    act(() => result.current.back());
+    expect(router.pathname).toBe('/conversation/b');
+  });
+
+  it('forgets an archived chat so Back never lands on it', () => {
+    const { result } = renderNav();
+    go('/conversation/b');
+    go('/conversation/c');
+
+    act(() => emitter.emit('conversation.archived', 'b'));
+    act(() => result.current.back());
+
+    expect(router.pathname).toBe('/conversation/a');
+  });
 });

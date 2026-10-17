@@ -1058,15 +1058,15 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
             });
           }
         }
-        setTabs((prevTabs) => {
-          const kept = prevTabs.filter((tab) => !isAgentProfileTab(tab, agentId));
-          if (kept.length === prevTabs.length || kept.some((tab) => tab.id === activeTabIdRef.current)) return kept;
-          const nextActive = kept.at(-1)?.id ?? null;
-          setActiveTabId(nextActive);
-          activeTabIdRef.current = nextActive;
-          if (!nextActive) setIsOpen(false);
-          return kept;
-        });
+        // Decided from tabsRef, so the updater stays pure: no state is set inside it.
+        const kept = tabsRef.current.filter((tab) => !isAgentProfileTab(tab, agentId));
+        if (kept.length === tabsRef.current.length) return;
+        setTabs((prevTabs) => prevTabs.filter((tab) => !isAgentProfileTab(tab, agentId)));
+        if (kept.some((tab) => tab.id === activeTabIdRef.current)) return;
+        const nextActive = kept.at(-1)?.id ?? null;
+        setActiveTabId(nextActive);
+        activeTabIdRef.current = nextActive;
+        if (!nextActive) setIsOpen(false);
       }),
     [setBackground]
   );
