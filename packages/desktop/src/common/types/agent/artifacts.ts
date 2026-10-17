@@ -13,6 +13,9 @@ export const ARTIFACT_LIMITS = {
   maxContentBytes: 2 * 1024 * 1024,
   maxTitleChars: 120,
   maxPerConversation: 200,
+  maxVersionsPerArtifact: 50,
+  /** Every version of every artifact in one conversation, in bytes on disk. */
+  maxBytesPerConversation: 200 * 1024 * 1024,
 } as const;
 
 export type ArtifactMeta = {

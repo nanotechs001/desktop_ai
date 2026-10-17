@@ -54,6 +54,7 @@ const ARTIFACT_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 const META_FILE = 'meta.json';
 const NOT_FOUND_MESSAGE = 'Artifact not found';
 const IO_MESSAGE = "Couldn't save the artifact";
+const READ_IO_MESSAGE = "Couldn't read the artifact";
 /** Conversation folders touched more recently than this are never cleaned up (defence in depth). */
 const CLEANUP_GRACE_MS = 10 * 60 * 1000;
 
@@ -174,11 +175,33 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
   const versionFile = (conversationId: string, id: string, kind: ArtifactKind, version: number) =>
     path.join(artifactDir(conversationId, id), `v${version}.${EXTENSIONS[kind]}`);
 
-  const toIoFailure = (e: unknown) => {
+  const toIoFailure = (e: unknown, message = IO_MESSAGE) => {
     if (isMissing(e)) return notFound();
     console.error('[artifacts] storage error', e);
-    return fail('io', IO_MESSAGE);
+    return fail('io', message);
   };
+
+  /** Bytes stored for a conversation: every file one level inside each artifact folder. */
+  const conversationBytes = async (conversationId: string): Promise<number> => {
+    const convDir = path.join(rootDir, conversationId);
+    const artifacts = (await listDir(convDir)).filter((e) => e.isDirectory() && ARTIFACT_ID_RE.test(e.name));
+    const sizes = await Promise.all(
+      artifacts.map(async (artifact) => {
+        const dir = path.join(convDir, artifact.name);
+        const files = (await listDir(dir)).filter((e) => e.isFile());
+        const stats = await Promise.all(files.map((f) => fs.lstat(path.join(dir, f.name))));
+        return stats.reduce((sum, st) => sum + st.size, 0);
+      })
+    );
+    return sizes.reduce((sum, size) => sum + size, 0);
+  };
+
+  const conversationFull = async (conversationId: string, content: string): Promise<boolean> =>
+    (await conversationBytes(conversationId)) + Buffer.byteLength(content, 'utf8') >
+    ARTIFACT_LIMITS.maxBytesPerConversation;
+
+  const conversationFullFailure = () =>
+    fail('limit-reached', `A conversation holds at most ${ARTIFACT_LIMITS.maxBytesPerConversation} bytes of artifacts`);
 
   const readVersion = async (meta: ArtifactMeta, version: number): Promise<ArtifactResult<ArtifactVersion>> => {
     if (!Number.isInteger(version) || version < 1 || version > meta.latest) return notFound();
@@ -192,7 +215,7 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
       const meta = await readMeta(conversationId, id);
       return await readVersion(meta, version ?? meta.latest);
     } catch (e) {
-      return toIoFailure(e);
+      return toIoFailure(e, READ_IO_MESSAGE);
     }
   };
 
@@ -215,7 +238,7 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
       await scan;
     } catch (e) {
       scan = undefined; // retry on the next call
-      return toIoFailure(e);
+      return toIoFailure(e, READ_IO_MESSAGE);
     }
     const conversationId = idIndex.get(id);
     return conversationId ? get(conversationId, id, version) : notFound();
@@ -250,6 +273,7 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
         ) {
           return fail('limit-reached', `A conversation holds at most ${ARTIFACT_LIMITS.maxPerConversation} artifacts`);
         }
+        if (await conversationFull(conversationId, input.content)) return conversationFullFailure();
         id = randomBytes(16).toString('base64url');
         const now = Date.now();
         const meta: ArtifactMeta = {
@@ -280,9 +304,17 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
     const checked = validateInput(input.content, input.title, false);
     if ('error' in checked) return checked.error;
 
-    return serialised(`id:${id}`, async () => {
+    // Serialised per conversation, like create, so the byte limit holds under concurrent writes.
+    return serialised(`conv:${conversationId}`, async () => {
       try {
         const current = await readMeta(conversationId, id);
+        if (current.latest >= ARTIFACT_LIMITS.maxVersionsPerArtifact) {
+          return fail(
+            'limit-reached',
+            `An artifact holds at most ${ARTIFACT_LIMITS.maxVersionsPerArtifact} versions; create a new one`
+          );
+        }
+        if (await conversationFull(conversationId, input.content)) return conversationFullFailure();
         const next: ArtifactMeta = {
           ...current,
           title: checked.title ?? current.title,

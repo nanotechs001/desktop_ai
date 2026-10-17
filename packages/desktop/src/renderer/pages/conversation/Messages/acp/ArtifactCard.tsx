@@ -8,25 +8,37 @@ import { Button, Message, Tag } from '@arco-design/web-react';
 import { Browser, Copy } from '@icon-park/react';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
+import { ipcBridge } from '@/common';
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { copyText } from '@/renderer/utils/ui/clipboard';
 
 const ARTIFACT_PATH = /^\/a\/[A-Za-z0-9_-]{22}(\/v\/[1-9][0-9]*)?$/;
+const LOCAL_ORIGIN = /^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/;
 
 /**
- * The link to open for a local artifact url (`http://127.0.0.1:<port>/a/<id>[/v/<n>]`), else null.
+ * The link to open for a local artifact url (`http://127.0.0.1:<port>/a/<id>[/v/<n>]`), else null. The link is built
+ * on `origin`, the artifact server of this launch, so a card from an earlier launch (another port) still opens.
  * An unversioned url gets `/v/<version>` so a card for an old version keeps showing that version.
  */
-const toArtifactHref = (url: string, version: number): string | null => {
+const toArtifactHref = (url: string, version: number, origin: string | null | undefined): string | null => {
+  if (!origin || !LOCAL_ORIGIN.test(origin)) return null;
   try {
     const parsed = new URL(url);
     const local = parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1' && parsed.port !== '';
     if (!local || parsed.username || parsed.password || !ARTIFACT_PATH.test(parsed.pathname)) return null;
-    return parsed.pathname.includes('/v/') ? parsed.href : `${parsed.origin}${parsed.pathname}/v/${version}`;
+    return parsed.pathname.includes('/v/') ? `${origin}${parsed.pathname}` : `${origin}${parsed.pathname}/v/${version}`;
   } catch {
     return null;
   }
 };
+
+/** This launch's artifact server origin, null while artifacts are unavailable. Shared by every card. */
+const useArtifactOrigin = (): string | null | undefined =>
+  useSWR('artifacts.origin', async () => {
+    const reply = await ipcBridge.artifacts.origin.invoke();
+    return reply.success && reply.data ? reply.data : null;
+  }).data;
 
 export type ArtifactCardProps = { title?: string; kind?: string; version: number; url: string };
 
@@ -38,7 +50,7 @@ const ArtifactCard: React.FC<ArtifactCardProps> = ({ title, kind, version, url }
   const { t } = useTranslation();
   const preview = useOptionalPreviewContext();
   const [messageApi, messageContext] = Message.useMessage();
-  const href = toArtifactHref(url, version);
+  const href = toArtifactHref(url, version, useArtifactOrigin());
 
   const handleCopy = useCallback(async () => {
     if (!href) return;

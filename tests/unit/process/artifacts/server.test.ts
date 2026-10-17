@@ -58,6 +58,54 @@ describe('startArtifacts', () => {
     }
   });
 
+  it('reuses the last port after a restart, so links in old chats keep working', async () => {
+    const first = await startArtifacts({ rootDir: root });
+    const port = first?.server.port;
+    await first?.server.close();
+    const second = await startArtifacts({ rootDir: root });
+    try {
+      expect(port).toBeGreaterThan(0);
+      expect(second?.server.port).toBe(port);
+    } finally {
+      await second?.server.close();
+    }
+  });
+
+  it('falls back to a random port when the last one is taken, and remembers the new one', async () => {
+    const first = await startArtifacts({ rootDir: root });
+    const port = first?.server.port;
+    await first?.server.close();
+    const blocker = net.createServer();
+    await new Promise<void>((resolve) => blocker.listen(port, '127.0.0.1', resolve));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let second: Awaited<ReturnType<typeof startArtifacts>> = null;
+    try {
+      second = await startArtifacts({ rootDir: root });
+      expect(second?.server.port).toBeGreaterThan(0);
+      expect(second?.server.port).not.toBe(port);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('is taken'));
+    } finally {
+      await second?.server.close();
+      await new Promise((resolve) => blocker.close(resolve));
+    }
+    const third = await startArtifacts({ rootDir: root });
+    try {
+      expect(third?.server.port).toBe(second?.server.port);
+    } finally {
+      await third?.server.close();
+    }
+  });
+
+  it('ignores an unreadable last-port file', async () => {
+    await fs.writeFile(path.join(root, 'server.json'), '{not json');
+    const started = await startArtifacts({ rootDir: root });
+    try {
+      expect(started?.server.port).toBeGreaterThan(0);
+    } finally {
+      await started?.server.close();
+    }
+  });
+
   it('startArtifacts returns null and logs when the port bind fails', async () => {
     const blocker = net.createServer();
     await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));

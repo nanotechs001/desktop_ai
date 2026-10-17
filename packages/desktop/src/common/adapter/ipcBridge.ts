@@ -1585,6 +1585,11 @@ export const agentNotes = {
   removeAgent: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('agent-notes.remove-agent'),
 };
 
+/** The artifact server this launch: its origin (`http://127.0.0.1:<port>`); fails while artifacts are unavailable. */
+export const artifacts = {
+  origin: bridge.buildProvider<IBridgeResponse<string>, void>('artifacts.origin'),
+};
+
 // ---------------------------------------------------------------------------
 // Window Controls — stays IPC (Electron-native)
 // ---------------------------------------------------------------------------

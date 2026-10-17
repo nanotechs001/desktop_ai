@@ -41,8 +41,30 @@ const artifactLibsDir = (): string | null =>
     ? path.join(path.dirname(require.main.filename), 'artifact-libs')
     : null;
 
+/** The last port the server bound, so artifact links in old chats keep working after a restart. */
+const PORT_FILE = 'server.json';
+
+const readLastPort = async (rootDir: string): Promise<number | undefined> => {
+  try {
+    const { port } = JSON.parse(await fs.readFile(path.join(rootDir, PORT_FILE), 'utf8')) as { port?: unknown };
+    return Number.isInteger(port) && (port as number) > 0 && (port as number) < 65536 ? (port as number) : undefined;
+  } catch {
+    return undefined; // first launch or an unreadable file: a random port
+  }
+};
+
+const rememberPort = async (rootDir: string, port: number): Promise<void> => {
+  try {
+    await fs.mkdir(rootDir, { recursive: true });
+    await fs.writeFile(path.join(rootDir, PORT_FILE), JSON.stringify({ port }));
+  } catch (error) {
+    console.warn('[artifacts] could not remember the server port; links may change after a restart', error);
+  }
+};
+
 /**
- * Starts the artifact store and its loopback server with a fresh per-launch token.
+ * Starts the artifact store and its loopback server with a fresh per-launch token. Without `opts.port` it binds the
+ * last launch's port when that is free, else a random one, and remembers it.
  * Returns null (and logs) when it can't start, e.g. the port can't be bound; the rest of the app runs
  * without artifacts.
  */
@@ -50,16 +72,26 @@ export async function startArtifacts(
   opts: { rootDir?: string; port?: number; notes?: NotesApi } = {}
 ): Promise<{ server: ArtifactServer; token: string; store: ArtifactStore } | null> {
   try {
-    const store = createArtifactStore(opts.rootDir ?? artifactsRoot());
+    const rootDir = opts.rootDir ?? artifactsRoot();
+    const store = createArtifactStore(rootDir);
     const token = randomBytes(32).toString('base64url');
-    const server = await startArtifactServer({
-      store,
-      token,
-      renderPage: renderArtifactPage,
-      libsDir: artifactLibsDir(),
-      port: opts.port,
-      notes: opts.notes,
+    const start = (port: number | undefined) =>
+      startArtifactServer({
+        store,
+        token,
+        renderPage: renderArtifactPage,
+        libsDir: artifactLibsDir(),
+        port,
+        notes: opts.notes,
+      });
+    if (opts.port !== undefined) return { server: await start(opts.port), token, store };
+    const lastPort = await readLastPort(rootDir);
+    const server = await start(lastPort).catch((error: unknown) => {
+      if (lastPort === undefined) throw error;
+      console.warn(`[artifacts] port ${lastPort} is taken; using a new one`);
+      return start(undefined);
     });
+    if (server.port !== lastPort) await rememberPort(rootDir, server.port);
     return { server, token, store };
   } catch (error) {
     console.error('[artifacts] could not start the local server; artifacts are unavailable', error);

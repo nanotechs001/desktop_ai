@@ -829,6 +829,11 @@ const handleAppReady = async (): Promise<void> => {
     // Without the env the artifacts MCP reports artifacts as unavailable; the rest of the app runs.
     console.error('[artifacts] Failed to start the artifact server; artifacts are unavailable.', error);
   }
+  // Artifact cards build their links on this launch's origin, never on the one stored in an old chat.
+  const artifactOrigin = artifacts?.server.origin;
+  ipcBridge.artifacts.origin.provider(async () =>
+    artifactOrigin ? { success: true, data: artifactOrigin } : { success: false, msg: 'Artifacts are unavailable' }
+  );
 
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
   if (debugBackendStartupFailure) {

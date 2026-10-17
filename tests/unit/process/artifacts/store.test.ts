@@ -361,6 +361,22 @@ describe('artifact store', () => {
       expect(await store.update('conv1', b.id, { content: 'x' })).toMatchObject({ ok: false });
     });
 
+    it('meta naming the same conversation in another case is not-found, on any filesystem', async () => {
+      const store = createArtifactStore(root);
+      const created = ok(await store.create('conv1', input));
+      // Case-sensitive filesystems can't answer for 'CONV1' at all, so write the flipped id into meta itself.
+      await rewriteMeta('conv1', created.id, { conversationId: 'CONV1' });
+      expect(await store.get('conv1', created.id)).toEqual({
+        ok: false,
+        error: 'not-found',
+        message: 'Artifact not found',
+      });
+      expect(await store.update('conv1', created.id, { content: 'x' })).toMatchObject({
+        ok: false,
+        error: 'not-found',
+      });
+    });
+
     it.each([0, -1, 1.5, '2', null])('meta with latest %j is rejected', async (latest) => {
       const store = createArtifactStore(root);
       const created = ok(await store.create('conv1', input));
@@ -369,6 +385,33 @@ describe('artifact store', () => {
       expect(await store.get('conv1', created.id)).toMatchObject({ ok: false });
       expect(await store.update('conv1', created.id, { content: 'x' })).toMatchObject({ ok: false });
     });
+  });
+
+  it('an artifact holds at most 50 versions; the 51st update returns limit-reached', async () => {
+    const store = createArtifactStore(root);
+    const created = ok(await store.create('conv1', input));
+    for (let n = 2; n <= ARTIFACT_LIMITS.maxVersionsPerArtifact; n++) {
+      // eslint-disable-next-line no-await-in-loop -- versions are consecutive
+      expect(ok(await store.update('conv1', created.id, { content: `v${n}` })).version).toBe(n);
+    }
+    expect(await store.update('conv1', created.id, { content: 'one too many' })).toMatchObject({
+      ok: false,
+      error: 'limit-reached',
+    });
+    expect(ok(await store.get('conv1', created.id)).latest).toBe(ARTIFACT_LIMITS.maxVersionsPerArtifact);
+  });
+
+  it('a conversation holds at most 200 MB of artifacts; past it create and update return limit-reached', async () => {
+    const store = createArtifactStore(root);
+    const created = ok(await store.create('conv1', input));
+    // A sparse file stands in for 200 MB of stored versions without writing them.
+    const v1 = path.join(root, 'conv1', created.id, 'v1.html');
+    await fs.truncate(v1, ARTIFACT_LIMITS.maxBytesPerConversation - 4);
+    const full = { ok: false, error: 'limit-reached' };
+    expect(await store.update('conv1', created.id, { content: 'more than four bytes' })).toMatchObject(full);
+    expect(await store.create('conv1', input)).toMatchObject(full);
+    // Other conversations are unaffected.
+    expect(await store.create('conv2', input)).toMatchObject({ ok: true });
   });
 
   it('210 concurrent creates in one conversation yield exactly 200 ok and 10 limit-reached', async () => {
@@ -392,6 +435,17 @@ describe('artifact store', () => {
       expect(JSON.stringify(r)).not.toContain(root);
       expect(logged).toHaveBeenCalledTimes(1);
       expect(logged.mock.calls[0]?.some((arg) => arg instanceof Error && arg.message.includes('ENOSPC'))).toBe(true);
+    });
+
+    it("a failed read says it couldn't read the artifact, not save it", async () => {
+      const store = createArtifactStore(root);
+      const created = ok(await store.create('conv1', input));
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.spyOn(fs, 'readFile').mockRejectedValue(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+
+      const expected = { ok: false, error: 'io', message: "Couldn't read the artifact" };
+      expect(await store.get('conv1', created.id)).toEqual(expected);
+      expect(await createArtifactStore(root).getById(created.id)).toEqual(expected);
     });
 
     it('cleanup logs a folder it could not remove and does not count it', async () => {
