@@ -1,6 +1,5 @@
 param(
   [string[]]$Versions = @(),
-  [string]$SentryDsnFile = '',
   [string]$OutputDir = (Join-Path $PSScriptRoot '..\out-fast-builds'),
   [string]$WorktreeRoot = (Join-Path $PSScriptRoot '..\..\aionui-build-worktrees'),
   [int]$TimeoutSeconds = 1800,
@@ -20,24 +19,6 @@ function Get-PackageVersion([string]$RepoRoot) {
     throw "package.json is missing version: $packageJsonPath"
   }
   return [string]$packageJson.version
-}
-
-function Resolve-SentryDsn([string]$Path) {
-  if ($env:SENTRY_DSN) {
-    Write-Host 'Using SENTRY_DSN from the current environment.'
-    return $env:SENTRY_DSN.Trim()
-  }
-
-  if ($Path) {
-    if (-not (Test-Path -LiteralPath $Path)) {
-      throw "SENTRY_DSN file not found: $Path"
-    }
-    Write-Host "Using SENTRY_DSN from file: $Path"
-    return (Get-Content -LiteralPath $Path -Raw).Trim()
-  }
-
-  Write-Warning 'SENTRY_DSN is not set. Building without installer/app Sentry reporting.'
-  return ''
 }
 
 function ConvertTo-ProcessArgument([string]$Value) {
@@ -94,16 +75,14 @@ function Remove-LongPathTree([string]$Path) {
   }
 }
 
-function New-BuildCommandFile([string]$WorktreePath, [string]$Version, [string]$Dsn, [string]$LocalAioncoreBinary, [string]$LocalAioncoreBundleDir) {
+function New-BuildCommandFile([string]$WorktreePath, [string]$Version, [string]$LocalAioncoreBinary, [string]$LocalAioncoreBundleDir) {
   $scriptPath = Join-Path $WorktreePath "build-$Version.ps1"
-  $dsnBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Dsn))
   $lines = @(
     '$ErrorActionPreference = ''Stop''',
     '$buildTemp = Join-Path $PSScriptRoot ''.tmp''',
     'New-Item -ItemType Directory -Force -Path $buildTemp | Out-Null',
     '$env:TEMP = $buildTemp',
     '$env:TMP = $buildTemp',
-    '$env:SENTRY_DSN = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''' + $dsnBase64 + '''))',
     '$env:AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION = ''' + $Version + '''',
     '$env:ELECTRON_BUILDER_COMPRESSION_LEVEL = ''1''',
     '$env:AIONUI_BACKEND_LOCAL_BINARY = ''' + ($LocalAioncoreBinary -replace "'", "''") + '''',
@@ -116,8 +95,8 @@ function New-BuildCommandFile([string]$WorktreePath, [string]$Version, [string]$
   return $scriptPath
 }
 
-function Start-BuildProcess([string]$WorktreePath, [string]$Version, [string]$Dsn, [string]$LogDir, [string]$LocalAioncoreBinary, [string]$LocalAioncoreBundleDir) {
-  $scriptPath = New-BuildCommandFile $WorktreePath $Version $Dsn $LocalAioncoreBinary $LocalAioncoreBundleDir
+function Start-BuildProcess([string]$WorktreePath, [string]$Version, [string]$LogDir, [string]$LocalAioncoreBinary, [string]$LocalAioncoreBundleDir) {
+  $scriptPath = New-BuildCommandFile $WorktreePath $Version $LocalAioncoreBinary $LocalAioncoreBundleDir
   $stdoutPath = Join-Path $LogDir "build-$Version.out.log"
   $stderrPath = Join-Path $LogDir "build-$Version.err.log"
   $process = Start-Process -FilePath 'powershell.exe' `
@@ -213,7 +192,6 @@ function Wait-BuildProcess($Build, [int]$TimeoutSeconds) {
 }
 
 $repoRoot = Resolve-RepoRoot
-$dsn = Resolve-SentryDsn $SentryDsnFile
 $runId = Get-Date -Format 'yyyyMMdd-HHmmss'
 $runRoot = Join-Path $WorktreeRoot $runId
 $patchPath = Join-Path $runRoot 'current-worktree.patch'
@@ -284,7 +262,7 @@ try {
   foreach ($version in $buildVersions) {
     $worktreePath = Join-Path $runRoot "AionUi-$version"
     Write-Host "=== build $version start: $(Get-Date -Format o) ==="
-    $build = Start-BuildProcess $worktreePath $version $dsn $runRoot $localAioncoreBinary $localAioncoreBundleDir
+    $build = Start-BuildProcess $worktreePath $version $runRoot $localAioncoreBinary $localAioncoreBundleDir
     if ($Sequential) {
       $result = Wait-BuildProcess $build $TimeoutSeconds
       $results += $result

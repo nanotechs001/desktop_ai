@@ -3,9 +3,10 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Teams, Pet, Butler and Feedback are removed from this fork by hiding their
- * entry points; their source stays. This guard fails when any renderer file
- * mounts one of the hidden UI pieces again.
+ * Teams, Pet and Butler are removed from this fork by hiding their entry
+ * points; their source stays. The Feedback report UI is deleted outright (it
+ * only existed to upload reports). This guard fails when any renderer file
+ * mounts one of these UI pieces again.
  */
 
 import fs from 'fs';

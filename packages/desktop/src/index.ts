@@ -11,9 +11,6 @@ import { installGpuCrashHandler } from './process/utils/gpuRecovery';
 import { describeUncaughtError } from './process/utils/describeUncaughtError';
 import type { UncaughtErrorDiagnostics } from './process/utils/describeUncaughtError';
 import { createRendererRecoveryPolicy } from './process/utils/rendererRecovery';
-import { captureBackendStartupFailure, initSentry, scheduleStartupLogReport, setSentryDeviceId } from './sentry';
-
-initSentry();
 
 import './process/utils/configureConsoleLog';
 import { app, BrowserWindow, ipcMain, nativeImage, powerMonitor, session } from 'electron';
@@ -153,10 +150,9 @@ if (electronSquirrelStartup) {
 }
 
 // Global error handlers for main process
-// Sentry automatically captures these, but we keep the handlers to prevent Electron's default error dialog.
-// Control flow is unchanged — both handlers still swallow the failure and keep the process alive; they only
-// log allow-listed attribution first, because a Sentry event for e.g. `read ECONNRESET` otherwise carries
-// nothing but Node-internal frames (TCP.onStreamRead) and cannot be traced back to a subsystem (AIONUI-128).
+// Keep these handlers to prevent Electron's default error dialog. Both swallow the failure and keep the
+// process alive; they only log allow-listed attribution first, because e.g. `read ECONNRESET` otherwise
+// carries nothing but Node-internal frames (TCP.onStreamRead) and cannot be traced back to a subsystem.
 process.on('uncaughtException', (error, origin) => {
   logUncaught(describeUncaughtError(error, origin));
 });
@@ -270,11 +266,9 @@ ipcMain.handle('backend:recover-corrupted-database', async () => {
             allowPendingOnHealthTimeout: false,
             onHealthTimeout: async (error) => {
               markBackendStartupFailed(error);
-              await captureBackendStartupFailure(error);
             },
             onPendingExit: async (error) => {
               markBackendStartupFailed(error);
-              await captureBackendStartupFailure(error);
             },
             onReady: (backendPort) => {
               markBackendReady(backendPort, 'backendManager.recoverCorruptedDatabase.lateReady');
@@ -285,7 +279,6 @@ ipcMain.handle('backend:recover-corrupted-database', async () => {
         );
       } catch (error) {
         markBackendStartupFailed(error);
-        await captureBackendStartupFailure(error);
         throw error;
       }
     },
@@ -533,8 +526,6 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
 
   initBrowserSession({ getMainWindow: () => mainWindow });
 
-  scheduleStartupLogReport(mainWindow);
-
   // Show window after content is ready to prevent FOUC (Flash of Unstyled Content)
   // Use 'ready-to-show' which fires when renderer has painted first frame,
   // combined with 'did-finish-load' as belt-and-suspenders approach.
@@ -630,7 +621,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   // crashes, escalate to a throttled app relaunch when the renderer cannot
   // launch at all (e.g. app files replaced by an update while running).
   // An unconditional immediate reload here caused a ~50/s crash storm on
-  // `launch-failed` (Sentry AIONUI-DESKTOP-A).
+  // `launch-failed`.
   const rendererRecovery = createRendererRecoveryPolicy();
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -743,8 +734,6 @@ const handleAppReady = async (): Promise<void> => {
       // Ignore dock icon errors in development
     }
   }
-
-  setSentryDeviceId();
 
   // Allow the renderer's Local Font Access queries (window.queryLocalFonts),
   // used by the appearance font picker to enumerate installed fonts. Electron 37
@@ -865,18 +854,9 @@ const handleAppReady = async (): Promise<void> => {
             allowPendingOnHealthTimeout: !(isWebUIMode || isResetPasswordMode),
             onHealthTimeout: async (error) => {
               markBackendStartupFailed(error);
-              // Hard rule: while the process is still alive, a health timeout is a
-              // recoverable "still starting" state — never auto-report to Sentry
-              // or escalate to a fatal dialog. Only genuinely abnormal shapes that
-              // fall through to a non-pending reason are captured.
-              if (backendStartupFailureInfo?.reason === 'backend_startup_pending_slow') {
-                return;
-              }
-              await captureBackendStartupFailure(error);
             },
             onPendingExit: async (error) => {
               markBackendStartupFailed(error);
-              await captureBackendStartupFailure(error);
             },
             onReady: (backendPort) => {
               markBackendReady(backendPort, 'backendManager.lateReady');
@@ -894,7 +874,6 @@ const handleAppReady = async (): Promise<void> => {
       },
       captureFailure: async (error) => {
         markBackendStartupFailed(error);
-        await captureBackendStartupFailure(error);
       },
       exitApp: (code) => app.exit(code),
       exitOnFailure: isWebUIMode || isResetPasswordMode,
@@ -1108,7 +1087,7 @@ installGpuCrashHandler();
 // instance lock. A lock-losing instance must NOT spawn a competing aioncore
 // backend — doing so races the first instance's aioncore over the same data
 // directory and produced the "local data repair failed" false alarm
-// (Sentry 135525166). Gating here (rather than at the top-level second-instance
+//. Gating here (rather than at the top-level second-instance
 // block) keeps it after handleAppReady is declared.
 if (shouldRegisterBackendStartup(gotTheLock)) {
   void app

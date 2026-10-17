@@ -41,10 +41,6 @@ vi.mock('@/renderer/components/base/AionScrollArea', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('@/renderer/components/base/FeedbackButton', () => ({
-  default: () => <button type='button'>settings.oneClickFeedback</button>,
-}));
-
 vi.mock('@/renderer/components/settings/LanguageSwitcher', () => ({
   default: () => <div>LanguageSwitcher</div>,
 }));

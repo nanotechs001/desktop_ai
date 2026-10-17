@@ -57,8 +57,6 @@ vi.mock('@/renderer/components/settings/useUpdateNotificationController', () => 
   UPDATE_AVAILABLE_EVENT: 'aionui-update-available',
 }));
 
-vi.mock('@/renderer/components/settings/SettingsModal/contents/FeedbackReportModal', () => ({ default: () => null }));
-
 import { OPEN_MIGRATION_DIALOG_EVENT } from '@/renderer/components/settings/UpdateMigrationDialog';
 import AboutModalContent from '@/renderer/components/settings/SettingsModal/contents/AboutModalContent';
 

@@ -227,10 +227,6 @@ vi.mock('@/renderer/pages/guid/components/QuickActionButtons', () => ({
   default: () => <div data-testid='guid-quick-actions' />,
 }));
 
-vi.mock('@/renderer/components/settings/SettingsModal/contents/FeedbackReportModal', () => ({
-  default: () => null,
-}));
-
 vi.mock('@/renderer/components/chat/SpeechInputButton', () => ({
   default: () => null,
 }));

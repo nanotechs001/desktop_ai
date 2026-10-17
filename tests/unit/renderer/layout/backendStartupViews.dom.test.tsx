@@ -81,9 +81,9 @@ describe('AC-5: backend_exited honest-failure wiring', () => {
   });
 });
 
-// Sentry 136646113 — dedicated port-report-timeout kind plus the neutralized
+// dedicated port-report-timeout kind plus the neutralized
 // startup_failed fallback kind. Neither may expose the download/reinstall path.
-describe('port_report_timeout and startup_failed dialog wiring (Sentry 136646113)', () => {
+describe('port_report_timeout and startup_failed dialog wiring', () => {
   it('uses the port-report-timeout copy with no download action', () => {
     expect(getInstallationIntegrityTitle(echoT, 'port_report_timeout')).toBe(
       'common.backendStartup.portReportTimeout.title'

@@ -1,28 +1,9 @@
 param(
   [string[]]$Versions = @(),
-  [string]$SentryDsnFile = '',
   [string]$OutputDir = (Join-Path $PSScriptRoot '..\out-fast-builds')
 )
 
 $ErrorActionPreference = 'Stop'
-
-function Resolve-SentryDsn {
-  if ($env:SENTRY_DSN) {
-    Write-Host 'Using SENTRY_DSN from the current environment.'
-    return $env:SENTRY_DSN.Trim()
-  }
-
-  if ($SentryDsnFile) {
-    if (-not (Test-Path -LiteralPath $SentryDsnFile)) {
-      throw "SENTRY_DSN file not found: $SentryDsnFile"
-    }
-    Write-Host "Using SENTRY_DSN from file: $SentryDsnFile"
-    return (Get-Content -LiteralPath $SentryDsnFile -Raw).Trim()
-  }
-
-  Write-Warning 'SENTRY_DSN is not set. Building without installer/app Sentry reporting.'
-  return ''
-}
 
 function Get-PackageVersion([string]$RepoRoot) {
   $packageJsonPath = Join-Path $RepoRoot 'package.json'
@@ -34,7 +15,6 @@ function Get-PackageVersion([string]$RepoRoot) {
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$env:SENTRY_DSN = Resolve-SentryDsn
 $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '1'
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $buildVersions = @($Versions | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })

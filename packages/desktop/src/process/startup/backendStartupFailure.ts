@@ -53,10 +53,10 @@ const STARTUP_DIRECTORY_UNAVAILABLE_RE =
   /startup directory preparation failed|(?:\b(?:ENOENT|ENOTDIR|EEXIST)\b[\s\S]{0,160}\bmkdir\b)|(?:\bmkdir\b[\s\S]{0,160}\b(?:ENOENT|ENOTDIR|EEXIST)\b)/i;
 const ASSISTANT_STORAGE_BOOTSTRAP_BOUNDARY_CODE = 'BOOTSTRAP_SERVER_FAILED';
 // Benign boundary code emitted by an aioncore instance that yielded the
-// data-dir instance guard to a peer (Sentry 135525166 Option A).
+// data-dir instance guard to a peer.
 const TRANSIENT_CONCURRENT_STARTUP_PEER_CODE = 'BOOTSTRAP_PEER_ALREADY_RUNNING';
 // Distinct bootstrap stage emitted when assistant storage bootstrap loses a
-// concurrent-startup race and exhausts its retries (Sentry 135525166 Option B).
+// concurrent-startup race and exhausts its retries.
 const ASSISTANT_BOOTSTRAP_CONTENTION_STAGE = 'router.assistant.bootstrap.concurrency_contended';
 const MAX_REPORTED_DIR_ENTRIES = 20;
 
@@ -203,7 +203,7 @@ function classifyLocalDataRepairFailure(
 // exhausted (Option B). Everything else — including an ordinary
 // `router.assistant.bootstrap` failure — is intentionally left to the generic
 // `backend_startup_failed` bucket rather than the old unconditional
-// "local data repair failed" false alarm (Sentry 135525166).
+// "local data repair failed" false alarm.
 function classifyTransientConcurrentStartupFailure(
   backendBoundaryCode: string | undefined,
   backendBoundaryStage: string | undefined
@@ -276,7 +276,7 @@ function classifyBackendStartupExited(details: ErrorWithDetails['details']): Bac
 // port-report window (stage `listen_timeout`) timed out while starting — it is
 // NOT a broken installation. Unlike pending-slow/exited this gate must not
 // require `serverListeningObserved === true`: on this stage it is always false
-// by definition (Sentry 136646113).
+// by definition.
 function classifyPortReportTimeout(details: ErrorWithDetails['details']): BackendStartupFailureInfo | undefined {
   if (!details) return undefined;
   if (details.stage !== 'listen_timeout') return undefined;

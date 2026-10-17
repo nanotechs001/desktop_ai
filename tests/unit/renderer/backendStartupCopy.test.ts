@@ -88,9 +88,9 @@ describe('backend startup copy — no misleading reinstall/antivirus wording (AC
   });
 });
 
-// Sentry 136646113 — the new portReportTimeout reason and the neutralized
+// the new portReportTimeout reason and the neutralized
 // startupFailed fallback both reuse the exited.* key structure.
-describe('backend startup copy — portReportTimeout / startupFailed (Sentry 136646113)', () => {
+describe('backend startup copy — portReportTimeout / startupFailed', () => {
   const NEW_GROUPS = ['portReportTimeout', 'startupFailed'] as const;
 
   it('every supported language defines both new key groups with the exited key structure', () => {

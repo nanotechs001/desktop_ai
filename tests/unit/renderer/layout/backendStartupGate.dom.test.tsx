@@ -93,7 +93,7 @@ describe('BackendStartupGate — lifecycle-driven view switching (AC-4 / AC-11)'
   });
 });
 
-describe('BackendStartupGate — port report timeout is fatal (Sentry 136646113)', () => {
+describe('BackendStartupGate — port report timeout is fatal', () => {
   it('shows the failure view for backend_startup_port_report_timeout', () => {
     installBridge({ reason: 'backend_startup_port_report_timeout' });
 
@@ -105,10 +105,10 @@ describe('BackendStartupGate — port report timeout is fatal (Sentry 136646113)
   });
 });
 
-// Sentry ELECTRON-31Z — a database from a newer AionUi (downgrade) is a fatal
+// a database from a newer AionUi (downgrade) is a fatal
 // startup reason: the gate must block the App and show the failure dialog, not
 // fall through to the normal UI on top of a dead backend.
-describe('BackendStartupGate — database newer than app is fatal (Sentry ELECTRON-31Z)', () => {
+describe('BackendStartupGate — database newer than app is fatal', () => {
   it('shows the failure view for backend_database_newer_than_app', () => {
     installBridge({ reason: 'backend_database_newer_than_app' });
 

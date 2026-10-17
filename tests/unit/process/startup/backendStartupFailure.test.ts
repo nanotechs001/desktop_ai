@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { classifyBackendStartupFailure } from '@/process/startup/backendStartupFailure';
 
-// T-L3a — transient concurrent-startup classification (Sentry 135525166).
+// T-L3a — transient concurrent-startup classification.
 // A brief two-instance bootstrap race over the same data directory is
 // self-recoverable and must NOT be reported as local data corruption.
 describe('classifyBackendStartupFailure — transient concurrent startup', () => {
@@ -116,7 +116,7 @@ describe('classifyBackendStartupFailure — genuine data damage still severe', (
   });
 });
 
-// Sentry ELECTRON-31Z — a database written by a NEWER AionUi (downgrade) is
+// a database written by a NEWER AionUi (downgrade) is
 // intact and only needs an app update. It must surface the dedicated
 // upgrade-required reason instead of the misleading migration-failure dialog.
 describe('classifyBackendStartupFailure — database newer than app (downgrade)', () => {
@@ -174,7 +174,7 @@ describe('classifyBackendStartupFailure — database newer than app (downgrade)'
   });
 });
 
-// Sentry 127971136 — a health-check timeout on a process that was observed
+// a health-check timeout on a process that was observed
 // listening and kept alive is a recoverable "slow startup", and a listening
 // process that then exits is an honest failure. Neither may fall back to the
 // generic bucket that renders the misleading "incomplete installation / reinstall"
@@ -286,7 +286,7 @@ describe('classifyBackendStartupFailure — slow startup / exited', () => {
   });
 });
 
-// Sentry 136646113 — stage 'listen_timeout' (spawned but never reported its
+// stage 'listen_timeout' (spawned but never reported its
 // listening port) must get its own honest reason instead of falling through to
 // the generic bucket, which used to render the "incomplete installation /
 // reinstall / antivirus" dialog for a pure startup timeout.

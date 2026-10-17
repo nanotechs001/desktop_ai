@@ -16,11 +16,6 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }));
 
-const openFeedbackMock = vi.fn(() => Promise.resolve());
-vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
-  useFeedback: () => ({ openFeedback: openFeedbackMock }),
-}));
-
 // ThemeContext is used by InlineAgentEditor for its CodeMirror theme —
 // stub it so we don't have to mount the real provider.
 vi.mock('@/renderer/hooks/context/ThemeContext', () => ({
@@ -67,7 +62,6 @@ const fillCommandAndTest = async (user: ReturnType<typeof userEvent.setup>, comm
 
 describe('InlineAgentEditor — FeedbackButton absence', () => {
   beforeEach(() => {
-    openFeedbackMock.mockClear();
     testCustomAgentMock.mockReset();
   });
 
@@ -102,7 +96,6 @@ describe('InlineAgentEditor — FeedbackButton absence', () => {
     });
 
     expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-    expect(openFeedbackMock).not.toHaveBeenCalled();
   });
 
   it('does not render FeedbackButton on fail_acp', async () => {
@@ -116,6 +109,5 @@ describe('InlineAgentEditor — FeedbackButton absence', () => {
     });
 
     expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-    expect(openFeedbackMock).not.toHaveBeenCalled();
   });
 });

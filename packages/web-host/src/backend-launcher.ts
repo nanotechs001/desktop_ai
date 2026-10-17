@@ -254,7 +254,7 @@ const AIONCORE_READY_MARKER = 'AIONCORE_READY';
 const BACKEND_PORT_REPORT_TIMEOUT_MS = 60_000;
 
 // Benign boundary code emitted by an aioncore instance that yielded the
-// data-dir instance guard to a peer that already owns it (Sentry 135525166).
+// data-dir instance guard to a peer that already owns it.
 // This is a transient, self-recoverable condition — the owning peer is expected
 // to finish (or a crash-orphan is expected to self-exit and release the guard),
 // so the launcher retries with bounded backoff rather than surfacing a fatal
@@ -553,7 +553,7 @@ export class BackendLifecycleManager {
     launchFlags: BackendLaunchFlags = {}
   ): Promise<number> {
     // Bounded retry loop for the transient "a peer aioncore already owns this
-    // data directory" case (Sentry 135525166). The owning peer either finishes
+    // data directory" case. The owning peer either finishes
     // startup and keeps running, or a crash-orphan self-exits and releases the
     // data-dir instance guard. Non-peer errors are thrown immediately with no
     // retry. Runtime crash restarts (handleCrash / maxRestarts) are a separate,

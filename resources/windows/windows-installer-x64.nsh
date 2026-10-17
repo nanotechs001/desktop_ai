@@ -23,7 +23,7 @@
 
 ; Architecture guard. Inserted from AIONUI_INSTALLER_PREINIT (preInit) so it runs before any
 ; registry mutation, replacing the old .onVerifyInstDir placement which fired after customInit
-; had already healed/cleared/repaired an existing install's registry. (Sentry ELECTRON-3BX)
+; had already healed/cleared/repaired an existing install's registry.
 ; Rejection policy is unchanged: an x64 build refuses both x86 and ARM64 machines.
 !macro AIONUI_ASSERT_TARGET_ARCH
   Var /GLOBAL AionUiActualArch

@@ -4,13 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Hook Sentry IPC so the renderer SDK uses ipcRenderer.send instead of falling
-// back to fetch('sentry-ipc://...'), which floods the DevTools Network panel.
-// Bundled into this preload via `externalizeDepsPlugin({ exclude: [...] })` so
-// Electron's sandbox-mode preload doesn't try to resolve it from node_modules.
-import '@sentry/electron/preload';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-// Bundled like @sentry/electron (see electron.vite.config.ts) so the sandboxed preload can load it.
+// Bundled (see electron.vite.config.ts) so the sandboxed preload can load it.
 import { injectBrowserAction } from 'electron-chrome-extensions/browser-action';
 import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
 

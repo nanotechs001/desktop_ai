@@ -1373,7 +1373,7 @@ describe('BackendLifecycleManager crash restart', () => {
   });
 });
 
-// T-A4 — bounded peer-already-running retry (Sentry 135525166).
+// T-A4 — bounded peer-already-running retry.
 type AttemptStartSpyTarget = { attemptStart: (...args: unknown[]) => Promise<number> };
 
 function makePeerAlreadyRunningError(): BackendStartupError {

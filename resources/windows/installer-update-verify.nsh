@@ -143,7 +143,7 @@ Var /GLOBAL AionUiActiveMarkerResult
     !insertmacro AIONUI_SLOG "event=installer-outdir-release outDir=$AionUiCurrentOutDir instDir=$INSTDIR"
     ; Guard target/machine architecture as early as possible: this runs before customInit's
     ; registry heal/clear/repair, so a wrong-arch installer aborts without mutating an existing
-    ; correct-arch install's registry or uninstaller state. (Sentry ELECTRON-3BX / code E1040)
+    ; correct-arch install's registry or uninstaller state.
     !insertmacro AIONUI_ASSERT_TARGET_ARCH
     !insertmacro AIONUI_BRING_UPDATED_INSTALLER_TO_FRONT
     !insertmacro AIONUI_RECORD_ACTIVE_INSTALLER_MARKER

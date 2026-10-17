@@ -4,34 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Sentry must be initialized first
-// Use electron-specific renderer package only inside Electron; fall back to the
-// browser SDK when running as a web server (no window.electronAPI).
-if ((window as { electronAPI?: unknown }).electronAPI) {
-  // Dynamic import avoids bundling sentry-ipc:// protocol code into the web build
-  import('@sentry/electron/renderer')
-    .then((Sentry) =>
-      Sentry.init({
-        beforeSend(event) {
-          if (!(window as { __backendStartupFailed?: boolean }).__backendStartupFailed) {
-            return event;
-          }
-          const haystacks: string[] = [];
-          if (event.message) haystacks.push(event.message);
-          const exceptions = event.exception?.values ?? [];
-          for (const ex of exceptions) {
-            if (ex.value) haystacks.push(ex.value);
-          }
-          if (haystacks.some((h) => /Failed to fetch|window\.__backendPort|__backendPort unset/.test(h))) {
-            return null;
-          }
-          return event;
-        },
-      })
-    )
-    .catch(() => {});
-}
-
 // Runtime patches must be imported early
 import './utils/ui/runtimePatches';
 
@@ -177,24 +149,6 @@ function isInstallationIntegrityFailure(kind: RuntimeFailureKind | undefined): b
   return INSTALLATION_INTEGRITY_FAILURES.has(kind ?? 'unknown');
 }
 
-function captureRuntimeInstallationIntegrityFailure(event: IRuntimeStatusEvent): void {
-  if (!isInstallationIntegrityFailure(event.failure_kind)) {
-    return;
-  }
-
-  void import('@sentry/electron/renderer')
-    .then((Sentry) => {
-      Sentry.withScope((scope) => {
-        scope.setTag('aionui.installation_integrity', event.failure_kind ?? 'unknown');
-        scope.setTag('aionui.runtime_resource', event.resource);
-        scope.setTag('aionui.runtime_resource_id', event.resource_id ?? '');
-        scope.setTag('aionui.runtime_scope', event.scope.kind);
-        Sentry.captureMessage('runtime-installation-integrity-failure', 'error');
-      });
-    })
-    .catch(() => {});
-}
-
 function resolveRuntimeResourceLabel(event: IRuntimeStatusEvent, t: TFunction): string {
   if (event.resource === 'node') {
     return t('settings.runtimeResource.node');
@@ -220,7 +174,8 @@ const RuntimeFailureDialogs: React.FC = () => {
         const controller = showInstallationIntegrityModal(modal, t, description);
         return { close: () => controller.close() };
       },
-      report: (event) => captureRuntimeInstallationIntegrityFailure(event),
+      // Nothing is reported off-device; the dialog is the only user-visible effect.
+      report: () => {},
     });
 
     const offStatus = ipcBridge.runtime.statusChanged.on((event: IRuntimeStatusEvent) => {

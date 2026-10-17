@@ -31,7 +31,7 @@ export type BackendStartupFailureReason =
   | 'backend_data_migration_failed'
   // The local database was created by a newer AionUi version (downgrade).
   // The data is intact; the fix is updating AionUi, not reinstalling or
-  // inspecting migrations (Sentry ELECTRON-31Z).
+  // inspecting migrations.
   | 'backend_database_newer_than_app'
   | 'backend_local_data_repair_failed'
   | 'backend_recoverable_database_corruption'
@@ -48,7 +48,7 @@ export type BackendStartupFailureReason =
   // Backend process spawned but never reported its listening port within the
   // port-report window (stage `listen_timeout`). The process has been killed,
   // so this is a fatal-but-honest "startup timed out" — never an "incomplete
-  // installation" (Sentry 136646113).
+  // installation".
   | 'backend_startup_port_report_timeout'
   | 'backend_startup_failed';
 
