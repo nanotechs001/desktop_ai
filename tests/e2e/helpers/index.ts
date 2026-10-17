@@ -112,7 +112,6 @@ export {
   SKILLS_SECTION,
   SKILLS_INDICATOR,
   SKILLS_INDICATOR_COUNT,
-  AGENT_BADGE,
 } from './selectors';
 export {
   resolveAionrsBinary,

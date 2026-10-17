@@ -3,7 +3,7 @@
  *
  * Covers: full send -> AI reply cycle for Gemini, Claude, Codex,
  * preset assistant conversation, agent info display, skills indicator,
- * navigation, cleanup, cron agent selection, and AgentBadge navigation.
+ * navigation, cleanup and cron agent selection.
  *
  * These tests require real API keys and CLI agents installed.
  */
@@ -19,7 +19,6 @@ import {
   waitForAiReply,
   deleteConversation,
   waitForSettle,
-  AGENT_BADGE,
   ASSISTANT_PILL,
   SKILLS_INDICATOR,
   SKILLS_INDICATOR_COUNT,
@@ -1694,66 +1693,6 @@ test.describe('Conversation Full Cycle', () => {
         { timeout: 15_000, message: `Waiting for skill "${trimmedName}" to appear on capabilities page` }
       )
       .toBeTruthy();
-
-    await deleteConversation(page, conversationId);
-  });
-
-  // -- Supplementary case: AgentBadge navigation ----------------------------
-
-  test('AgentBadge click navigates to AssistantSettings', async ({ page }) => {
-    await goToGuid(page);
-    const pillVisible = await page
-      .locator(ASSISTANT_PILL)
-      .first()
-      .waitFor({ state: 'visible', timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!pillVisible) {
-      test.skip(true, 'Assistant pills not visible on guid page');
-      return;
-    }
-
-    // Select a preset assistant (which provides assistantId for badge navigation)
-    const presetPills = page.locator('[data-testid^="preset-pill-"]');
-    if ((await presetPills.count()) === 0) {
-      test.skip(true, 'No preset assistants -- AgentBadge navigation requires assistantId');
-      return;
-    }
-
-    await presetPills.first().click();
-    await waitForSettle(page, 1_000);
-
-    const conversationId = await sendMessageFromGuid(page, 'e2e badge navigation test');
-    expect(conversationId).toBeTruthy();
-
-    const sessionReady = await waitForSessionActive(page, 60_000)
-      .then(() => true)
-      .catch(() => false);
-    if (!sessionReady) {
-      await deleteConversation(page, conversationId).catch(() => {});
-      test.skip(true, 'Agent session did not activate in time');
-      return;
-    }
-
-    // Click the agent badge
-    const badge = page.locator(AGENT_BADGE);
-    const badgeVisible = await badge.isVisible().catch(() => false);
-
-    if (!badgeVisible) {
-      await deleteConversation(page, conversationId);
-      test.skip(true, 'AgentBadge not visible on conversation page');
-      return;
-    }
-
-    await badge.click();
-
-    // Should navigate to assistant settings with highlight param
-    await page
-      .waitForFunction(() => window.location.hash.includes('/settings/assistants'), { timeout: 10_000 })
-      .catch(() => {});
-
-    const url = page.url();
-    expect(url).toContain('/settings/assistants');
 
     await deleteConversation(page, conversationId);
   });

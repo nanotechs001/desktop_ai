@@ -1,23 +1,23 @@
 /**
  * E2E: Workspace file operations — expand folder, search, context menu.
  *
- * Seeds a nested directory structure, creates a conversation pointing at it,
- * then drives the workspace panel: expand a folder to reveal children, search
- * by filename, and right-click to open the context menu.
+ * Seeds a nested directory structure, starts a single chat on it from the guid page (see `startWorkspaceChat`; the
+ * claude command is a stub, so no model session starts), then drives the project panel: expand a folder to reveal
+ * children, search by filename, and right-click to open the context menu.
  *
- * Uses test.describe.serial to share a single conversation across all assertions
- * and avoid redundant 30-second conversation creation per test.
+ * Uses test.describe.serial to share a single conversation across all assertions.
  */
 import { test, expect } from '../../fixtures';
-import { goToGuid } from '../../helpers';
+import { openProjectPanel, startWorkspaceChat, type WorkspaceChat } from '../../helpers';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import type { Page, ElectronApplication, Locator } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 
 test.describe.serial('Workspace — file operations', () => {
   let workspace: string;
   let panel: Locator | null = null;
+  let chat: WorkspaceChat | null = null;
 
   test.beforeAll(() => {
     workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-ws-ops-'));
@@ -29,50 +29,24 @@ test.describe.serial('Workspace — file operations', () => {
     fs.writeFileSync(path.join(workspace, 'lib', 'api.ts'), 'export const fetch = () => {}');
   });
 
-  test.afterAll(() => {
+  test.afterAll(async () => {
+    await chat?.cleanup();
     fs.rmSync(workspace, { recursive: true, force: true });
   });
 
   test('setup: create conversation with workspace panel', async ({ page, electronApp }) => {
     test.setTimeout(120_000);
 
-    await electronApp.evaluate(async ({ dialog }, target) => {
-      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
-    }, workspace);
-
-    await goToGuid(page);
-
-    const agentPill = page.locator('[data-testid^="agent-pill-"]').first();
-    if (!(await agentPill.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      test.skip(true, 'No agent pills available on guid page');
+    chat = await startWorkspaceChat(page, electronApp, workspace, 'describe the project structure');
+    if (!chat) {
+      test.skip(true, 'Needs an installed claude agent to start a chat');
       return;
     }
-    await agentPill.click();
+    await openProjectPanel(page);
 
-    const wsBtn = page.locator('[data-testid="workspace-selector-btn"]');
-    if (await wsBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await wsBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    const input = page.locator('[data-testid="guid-input"] textarea, [data-testid="guid-input"] input').first();
-    await input.fill('describe the project structure');
-    await page.locator('[data-testid="guid-send-btn"]').click();
-    await page.waitForURL(/\/conversation\//, { timeout: 30_000 });
-
-    const wsPanel = page.locator('.chat-workspace');
-    if (!(await wsPanel.isVisible({ timeout: 30_000 }).catch(() => false))) {
-      test.skip(true, 'Workspace panel did not appear');
-      return;
-    }
-
-    const tree = wsPanel.locator('.workspace-tree');
-    if (!(await tree.isVisible({ timeout: 15_000 }).catch(() => false))) {
-      test.skip(true, 'File tree not loaded');
-      return;
-    }
-
-    panel = wsPanel;
+    const tree = page.locator('.workspace-tree');
+    await expect(tree).toBeVisible({ timeout: 15_000 });
+    panel = tree;
   });
 
   test('expand folder node reveals children files', async ({ page }) => {
@@ -82,7 +56,7 @@ test.describe.serial('Workspace — file operations', () => {
       return;
     }
 
-    const componentsNode = panel.getByText('components').first();
+    const componentsNode = panel.getByText('components', { exact: true }).first();
     await expect(componentsNode).toBeVisible({ timeout: 10_000 });
 
     await componentsNode.click();
@@ -101,16 +75,16 @@ test.describe.serial('Workspace — file operations', () => {
       return;
     }
 
-    const searchInput = panel.locator('.workspace-search-input input').first();
+    const searchInput = page.getByRole('textbox', { name: /Search|搜索/ }).first();
     await expect(searchInput).toBeVisible({ timeout: 5_000 });
 
     await searchInput.fill('Button');
-    await expect(panel.getByText('Button.tsx').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Button.tsx').first()).toBeVisible({ timeout: 5_000 });
 
     await page.screenshot({ path: 'tests/e2e/results/ws-ops-02-search-button.png' });
 
     await searchInput.fill('api');
-    await expect(panel.getByText('api.ts').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('api.ts').first()).toBeVisible({ timeout: 5_000 });
 
     await searchInput.fill('');
     await page.screenshot({ path: 'tests/e2e/results/ws-ops-03-search-cleared.png' });
@@ -127,17 +101,12 @@ test.describe.serial('Workspace — file operations', () => {
     await expect(configNode).toBeVisible({ timeout: 10_000 });
     await configNode.click({ button: 'right' });
 
-    const ctxMenu = page.locator('.fixed.z-100').first();
+    const ctxMenu = page.locator('.arco-dropdown-menu:visible').first();
     await expect(ctxMenu).toBeVisible({ timeout: 3_000 });
-
-    const addToChat = ctxMenu.getByText(/Add to Chat|添加到对话/i).first();
-    const openItem = ctxMenu.getByText(/^Open$|^打开$/i).first();
-    expect(
-      (await addToChat.isVisible().catch(() => false)) || (await openItem.isVisible().catch(() => false))
-    ).toBeTruthy();
+    await expect(ctxMenu.getByText(/Add to Chat|添加到对话/i).first()).toBeVisible();
 
     await page.screenshot({ path: 'tests/e2e/results/ws-ops-04-context-menu.png' });
 
-    await panel.click({ position: { x: 10, y: 10 } });
+    await page.keyboard.press('Escape');
   });
 });

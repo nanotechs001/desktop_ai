@@ -172,9 +172,6 @@ export const SKILLS_INDICATOR = '[data-testid="skills-indicator"]';
 /** Skills indicator count. */
 export const SKILLS_INDICATOR_COUNT = '[data-testid="skills-indicator-count"]';
 
-/** Agent badge on conversation page. */
-export const AGENT_BADGE = '[data-testid="agent-badge"]';
-
 /** Search toggle button. */
 export const BTN_SEARCH_ASSISTANT = '[data-testid="btn-search-toggle"]';
 
