@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PermissionRequest } from '@/common/types/browser';
 
 const mocks = vi.hoisted(() => ({
+  assistants: vi.fn(() => Promise.resolve([{ id: 'bare:sales', name: 'Sales', avatar: '🦊', source: 'user' }])),
   getPermissionRequests: vi.fn(),
   replyPermission: vi.fn(() => Promise.resolve({ success: true })),
   handler: null as ((open: PermissionRequest[]) => void) | null,
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    assistants: { list: { invoke: mocks.assistants } },
     browser: {
       getPermissionRequests: { invoke: mocks.getPermissionRequests },
       replyPermission: { invoke: mocks.replyPermission },
@@ -47,6 +49,8 @@ const request = (id: string, patch: Partial<PermissionRequest> = {}): Permission
   origin: `https://${id}.test`,
   permission: 'media',
   mediaTypes: ['video', 'audio'],
+  partition: 'persist:aionui-browser',
+  profile: { kind: 'personal' },
   ...patch,
 });
 
@@ -148,5 +152,17 @@ describe('PermissionPrompt', () => {
     await mount();
     cleanup();
     expect(mocks.unsubscribe).toHaveBeenCalled();
+  });
+
+  it("shows whose browser asks: the Agent's avatar for an Agent profile, Personal otherwise", async () => {
+    await mount([request('a', { profile: { kind: 'agent', agentId: 'bare:sales' } })]);
+
+    await waitFor(() => expect(screen.getByTestId('browser-profile-badge').getAttribute('aria-label')).toBe('Sales'));
+    act(() => mocks.handler?.([request('b')]));
+    await waitFor(() =>
+      expect(screen.getByTestId('browser-profile-badge').getAttribute('aria-label')).toBe(
+        'preview.browserChrome.profile.personal'
+      )
+    );
   });
 });

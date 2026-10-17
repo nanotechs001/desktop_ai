@@ -235,7 +235,9 @@
       "paused": "Paused: you took over.",
       "resume": "Resume agent",
       "actions": "Agent actions",
-      "actionFailed": "Couldn't update the agent. Try again."
+      "actionFailed": "Couldn't update the agent. Try again.",
+      "shareWith": "Поділитися з {{name}}",
+      "sharedWith": "Доступно лише {{name}}"
     },
     "confirm": {
       "title": "Allow this agent action?",

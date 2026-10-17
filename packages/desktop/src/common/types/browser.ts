@@ -26,6 +26,10 @@ export type PermissionRequest = {
   permission: PromptPermission;
   /** `'video'` / `'audio'` for `media` requests; empty otherwise. */
   mediaTypes: string[];
+  /** The browser partition asking; its remembered decisions are its own. */
+  partition: string;
+  /** That partition's profile, so the prompt can say whose browser asks. */
+  profile: BrowserTabProfile;
 };
 
 /** A keyboard shortcut the in-app browser recognises on a page. */
@@ -58,10 +62,12 @@ export type TabOwnership = {
   webContentsId: number;
   /** 'user' for tabs the user opened; an agent client for tabs it opened through the relay. */
   owner: 'user' | { clientId: string; label: string };
-  /** 'all' once the user clicked "Share with agent": every agent client may act on the tab. */
+  /** 'all' once the user clicked "Share with agent": agent clients of the tab's profile may act on it (see mayAct). */
   sharedWith: 'all' | null;
   /** The user took over (typed or clicked) an agent or shared tab; agent input is refused until resume. */
   paused: boolean;
+  /** The browser profile the tab lives in; sharing an Agent-profile tab reaches only that Agent's clients. */
+  profile: BrowserTabProfile;
 };
 
 /** One agent action, reported by the agent's MCP server, for the pane's highlight overlay and action feed. */

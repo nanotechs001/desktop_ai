@@ -62,6 +62,8 @@ type Connection = {
   client: RelayClient;
   /** The chat the client's MCP runs for (`X-Aion-Conversation`); undefined for older MCPs and other engines. */
   conversationId?: string;
+  /** Settles once the client's Agent profile is resolved (once per connection) and set on `client`. */
+  profileReady: Promise<void>;
   ws: WebSocket;
   actionTimes: number[];
   createTimes: number[];
@@ -156,6 +158,9 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
 
   const createTarget = async (conn: Connection, params: Params): Promise<Params> => {
     const { client } = conn;
+    // Only the url comes from the agent; any profile-like field in its params is ignored.
+    const { profile } = client;
+    if (!profile) throw new Error("This agent's browser profile is not known yet");
     const { url } = params;
     if (typeof url !== 'string' || !isAgentNavigableUrl(url, blockedPorts())) {
       throw new Error(
@@ -177,15 +182,13 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     conn.pendingCreates += 1;
     let contents: RelayContents;
     try {
-      // Only the url comes from the agent; any profile-like field in its params is ignored.
-      const profile = await deps.resolveProfile(conn.conversationId);
       const waiting = deps.waitForTab(url, conn.conversationId, profile);
       deps.openTab(url, conn.conversationId, profile);
       contents = await waiting;
     } finally {
       conn.pendingCreates -= 1;
     }
-    registry.track(contents);
+    registry.track(contents, profile);
     registry.claim(contents.id, client);
     // The client may have gone while the tab opened; it must not stay claimable under its label.
     if (!connections.has(client.clientId)) registry.releaseClient(client.clientId);
@@ -418,6 +421,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     }
     const { id, method, params, sessionId } = request;
     try {
+      await conn.profileReady;
       const result =
         sessionId === undefined
           ? await browserCommand(conn, method, params)
@@ -492,6 +496,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     const conn: Connection = {
       client: { clientId: randomUUID(), label },
       conversationId,
+      profileReady: Promise.resolve(),
       ws,
       actionTimes: [],
       createTimes: [],
@@ -504,6 +509,13 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       queuedBytes: 0,
       bufferTimer: null,
     };
+    // Resolved once: every command waits for it, and shared Agent-profile tabs stay out of reach until it is known.
+    conn.profileReady = deps.resolveProfile(conversationId).then((profile) => {
+      conn.client = { ...conn.client, profile };
+    });
+    conn.profileReady.catch((error: unknown) =>
+      console.warn('[AgentBrowserRelay] no browser profile for a client:', error)
+    );
     connections.set(conn.client.clientId, conn);
     ws.on('message', (data) => enqueue(conn, data.toString()));
     ws.on('close', () => {

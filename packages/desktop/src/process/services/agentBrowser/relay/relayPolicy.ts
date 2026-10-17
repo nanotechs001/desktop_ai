@@ -12,7 +12,8 @@
  *   (a) keep web pages and non-app processes out (loopback, token, no Origin, no HTTP discovery);
  *   (b) give the MCP tools (our code) a minimal, safe CDP surface (this file);
  *   (c) keep the user in control: ownership, take-over pause and confirmation.
- * No separate partition and no per-origin approval, by design.
+ * No per-origin approval, by design. Each Agent browses in its own profile (Task 14), and sharing reaches only the
+ * shared tab's profile (ruling N-16).
  *
  * Accepted under P2-H: the url check guards the explicit navigation APIs (Page.navigate,
  * Target.createTarget), it is not a sandbox. Setting `location` from the agent's own isolated world, or
@@ -146,9 +147,15 @@ const PAUSED_METHODS = new Set(['Page.navigate', 'Page.reload', 'Page.stopLoadin
 const ALLOWED = { allow: true } as const;
 const deny = (message: string): PolicyDecision => ({ allow: false, code: POLICY_ERROR_CODE, message });
 
-/** True when `client` may drive the tab: it opened it, or the user shared it. */
-export const mayAct = (tab: TabOwnership | null, client: RelayClient): boolean =>
-  tab !== null && (tab.sharedWith === 'all' || (tab.owner !== 'user' && tab.owner.clientId === client.clientId));
+/** True when `client` may drive the tab: it opened it, or the user shared it with the agents of its profile. */
+export const mayAct = (tab: TabOwnership | null, client: RelayClient): boolean => {
+  if (tab === null) return false;
+  if (tab.owner !== 'user' && tab.owner.clientId === client.clientId) return true;
+  if (tab.sharedWith !== 'all') return false;
+  // Ruling N-16: a shared Personal tab is open to every client; a shared Agent-profile tab only to that Agent's.
+  if (tab.profile.kind === 'personal') return true;
+  return client.profile?.kind === 'agent' && client.profile.agentId === tab.profile.agentId;
+};
 
 const isOwnContext = (value: unknown, ownContexts: ReadonlySet<number>): boolean =>
   typeof value === 'number' && ownContexts.has(value);

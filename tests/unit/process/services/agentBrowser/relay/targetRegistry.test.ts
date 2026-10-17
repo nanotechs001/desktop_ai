@@ -21,10 +21,29 @@ describe('targetRegistry', () => {
     const onChange = vi.fn();
     registry.onChange(onChange);
     registry.track(new FakeContents(5));
-    expect(registry.ownership(5)).toEqual({ webContentsId: 5, owner: 'user', sharedWith: null, paused: false });
+    const personal = { kind: 'personal' };
+    expect(registry.ownership(5)).toEqual({
+      webContentsId: 5,
+      owner: 'user',
+      sharedWith: null,
+      paused: false,
+      profile: personal,
+    });
     registry.claim(5, agent);
     expect(registry.ownership(5)?.owner).toEqual(agent);
-    expect(onChange).toHaveBeenLastCalledWith([{ webContentsId: 5, owner: agent, sharedWith: null, paused: false }]);
+    expect(onChange).toHaveBeenLastCalledWith([
+      { webContentsId: 5, owner: agent, sharedWith: null, paused: false, profile: personal },
+    ]);
+  });
+
+  it("records each tab's browser profile, and an owner is only the client's id and label", () => {
+    const registry = createTargetRegistry();
+    const profile = { kind: 'agent', agentId: 'bare:x' } as const;
+    registry.track(new FakeContents(6), profile);
+    registry.claim(6, { ...agent, profile });
+
+    expect(registry.ownership(6)?.profile).toEqual(profile);
+    expect(registry.ownership(6)?.owner).toEqual(agent);
   });
 
   it('pauses an agent or shared tab on user input, but not a private user tab', () => {
@@ -173,7 +192,13 @@ describe('targetRegistry', () => {
     registry.track(contents);
     registry.claim(4, agent);
     contents.destroy();
-    expect(onDestroyed).toHaveBeenCalledWith({ webContentsId: 4, owner: agent, sharedWith: null, paused: false });
+    expect(onDestroyed).toHaveBeenCalledWith({
+      webContentsId: 4,
+      owner: agent,
+      sharedWith: null,
+      paused: false,
+      profile: { kind: 'personal' },
+    });
     expect(registry.ownership(4)).toBeNull();
     expect(registry.listTargets()).toEqual([]);
   });

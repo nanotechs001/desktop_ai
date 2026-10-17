@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { TabOwnership } from '@/common/types/browser';
 import { isAgentNavigableUrl } from '@process/services/agentBrowser/relay/agentUrl';
-import { decideRelayCommand, type PolicyContext } from '@process/services/agentBrowser/relay/relayPolicy';
+import { decideRelayCommand, mayAct, type PolicyContext } from '@process/services/agentBrowser/relay/relayPolicy';
 
 const agent = { clientId: 'c1', label: 'claude' };
-const ownTab: TabOwnership = { webContentsId: 7, owner: agent, sharedWith: null, paused: false };
-const userTab: TabOwnership = { webContentsId: 8, owner: 'user', sharedWith: null, paused: false };
+const PERSONAL = { kind: 'personal' } as const;
+const ownTab: TabOwnership = { webContentsId: 7, owner: agent, sharedWith: null, paused: false, profile: PERSONAL };
+const userTab: TabOwnership = { webContentsId: 8, owner: 'user', sharedWith: null, paused: false, profile: PERSONAL };
 const RELAY_PORT = 4100;
 const BACKEND_PORT = 4200;
 
@@ -179,6 +180,15 @@ describe('decideRelayCommand: ownership and pause', () => {
     const other: TabOwnership = { ...ownTab, owner: { clientId: 'c2', label: 'codex' } };
     expect(decide('Page.getFrameTree', {}, { tab: other }).allow).toBe(false);
     expect(decide('Page.getFrameTree', {}, { tab: { ...other, sharedWith: 'all' } }).allow).toBe(true);
+  });
+
+  it("allows a shared Agent-profile tab only to a client of that Agent's profile", () => {
+    const sales = { kind: 'agent', agentId: 'bare:sales' } as const;
+    const tab: TabOwnership = { ...userTab, sharedWith: 'all', profile: sales };
+    expect(mayAct(tab, { ...agent, profile: sales })).toBe(true);
+    expect(mayAct(tab, { ...agent, profile: { kind: 'agent', agentId: 'bare:other' } })).toBe(false);
+    expect(mayAct(tab, agent)).toBe(false); // profile not resolved yet: fails closed
+    expect(mayAct({ ...tab, sharedWith: null }, { ...agent, profile: sales })).toBe(false);
   });
 
   it('denies everything when the tab is gone', () => {

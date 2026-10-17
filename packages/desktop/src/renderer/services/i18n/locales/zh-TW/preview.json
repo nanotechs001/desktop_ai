@@ -233,7 +233,9 @@
       "paused": "Paused: you took over.",
       "resume": "Resume agent",
       "actions": "Agent actions",
-      "actionFailed": "Couldn't update the agent. Try again."
+      "actionFailed": "Couldn't update the agent. Try again.",
+      "shareWith": "與 {{name}} 共用",
+      "sharedWith": "僅與 {{name}} 共用"
     },
     "confirm": {
       "title": "Allow this agent action?",

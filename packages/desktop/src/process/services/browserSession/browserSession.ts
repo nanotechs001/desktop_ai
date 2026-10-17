@@ -120,7 +120,7 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   rememberBrowserSession(partition, browserSession);
   browserSession.setUserAgent(toChromeUserAgent(app.userAgentFallback));
   installDownloads(browserSession);
-  installPermissions(browserSession);
+  installPermissions(browserSession, partition);
   browserSession.webRequest.onBeforeSendHeaders({ urls: GOOGLE_URL_FILTER }, (details, callback) => {
     if (!isGoogleHost(details.url)) {
       callback({ requestHeaders: details.requestHeaders });

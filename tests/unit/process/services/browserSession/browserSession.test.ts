@@ -196,7 +196,7 @@ describe('initBrowserSession', () => {
     expect(mocks.installDownloads).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads).toHaveBeenCalledWith(mocks.browserSession);
     expect(mocks.installPermissions).toHaveBeenCalledTimes(1);
-    expect(mocks.installPermissions).toHaveBeenCalledWith(mocks.browserSession);
+    expect(mocks.installPermissions).toHaveBeenCalledWith(mocks.browserSession, 'persist:aionui-browser');
     expect(mocks.app.on.mock.calls.filter(([name]) => name === 'web-contents-created')).toHaveLength(1);
   });
 
@@ -545,7 +545,10 @@ describe('ensureBrowserSession (Agent profiles)', () => {
     expect(mocks.agentSession.setUserAgent).toHaveBeenCalledWith(CHROME_UA);
     expect(mocks.agentSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads.mock.calls).toEqual([[mocks.browserSession], [mocks.agentSession]]);
-    expect(mocks.installPermissions.mock.calls).toEqual([[mocks.browserSession], [mocks.agentSession]]);
+    expect(mocks.installPermissions.mock.calls).toEqual([
+      [mocks.browserSession, 'persist:aionui-browser'],
+      [mocks.agentSession, partition],
+    ]);
     expect(mocks.initBrowserExtensions).toHaveBeenCalledTimes(2);
     expect(mocks.installExtensionProtocols).toHaveBeenCalledTimes(1);
     // One dispatcher serves every browser session.

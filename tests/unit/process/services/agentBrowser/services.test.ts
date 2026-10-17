@@ -176,7 +176,9 @@ describe('agent browser services: tabs', () => {
 
     const tab = newTab(7);
     const emits = h.ipcBridge.agentBrowser.ownershipChanged.emit.mock.calls;
-    expect(emits.at(-1)?.[0]).toEqual([{ webContentsId: 7, owner: 'user', sharedWith: null, paused: false }]);
+    expect(emits.at(-1)?.[0]).toEqual([
+      { webContentsId: 7, owner: 'user', sharedWith: null, paused: false, profile: DEFAULT_AGENT_PROFILE },
+    ]);
     tab.navigate('https://a.test/');
 
     expect((await created).result).toEqual({ targetId: 'wc-7' });

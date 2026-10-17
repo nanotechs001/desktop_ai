@@ -10,6 +10,8 @@ import { History, Robot } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { AgentActionEvent, TabOwnership } from '@/common/types/browser';
+import { profilePresentation } from '../BrowserProfiles/ProfileBadge';
+import { useProfileAgents } from '../BrowserProfiles/useBrowserProfiles';
 
 const KEY = 'preview.browserChrome.agent';
 
@@ -52,9 +54,14 @@ export type AgentControlsProps = {
 /** Nav bar controls: the Agent badge on agent-owned tabs, "Share with agent" on the user's, and the action feed. */
 const AgentControls: React.FC<AgentControlsProps> = ({ webContentsId, ownership, actions }) => {
   const { t } = useTranslation();
+  const profile = ownership?.profile;
+  const agents = useProfileAgents(profile?.kind === 'agent');
   if (!ownership) return null;
 
   const shared = ownership.sharedWith === 'all';
+  // Sharing a tab in an Agent's profile reaches only that Agent (ruling N-16), so the button names it.
+  const agentName = profile?.kind === 'agent' ? profilePresentation(profile, agents, t).name : null;
+  const shareLabel = agentName ? t(`${KEY}.shareWith`, { name: agentName }) : t(`${KEY}.share`);
   return (
     <>
       {ownership.owner === 'user' ? (
@@ -62,10 +69,11 @@ const AgentControls: React.FC<AgentControlsProps> = ({ webContentsId, ownership,
           size='mini'
           type={shared ? 'primary' : 'secondary'}
           aria-pressed={shared}
+          title={shared && agentName ? t(`${KEY}.sharedWith`, { name: agentName }) : undefined}
           icon={<Robot theme='outline' size='14' />}
           onClick={() => toggleShare(webContentsId, !shared, () => Message.error(t(`${KEY}.actionFailed`)))}
         >
-          {t(`${KEY}.${shared ? 'stopSharing' : 'share'}`)}
+          {shared ? t(`${KEY}.stopSharing`) : shareLabel}
         </Button>
       ) : (
         <Tag icon={<Robot theme='outline' size='14' />}>{t(`${KEY}.badge`)}</Tag>

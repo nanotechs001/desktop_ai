@@ -1338,6 +1338,8 @@ export type I18nKey =
   | 'preview.browserChrome.agent.paused'
   | 'preview.browserChrome.agent.resume'
   | 'preview.browserChrome.agent.share'
+  | 'preview.browserChrome.agent.shareWith'
+  | 'preview.browserChrome.agent.sharedWith'
   | 'preview.browserChrome.agent.stopSharing'
   | 'preview.browserChrome.confirm.allow'
   | 'preview.browserChrome.confirm.always'

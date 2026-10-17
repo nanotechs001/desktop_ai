@@ -9,7 +9,7 @@ import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
-import { partitionOfProfile, partitionOfSession } from '@process/services/browserSession/profiles/browserProfiles';
+import { partitionOfProfile, profileOfSession } from '@process/services/browserSession/profiles/browserProfiles';
 import { PendingConfirms } from './confirmGate';
 import { startRelayServer } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
@@ -173,10 +173,12 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   const waiter = new CreateTabWaiter<Electron.WebContents>();
   // One listener, so a new tab is tracked before the relay's createTarget waiter receives it.
   onBrowserContentsCreated((contents) => {
-    registry.track(contents);
+    const profile = profileOfSession(contents.session);
+    // Every browser session has a profile; a tab without one is never exposed to agents.
+    if (!profile) return;
+    registry.track(contents, profile);
     watchUserInput(contents, registry);
-    if (contents.getType() === 'webview')
-      offerNewTab(waiter, contents, partitionOfSession(contents.session) ?? undefined);
+    if (contents.getType() === 'webview') offerNewTab(waiter, contents, partitionOfProfile(profile));
   });
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
   confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));

@@ -22,18 +22,23 @@ vi.mock('os', async (importOriginal) => {
 import {
   __resetPermissionsForTests,
   decidePermission,
+  forgetPermissions,
   getPermissionRequests,
   installPermissions,
-  loadPermissionStore,
+  loadPermissionStores,
   MAX_OPEN_PERMISSION_PROMPTS,
   PendingPermissions,
   rememberPermission,
   replyPermission,
-  savePermissionStore,
+  savePermissionStores,
   type PermissionStore,
 } from '@process/services/browserSession/permissions';
+import { agentPartition } from '@process/services/browserSession/profiles/browserProfiles';
 
 const ORIGIN = 'https://a.test';
+const PERSONAL = 'persist:aionui-browser';
+const AGENT_PARTITION = agentPartition('bare:perm');
+const PERSONAL_PROFILE = { kind: 'personal' } as const;
 
 beforeEach(() => {
   mocks.home = mkdtempSync(path.join(tmpdir(), 'aionui-perm-'));
@@ -83,39 +88,54 @@ describe('permission store', () => {
     expect(after).not.toBe(before);
   });
 
-  it('loadPermissionStore returns {} for a missing or corrupt file', () => {
+  it('loadPermissionStores returns {} for a missing or corrupt file', () => {
     const file = path.join(mocks.home, 'store.json');
-    expect(loadPermissionStore(file)).toEqual({});
+    expect(loadPermissionStores(file)).toEqual({});
     writeFileSync(file, '{not json');
-    expect(loadPermissionStore(file)).toEqual({});
+    expect(loadPermissionStores(file)).toEqual({});
     writeFileSync(file, '[1,2]');
-    expect(loadPermissionStore(file)).toEqual({});
+    expect(loadPermissionStores(file)).toEqual({});
   });
 
-  it('loadPermissionStore drops entries that are not allow/deny', () => {
+  it('loadPermissionStores drops entries that are not allow/deny', () => {
     const file = path.join(mocks.home, 'store.json');
-    writeFileSync(file, JSON.stringify({ [ORIGIN]: { media: 'allow', midi: 'maybe' }, bad: 'x' }));
-    expect(loadPermissionStore(file)).toEqual({ [ORIGIN]: { media: 'allow' } });
+    writeFileSync(
+      file,
+      JSON.stringify({ partitions: { [PERSONAL]: { [ORIGIN]: { media: 'allow', midi: 'maybe' }, bad: 'x' }, x: 5 } })
+    );
+    expect(loadPermissionStores(file)).toEqual({ [PERSONAL]: { [ORIGIN]: { media: 'allow' } } });
   });
 
-  it('savePermissionStore removes its temp file and rethrows when the rename fails', () => {
+  it("reads a flat (pre-profile) file as Personal's decisions", () => {
+    const file = path.join(mocks.home, 'store.json');
+    writeFileSync(file, JSON.stringify({ [ORIGIN]: { media: 'allow' } }));
+    expect(loadPermissionStores(file)).toEqual({ [PERSONAL]: { [ORIGIN]: { media: 'allow' } } });
+  });
+
+  it('savePermissionStores removes its temp file and rethrows when the rename fails', () => {
     const file = path.join(mocks.home, 'blocked');
     mkdirSync(file); // renaming a file over a directory fails
-    expect(() => savePermissionStore(file, {})).toThrow();
+    expect(() => savePermissionStores(file, {})).toThrow();
     expect(readdirSync(mocks.home).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });
 
-  it('savePermissionStore round-trips and creates the parent directory', () => {
+  it('savePermissionStores round-trips per partition and creates the parent directory', () => {
     const file = path.join(mocks.home, 'nested', 'store.json');
-    const store: PermissionStore = { [ORIGIN]: { media: 'deny' } };
-    savePermissionStore(file, store);
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(store);
-    expect(loadPermissionStore(file)).toEqual(store);
+    const stores = { [PERSONAL]: { [ORIGIN]: { media: 'deny' as const } }, [AGENT_PARTITION]: {} };
+    savePermissionStores(file, stores);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ partitions: stores });
+    expect(loadPermissionStores(file)).toEqual(stores);
   });
 });
 
 describe('PendingPermissions', () => {
-  const req: Omit<PermissionRequest, 'id'> = { origin: ORIGIN, permission: 'media', mediaTypes: ['video'] };
+  const req: Omit<PermissionRequest, 'id'> = {
+    origin: ORIGIN,
+    permission: 'media',
+    mediaTypes: ['video'],
+    partition: PERSONAL,
+    profile: PERSONAL_PROFILE,
+  };
 
   it('resolves the promise with the reply and removes the request', async () => {
     const pending = new PendingPermissions();
@@ -168,6 +188,17 @@ describe('PendingPermissions', () => {
     expect(pending.list()).toHaveLength(1);
     pending.reply(pending.list()[0].id, true);
     await expect(other).resolves.toBe(true);
+  });
+
+  it('keeps one prompt per profile: the same site asking in two profiles at once gets two prompts', () => {
+    const pending = new PendingPermissions();
+    void pending.request(req, 60_000);
+    void pending.request(
+      { ...req, partition: AGENT_PARTITION, profile: { kind: 'agent', agentId: 'bare:perm' } },
+      60_000
+    );
+
+    expect(pending.list().map((r) => r.partition)).toEqual([PERSONAL, AGENT_PARTITION]);
   });
 
   it('auto-denies a request beyond the open-prompt cap without listing it', async () => {
@@ -237,17 +268,20 @@ describe('installPermissions', () => {
     details: { requestingUrl?: string }
   ) => boolean;
 
-  const setup = () => {
+  const setup = (partition = PERSONAL) => {
     let request!: RequestHandler;
     let check!: CheckHandler;
-    installPermissions({
-      setPermissionRequestHandler: (handler: RequestHandler) => {
-        request = handler;
-      },
-      setPermissionCheckHandler: (handler: CheckHandler) => {
-        check = handler;
-      },
-    } as unknown as Electron.Session);
+    installPermissions(
+      {
+        setPermissionRequestHandler: (handler: RequestHandler) => {
+          request = handler;
+        },
+        setPermissionCheckHandler: (handler: CheckHandler) => {
+          check = handler;
+        },
+      } as unknown as Electron.Session,
+      partition
+    );
     return { request, check };
   };
   const contents = { getURL: () => `${ORIGIN}/page` };
@@ -262,7 +296,14 @@ describe('installPermissions', () => {
 
     request(contents, 'media', callback, { requestingUrl: `${ORIGIN}/x`, mediaTypes: ['audio', 'video'] });
     expect(getPermissionRequests()).toEqual([
-      { id: expect.any(String), origin: ORIGIN, permission: 'media', mediaTypes: ['audio', 'video'] },
+      {
+        id: expect.any(String),
+        origin: ORIGIN,
+        permission: 'media',
+        mediaTypes: ['audio', 'video'],
+        partition: PERSONAL,
+        profile: PERSONAL_PROFILE,
+      },
     ]);
     expect(mocks.emit).toHaveBeenLastCalledWith(getPermissionRequests());
     expect(callback).toHaveBeenCalledTimes(2);
@@ -314,7 +355,46 @@ describe('installPermissions', () => {
     expect(callback).toHaveBeenCalledWith(true);
     expect(getPermissionRequests()).toEqual([]);
     const saved = JSON.parse(readFileSync(path.join(mocks.home, '.aionui', 'browser-permissions.json'), 'utf8'));
-    expect(saved).toEqual({ [ORIGIN]: { geolocation: 'allow' } });
+    expect(saved).toEqual({ partitions: { [PERSONAL]: { [ORIGIN]: { geolocation: 'allow' } } } });
+  });
+
+  it('Always allow in Personal does not apply in an Agent partition, and vice versa', async () => {
+    const personal = setup();
+    const agent = setup(AGENT_PARTITION);
+    const details = { requestingUrl: `${ORIGIN}/x` };
+    personal.request(contents, 'geolocation', vi.fn(), {});
+    expect(getPermissionRequests()[0]).toMatchObject({ partition: PERSONAL, profile: PERSONAL_PROFILE });
+    replyPermission(getPermissionRequests()[0].id, true, true);
+
+    expect(personal.check(null, 'geolocation', ORIGIN, details)).toBe(true);
+    expect(agent.check(null, 'geolocation', ORIGIN, details)).toBe(false);
+    const callback = vi.fn();
+    agent.request(contents, 'geolocation', callback, {});
+    expect(callback).not.toHaveBeenCalled();
+    expect(getPermissionRequests()).toEqual([
+      expect.objectContaining({ partition: AGENT_PARTITION, profile: { kind: 'agent', agentId: 'bare:perm' } }),
+    ]);
+    replyPermission(getPermissionRequests()[0].id, false, true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(callback).toHaveBeenCalledWith(false);
+    expect(personal.check(null, 'geolocation', ORIGIN, details)).toBe(true);
+  });
+
+  it("forgetPermissions drops a deleted Agent's decisions and keeps the other profiles'", () => {
+    const personal = setup();
+    const agent = setup(AGENT_PARTITION);
+    const details = { requestingUrl: `${ORIGIN}/x` };
+    personal.request(contents, 'media', vi.fn(), {});
+    replyPermission(getPermissionRequests()[0].id, true, true);
+    agent.request(contents, 'media', vi.fn(), {});
+    replyPermission(getPermissionRequests()[0].id, true, true);
+
+    forgetPermissions(AGENT_PARTITION);
+
+    expect(agent.check(null, 'media', ORIGIN, details)).toBe(false);
+    expect(personal.check(null, 'media', ORIGIN, details)).toBe(true);
+    const saved = JSON.parse(readFileSync(path.join(mocks.home, '.aionui', 'browser-permissions.json'), 'utf8'));
+    expect(Object.keys(saved.partitions)).toEqual([PERSONAL]);
   });
 
   it('does not remember when remember is false, and a late reply returns false', () => {
@@ -366,7 +446,10 @@ describe('installPermissions', () => {
 
     expect(callback).toHaveBeenCalledWith(false);
     expect(getPermissionRequests()).toEqual([]);
-    // Other permissions and other sites still prompt.
+    // Other permissions, other sites and other profiles still prompt.
+    setup(AGENT_PARTITION).request(contents, 'geolocation', vi.fn(), {});
+    expect(getPermissionRequests().map((r) => r.partition)).toEqual([AGENT_PARTITION]);
+    replyPermission(getPermissionRequests()[0].id, true, false);
     request(contents, 'notifications', vi.fn(), {});
     request({ getURL: () => 'https://b.test/' }, 'geolocation', vi.fn(), {});
     expect(getPermissionRequests().map((r) => `${r.origin} ${r.permission}`)).toEqual([

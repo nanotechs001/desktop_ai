@@ -9,6 +9,7 @@ import { Button, Checkbox, Modal } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { PermissionRequest } from '@/common/types/browser';
+import ProfileBadge from '../BrowserProfiles/ProfileBadge';
 
 const KEY = 'preview.browserChrome.permission';
 
@@ -49,7 +50,11 @@ const PromptBody: React.FC<{ request: PermissionRequest }> = ({ request }) => {
 
   return (
     <div className='flex flex-col gap-16px'>
-      <div>{t(`${KEY}.${messageKey(request)}`, { origin: request.origin })}</div>
+      {/* Each profile remembers its own answers, so the prompt says whose browser asks. */}
+      <div className='flex items-start gap-8px'>
+        <ProfileBadge profile={request.profile} size={16} />
+        <div>{t(`${KEY}.${messageKey(request)}`, { origin: request.origin })}</div>
+      </div>
       <Checkbox checked={remember} onChange={setRemember}>
         {t(`${KEY}.remember`)}
       </Checkbox>

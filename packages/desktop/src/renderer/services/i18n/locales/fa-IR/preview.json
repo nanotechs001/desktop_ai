@@ -233,7 +233,9 @@
       "paused": "Paused: you took over.",
       "resume": "Resume agent",
       "actions": "Agent actions",
-      "actionFailed": "Couldn't update the agent. Try again."
+      "actionFailed": "Couldn't update the agent. Try again.",
+      "shareWith": "اشتراک با {{name}}",
+      "sharedWith": "فقط با {{name}} به اشتراک گذاشته شده"
     },
     "confirm": {
       "title": "Allow this agent action?",

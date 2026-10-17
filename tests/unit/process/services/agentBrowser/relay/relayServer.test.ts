@@ -284,6 +284,39 @@ describe('relay server: targets', () => {
     expect(waitForTab).not.toHaveBeenCalled();
   });
 
+  it("a shared tab in Agent X's profile reaches only X's clients; a shared Personal tab reaches every client", async () => {
+    const handle = await start();
+    const agentX = await connect(handle, 'x', { 'X-Aion-Conversation': 'conv_X' });
+    const agentY = await connect(handle, 'y', { 'X-Aion-Conversation': 'conv_Y' });
+    const noChat = await connect(handle, 'none');
+    registry.track(new FakeContents(80), agentProfileOf('conv_X'));
+    registry.track(new FakeContents(81), { kind: 'personal' });
+    registry.track(new FakeContents(82), agentProfileOf());
+    for (const id of [80, 81, 82]) registry.share(id, true);
+
+    const listed = async (client: TestClient) =>
+      (((await client.send('AionRelay.listTabs')).result?.tabs ?? []) as Array<{ targetId: string }>)
+        .map((t) => t.targetId)
+        .toSorted();
+    const attachTo = (client: TestClient, targetId: string) =>
+      client.send('Target.attachToTarget', { targetId, flatten: true });
+
+    expect(await listed(agentX)).toEqual(['wc-80', 'wc-81']);
+    expect((await attachTo(agentX, 'wc-80')).error).toBeUndefined();
+    expect(await listed(agentY)).toEqual(['wc-81']);
+    expect((await attachTo(agentY, 'wc-80')).error?.message).toMatch(/not shared/i);
+    expect((await agentY.send('Target.closeTarget', { targetId: 'wc-80' })).error).toBeDefined();
+    const targets = (await agentY.send('Target.getTargets')).result?.targetInfos as Array<{ targetId: string }>;
+    expect(targets.map((t) => t.targetId)).toEqual(['wc-81']);
+    expect((await attachTo(agentY, 'wc-81')).error).toBeUndefined();
+    // A client with no chat is the default Agent's: among Agent profiles it reaches only the default one.
+    expect(await listed(noChat)).toEqual(['wc-81', 'wc-82']);
+    expect((await attachTo(noChat, 'wc-80')).error?.message).toMatch(/not shared/i);
+    expect(registry.ownership(80)?.profile).toEqual(agentProfileOf('conv_X'));
+    // The profile is resolved once per connection, not per command.
+    expect(resolveProfile.mock.calls.filter(([id]) => id === 'conv_Y')).toHaveLength(1);
+  });
+
   it("an agent cannot target a Personal tab unless shared, nor another Agent's tab", async () => {
     const handle = await start();
     nextTab = () => {

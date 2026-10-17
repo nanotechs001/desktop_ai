@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { TabOwnership } from '@/common/types/browser';
+import type { BrowserTabProfile, TabOwnership } from '@/common/types/browser';
 
-/** One relay WebSocket connection (an agent's MCP server). */
-export type RelayClient = { clientId: string; label: string };
+/**
+ * One relay WebSocket connection (an agent's MCP server). `profile` is its chat's Agent profile, set once main has
+ * resolved it; until then the client reaches no shared Agent-profile tab.
+ */
+export type RelayClient = { clientId: string; label: string; profile?: BrowserTabProfile };
 
 /** The part of `webContents.debugger` the relay uses; Electron's Debugger satisfies it. */
 export type RelayDebugger = {
@@ -54,8 +57,8 @@ export type RelayTargetInfo = {
 };
 
 export type TargetRegistry = {
-  /** Starts tracking a browser tab (user-owned) until it is destroyed. Tracking twice is a no-op. */
-  track(contents: RelayContents): void;
+  /** Starts tracking a browser tab of `profile` (Personal if unset), user-owned, until it is destroyed. Tracking twice is a no-op. */
+  track(contents: RelayContents, profile?: BrowserTabProfile): void;
   contents(webContentsId: number): RelayContents | null;
   listTargets(): RelayTargetInfo[];
   ownership(webContentsId: number): TabOwnership | null;
@@ -118,6 +121,7 @@ const callEach = <A>(listeners: Iterable<(arg: A) => void>, arg: A): void => {
   }
 };
 const DISCONNECTED_LABEL = 'agent (disconnected)';
+const PERSONAL_PROFILE: BrowserTabProfile = { kind: 'personal' };
 
 /** The CDP target id of a browser tab. */
 export const targetIdFor = (webContentsId: number): string => `${TARGET_PREFIX}${webContentsId}`;
@@ -147,12 +151,12 @@ export function createTargetRegistry(): TargetRegistry {
   };
 
   return {
-    track(contents) {
+    track(contents, profile = PERSONAL_PROFILE) {
       if (tabs.has(contents.id) || contents.isDestroyed()) return;
       const webContentsId = contents.id;
       tabs.set(webContentsId, {
         contents,
-        ownership: { webContentsId, owner: 'user', sharedWith: null, paused: false },
+        ownership: { webContentsId, owner: 'user', sharedWith: null, paused: false, profile },
       });
       contents.once('destroyed', () => {
         const tab = tabs.get(webContentsId);
@@ -176,7 +180,7 @@ export function createTargetRegistry(): TargetRegistry {
       })),
     ownership: (webContentsId) => tabs.get(webContentsId)?.ownership ?? null,
     all,
-    claim: (webContentsId, client) => update(webContentsId, { owner: { ...client } }),
+    claim: (webContentsId, { clientId, label }) => update(webContentsId, { owner: { clientId, label } }),
     share: (webContentsId, on) => update(webContentsId, { sharedWith: on ? 'all' : null }),
     setPaused: (webContentsId, paused) => update(webContentsId, { paused }),
     releaseClient(clientId) {
