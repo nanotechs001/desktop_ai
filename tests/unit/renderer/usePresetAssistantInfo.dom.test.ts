@@ -173,6 +173,7 @@ describe('usePresetAssistantInfo', () => {
       isEmoji: false,
       backend: 'gemini',
       assistantId: 'assistant-social',
+      source: 'generated',
     });
   });
 
@@ -250,6 +251,7 @@ describe('usePresetAssistantInfo', () => {
       isFallback: true,
       backend: 'codex',
       assistantId: 'assistant-local-avatar',
+      source: 'user',
     });
   });
 
@@ -283,6 +285,7 @@ describe('usePresetAssistantInfo', () => {
       isFallback: true,
       backend: 'codex',
       assistantId: 'bare-codex',
+      source: 'generated',
     });
   });
 
