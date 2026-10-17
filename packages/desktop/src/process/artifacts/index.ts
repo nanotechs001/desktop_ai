@@ -44,10 +44,16 @@ const artifactLibsDir = (): string | null =>
 /** The last port the server bound, so artifact links in old chats keep working after a restart. */
 const PORT_FILE = 'server.json';
 
-const readLastPort = async (rootDir: string): Promise<number | undefined> => {
+const MIN_PORT = 1024;
+const MAX_PORT = 65535;
+
+/** The remembered port, or undefined when the file is missing, unreadable or holds anything but an integer in 1024-65535. */
+export const readLastPort = async (rootDir: string): Promise<number | undefined> => {
   try {
     const { port } = JSON.parse(await fs.readFile(path.join(rootDir, PORT_FILE), 'utf8')) as { port?: unknown };
-    return Number.isInteger(port) && (port as number) > 0 && (port as number) < 65536 ? (port as number) : undefined;
+    return typeof port === 'number' && Number.isInteger(port) && port >= MIN_PORT && port <= MAX_PORT
+      ? port
+      : undefined;
   } catch {
     return undefined; // first launch or an unreadable file: a random port
   }

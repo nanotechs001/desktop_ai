@@ -65,7 +65,10 @@ export function getAgentPresentation(
 export const isEngineEntry = (record: { source?: string } | null | undefined): boolean =>
   record?.source === 'generated';
 
-/** The records an Agent picker may offer: every Agent, without the engines' own entries. */
+/**
+ * The records an Agent picker may offer: every Agent, without the engines' own entries. Built-in presets
+ * (`source: 'builtin'`) are Agents and stay in (ruling N-21).
+ */
 export const pickableAgents = <T extends { source?: string }>(records: readonly T[]): T[] =>
   records.filter((record) => !isEngineEntry(record));
 

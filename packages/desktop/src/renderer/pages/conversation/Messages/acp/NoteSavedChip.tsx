@@ -18,7 +18,8 @@ export type NoteSavedChipProps = NoteChipData & { conversationId?: string };
 
 /**
  * Chat chip for a note an agent saved to its notebook: the note (plain text), where it came from, and a link to the
- * notebook of the chat's Agent (the default Agent's for a chat without one) in the Agent editor.
+ * notebook of the chat's Agent (the default Agent's for a chat without one) in the Agent editor. The link is hidden
+ * when the chat is gone, because its Agent can't be resolved then.
  */
 const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversationId }) => {
   const { t } = useTranslation();
@@ -28,6 +29,7 @@ const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversatio
     getConversationOrNull(conversationId!)
   );
   const agentId = conversation?.assistant?.id ?? DEFAULT_AGENT_ID;
+  const agentUnresolved = conversationId !== undefined && conversation === null;
 
   return (
     <div className='flex flex-col gap-4px rounded-8px border bg-1 p-12px max-w-420px' data-testid='note-saved-chip'>
@@ -39,17 +41,19 @@ const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversatio
         </span>
       </div>
       <div className='text-13px text-t-primary break-words'>{text}</div>
-      <div>
-        <Button
-          size='mini'
-          type='text'
-          className='!px-0'
-          disabled={conversationId !== undefined && conversation === undefined}
-          onClick={() => navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: agentId } })}
-        >
-          {t('messages.noteChip.open')}
-        </Button>
-      </div>
+      {agentUnresolved ? null : (
+        <div>
+          <Button
+            size='mini'
+            type='text'
+            className='!px-0'
+            disabled={conversationId !== undefined && conversation === undefined}
+            onClick={() => navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: agentId } })}
+          >
+            {t('messages.noteChip.open')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

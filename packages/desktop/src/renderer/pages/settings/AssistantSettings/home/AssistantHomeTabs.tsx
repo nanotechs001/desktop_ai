@@ -8,6 +8,7 @@ import type { AssistantListItem } from '../types';
 import EnabledAssistantsList from './EnabledAssistantsList';
 import MyAssistantsList from './MyAssistantsList';
 import OfficialAssistantsGrid from './OfficialAssistantsGrid';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import AddActionButton from '@/renderer/components/base/AddActionButton';
 import { AionSearchInput } from '@/renderer/components/base';
@@ -36,7 +37,7 @@ type AssistantHomeTabsProps = {
 type HomeTab = 'enabled' | 'mine' | 'official';
 
 const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
-  assistants,
+  assistants: allAssistants,
   assistantOrder,
   localeKey,
   onOpenDetail,
@@ -55,6 +56,9 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
   const isMobile = layout?.isMobile ?? false;
   const [tab, setTab] = useState<HomeTab>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // N-22: an engine's own generated entry is managed in Settings -> Engine, so this page lists Agents only.
+  const assistants = useMemo(() => pickableAgents(allAssistants), [allAssistants]);
 
   const selectTab = (next: HomeTab) => {
     setTab(next);

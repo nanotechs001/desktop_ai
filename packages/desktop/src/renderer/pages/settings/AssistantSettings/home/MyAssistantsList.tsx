@@ -49,7 +49,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   const { t } = useTranslation();
   const [filter, setFilter] = useState<AssistantEnabledFilter>('all');
 
-  const { cliAssistants, createdAssistants } = useMemo(() => {
+  const { createdAssistants } = useMemo(() => {
     const filtered = filterByEnabled(assistants, filter);
     return groupMyAssistants(filtered);
   }, [assistants, filter]);
@@ -85,7 +85,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   // The "created by me" group shows a guiding empty state when the user has
   // no custom assistants yet (only in the unfiltered view — a filtered empty
   // just means "no matches", not "none exist").
-  const hasVisibleAssistants = cliAssistants.length > 0 || createdAssistants.length > 0;
+  const hasVisibleAssistants = createdAssistants.length > 0;
   const createdEmpty = createdAssistants.length === 0 && filter === 'all' && !searchActive;
 
   const renderCreatedEmpty = () => (
@@ -158,18 +158,6 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
             'bg-primary-5'
           )}
           {createdEmpty ? renderCreatedEmpty() : renderCardGrid(createdAssistants)}
-        </div>
-      ) : null}
-
-      {/* CLI group below. */}
-      {cliAssistants.length > 0 ? (
-        <div className='mt-20px' data-testid='group-cli'>
-          {renderGroupHeader(
-            t('settings.assistantGroupCli', { defaultValue: 'Your CLI' }),
-            cliAssistants.length,
-            'bg-warning-5'
-          )}
-          {renderCardGrid(cliAssistants)}
         </div>
       ) : null}
     </div>
