@@ -283,4 +283,14 @@ describe('the browser-profile IPC', () => {
     expect(await call('clearProfileData', { agentId: 'bare:clear' })).toEqual({ success: true });
     expect(ipc.forgetPermissions).toHaveBeenCalledWith(partition);
   });
+
+  it('refuses to clear or delete the shared default Agent profile', async () => {
+    ipc.fromPartition.mockClear();
+    ipc.profileRemoved.mockClear();
+
+    expect((await call('deleteProfileData', { agentId: 'aion-default-agent' })).success).toBe(false);
+    expect((await call('clearProfileData', { agentId: 'aion-default-agent' })).success).toBe(false);
+    expect(ipc.fromPartition).not.toHaveBeenCalled();
+    expect(ipc.profileRemoved).not.toHaveBeenCalled();
+  });
 });

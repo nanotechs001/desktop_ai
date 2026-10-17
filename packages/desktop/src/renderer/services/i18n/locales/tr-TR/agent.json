@@ -95,6 +95,7 @@
     "cleared": "Tarama verileri temizlendi.",
     "clearFailed": "Tarama verileri temizlenemedi.",
     "deleteWithAgent": "Tarayıcı verilerini de sil (çerezler, oturumlar, site verileri, uzantılar)",
-    "deleteFailed": "Bu Ajanın tarayıcı verileri silinemedi, bu yüzden Ajan korundu. Yeniden deneyin."
+    "deleteFailed": "Bu Ajanın tarayıcı verileri silinemedi, bu yüzden Ajan korundu. Yeniden deneyin.",
+    "partialDelete": "Ajanın tarayıcı verileri kaldırıldı, ancak Ajan silinmedi. Bitirmek için yeniden silin."
   }
 }

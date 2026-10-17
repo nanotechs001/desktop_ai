@@ -164,7 +164,10 @@ describe('agent browser services: IPC', () => {
 
 describe('agentTabProfile', () => {
   it("uses the chat's Agent, and the default Agent profile once that Agent's browser data is deleted", async () => {
-    expect(await agentTabProfile(resolveAgent, 'conv-1')).toEqual({ kind: 'agent', agentId: 'bare:agent-1' });
+    expect(await agentTabProfile(resolveAgent, 'conv-1')).toEqual({
+      profile: { kind: 'agent', agentId: 'bare:agent-1' },
+      final: true,
+    });
     const deleted = vi.fn(async () => ({ ok: true, agentId: 'bare:deleted' }) as const);
     const folder = `/u/Partitions/${agentPartition('bare:deleted').slice('persist:'.length)}`;
     const session = { storagePath: folder, clearStorageData: vi.fn(), clearCache: vi.fn(), clearAuthCache: vi.fn() };
@@ -177,13 +180,24 @@ describe('agentTabProfile', () => {
       forgetPartition: () => {},
     });
 
-    expect(await agentTabProfile(deleted, 'conv-9')).toEqual(DEFAULT_AGENT_PROFILE);
+    expect(await agentTabProfile(deleted, 'conv-9')).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: true });
     // A client that connected before the deletion opens its next tab in the default Agent profile too.
     expect(liveAgentProfile({ kind: 'agent', agentId: 'bare:deleted' })).toEqual(DEFAULT_AGENT_PROFILE);
     expect(liveAgentProfile({ kind: 'agent', agentId: 'bare:agent-1' })).toEqual({
       kind: 'agent',
       agentId: 'bare:agent-1',
     });
+  });
+});
+
+describe('agentTabProfile lookups', () => {
+  it('marks a default fallback caused by a lookup error as not final, so the relay retries it', async () => {
+    const failing = vi.fn(async () => ({ ok: false, message: "Couldn't look up", transient: true }) as const);
+    const noAgent = vi.fn(async () => ({ ok: false, message: 'No Agent for this chat' }) as const);
+
+    expect(await agentTabProfile(failing, 'conv-1')).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: false });
+    expect(await agentTabProfile(noAgent, 'conv-1')).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: true });
+    expect(await agentTabProfile(resolveAgent, undefined)).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: true });
   });
 });
 

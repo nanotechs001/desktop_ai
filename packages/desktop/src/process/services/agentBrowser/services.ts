@@ -16,7 +16,7 @@ import {
   profileOfSession,
 } from '@process/services/browserSession/profiles/browserProfiles';
 import { PendingConfirms } from './confirmGate';
-import { startRelayServer } from './relay/relayServer';
+import { startRelayServer, type ProfileLookup } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
 import { parseConversationId } from './relay/relayTransport';
 import { handleEnsureAgentRule } from './assistantRules';
@@ -157,14 +157,17 @@ const registerProviders = (
 
 /**
  * The profile an agent's tabs open in: its chat's Agent, else (another engine, a built-in, no chat, a failed lookup,
- * an Agent whose browser data was deleted) the shared default Agent profile. Never Personal.
+ * an Agent whose browser data was deleted) the shared default Agent profile. Never Personal. Not `final` when the
+ * lookup itself failed.
  */
 export async function agentTabProfile(
   resolveAgent: AgentBrowserOptions['resolveAgent'],
   conversationId: string | undefined
-): Promise<BrowserTabProfile> {
+): Promise<ProfileLookup> {
   const resolved = conversationId && resolveAgent ? await resolveAgent(conversationId) : null;
-  return liveAgentProfile({ kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID });
+  const profile = liveAgentProfile({ kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID });
+  // A lookup that itself failed (not "no Agent") is retried later by the relay.
+  return { profile, final: !(resolved?.ok === false && resolved.transient === true) };
 }
 
 /** `profile`, or the default Agent profile once that Agent's browser data was deleted (a client connected before). */

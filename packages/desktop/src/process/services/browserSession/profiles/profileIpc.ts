@@ -7,6 +7,7 @@
 import fs from 'node:fs/promises';
 import { BrowserWindow, app, session, webContents } from 'electron';
 import { ipcBridge } from '@/common';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import { browserExtensionsSettled, ensureBrowserSession, forgetBrowserSession } from '../browserSession';
 import { forgetPermissions } from '../permissions';
 import {
@@ -54,10 +55,13 @@ const failure = (error: unknown): Reply => {
   return { success: false, msg: error instanceof Error ? error.message : String(error) };
 };
 
-/** The request's `agentId` when it is a string; the profile helpers validate it as an Agent id. */
+/**
+ * The request's `agentId` when it is a string, but never the default Agent's: its profile is shared by every chat
+ * without an Agent and is not the user's to clear or delete. The profile helpers validate it as an Agent id.
+ */
 const agentIdOf = (request: unknown): string | null => {
   const agentId = (request as { agentId?: unknown } | null)?.agentId;
-  return typeof agentId === 'string' ? agentId : null;
+  return typeof agentId === 'string' && agentId !== DEFAULT_AGENT_ID ? agentId : null;
 };
 
 /** The renderer's browser-profile IPC: a tab's partition (its session set up first), and clearing or deleting data. */

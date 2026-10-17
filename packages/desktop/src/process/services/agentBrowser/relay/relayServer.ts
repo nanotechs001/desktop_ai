@@ -45,7 +45,7 @@ export type RelayServerDeps = {
    * The browser profile an agent's new tabs open in: its chat's Agent (or the shared default Agent profile), resolved
    * in main from the client's conversation, never from the agent's input. Never Personal.
    */
-  resolveProfile(conversationId: string | undefined): Promise<BrowserTabProfile>;
+  resolveProfile(conversationId: string | undefined): Promise<ProfileLookup>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
@@ -56,14 +56,21 @@ export type RelayServerDeps = {
   limits?: Partial<RelayLimits>;
 };
 
+/** A client's Agent profile; not `final` when it is a fallback after a failed lookup, which the relay retries. */
+export type ProfileLookup = { profile: BrowserTabProfile; final: boolean };
+
 export type RelayHandle = { url: string; token: string; clients(): RelayClient[]; close(): Promise<void> };
 
 type Connection = {
   client: RelayClient;
   /** The chat the client's MCP runs for (`X-Aion-Conversation`); undefined for older MCPs and other engines. */
   conversationId?: string;
-  /** Settles once the client's Agent profile is resolved (once per connection) and set on `client`. */
-  profileReady: Promise<void>;
+  /** The client's profile lookup in flight, if any; it never rejects. */
+  profileLookup: Promise<void> | null;
+  /** When the last lookup started (ms), for the retry interval. */
+  lastLookupAt: number;
+  /** The profile on `client` is the answer for good (no retry needed). */
+  profileFinal: boolean;
   ws: WebSocket;
   actionTimes: number[];
   createTimes: number[];
@@ -88,6 +95,8 @@ const MAX_DIALOGS_IN_FLIGHT = 2;
 const MAX_CONFIRMS_IN_FLIGHT = 2;
 const MAX_CONFIRM_LABEL_LENGTH = 120;
 const FRAME_LOOKUP_TIMEOUT_MS = 5000;
+/** A client whose profile lookup failed (or fell back on an error) looks it up again at most this often. */
+const PROFILE_RETRY_MS = 10_000;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -156,7 +165,35 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return { webContentsId, contents };
   };
 
+  /** Looks the client's Agent profile up and sets it on `client`; a rejection leaves the client as it was (logged). */
+  const lookUpProfile = (conn: Connection): Promise<void> => {
+    conn.lastLookupAt = Date.now();
+    const tracked: Promise<void> = deps
+      .resolveProfile(conn.conversationId)
+      .then(
+        ({ profile, final }) => {
+          conn.client = { ...conn.client, profile };
+          conn.profileFinal = final;
+        },
+        (error: unknown) => console.warn("[AgentBrowserRelay] could not look up a client's browser profile:", error)
+      )
+      .finally(() => {
+        if (conn.profileLookup === tracked) conn.profileLookup = null;
+      });
+    conn.profileLookup = tracked;
+    return tracked;
+  };
+
+  /** Before opening or listing tabs: retries a failed or fallback lookup, at most once per {@link PROFILE_RETRY_MS}. */
+  const refreshProfile = async (conn: Connection): Promise<void> => {
+    if (!conn.profileFinal && !conn.profileLookup && Date.now() - conn.lastLookupAt >= PROFILE_RETRY_MS) {
+      void lookUpProfile(conn);
+    }
+    await conn.profileLookup;
+  };
+
   const createTarget = async (conn: Connection, params: Params): Promise<Params> => {
+    await refreshProfile(conn);
     const { client } = conn;
     // Only the url comes from the agent; any profile-like field in its params is ignored.
     const { profile } = client;
@@ -331,7 +368,12 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   /** Tabs this client may act on with who owns each: `Target.getTargets` cannot tell agent from shared. */
-  const listTabs = (conn: Connection): Params => ({
+  const listTabs = async (conn: Connection): Promise<Params> => {
+    await refreshProfile(conn);
+    return listTabsNow(conn);
+  };
+
+  const listTabsNow = (conn: Connection): Params => ({
     tabs: registry.listTargets().flatMap(({ targetId, title, url }) => {
       const tab = registry.ownership(webContentsIdFromTargetId(targetId) ?? -1);
       if (!mayAct(tab, conn.client)) return [];
@@ -344,6 +386,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   const browserCommand = async (conn: Connection, method: string, params: Params): Promise<Params> => {
     switch (method) {
       case 'Target.getTargets':
+        await refreshProfile(conn);
         return {
           targetInfos: registry
             .listTargets()
@@ -421,7 +464,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     }
     const { id, method, params, sessionId } = request;
     try {
-      await conn.profileReady;
+      // A command never fails on the lookup: an unresolved client just reaches no shared Agent-profile tab.
+      await conn.profileLookup;
       const result =
         sessionId === undefined
           ? await browserCommand(conn, method, params)
@@ -496,7 +540,9 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     const conn: Connection = {
       client: { clientId: randomUUID(), label },
       conversationId,
-      profileReady: Promise.resolve(),
+      profileLookup: null,
+      lastLookupAt: 0,
+      profileFinal: false,
       ws,
       actionTimes: [],
       createTimes: [],
@@ -509,13 +555,9 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       queuedBytes: 0,
       bufferTimer: null,
     };
-    // Resolved once: every command waits for it, and shared Agent-profile tabs stay out of reach until it is known.
-    conn.profileReady = deps.resolveProfile(conversationId).then((profile) => {
-      conn.client = { ...conn.client, profile };
-    });
-    conn.profileReady.catch((error: unknown) =>
-      console.warn('[AgentBrowserRelay] no browser profile for a client:', error)
-    );
+    // Resolved once (retried only after a failure): commands wait for the lookup in flight, and shared Agent-profile
+    // tabs stay out of reach until the profile is known.
+    void lookUpProfile(conn);
     connections.set(conn.client.clientId, conn);
     ws.on('message', (data) => enqueue(conn, data.toString()));
     ws.on('close', () => {

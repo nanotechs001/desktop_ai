@@ -181,6 +181,17 @@ describe('useAssistantEditor', () => {
       expect(mockMessage.success).toHaveBeenCalled();
     });
 
+    it('says the browser data is gone but the Agent is not when only the Agent delete fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      (ipcBridge.browser.deleteProfileData.invoke as any).mockResolvedValueOnce({ success: true });
+      (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('backend down'));
+
+      await deleteWith(true);
+
+      expect(mockMessage.error).toHaveBeenCalledWith('agent.browserProfile.partialDelete');
+      expect(mockMessage.success).not.toHaveBeenCalled();
+    });
+
     it('keeps the browser data when not asked', async () => {
       (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
       await deleteWith(false);

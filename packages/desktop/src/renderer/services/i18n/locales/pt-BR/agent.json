@@ -95,6 +95,7 @@
     "cleared": "Dados de navegação limpos.",
     "clearFailed": "Não foi possível limpar os dados de navegação.",
     "deleteWithAgent": "Excluir também os dados do navegador dele (cookies, logins, dados de sites, extensões)",
-    "deleteFailed": "Não foi possível excluir os dados do navegador deste Agente, então o Agente foi mantido. Tente novamente."
+    "deleteFailed": "Não foi possível excluir os dados do navegador deste Agente, então o Agente foi mantido. Tente novamente.",
+    "partialDelete": "Os dados do navegador do Agente foram removidos, mas o Agente não foi excluído. Exclua-o novamente para concluir."
   }
 }

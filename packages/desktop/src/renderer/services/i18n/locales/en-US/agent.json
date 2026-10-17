@@ -95,6 +95,7 @@
     "cleared": "Browsing data cleared.",
     "clearFailed": "Couldn't clear the browsing data.",
     "deleteWithAgent": "Also delete its browser data (cookies, sign-ins, site data, extensions)",
-    "deleteFailed": "Couldn't delete this Agent's browser data, so the Agent was kept. Try again."
+    "deleteFailed": "Couldn't delete this Agent's browser data, so the Agent was kept. Try again.",
+    "partialDelete": "The Agent's browser data was removed, but the Agent wasn't deleted. Delete it again to finish."
   }
 }

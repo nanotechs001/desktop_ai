@@ -626,6 +626,7 @@ export const useAssistantEditor = ({
   const handleDeleteConfirm = async (deleteBrowserData = false) => {
     if (!activeAssistant) return;
 
+    let browserDataDeleted = false;
     try {
       if (deleteBrowserData) {
         const reply = await ipcBridge.browser.deleteProfileData
@@ -640,6 +641,7 @@ export const useAssistantEditor = ({
           );
           return;
         }
+        browserDataDeleted = true;
       }
       await ipcBridge.assistants.delete.invoke({ id: activeAssistant.id });
       await refreshAssistantCatalog();
@@ -648,7 +650,14 @@ export const useAssistantEditor = ({
       message.success(t('common.success', { defaultValue: 'Success' }));
     } catch (error) {
       console.error('Failed to delete assistant:', error);
-      message.error(t('common.failed', { defaultValue: 'Failed' }));
+      message.error(
+        browserDataDeleted
+          ? t('agent.browserProfile.partialDelete', {
+              defaultValue:
+                "The Agent's browser data was removed, but the Agent wasn't deleted. Delete it again to finish.",
+            })
+          : t('common.failed', { defaultValue: 'Failed' })
+      );
     }
   };
 

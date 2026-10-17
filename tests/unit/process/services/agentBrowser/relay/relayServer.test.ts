@@ -72,7 +72,10 @@ const agentProfileOf = (conversationId?: string): BrowserTabProfile => ({
   kind: 'agent',
   agentId: conversationId ? `agent-of-${conversationId}` : 'aion-default-agent',
 });
-const resolveProfile = vi.fn(async (conversationId?: string) => agentProfileOf(conversationId));
+const resolveProfile = vi.fn(async (conversationId?: string) => ({
+  profile: agentProfileOf(conversationId),
+  final: true,
+}));
 
 const start = async (limits: Partial<RelayLimits> = {}): Promise<RelayHandle> => {
   registry = createTargetRegistry();
@@ -141,6 +144,7 @@ afterEach(async () => {
   await relay?.close();
   relay = null;
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   nextTab = () => new Promise(() => {});
 });
 
@@ -272,16 +276,60 @@ describe('relay server: targets', () => {
     expect(waitForTab).toHaveBeenCalledWith('https://example.com', 'conv_A-1', agentProfileOf('conv_A-1'));
   });
 
-  it('opens nothing when the Agent of the chat cannot be resolved', async () => {
+  it('opens nothing while the Agent of the chat is unresolved, keeps other commands working, and retries after 10 s', async () => {
     const handle = await start();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     resolveProfile.mockRejectedValueOnce(new Error('backend down'));
     const client = await connect(handle, 'a', { 'X-Aion-Conversation': 'conv_A-1' });
 
-    const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
-
-    expect(reply.error?.message).toMatch(/backend down/);
+    const refused = await client.send('Target.createTarget', { url: 'https://example.com' });
+    expect(refused.error?.message).toMatch(/profile is not known yet/);
     expect(openTab).not.toHaveBeenCalled();
-    expect(waitForTab).not.toHaveBeenCalled();
+    // The failed lookup does not fail every later command.
+    expect((await client.send('Target.getTargets')).error).toBeUndefined();
+    expect(resolveProfile).toHaveBeenCalledTimes(1);
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 10_001);
+    nextTab = () => {
+      const tab = new FakeContents(90);
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    expect((await client.send('Target.createTarget', { url: 'https://example.com' })).result).toEqual({
+      targetId: 'wc-90',
+    });
+    expect(resolveProfile).toHaveBeenCalledTimes(2);
+    expect(openTab).toHaveBeenCalledWith('https://example.com', 'conv_A-1', agentProfileOf('conv_A-1'));
+  });
+
+  it('retries a lookup that fell back to the default profile on an error, at most once per 10 s; never a final one', async () => {
+    const handle = await start();
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    resolveProfile.mockResolvedValueOnce({ profile: agentProfileOf(), final: false });
+    const flaky = await connect(handle, 'a', { 'X-Aion-Conversation': 'conv_A-1' });
+    const settled = await connect(handle, 'b', { 'X-Aion-Conversation': 'conv_B' });
+    const lookupsOf = (id: string) => resolveProfile.mock.calls.filter(([c]) => c === id).length;
+
+    await flaky.send('AionRelay.listTabs');
+    await settled.send('AionRelay.listTabs');
+    clock.mockReturnValue(now + 5_000);
+    await flaky.send('AionRelay.listTabs');
+    expect(lookupsOf('conv_A-1')).toBe(1);
+
+    clock.mockReturnValue(now + 10_001);
+    await flaky.send('AionRelay.listTabs');
+    await flaky.send('AionRelay.listTabs');
+    await settled.send('AionRelay.listTabs');
+    expect(lookupsOf('conv_A-1')).toBe(2);
+    expect(lookupsOf('conv_B')).toBe(1);
+
+    // The retried lookup's profile is the one now in use: the chat's own Agent's shared tab is reachable.
+    registry.track(new FakeContents(91), agentProfileOf('conv_A-1'));
+    registry.share(91, true);
+    const tabs = (await flaky.send('AionRelay.listTabs')).result?.tabs as Array<{ targetId: string }>;
+    expect(tabs.map((t) => t.targetId)).toEqual(['wc-91']);
   });
 
   it("a shared tab in Agent X's profile reaches only X's clients; a shared Personal tab reaches every client", async () => {

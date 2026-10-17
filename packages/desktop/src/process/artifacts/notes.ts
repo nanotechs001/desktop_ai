@@ -230,7 +230,8 @@ export function renderNotesBlock(notes: readonly Note[]): string | null {
 export const upsertNotesBlock = (existing: string, notes: readonly Note[]): UpsertManagedBlockResult =>
   upsertManagedBlock(existing, NOTES_BLOCK_NAME, renderNotesBlock(notes));
 
-export type AgentResolution = { ok: true; agentId: string } | { ok: false; message: string };
+/** `transient`: the lookup itself failed (the backend), so a later lookup may succeed. */
+export type AgentResolution = { ok: true; agentId: string } | { ok: false; message: string; transient?: true };
 
 export type AgentLookupDeps = {
   /** The backend conversation, null when it doesn't exist. */
@@ -268,7 +269,7 @@ export function createAgentResolver(deps: AgentLookupDeps): AgentResolver {
       return { ok: true, agentId };
     } catch (error) {
       console.warn('[notes] could not look up the Agent of a chat', error);
-      return { ok: false, message: "Couldn't look up this chat's Agent" };
+      return { ok: false, message: "Couldn't look up this chat's Agent", transient: true };
     }
   };
   const forgetAgent = (agentId: string): void => {

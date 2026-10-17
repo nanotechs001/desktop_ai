@@ -424,6 +424,18 @@ describe('createAgentResolver', () => {
     expect(await resolverWith({}).resolve('missing')).toEqual({ ok: false, message: 'No Agent for this chat' });
   });
 
+  it('marks a failed backend lookup as transient, unlike a chat with no Agent', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const resolve = createAgentResolver({
+      getConversation: async () => {
+        throw new Error('backend down');
+      },
+      getDefaultAgentId: async () => 'aion-default-agent',
+    });
+    expect(await resolve('c1')).toMatchObject({ ok: false, transient: true });
+    expect(await resolverWith({}).resolve('missing')).not.toHaveProperty('transient');
+  });
+
   it('forgetAgent drops the cached chats of a deleted Agent, so they are looked up again', async () => {
     const { resolve, getConversation } = resolverWith({
       c1: { assistant: { id: 'agent-1', source: 'user' } },
