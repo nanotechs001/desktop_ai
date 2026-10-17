@@ -123,9 +123,9 @@ const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, 
     if (browser === null || profileDir === null) return;
     const { domains, invalid } = parseDomains(sitesText);
     setInvalidSites(invalid);
+    setOutcome(null);
     if (invalid.length > 0) return;
     setRunning(true);
-    setOutcome(null);
     const reply = await ipcBridge.browser.cookieImport.run
       .invoke({ browser, profileDir, target, domains })
       .catch((error: unknown): { success: false; data?: undefined } => {

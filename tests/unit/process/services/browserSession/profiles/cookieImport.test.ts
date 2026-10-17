@@ -22,6 +22,8 @@ const h = vi.hoisted(() => {
   return {
     providers,
     home: { dir: '', fail: false },
+    /** When set, ensureBrowserSession throws (e.g. a deleted Agent's partition). */
+    sessionError: null as Error | null,
     // The IPC reads the Keychain through execFile; this one answers like `security -w` with the test password.
     execFile: vi.fn(
       (_file: string, _args: string[], _options: unknown, callback: (error: Error | null, stdout: string) => void) =>
@@ -80,6 +82,7 @@ vi.mock('electron', () => ({
 vi.mock('@process/services/browserSession/permissions', () => ({ forgetPermissions: vi.fn() }));
 vi.mock('@process/services/browserSession/browserSession', () => ({
   ensureBrowserSession: (partition: string) => {
+    if (h.sessionError) throw h.sessionError;
     const existing = h.sessions.get(partition);
     if (existing) return existing;
     const created = { cookies: { set: vi.fn((_details: SetDetails) => Promise.resolve()) } };
@@ -531,6 +534,7 @@ describe('one import at a time', () => {
 describe('cookie import IPC', () => {
   beforeEach(() => {
     h.home.fail = false;
+    h.sessionError = null;
     h.providers.clear();
     registerBrowserProfileIpc();
   });
@@ -561,7 +565,7 @@ describe('cookie import IPC', () => {
     expect(h.execFile).toHaveBeenCalledWith(
       '/usr/bin/security',
       ['find-generic-password', '-w', '-s', 'Chrome Safe Storage'],
-      { encoding: 'utf8', timeout: 120_000 },
+      { encoding: 'utf8', timeout: 120_000, killSignal: 'SIGKILL' },
       expect.any(Function)
     );
     expect(result).toEqual({
@@ -639,6 +643,22 @@ describe('cookie import IPC', () => {
     expect(replied).not.toMatch(/msg|[A-Z][a-z]+ [a-z]+/);
     // The detail stays in main's log.
     expect(errors.mock.calls.flat().map(String).join('\n')).toContain('EACCES');
+  });
+
+  it('answers read_failed, never hangs, when the import throws unexpectedly', async () => {
+    h.home.dir = makeHome();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.sessionError = new Error('The Agent browser profile was deleted');
+    const run = h.providers.get('run');
+    const request = { browser: 'chrome', profileDir: 'Default', target: { kind: 'personal' }, domains: null };
+    expect(await run?.(request)).toEqual({
+      success: true,
+      data: { ok: false, code: 'read_failed', browser: 'chrome' },
+    });
+    expect(errors.mock.calls.flat().map(String).join('\n')).toContain('The Agent browser profile was deleted');
+    // The busy guard was released: the next import runs.
+    h.sessionError = null;
+    expect(await run?.(request)).toMatchObject({ success: true, data: { ok: true } });
   });
 
   it('no relay or MCP route reaches the import: only the renderer IPC imports it', () => {

@@ -41,7 +41,7 @@ export type ExecFile = (file: string, args: string[]) => Promise<{ stdout: strin
 
 const runSecurity: ExecFile = (file, args) =>
   new Promise((resolve, reject) => {
-    execFile(file, args, { encoding: 'utf8', timeout: KEYCHAIN_TIMEOUT_MS }, (error, stdout) =>
+    execFile(file, args, { encoding: 'utf8', timeout: KEYCHAIN_TIMEOUT_MS, killSignal: 'SIGKILL' }, (error, stdout) =>
       error ? reject(error) : resolve({ stdout })
     );
   });

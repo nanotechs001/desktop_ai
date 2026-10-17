@@ -104,6 +104,21 @@ describe('CookieImportModal', () => {
     expect(mocks.run).not.toHaveBeenCalled();
   });
 
+  it('clears an earlier result when the next import stops on invalid sites', async () => {
+    mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
+    mocks.run.mockResolvedValue({ success: true, data: { ok: false, code: 'busy', browser: 'chrome' } });
+    renderModal();
+    await screen.findByText('Chrome');
+    fireEvent.click(screen.getByText(`${K}.import`));
+    const earlier = tr(`${K}.errors.busy`, { browser: 'Chrome' });
+    expect(await screen.findByText(earlier)).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(`${K}.domainsPlaceholder`), { target: { value: 'not_valid!' } });
+    fireEvent.click(screen.getByText(`${K}.import`));
+    expect(await screen.findByText(tr(`${K}.invalidSites`, { sites: 'not_valid!' }))).toBeInTheDocument();
+    expect(screen.queryByText(earlier)).toBeNull();
+    expect(mocks.run).toHaveBeenCalledTimes(1);
+  });
+
   it('switching browser picks that browser’s profile and imports every site when no domains are given', async () => {
     mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
     mocks.run.mockResolvedValue({

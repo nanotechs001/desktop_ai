@@ -113,7 +113,13 @@ function registerCookieImportIpc(): void {
       return { success: true, data: { ok: false, code: 'read_failed', browser } };
     }
     if (!source) return { success: true, data: { ok: false, code: 'source_not_found', browser } };
-    return { success: true, data: await importCookies(source, target, domains) };
+    try {
+      return { success: true, data: await importCookies(source, target, domains) };
+    } catch (error) {
+      // e.g. the target's session is gone; the dialog must still get an answer.
+      console.error('[CookieImport] the import failed:', error);
+      return { success: true, data: { ok: false, code: 'read_failed', browser } };
+    }
   });
 }
 
