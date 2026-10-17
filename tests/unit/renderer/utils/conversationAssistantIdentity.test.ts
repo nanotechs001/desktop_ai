@@ -62,6 +62,23 @@ describe('resolveConversationLeadingMark', () => {
     expect(result).toEqual({ kind: 'emoji', value: '✍️', label: 'Writer' });
   });
 
+  it("shows the neutral Agent mark for a chat on an engine's own generated entry", () => {
+    const conversation = makeConversation({
+      assistant: {
+        id: 'bare:2d23ff1c',
+        source: 'generated',
+        name: 'Claude Code',
+        avatar: '/api/assets/logos/ai-major/claude.svg',
+        backend: 'claude',
+      },
+    });
+
+    expect(resolveConversationLeadingMark(conversation, undefined, t)).toEqual({
+      kind: 'assistant_fallback',
+      label: 'Agent',
+    });
+  });
+
   it.each(['claude', 'codex', 'gemini', 'unknown-agent'])(
     'shows the neutral Agent mark, never the %s engine logo, when the chat has no Agent record',
     (backend) => {

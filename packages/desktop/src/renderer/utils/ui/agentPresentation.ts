@@ -61,12 +61,16 @@ export function getAgentPresentation(
   };
 }
 
+/** True for an engine's own entry (a bare CLI record named and drawn after its vendor), which is not an Agent. */
+export const isEngineEntry = (record: { source?: string } | null | undefined): boolean =>
+  record?.source === 'generated';
+
 /**
- * The Agent a resolved conversation identity names. Only assistant records are Agents; identities
- * usePresetAssistantInfo derives from `extra.agent_name` / `extra.backend` carry the engine's vendor
- * name and logo, so they yield null.
+ * The Agent a resolved conversation identity names. Only assistant records are Agents, and not every one: identities
+ * usePresetAssistantInfo derives from `extra.agent_name` / `extra.backend`, and an engine's own generated entry,
+ * carry the engine's vendor name and logo, so they yield null.
  */
 export function agentFromPresetInfo(info: PresetAssistantInfo | null | undefined): AgentIdentity | null {
-  if (!info?.assistantId) return null;
+  if (!info?.assistantId || isEngineEntry(info)) return null;
   return { name: info.name, avatar: info.logo };
 }

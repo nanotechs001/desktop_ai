@@ -1,7 +1,7 @@
 import type { TChatConversation } from '@/common/config/storage';
 import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
-import { agentFromPresetInfo, type AgentIdentity } from '@/renderer/utils/ui/agentPresentation';
+import { agentFromPresetInfo, isEngineEntry, type AgentIdentity } from '@/renderer/utils/ui/agentPresentation';
 import type { TFunction } from 'i18next';
 
 /**
@@ -69,7 +69,9 @@ export function resolveConversationLeadingMark(
   const snapshot = conversation.assistant;
   const agent: AgentIdentity | null =
     agentFromPresetInfo(assistantInfo) ??
-    (snapshot ? { name: snapshot.name.trim() || snapshot.id, avatar: snapshot.avatar } : null);
+    (snapshot && !isEngineEntry(snapshot)
+      ? { name: snapshot.name.trim() || snapshot.id, avatar: snapshot.avatar }
+      : null);
   const label = agent?.name || t('agent.displayName');
 
   const avatar = resolveAssistantAvatar(agent?.avatar);

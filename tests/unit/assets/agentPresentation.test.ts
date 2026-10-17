@@ -76,6 +76,19 @@ describe('agentFromPresetInfo', () => {
     expect(agentFromPresetInfo(info)).toEqual({ name: 'Research Agent', avatar: '🔬' });
   });
 
+  it("drops an engine's own generated entry: its record carries the vendor name and logo", () => {
+    const bare: PresetAssistantInfo = {
+      name: 'Claude Code',
+      logo: '/api/assets/logos/ai-major/claude.svg',
+      isEmoji: false,
+      backend: 'claude',
+      assistantId: 'bare:2d23ff1c',
+      source: 'generated',
+    };
+
+    expect(agentFromPresetInfo(bare)).toBeNull();
+  });
+
   it('drops identities derived from the engine instead of an assistant record', () => {
     expect(agentFromPresetInfo(engineInfo)).toBeNull();
     expect(agentFromPresetInfo(null)).toBeNull();

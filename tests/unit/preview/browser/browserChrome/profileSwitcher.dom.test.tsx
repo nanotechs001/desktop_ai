@@ -8,6 +8,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { BrowserTabProfile } from '@/common/types/browser';
 
 const AGENT_PARTITION = 'persist:aionui-agent-0123456789abcdef0123456789abcdef';
@@ -45,6 +46,7 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
 import ProfileSwitcher from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/ProfileSwitcher';
 import PreviewTabs from '@/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewTabs';
 import BrowserViewer from '@/renderer/pages/conversation/Preview/browser/BrowserViewer';
+import { profilePresentation } from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/ProfileBadge';
 
 const AGENTS = [
   { id: 'bare:sales', name: 'Sales', avatar: '🦊', source: 'user', enabled: true },
@@ -176,5 +178,18 @@ describe('a browser tab in an Agent profile', () => {
     expect(screen.getByTestId('browser-profile-badge').getAttribute('aria-label')).toBe(
       'preview.browserChrome.profile.personal'
     );
+  });
+});
+
+describe('profilePresentation', () => {
+  it("names a profile of an engine's own generated entry 'Agent', never the vendor", () => {
+    const bare = { id: 'bare:2d23ff1c', name: 'Claude Code', avatar: '/logos/claude.svg', source: 'generated' };
+    const t = ((key: string) => (key === 'agent.displayName' ? 'Agent' : key)) as Parameters<
+      typeof profilePresentation
+    >[2];
+
+    const shown = profilePresentation({ kind: 'agent', agentId: bare.id }, [bare] as unknown as Assistant[], t);
+
+    expect(shown.name).toBe('Agent');
   });
 });

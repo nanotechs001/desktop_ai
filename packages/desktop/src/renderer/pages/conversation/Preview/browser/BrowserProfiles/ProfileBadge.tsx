@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import { iconColors } from '@/renderer/styles/colors';
-import { getAgentPresentation, type AgentPresentation } from '@/renderer/utils/ui/agentPresentation';
+import { getAgentPresentation, isEngineEntry, type AgentPresentation } from '@/renderer/utils/ui/agentPresentation';
 import { useProfileAgents } from './useBrowserProfiles';
 
 const DEFAULT_SIZE_PX = 14;
@@ -34,7 +34,11 @@ export function profilePresentation(
     };
   }
   const agent = agents.find((candidate) => candidate.id === profile.agentId);
-  return getAgentPresentation(agent ? { name: agent.name, avatar: agent.avatar } : null, t, size);
+  return getAgentPresentation(
+    agent && !isEngineEntry(agent) ? { name: agent.name, avatar: agent.avatar } : null,
+    t,
+    size
+  );
 }
 
 type ProfileBadgeProps = { profile?: BrowserTabProfile; size?: number };

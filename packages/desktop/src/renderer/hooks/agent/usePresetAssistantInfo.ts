@@ -21,6 +21,8 @@ export interface PresetAssistantInfo {
   isFallback?: boolean;
   backend?: string;
   assistantId?: string;
+  /** The record's source; `generated` is an engine's own entry, not a user-made Agent. */
+  source?: string;
 }
 
 /**
@@ -223,6 +225,7 @@ function buildPresetInfoFromAssistant(assistant: Assistant, locale: string): Pre
     isFallback: normalized.isFallback,
     backend: assistantRuntimeKey(assistant) || undefined,
     assistantId: assistant.id,
+    source: assistant.source,
   };
 }
 
@@ -237,6 +240,7 @@ function buildPresetInfoFromConversationAssistant(
     isFallback: normalized.isFallback,
     backend: assistant.backend,
     assistantId: assistant.id,
+    source: assistant.source,
   };
 }
 
