@@ -1368,6 +1368,7 @@
     "agentControlSaved": "設定を保存しました",
     "agentControlFailed": "設定の保存に失敗しました",
     "agentControlRestartRequired": "この設定はアプリを再起動すると有効になります。",
+    "importDesc": "Chrome、Brave、Edge、Arc、Vivaldi のログイン状態を自分のブラウザプロファイルに取り込みます。",
     "clearLabel": "閲覧データを消去",
     "clearDesc": "ブラウザーでログイン済みのすべてのサイトからサインアウトし、キャッシュを消去します。開いているタブは再読み込み後に反映されます。",
     "clearConfirmTitle": "閲覧データを消去しますか？",

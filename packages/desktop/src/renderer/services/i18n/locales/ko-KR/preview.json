@@ -271,6 +271,22 @@
       "newTabIn": "새 탭 열기 위치…",
       "unavailable": "이 에이전트의 브라우저 프로필을 열 수 없습니다.",
       "retry": "다시 시도"
+    },
+    "cookieImport": {
+      "more": "더 보기",
+      "menu": "브라우저에서 가져오기…",
+      "title": "브라우저에서 가져오기",
+      "into": "대상: {{profile}}",
+      "browser": "브라우저",
+      "profile": "브라우저 프로필",
+      "sites": "사이트 (선택)",
+      "domainsPlaceholder": "모든 사이트, 또는 예: gohighlevel.com, elementor.com",
+      "keychainHint": "macOS가 브라우저의 Safe Storage 키 사용을 묻습니다. 가져오려면 허용하세요.",
+      "import": "가져오기",
+      "none": "이 Mac에서 Chrome, Brave, Edge, Arc 또는 Vivaldi 프로필을 찾지 못했습니다.",
+      "result": "{{sites}}개 사이트에서 쿠키 {{cookies}}개를 가져왔습니다",
+      "skipped": "건너뜀: 만료 {{expired}}, 읽을 수 없음 {{undecryptable}}, 거부됨 {{rejected}}",
+      "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
     }
   }
 }

@@ -271,6 +271,22 @@
       "newTabIn": "New tab in…",
       "unavailable": "This Agent's browser profile couldn't be opened.",
       "retry": "Retry"
+    },
+    "cookieImport": {
+      "more": "More",
+      "menu": "Import from browser…",
+      "title": "Import from browser",
+      "into": "Into: {{profile}}",
+      "browser": "Browser",
+      "profile": "Browser profile",
+      "sites": "Sites (optional)",
+      "domainsPlaceholder": "All sites, or e.g. gohighlevel.com, elementor.com",
+      "keychainHint": "macOS asks to use the browser's Safe Storage key. Allow it to import.",
+      "import": "Import",
+      "none": "No Chrome, Brave, Edge, Arc or Vivaldi profile was found on this Mac.",
+      "result": "Imported {{cookies}} cookies from {{sites}} sites",
+      "skipped": "Skipped: {{expired}} expired, {{undecryptable}} unreadable, {{rejected}} rejected",
+      "failed": "Couldn't import the cookies: {{reason}}"
     }
   }
 }

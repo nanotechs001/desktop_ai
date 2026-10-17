@@ -271,6 +271,22 @@
       "newTabIn": "新しいタブを開くプロファイル…",
       "unavailable": "このエージェントのブラウザプロファイルを開けませんでした。",
       "retry": "再試行"
+    },
+    "cookieImport": {
+      "more": "その他",
+      "menu": "ブラウザから読み込む…",
+      "title": "ブラウザから読み込む",
+      "into": "読み込み先：{{profile}}",
+      "browser": "ブラウザ",
+      "profile": "ブラウザのプロファイル",
+      "sites": "サイト（任意）",
+      "domainsPlaceholder": "すべてのサイト、または例：gohighlevel.com, elementor.com",
+      "keychainHint": "macOS がブラウザの Safe Storage キーの使用を確認します。許可すると読み込めます。",
+      "import": "読み込む",
+      "none": "この Mac に Chrome、Brave、Edge、Arc、Vivaldi のプロファイルが見つかりませんでした。",
+      "result": "{{sites}} サイトから {{cookies}} 件の Cookie を読み込みました",
+      "skipped": "スキップ：期限切れ {{expired}}、読み取り不可 {{undecryptable}}、拒否 {{rejected}}",
+      "failed": "Cookie を読み込めませんでした：{{reason}}"
     }
   }
 }

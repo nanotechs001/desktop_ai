@@ -271,6 +271,22 @@
       "newTabIn": "在以下設定檔中新增標籤頁…",
       "unavailable": "無法開啟此智慧體的瀏覽器設定檔。",
       "retry": "重試"
+    },
+    "cookieImport": {
+      "more": "更多",
+      "menu": "從瀏覽器匯入…",
+      "title": "從瀏覽器匯入",
+      "into": "匯入到：{{profile}}",
+      "browser": "瀏覽器",
+      "profile": "瀏覽器設定檔",
+      "sites": "網站（選填）",
+      "domainsPlaceholder": "全部網站，或例如 gohighlevel.com, elementor.com",
+      "keychainHint": "macOS 會請求使用該瀏覽器的 Safe Storage 金鑰，允許後即可匯入。",
+      "import": "匯入",
+      "none": "未在此 Mac 上找到 Chrome、Brave、Edge、Arc 或 Vivaldi 的設定檔。",
+      "result": "已從 {{sites}} 個網站匯入 {{cookies}} 個 Cookie",
+      "skipped": "已略過：{{expired}} 個已過期，{{undecryptable}} 個無法讀取，{{rejected}} 個遭拒絕",
+      "failed": "無法匯入 Cookie：{{reason}}"
     }
   }
 }

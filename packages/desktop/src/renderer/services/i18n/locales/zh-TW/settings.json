@@ -1368,6 +1368,7 @@
     "agentControlSaved": "設定已儲存",
     "agentControlFailed": "設定儲存失敗",
     "agentControlRestartRequired": "此設定需重新啟動應用後生效。",
+    "importDesc": "將 Chrome、Brave、Edge、Arc 或 Vivaldi 中的登入狀態匯入你自己的瀏覽器設定檔。",
     "clearLabel": "清空瀏覽資料",
     "clearDesc": "登出瀏覽器中所有已登入的網站，並清空快取。已開啟的瀏覽器標籤頁重新載入後生效。",
     "clearConfirmTitle": "確定清空瀏覽資料？",

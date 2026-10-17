@@ -1366,6 +1366,7 @@
     "agentControlSaved": "Setting saved",
     "agentControlFailed": "Failed to save setting",
     "agentControlRestartRequired": "This setting takes effect after you restart the app.",
+    "importDesc": "Bring your sign-ins from Chrome, Brave, Edge, Arc or Vivaldi into your own browser profile.",
     "clearLabel": "Clear browsing data",
     "clearDesc": "Signs out of every site the browser is logged into and clears its cache. Open browser tabs take effect after a reload.",
     "clearConfirmTitle": "Clear browsing data?",

@@ -271,6 +271,22 @@
       "newTabIn": "Yeni sekmeyi şurada aç…",
       "unavailable": "Bu Ajanın tarayıcı profili açılamadı.",
       "retry": "Yeniden dene"
+    },
+    "cookieImport": {
+      "more": "Daha fazla",
+      "menu": "Tarayıcıdan içe aktar…",
+      "title": "Tarayıcıdan içe aktar",
+      "into": "Hedef: {{profile}}",
+      "browser": "Tarayıcı",
+      "profile": "Tarayıcı profili",
+      "sites": "Siteler (isteğe bağlı)",
+      "domainsPlaceholder": "Tüm siteler veya ör. gohighlevel.com, elementor.com",
+      "keychainHint": "macOS, tarayıcının Safe Storage anahtarını kullanmak için izin ister. İçe aktarmak için izin verin.",
+      "import": "İçe aktar",
+      "none": "Bu Mac’te Chrome, Brave, Edge, Arc veya Vivaldi profili bulunamadı.",
+      "result": "{{sites}} siteden {{cookies}} çerez içe aktarıldı",
+      "skipped": "Atlanan: {{expired}} süresi dolmuş, {{undecryptable}} okunamayan, {{rejected}} reddedilen",
+      "failed": "Çerezler içe aktarılamadı: {{reason}}"
     }
   }
 }

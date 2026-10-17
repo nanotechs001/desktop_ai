@@ -273,6 +273,22 @@
       "newTabIn": "Нова вкладка в…",
       "unavailable": "Не вдалося відкрити профіль браузера цього агента.",
       "retry": "Повторити"
+    },
+    "cookieImport": {
+      "more": "Більше",
+      "menu": "Імпорт із браузера…",
+      "title": "Імпорт із браузера",
+      "into": "До профілю: {{profile}}",
+      "browser": "Браузер",
+      "profile": "Профіль браузера",
+      "sites": "Сайти (необов’язково)",
+      "domainsPlaceholder": "Усі сайти або, наприклад, gohighlevel.com, elementor.com",
+      "keychainHint": "macOS попросить доступ до ключа Safe Storage браузера. Дозвольте його для імпорту.",
+      "import": "Імпортувати",
+      "none": "На цьому Mac не знайдено профілю Chrome, Brave, Edge, Arc або Vivaldi.",
+      "result": "Імпортовано cookie: {{cookies}}, сайтів: {{sites}}",
+      "skipped": "Пропущено: прострочених {{expired}}, нечитабельних {{undecryptable}}, відхилених {{rejected}}",
+      "failed": "Не вдалося імпортувати cookie: {{reason}}"
     }
   }
 }

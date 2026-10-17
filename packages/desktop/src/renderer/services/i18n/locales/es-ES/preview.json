@@ -271,6 +271,22 @@
       "newTabIn": "Nueva pestaña en…",
       "unavailable": "No se pudo abrir el perfil del navegador de este Agente.",
       "retry": "Reintentar"
+    },
+    "cookieImport": {
+      "more": "Más",
+      "menu": "Importar desde el navegador…",
+      "title": "Importar desde el navegador",
+      "into": "En: {{profile}}",
+      "browser": "Navegador",
+      "profile": "Perfil del navegador",
+      "sites": "Sitios (opcional)",
+      "domainsPlaceholder": "Todos los sitios, o p. ej. gohighlevel.com, elementor.com",
+      "keychainHint": "macOS pedirá usar la clave Safe Storage del navegador. Permítelo para importar.",
+      "import": "Importar",
+      "none": "No se encontró ningún perfil de Chrome, Brave, Edge, Arc o Vivaldi en este Mac.",
+      "result": "Se importaron {{cookies}} cookies de {{sites}} sitios",
+      "skipped": "Omitidas: {{expired}} caducadas, {{undecryptable}} ilegibles, {{rejected}} rechazadas",
+      "failed": "No se pudieron importar las cookies: {{reason}}"
     }
   }
 }

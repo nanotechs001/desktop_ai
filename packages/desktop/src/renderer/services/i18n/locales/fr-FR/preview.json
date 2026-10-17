@@ -271,6 +271,22 @@
       "newTabIn": "Nouvel onglet dans…",
       "unavailable": "Le profil de navigateur de cet Agent n'a pas pu être ouvert.",
       "retry": "Réessayer"
+    },
+    "cookieImport": {
+      "more": "Plus",
+      "menu": "Importer depuis un navigateur…",
+      "title": "Importer depuis un navigateur",
+      "into": "Vers : {{profile}}",
+      "browser": "Navigateur",
+      "profile": "Profil du navigateur",
+      "sites": "Sites (facultatif)",
+      "domainsPlaceholder": "Tous les sites, ou p. ex. gohighlevel.com, elementor.com",
+      "keychainHint": "macOS demande à utiliser la clé Safe Storage du navigateur. Autorisez-la pour importer.",
+      "import": "Importer",
+      "none": "Aucun profil Chrome, Brave, Edge, Arc ou Vivaldi trouvé sur ce Mac.",
+      "result": "{{cookies}} cookies importés depuis {{sites}} sites",
+      "skipped": "Ignorés : {{expired}} expirés, {{undecryptable}} illisibles, {{rejected}} refusés",
+      "failed": "Impossible d'importer les cookies : {{reason}}"
     }
   }
 }

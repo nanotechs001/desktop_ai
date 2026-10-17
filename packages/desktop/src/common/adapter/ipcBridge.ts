@@ -19,6 +19,9 @@ import type {
   ConfirmRequest,
   BrowserShortcutRequest,
   BrowserTabProfile,
+  CookieImportRequest,
+  CookieImportResult,
+  CookieImportSource,
   DownloadItem,
   PermissionRequest,
   TabOwnership,
@@ -1503,6 +1506,11 @@ export const browser = {
   deleteProfileData: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('browser.delete-profile-data'),
   // main → renderer: an Agent's browser profile is being deleted; drop its tabs everywhere (on screen, background, stored)
   profileRemoved: bridge.buildEmitter<{ agentId: string }>('browser.profile-removed'),
+  // user-initiated only: the Chromium profiles on this Mac, and importing one's cookies into a profile (counts back)
+  cookieImport: {
+    listSources: bridge.buildProvider<IBridgeResponse<CookieImportSource[]>, void>('browser.cookie-import.sources'),
+    run: bridge.buildProvider<IBridgeResponse<CookieImportResult>, CookieImportRequest>('browser.cookie-import.run'),
+  },
   getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
   openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),
   showDownloadInFolder: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.show-download-in-folder'),

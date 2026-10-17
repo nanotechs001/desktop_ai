@@ -6,6 +6,7 @@
 
 import fs from 'node:fs/promises';
 import { BrowserWindow, app, session, webContents } from 'electron';
+import { z } from 'zod';
 import { ipcBridge } from '@/common';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import { browserExtensionsSettled, ensureBrowserSession, forgetBrowserSession } from '../browserSession';
@@ -17,6 +18,8 @@ import {
   parseBrowserTabProfile,
   partitionOfProfile,
 } from './browserProfiles';
+import { detectBrowserSources } from './cookieImport/detect';
+import { importCookies } from './cookieImport/importCookies';
 
 type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
 
@@ -64,8 +67,53 @@ const agentIdOf = (request: unknown): string | null => {
   return typeof agentId === 'string' && agentId !== DEFAULT_AGENT_ID ? agentId : null;
 };
 
+/** A lowercase host name such as `gohighlevel.com`. */
+const DOMAIN_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+const MAX_IMPORT_DOMAINS = 100;
+const MAX_PROFILE_DIR_CHARS = 255;
+
+/** A cookie import request; the source is named, never a path: main looks its cookie DB up itself. */
+const cookieImportRequest = z
+  .object({
+    browser: z.enum(['chrome', 'brave', 'edge', 'arc', 'vivaldi']),
+    profileDir: z.string().min(1).max(MAX_PROFILE_DIR_CHARS),
+    target: z.unknown(),
+    domains: z.array(z.string().regex(DOMAIN_RE)).min(1).max(MAX_IMPORT_DOMAINS).nullable(),
+  })
+  .strict();
+
+/** The renderer's cookie import (spec R7): user-initiated from the UI only, and it answers with counts. */
+function registerCookieImportIpc(): void {
+  ipcBridge.browser.cookieImport.listSources.provider(async () => {
+    try {
+      const sources = await detectBrowserSources(app.getPath('home'));
+      return {
+        success: true,
+        data: sources.map(({ browser, profileDir, profileName }) => ({ browser, profileDir, profileName })),
+      };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+  ipcBridge.browser.cookieImport.run.provider(async (request) => {
+    const parsed = cookieImportRequest.safeParse(request);
+    const target = parsed.success ? parseBrowserTabProfile(parsed.data.target) : null;
+    if (!parsed.success || !target) return INVALID;
+    const { browser, profileDir, domains } = parsed.data;
+    try {
+      const sources = await detectBrowserSources(app.getPath('home'));
+      const source = sources.find((known) => known.browser === browser && known.profileDir === profileDir);
+      if (!source) return { success: false, msg: 'That browser profile was not found' };
+      return { success: true, data: await importCookies(source, target, domains) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+}
+
 /** The renderer's browser-profile IPC: a tab's partition (its session set up first), and clearing or deleting data. */
 export function registerBrowserProfileIpc(): void {
+  registerCookieImportIpc();
   ipcBridge.browser.profilePartition.provider(async (request) => {
     const profile = parseBrowserTabProfile(request);
     if (!profile) return INVALID;

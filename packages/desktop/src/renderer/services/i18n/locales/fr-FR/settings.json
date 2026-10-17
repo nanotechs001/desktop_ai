@@ -1366,6 +1366,7 @@
     "agentControlSaved": "Paramètre enregistré",
     "agentControlFailed": "Échec de l'enregistrement du paramètre",
     "agentControlRestartRequired": "Ce paramètre prend effet après le redémarrage de l'application.",
+    "importDesc": "Récupérez vos connexions de Chrome, Brave, Edge, Arc ou Vivaldi dans votre propre profil de navigateur.",
     "clearLabel": "Effacer les données de navigation",
     "clearDesc": "Vous déconnecte de tous les sites où le navigateur est connecté et vide le cache. Les onglets ouverts sont concernés après rechargement.",
     "clearConfirmTitle": "Effacer les données de navigation ?",

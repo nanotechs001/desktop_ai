@@ -1366,6 +1366,7 @@
     "agentControlSaved": "Ayar kaydedildi",
     "agentControlFailed": "Ayar kaydedilemedi",
     "agentControlRestartRequired": "Bu ayar, uygulamayı yeniden başlattıktan sonra geçerli olur.",
+    "importDesc": "Chrome, Brave, Edge, Arc veya Vivaldi’deki oturumlarınızı kendi tarayıcı profilinize taşıyın.",
     "clearLabel": "Tarama verilerini temizle",
     "clearDesc": "Tarayıcıda oturum açılmış tüm sitelerden çıkış yapar ve önbelleği temizler. Açık sekmelerde yenilemeden sonra geçerli olur.",
     "clearConfirmTitle": "Tarama verileri temizlensin mi?",

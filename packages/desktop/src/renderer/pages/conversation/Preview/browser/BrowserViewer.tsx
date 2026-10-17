@@ -17,6 +17,7 @@ import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
 import ExtensionActions from './BrowserChrome/ExtensionActions';
 import FindBar from './BrowserChrome/FindBar';
+import { CookieImportMenu } from './BrowserProfiles/CookieImportModal';
 import ProfileBadge from './BrowserProfiles/ProfileBadge';
 import ProfileErrorOverlay from './BrowserProfiles/ProfileErrorOverlay';
 import { useProfilePartition } from './BrowserProfiles/useBrowserProfiles';
@@ -337,6 +338,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
               )}
               <ExtensionActions partition={partition} profile={profile} />
               <DownloadsButton />
+              <CookieImportMenu profile={profile ?? { kind: 'personal' }} />
             </>
           }
           className='bg-bg-1'

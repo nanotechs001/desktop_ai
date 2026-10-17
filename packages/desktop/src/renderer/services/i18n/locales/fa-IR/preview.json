@@ -271,6 +271,22 @@
       "newTabIn": "زبانه جدید در…",
       "unavailable": "نمایه مرورگر این عامل باز نشد.",
       "retry": "تلاش دوباره"
+    },
+    "cookieImport": {
+      "more": "بیشتر",
+      "menu": "وارد کردن از مرورگر…",
+      "title": "وارد کردن از مرورگر",
+      "into": "به: {{profile}}",
+      "browser": "مرورگر",
+      "profile": "نمایه مرورگر",
+      "sites": "سایت‌ها (اختیاری)",
+      "domainsPlaceholder": "همه سایت‌ها، یا مثلاً gohighlevel.com, elementor.com",
+      "keychainHint": "macOS برای استفاده از کلید Safe Storage مرورگر اجازه می‌خواهد. برای وارد کردن آن را مجاز کنید.",
+      "import": "وارد کردن",
+      "none": "هیچ نمایه‌ای از Chrome، Brave، Edge، Arc یا Vivaldi روی این Mac پیدا نشد.",
+      "result": "{{cookies}} کوکی از {{sites}} سایت وارد شد",
+      "skipped": "رد شده: {{expired}} منقضی، {{undecryptable}} ناخوانا، {{rejected}} نپذیرفته",
+      "failed": "کوکی‌ها وارد نشدند: {{reason}}"
     }
   }
 }

@@ -57,6 +57,27 @@ export type BrowserShortcutRequest = {
 /** Which browser profile (Electron session) a tab lives in: the user's own, or one Agent's. */
 export type BrowserTabProfile = { kind: 'personal' } | { kind: 'agent'; agentId: string };
 
+/** A Chromium browser on this Mac whose cookies can be imported into a browser profile. */
+export type CookieSourceBrowser = 'chrome' | 'brave' | 'edge' | 'arc' | 'vivaldi';
+
+/** One of that browser's own profiles, as the renderer sees it: names only, no file paths. */
+export type CookieImportSource = { browser: CookieSourceBrowser; profileDir: string; profileName: string };
+
+/** Import the cookies of a source profile into `target`; `domains` null means every site. */
+export type CookieImportRequest = {
+  browser: CookieSourceBrowser;
+  profileDir: string;
+  target: BrowserTabProfile;
+  domains: string[] | null;
+};
+
+/** What an import did, in counts only: cookie values never leave main. */
+export type CookieImportResult = {
+  imported: number;
+  sites: number;
+  skipped: Record<'expired' | 'undecryptable' | 'rejected', number>;
+};
+
 /** Who may drive a browser tab through the agent relay. */
 export type TabOwnership = {
   webContentsId: number;

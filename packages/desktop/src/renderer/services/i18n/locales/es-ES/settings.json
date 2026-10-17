@@ -1366,6 +1366,7 @@
     "agentControlSaved": "Ajuste guardado",
     "agentControlFailed": "No se pudo guardar el ajuste",
     "agentControlRestartRequired": "Este ajuste se aplica al reiniciar la aplicación.",
+    "importDesc": "Trae tus inicios de sesión de Chrome, Brave, Edge, Arc o Vivaldi a tu propio perfil del navegador.",
     "clearLabel": "Borrar datos de navegación",
     "clearDesc": "Cierra la sesión en todos los sitios donde el navegador está conectado y borra la caché. Las pestañas abiertas se actualizan al recargar.",
     "clearConfirmTitle": "¿Borrar los datos de navegación?",

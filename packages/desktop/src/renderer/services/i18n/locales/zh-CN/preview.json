@@ -271,6 +271,22 @@
       "newTabIn": "在以下资料中新建标签页…",
       "unavailable": "无法打开此智能体的浏览器资料。",
       "retry": "重试"
+    },
+    "cookieImport": {
+      "more": "更多",
+      "menu": "从浏览器导入…",
+      "title": "从浏览器导入",
+      "into": "导入到：{{profile}}",
+      "browser": "浏览器",
+      "profile": "浏览器配置文件",
+      "sites": "网站（可选）",
+      "domainsPlaceholder": "全部网站，或例如 gohighlevel.com, elementor.com",
+      "keychainHint": "macOS 会请求使用该浏览器的 Safe Storage 密钥，允许后即可导入。",
+      "import": "导入",
+      "none": "未在此 Mac 上找到 Chrome、Brave、Edge、Arc 或 Vivaldi 的配置文件。",
+      "result": "已从 {{sites}} 个网站导入 {{cookies}} 个 Cookie",
+      "skipped": "已跳过：{{expired}} 个已过期，{{undecryptable}} 个无法读取，{{rejected}} 个被拒绝",
+      "failed": "无法导入 Cookie：{{reason}}"
     }
   }
 }

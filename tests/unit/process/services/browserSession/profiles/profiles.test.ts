@@ -28,6 +28,7 @@ const ipc = vi.hoisted(() => {
         profilePartition: provider('profilePartition'),
         clearProfileData: provider('clearProfileData'),
         deleteProfileData: provider('deleteProfileData'),
+        cookieImport: { listSources: provider('cookieImportSources'), run: provider('cookieImportRun') },
       },
     },
   };
