@@ -6,7 +6,7 @@
 
 // Fixture DBs and a fake `security` only: these tests never read a real browser profile or the Keychain.
 
-import { createCipheriv, createHash, pbkdf2Sync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,7 +21,7 @@ const h = vi.hoisted(() => {
   const provider = (name: string) => ({ provider: (fn: Provider) => providers.set(name, fn) });
   return {
     providers,
-    home: { dir: '' },
+    home: { dir: '', fail: false },
     // The IPC reads the Keychain through execFile; this one answers like `security -w` with the test password.
     execFile: vi.fn(
       (_file: string, _args: string[], _options: unknown, callback: (error: Error | null, stdout: string) => void) =>
@@ -66,7 +66,13 @@ vi.mock('better-sqlite3', async () => {
 vi.mock('@/common', () => ({ ipcBridge: h.bridge }));
 vi.mock('node:child_process', () => ({ execFile: h.execFile }));
 vi.mock('electron', () => ({
-  app: { getPath: (name: string) => (name === 'home' ? h.home.dir : '/nonexistent-aionui-test-user-data') },
+  app: {
+    getPath: (name: string) => {
+      if (name !== 'home') return '/nonexistent-aionui-test-user-data';
+      if (h.home.fail) throw new Error(`EACCES: permission denied, scandir '${h.home.dir}/Library'`);
+      return h.home.dir;
+    },
+  },
   session: { fromPartition: vi.fn() },
   webContents: { getAllWebContents: () => [] },
   BrowserWindow: { fromWebContents: () => null },
@@ -122,6 +128,8 @@ type FixtureCookie = {
   httpOnly?: boolean;
   sameSite?: number;
   encrypted?: Buffer;
+  /** CHIPS: the top-level site a partitioned cookie belongs to. */
+  topFrameSiteKey?: string;
 };
 
 const FIXTURE: FixtureCookie[] = [
@@ -159,21 +167,45 @@ const FIXTURE: FixtureCookie[] = [
     encrypted: Buffer.concat([Buffer.from('v10'), Buffer.alloc(16, 7)]),
   },
   { host: '.example.com', name: 'v11', value: '', encrypted: Buffer.from('v11xxxxxxxxxxxxxxxxx') },
+  // Partitioned (CHIPS): skipped and counted as rejected. Only in DBs that have the column (meta 24 here).
+  {
+    host: '.example.com',
+    name: 'chips',
+    value: 'chips-secret-6',
+    expires: chromiumTime(NOW_S + 86400),
+    secure: true,
+    topFrameSiteKey: 'https://embedder.test',
+  },
   // Another site.
   { host: '.other.org', name: 'o', value: SECRET_VALUES[4], expires: chromiumTime(NOW_S + 86400), secure: true },
 ];
 
-const buildCookiesDb = (file: string, metaVersion: number, cookies: FixtureCookie[] = FIXTURE): void => {
+/**
+ * Writes a Chromium-like `Cookies` DB. Older DBs (meta < 24 here) have no `top_frame_site_key` column, so their
+ * fixture leaves the partitioned cookie out. `wal` keeps the writer open in WAL mode with no checkpoint, the way a
+ * running browser leaves recent rows only in `Cookies-wal`; the caller closes the returned DB.
+ */
+function buildCookiesDb(file: string, metaVersion: number, options: { wal: true }): DatabaseSync;
+function buildCookiesDb(file: string, metaVersion: number, options?: { wal?: false }): void;
+function buildCookiesDb(file: string, metaVersion: number, options: { wal?: boolean } = {}): DatabaseSync | void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  const partitioned = metaVersion >= 24;
   const db = new DatabaseSync(file);
+  if (options.wal) {
+    db.exec('PRAGMA journal_mode=WAL');
+    db.exec('PRAGMA wal_autocheckpoint=0');
+  }
   db.exec('CREATE TABLE meta (key TEXT NOT NULL UNIQUE PRIMARY KEY, value TEXT)');
   db.exec(
     'CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB, path TEXT, ' +
-      'expires_utc INTEGER, is_secure INTEGER, is_httponly INTEGER, samesite INTEGER)'
+      'expires_utc INTEGER, is_secure INTEGER, is_httponly INTEGER, samesite INTEGER' +
+      (partitioned ? ', top_frame_site_key TEXT' : '') +
+      ')'
   );
   db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('version', String(metaVersion));
-  const insert = db.prepare('INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-  for (const c of cookies) {
+  const insert = db.prepare(`INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?${partitioned ? ', ?' : ''})`);
+  for (const c of FIXTURE) {
+    if (c.topFrameSiteKey && !partitioned) continue;
     insert.run(
       c.host,
       c.name,
@@ -183,11 +215,13 @@ const buildCookiesDb = (file: string, metaVersion: number, cookies: FixtureCooki
       c.expires ?? 0n,
       c.secure ? 1 : 0,
       c.httpOnly ? 1 : 0,
-      c.sameSite ?? -1
+      c.sameSite ?? -1,
+      ...(partitioned ? [c.topFrameSiteKey ?? ''] : [])
     );
   }
+  if (options.wal) return db;
   db.close();
-};
+}
 
 const tmpDirs: string[] = [];
 const makeTmp = (): string => {
@@ -253,11 +287,31 @@ describe('Chromium cookie decryption', () => {
 
   it('decryptValue decrypts v10, strips the 32-byte host hash when meta.version >= 24, returns null on bad padding', () => {
     const key = deriveKey(PASSWORD);
-    expect(decryptValue(encrypt('hello', 23, 'a.com'), key, 23)).toBe('hello');
-    expect(decryptValue(encrypt('hello', 24, 'a.com'), key, 24)).toBe('hello');
-    expect(decryptValue(Buffer.concat([Buffer.from('v10'), Buffer.alloc(16, 7)]), key, 24)).toBeNull();
-    expect(decryptValue(Buffer.from('v11abcdefabcdefabcdef'), key, 24)).toBeNull();
-    expect(decryptValue(encrypt('hello', 24, 'a.com'), Buffer.alloc(16, 1), 24)).toBeNull();
+    expect(decryptValue(encrypt('hello', 23, 'a.com'), key, 23, 'a.com')).toBe('hello');
+    expect(decryptValue(encrypt('hello', 24, 'a.com'), key, 24, 'a.com')).toBe('hello');
+    expect(decryptValue(Buffer.concat([Buffer.from('v10'), Buffer.alloc(16, 7)]), key, 24, 'a.com')).toBeNull();
+    expect(decryptValue(Buffer.from('v11abcdefabcdefabcdef'), key, 24, 'a.com')).toBeNull();
+    expect(decryptValue(encrypt('hello', 24, 'a.com'), Buffer.alloc(16, 1), 24, 'a.com')).toBeNull();
+  });
+
+  it('decryptValue checks the host hash at meta.version >= 24, so a wrong key that passes the padding is caught', () => {
+    const key = deriveKey(PASSWORD);
+    const enc = encrypt('a-cookie-value-long-enough', 24, '.a.com');
+    // Another host's hash in front of the value: decrypts fine, but it is not this cookie's.
+    expect(decryptValue(enc, key, 24, '.b.com')).toBeNull();
+    // About 1 in 256 wrong keys leaves valid PKCS7 padding; find one and make sure it still fails.
+    const paddingPasses = (candidate: Buffer): boolean => {
+      try {
+        const decipher = createDecipheriv('aes-128-cbc', candidate, IV);
+        Buffer.concat([decipher.update(enc.subarray(3)), decipher.final()]);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const wrongKey = Array.from({ length: 4096 }, (_, i) => deriveKey(`wrong-${i}`)).find(paddingPasses);
+    if (!wrongKey) throw new Error('no padding-passing wrong key in 4096 tries');
+    expect(decryptValue(enc, wrongKey, 24, '.a.com')).toBeNull();
   });
 
   it('readChromiumCookies reads a copy, filters by domain, counts expired and undecryptable, removes the temp copy', async () => {
@@ -272,7 +326,7 @@ describe('Chromium cookie decryption', () => {
       const all = await readChromiumCookies(original, deriveKey(PASSWORD), null);
       expect(all.cookies.map((c) => c.name).toSorted()).toEqual(['__Host-pref', '__Secure-bad', 'cart', 'o', 'sid']);
       expect(all.cookies.find((c) => c.name === 'sid')?.value).toBe(SECRET_VALUES[0]);
-      expect(all.skipped).toEqual({ expired: 1, undecryptable: 2 });
+      expect(all.skipped).toEqual({ expired: 1, undecryptable: 2, partitioned: metaVersion >= 24 ? 1 : 0 });
 
       const filtered = await readChromiumCookies(original, deriveKey(PASSWORD), ['other.org']);
       expect(filtered.cookies.map((c) => c.name)).toEqual(['o']);
@@ -285,6 +339,20 @@ describe('Chromium cookie decryption', () => {
         expect(fs.existsSync(path.dirname(file))).toBe(false);
       }
       expect(fs.readFileSync(original).equals(before)).toBe(true);
+    }
+  });
+
+  it('readChromiumCookies includes rows a running browser has only in Cookies-wal', async () => {
+    const dir = makeTmp();
+    const original = path.join(dir, 'Cookies');
+    const writer = buildCookiesDb(original, 24, { wal: true });
+    try {
+      expect(fs.statSync(`${original}-wal`).size).toBeGreaterThan(0);
+      const read = await readChromiumCookies(original, deriveKey(PASSWORD), null);
+      expect(read.cookies.map((c) => c.name).toSorted()).toEqual(['__Host-pref', '__Secure-bad', 'cart', 'o', 'sid']);
+      expect(read.skipped).toEqual({ expired: 1, undecryptable: 2, partitioned: 1 });
+    } finally {
+      writer.close();
     }
   });
 
@@ -333,8 +401,19 @@ describe('importCookies', () => {
     const exec = fakeSecurity();
     const result = await importCookies(await chromeDefault(makeHome()), { kind: 'personal' }, null, exec);
 
-    expect(exec).toHaveBeenCalledWith('security', ['find-generic-password', '-w', '-s', 'Chrome Safe Storage']);
-    expect(result).toEqual({ imported: 4, sites: 4, skipped: { expired: 1, undecryptable: 2, rejected: 1 } });
+    expect(exec).toHaveBeenCalledWith('/usr/bin/security', [
+      'find-generic-password',
+      '-w',
+      '-s',
+      'Chrome Safe Storage',
+    ]);
+    // Rejected: the non-secure __Secure- cookie and the partitioned one.
+    expect(result).toEqual({
+      ok: true,
+      imported: 4,
+      sites: 4,
+      skipped: { expired: 1, undecryptable: 2, rejected: 2 },
+    });
     expect([...h.sessions.keys()]).toEqual([BROWSER_SESSION_PARTITION]);
     const calls = setCallsOf(BROWSER_SESSION_PARTITION);
     const byName = (name: string) => calls.find((c) => c.name === name);
@@ -365,6 +444,7 @@ describe('importCookies', () => {
     expect(byName('cart')?.sameSite).toBe('no_restriction');
     expect(byName('o')?.sameSite).toBe('unspecified');
     expect(byName('__Secure-bad')).toBeUndefined();
+    expect(byName('chips')).toBeUndefined();
   });
 
   it('counts a cookie Electron refuses as rejected', async () => {
@@ -373,7 +453,7 @@ describe('importCookies', () => {
     await importCookies(source, { kind: 'personal' }, ['other.org'], exec);
     h.sessions.get(BROWSER_SESSION_PARTITION)?.cookies.set.mockRejectedValue(new Error('Failed to set cookie'));
     const result = await importCookies(source, { kind: 'personal' }, ['other.org'], exec);
-    expect(result).toEqual({ imported: 0, sites: 0, skipped: { expired: 0, undecryptable: 0, rejected: 1 } });
+    expect(result).toEqual({ ok: true, imported: 0, sites: 0, skipped: { expired: 0, undecryptable: 0, rejected: 1 } });
   });
 
   it('importCookies into an Agent profile leaves Personal untouched', async () => {
@@ -383,7 +463,7 @@ describe('importCookies', () => {
       ['example.com'],
       fakeSecurity()
     );
-    expect(result.imported).toBe(3);
+    expect(result).toMatchObject({ ok: true, imported: 3 });
     expect([...h.sessions.keys()]).toEqual([agentPartition(AGENT_ID)]);
     expect(
       setCallsOf(agentPartition(AGENT_ID))
@@ -396,11 +476,20 @@ describe('importCookies', () => {
   it('Keychain denial returns a clear "access to <Browser> Safe Storage was denied" result and imports nothing', async () => {
     const source = (await detectBrowserSources(makeHome())).find((s) => s.browser === 'brave');
     if (!source) throw new Error('fixture missing Brave');
-    for (const code of [44, 51, 128]) {
-      const exec = vi.fn(() => Promise.reject(Object.assign(new Error('security: denied'), { code })));
-      await expect(importCookies(source, { kind: 'personal' }, null, exec)).rejects.toThrow(
-        'Access to Brave Safe Storage was denied'
-      );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const failing = (error: object) => vi.fn(() => Promise.reject(Object.assign(new Error('security: failed'), error)));
+    const cases: Array<[object, string]> = [
+      [{ code: 51 }, 'keychain_denied'],
+      [{ code: 128 }, 'keychain_denied'],
+      [{ code: 44 }, 'keychain_missing'],
+      [{ killed: true, signal: 'SIGTERM', code: null }, 'keychain_timeout'],
+    ];
+    for (const [error, code] of cases) {
+      expect(await importCookies(source, { kind: 'personal' }, null, failing(error))).toEqual({
+        ok: false,
+        code,
+        browser: 'brave',
+      });
     }
     expect(h.sessions.size).toBe(0);
     expect(h.opened).toEqual([]);
@@ -414,8 +503,34 @@ describe('importCookies', () => {
   });
 });
 
+describe('one import at a time', () => {
+  it('refuses a second import while the first waits on the Keychain', async () => {
+    const source = (await detectBrowserSources(makeHome()))[0];
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let settle: ((error: Error) => void) | undefined;
+    // The first import's Keychain prompt never answers until the test ends it.
+    const hanging = vi.fn(
+      () =>
+        new Promise<{ stdout: string }>((_resolve, reject) => {
+          settle = reject;
+        })
+    );
+    const first = importCookies(source, { kind: 'personal' }, null, hanging);
+    expect(await importCookies(source, { kind: 'personal' }, null, fakeSecurity())).toEqual({
+      ok: false,
+      code: 'busy',
+      browser: 'chrome',
+    });
+    settle?.(Object.assign(new Error('timed out'), { killed: true, signal: 'SIGTERM' }));
+    expect(await first).toEqual({ ok: false, code: 'keychain_timeout', browser: 'chrome' });
+    // Once it is over, the next import runs.
+    expect(await importCookies(source, { kind: 'personal' }, null, fakeSecurity())).toMatchObject({ ok: true });
+  });
+});
+
 describe('cookie import IPC', () => {
   beforeEach(() => {
+    h.home.fail = false;
     h.providers.clear();
     registerBrowserProfileIpc();
   });
@@ -444,14 +559,14 @@ describe('cookie import IPC', () => {
       domains: null,
     });
     expect(h.execFile).toHaveBeenCalledWith(
-      'security',
+      '/usr/bin/security',
       ['find-generic-password', '-w', '-s', 'Chrome Safe Storage'],
-      expect.anything(),
+      { encoding: 'utf8', timeout: 120_000 },
       expect.any(Function)
     );
     expect(result).toEqual({
       success: true,
-      data: { imported: 4, sites: 4, skipped: { expired: 1, undecryptable: 2, rejected: 1 } },
+      data: { ok: true, imported: 4, sites: 4, skipped: { expired: 1, undecryptable: 2, rejected: 2 } },
     });
     // A failing import logs too: still no values.
     h.sessions.get(BROWSER_SESSION_PARTITION)?.cookies.set.mockRejectedValue(new Error('Failed to set cookie'));
@@ -459,7 +574,7 @@ describe('cookie import IPC', () => {
 
     const logged = JSON.stringify(logs.flatMap((spy) => spy.mock.calls));
     const replied = JSON.stringify([sources, result]);
-    for (const secret of [...SECRET_VALUES, PASSWORD]) {
+    for (const secret of [...SECRET_VALUES, 'chips-secret-6', PASSWORD]) {
       expect(logged).not.toContain(secret);
       expect(replied).not.toContain(secret);
     }
@@ -480,9 +595,50 @@ describe('cookie import IPC', () => {
     ]) {
       expect(await run?.(bad)).toMatchObject({ success: false });
     }
-    expect(await run?.({ ...good, profileDir: '../../Brave' })).toMatchObject({ success: false });
+    expect(await run?.({ ...good, profileDir: '../../Brave' })).toEqual({
+      success: true,
+      data: { ok: false, code: 'source_not_found', browser: 'chrome' },
+    });
     expect(h.execFile).not.toHaveBeenCalled();
     expect(h.sessions.size).toBe(0);
+  });
+
+  it('failures reach the renderer as codes only: no path, no English text from main', async () => {
+    h.home.dir = makeHome();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Brave's cookie DB is unreadable; Chrome's Keychain item is missing.
+    fs.writeFileSync(
+      path.join(h.home.dir, 'Library', 'Application Support', 'BraveSoftware', 'Brave-Browser', 'Default', 'Cookies'),
+      'garbage'
+    );
+    const run = h.providers.get('run');
+    const replies = [
+      await run?.({ browser: 'brave', profileDir: 'Default', target: { kind: 'personal' }, domains: null }),
+    ];
+    h.execFile.mockImplementationOnce((_file, _args, _options, callback) =>
+      callback(Object.assign(new Error('security: SecKeychainSearchCopyNext: item not found'), { code: 44 }), '')
+    );
+    replies.push(
+      await run?.({ browser: 'chrome', profileDir: 'Default', target: { kind: 'personal' }, domains: null })
+    );
+    h.home.fail = true;
+    replies.push(await h.providers.get('listSources')?.());
+    replies.push(
+      await run?.({ browser: 'chrome', profileDir: 'Default', target: { kind: 'personal' }, domains: null })
+    );
+
+    expect(replies).toEqual([
+      { success: true, data: { ok: false, code: 'read_failed', browser: 'brave' } },
+      { success: true, data: { ok: false, code: 'keychain_missing', browser: 'chrome' } },
+      { success: false },
+      { success: true, data: { ok: false, code: 'read_failed', browser: 'chrome' } },
+    ]);
+    const replied = JSON.stringify(replies);
+    expect(replied).not.toContain(h.home.dir);
+    expect(replied).not.toMatch(/msg|[A-Z][a-z]+ [a-z]+/);
+    // The detail stays in main's log.
+    expect(errors.mock.calls.flat().map(String).join('\n')).toContain('EACCES');
   });
 
   it('no relay or MCP route reaches the import: only the renderer IPC imports it', () => {
@@ -501,5 +657,32 @@ describe('cookie import IPC', () => {
     };
     walk(processDir);
     expect(importers).toEqual([path.join('services', 'browserSession', 'profiles', 'profileIpc.ts')]);
+  });
+
+  it('the raw run channel appears only where the bridge defines it, and only the IPC and the modal use it', () => {
+    const packagesDir = path.resolve(__dirname, '../../../../../../packages');
+    const withChannel: string[] = [];
+    const withRun: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (['node_modules', 'dist', 'out', 'build', '.vite'].includes(entry.name)) continue;
+        const file = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(file);
+        else if (/\.(?:[cm]?[jt]sx?)$/.test(entry.name)) {
+          const text = fs.readFileSync(file, 'utf8');
+          if (text.includes('browser.cookie-import.run')) withChannel.push(path.relative(packagesDir, file));
+          if (/cookieImport\.run\b/.test(text)) withRun.push(path.relative(packagesDir, file));
+        }
+      }
+    };
+    walk(packagesDir);
+    const desktop = (...parts: string[]) => path.join('desktop', 'src', ...parts);
+    expect(withChannel).toEqual([desktop('common', 'adapter', 'ipcBridge.ts')]);
+    expect(withRun.toSorted()).toEqual(
+      [
+        desktop('process', 'services', 'browserSession', 'profiles', 'profileIpc.ts'),
+        desktop('renderer', 'pages', 'conversation', 'Preview', 'browser', 'BrowserProfiles', 'CookieImportModal.tsx'),
+      ].toSorted()
+    );
   });
 });

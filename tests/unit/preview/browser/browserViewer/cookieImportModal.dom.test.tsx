@@ -22,12 +22,10 @@ vi.mock('@/common', () => ({
     browser: { cookieImport: { listSources: { invoke: mocks.listSources }, run: { invoke: mocks.run } } },
   },
 }));
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => (options ? `${key} ${JSON.stringify(options)}` : key),
-    i18n: { language: 'en' },
-  }),
-}));
+/** The mocked `t`: the key, then its options as JSON. */
+const tr = (key: string, options?: Record<string, unknown>): string =>
+  options ? `${key} ${JSON.stringify(options)}` : key;
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: tr, i18n: { language: 'en' } }) }));
 
 import CookieImportModal, {
   CookieImportMenu,
@@ -68,7 +66,7 @@ describe('CookieImportModal', () => {
     mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
     mocks.run.mockResolvedValue({
       success: true,
-      data: { imported: 12, sites: 3, skipped: { expired: 2, undecryptable: 1, rejected: 0 } },
+      data: { ok: true, imported: 12, sites: 3, skipped: { expired: 2, undecryptable: 1, rejected: 0 } },
     });
     renderModal({ kind: 'agent', agentId: 'bare:632f31d2' });
 
@@ -78,25 +76,39 @@ describe('CookieImportModal', () => {
     expect(await screen.findByText(`${K}.into {"profile":"Scout"}`)).toBeInTheDocument();
     await chooseOption('cookie-import-profile', 'Work');
     fireEvent.change(screen.getByPlaceholderText(`${K}.domainsPlaceholder`), {
-      target: { value: 'https://GoHighLevel.com/x, elementor.com' },
+      target: { value: 'https://GoHighLevel.com:8443/x, elementor.com bücher.de' },
     });
     fireEvent.click(screen.getByText(`${K}.import`));
 
-    expect(await screen.findByText(`${K}.result {"cookies":12,"sites":3}`)).toBeInTheDocument();
+    // i18next plurals: `count` picks result_one/_other, and the site count is its own plural.
+    const sitesText = tr(`${K}.sitesCount`, { count: 3 });
+    expect(await screen.findByText(tr(`${K}.result`, { count: 12, sitesText }))).toBeInTheDocument();
     expect(screen.getByText(`${K}.skipped {"expired":2,"undecryptable":1,"rejected":0}`)).toBeInTheDocument();
     expect(mocks.run).toHaveBeenCalledWith({
       browser: 'chrome',
       profileDir: 'Profile 1',
       target: { kind: 'agent', agentId: 'bare:632f31d2' },
-      domains: ['gohighlevel.com', 'elementor.com'],
+      domains: ['gohighlevel.com', 'elementor.com', 'xn--bcher-kva.de'],
     });
+  });
+
+  it('marks sites that are not host names on the field and does not import', async () => {
+    mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
+    renderModal();
+    await screen.findByText('Chrome');
+    fireEvent.change(screen.getByPlaceholderText(`${K}.domainsPlaceholder`), {
+      target: { value: 'example.com, not_valid!, ok.org' },
+    });
+    fireEvent.click(screen.getByText(`${K}.import`));
+    expect(await screen.findByText(tr(`${K}.invalidSites`, { sites: 'not_valid!' }))).toBeInTheDocument();
+    expect(mocks.run).not.toHaveBeenCalled();
   });
 
   it('switching browser picks that browser’s profile and imports every site when no domains are given', async () => {
     mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
     mocks.run.mockResolvedValue({
       success: true,
-      data: { imported: 1, sites: 1, skipped: { expired: 0, undecryptable: 0, rejected: 0 } },
+      data: { ok: true, imported: 1, sites: 1, skipped: { expired: 0, undecryptable: 0, rejected: 0 } },
     });
     renderModal();
     fireEvent.click(await screen.findByText('Brave'));
@@ -114,15 +126,35 @@ describe('CookieImportModal', () => {
     );
   });
 
-  it('shows why an import failed, e.g. the Keychain was denied', async () => {
+  it('words each failure code in the renderer, naming the browser', async () => {
     mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
-    mocks.run.mockResolvedValue({ success: false, msg: 'Access to Chrome Safe Storage was denied' });
     renderModal();
     await screen.findByText('Chrome');
+    for (const code of [
+      'keychain_denied',
+      'keychain_missing',
+      'keychain_timeout',
+      'source_not_found',
+      'read_failed',
+      'busy',
+    ]) {
+      mocks.run.mockResolvedValueOnce({ success: true, data: { ok: false, code, browser: 'chrome' } });
+      fireEvent.click(screen.getByText(`${K}.import`));
+      expect(await screen.findByText(tr(`${K}.errors.${code}`, { browser: 'Chrome' }))).toBeInTheDocument();
+    }
+    // A refused request (or a broken bridge) never shows main's text.
+    mocks.run.mockResolvedValueOnce({ success: false, msg: 'Invalid arguments' });
     fireEvent.click(screen.getByText(`${K}.import`));
-    expect(
-      await screen.findByText(`${K}.failed {"reason":"Access to Chrome Safe Storage was denied"}`)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(tr(`${K}.errors.unknown`, { browser: 'Chrome' }))).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid arguments/)).toBeNull();
+  });
+
+  it('shows that looking for browsers failed, rather than that none was found', async () => {
+    mocks.listSources.mockResolvedValue({ success: false });
+    renderModal();
+    expect(await screen.findByText(`${K}.errors.list_failed`)).toBeInTheDocument();
+    expect(screen.queryByText(`${K}.none`)).toBeNull();
+    expect(screen.getByText(`${K}.import`).closest('button')).toBeDisabled();
   });
 
   it('says so when no supported browser is found, and offers no import', async () => {
@@ -149,12 +181,18 @@ describe('CookieImportModal', () => {
 
 describe('parseDomains', () => {
   it('turns a typed list into host names, or null for every site', () => {
-    expect(parseDomains('')).toBeNull();
-    expect(parseDomains('  , ')).toBeNull();
-    expect(parseDomains('https://Example.com/path *.foo.org\n.bar.net, example.com')).toEqual([
-      'example.com',
-      'foo.org',
-      'bar.net',
-    ]);
+    expect(parseDomains('')).toEqual({ domains: null, invalid: [] });
+    expect(parseDomains('  , ')).toEqual({ domains: null, invalid: [] });
+    expect(parseDomains('https://Example.com/path *.foo.org\n.bar.net, example.com, localhost:3000')).toEqual({
+      domains: ['example.com', 'foo.org', 'bar.net', 'localhost'],
+      invalid: [],
+    });
+  });
+
+  it('IDN-encodes names, drops ports, and lists the entries that are not host names', () => {
+    expect(parseDomains('Bücher.de:8080 münchen.de, a_b.com, http://, -bad-.com')).toEqual({
+      domains: ['xn--bcher-kva.de', 'xn--mnchen-3ya.de'],
+      invalid: ['a_b.com', 'http://', '-bad-.com'],
+    });
   });
 });

@@ -9,6 +9,7 @@ import { BrowserWindow, app, session, webContents } from 'electron';
 import { z } from 'zod';
 import { ipcBridge } from '@/common';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
+import { HOST_NAME_RE } from '@/common/utils/urlValidation';
 import { browserExtensionsSettled, ensureBrowserSession, forgetBrowserSession } from '../browserSession';
 import { forgetPermissions } from '../permissions';
 import {
@@ -18,7 +19,7 @@ import {
   parseBrowserTabProfile,
   partitionOfProfile,
 } from './browserProfiles';
-import { detectBrowserSources } from './cookieImport/detect';
+import { detectBrowserSources, type BrowserSource } from './cookieImport/detect';
 import { importCookies } from './cookieImport/importCookies';
 
 type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
@@ -67,8 +68,6 @@ const agentIdOf = (request: unknown): string | null => {
   return typeof agentId === 'string' && agentId !== DEFAULT_AGENT_ID ? agentId : null;
 };
 
-/** A lowercase host name such as `gohighlevel.com`. */
-const DOMAIN_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
 const MAX_IMPORT_DOMAINS = 100;
 const MAX_PROFILE_DIR_CHARS = 255;
 
@@ -78,11 +77,14 @@ const cookieImportRequest = z
     browser: z.enum(['chrome', 'brave', 'edge', 'arc', 'vivaldi']),
     profileDir: z.string().min(1).max(MAX_PROFILE_DIR_CHARS),
     target: z.unknown(),
-    domains: z.array(z.string().regex(DOMAIN_RE)).min(1).max(MAX_IMPORT_DOMAINS).nullable(),
+    domains: z.array(z.string().regex(HOST_NAME_RE)).min(1).max(MAX_IMPORT_DOMAINS).nullable(),
   })
   .strict();
 
-/** The renderer's cookie import (spec R7): user-initiated from the UI only, and it answers with counts. */
+/**
+ * The renderer's cookie import (spec R7): user-initiated from the UI only. It answers with counts or an error code,
+ * never a path or main's own text.
+ */
 function registerCookieImportIpc(): void {
   ipcBridge.browser.cookieImport.listSources.provider(async () => {
     try {
@@ -92,22 +94,26 @@ function registerCookieImportIpc(): void {
         data: sources.map(({ browser, profileDir, profileName }) => ({ browser, profileDir, profileName })),
       };
     } catch (error) {
-      return failure(error);
+      // The detail (paths) stays in the log; the renderer shows its own "couldn't look" state.
+      console.error('[CookieImport] could not look for browsers:', error);
+      return { success: false };
     }
   });
   ipcBridge.browser.cookieImport.run.provider(async (request) => {
     const parsed = cookieImportRequest.safeParse(request);
     const target = parsed.success ? parseBrowserTabProfile(parsed.data.target) : null;
-    if (!parsed.success || !target) return INVALID;
+    if (!parsed.success || !target) return { success: false };
     const { browser, profileDir, domains } = parsed.data;
+    let source: BrowserSource | undefined;
     try {
       const sources = await detectBrowserSources(app.getPath('home'));
-      const source = sources.find((known) => known.browser === browser && known.profileDir === profileDir);
-      if (!source) return { success: false, msg: 'That browser profile was not found' };
-      return { success: true, data: await importCookies(source, target, domains) };
+      source = sources.find((known) => known.browser === browser && known.profileDir === profileDir);
     } catch (error) {
-      return failure(error);
+      console.error('[CookieImport] could not look for browsers:', error);
+      return { success: true, data: { ok: false, code: 'read_failed', browser } };
     }
+    if (!source) return { success: true, data: { ok: false, code: 'source_not_found', browser } };
+    return { success: true, data: await importCookies(source, target, domains) };
   });
 }
 

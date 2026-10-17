@@ -283,12 +283,29 @@
       "profile": "Профіль браузера",
       "sites": "Сайти (необов’язково)",
       "domainsPlaceholder": "Усі сайти або, наприклад, gohighlevel.com, elementor.com",
-      "keychainHint": "macOS попросить доступ до ключа Safe Storage браузера. Дозвольте його для імпорту.",
+      "keychainHint": "macOS попросить доступ до ключа Safe Storage браузера. Виберіть «Дозволити», а не «Завжди дозволяти», щоб кожен імпорт питав знову.",
       "import": "Імпортувати",
       "none": "На цьому Mac не знайдено профілю Chrome, Brave, Edge, Arc або Vivaldi.",
-      "result": "Імпортовано cookie: {{cookies}}, сайтів: {{sites}}",
+      "result_one": "Імпортовано {{count}} cookie з {{sitesText}}",
+      "result_few": "Імпортовано {{count}} cookie з {{sitesText}}",
+      "result_many": "Імпортовано {{count}} cookie з {{sitesText}}",
+      "result_other": "Імпортовано {{count}} cookie з {{sitesText}}",
+      "sitesCount_one": "{{count}} сайту",
+      "sitesCount_few": "{{count}} сайтів",
+      "sitesCount_many": "{{count}} сайтів",
+      "sitesCount_other": "{{count}} сайтів",
       "skipped": "Пропущено: прострочених {{expired}}, нечитабельних {{undecryptable}}, відхилених {{rejected}}",
-      "failed": "Не вдалося імпортувати cookie: {{reason}}"
+      "invalidSites": "Не назва сайту: {{sites}}",
+      "errors": {
+        "keychain_denied": "Доступ до ключа Safe Storage {{browser}} заборонено, тому нічого не імпортовано.",
+        "keychain_missing": "{{browser}} не має ключа Safe Storage у в’язці ключів, тому нічого не імпортовано.",
+        "keychain_timeout": "Запит в’язки ключів для {{browser}} залишився без відповіді. Повторіть і виберіть «Дозволити».",
+        "source_not_found": "Цього профілю {{browser}} більше немає на цьому Mac.",
+        "read_failed": "Не вдалося прочитати cookie {{browser}}. Повторіть або спершу закрийте {{browser}}.",
+        "busy": "Інший імпорт ще триває. Дочекайтеся його завершення.",
+        "unknown": "Не вдалося імпортувати cookie. Повторіть спробу.",
+        "list_failed": "Не вдалося знайти браузери на цьому Mac."
+      }
     }
   }
 }

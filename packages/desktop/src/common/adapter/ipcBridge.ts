@@ -19,8 +19,8 @@ import type {
   ConfirmRequest,
   BrowserShortcutRequest,
   BrowserTabProfile,
+  CookieImportOutcome,
   CookieImportRequest,
-  CookieImportResult,
   CookieImportSource,
   DownloadItem,
   PermissionRequest,
@@ -1509,7 +1509,7 @@ export const browser = {
   // user-initiated only: the Chromium profiles on this Mac, and importing one's cookies into a profile (counts back)
   cookieImport: {
     listSources: bridge.buildProvider<IBridgeResponse<CookieImportSource[]>, void>('browser.cookie-import.sources'),
-    run: bridge.buildProvider<IBridgeResponse<CookieImportResult>, CookieImportRequest>('browser.cookie-import.run'),
+    run: bridge.buildProvider<IBridgeResponse<CookieImportOutcome>, CookieImportRequest>('browser.cookie-import.run'),
   },
   getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
   openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),

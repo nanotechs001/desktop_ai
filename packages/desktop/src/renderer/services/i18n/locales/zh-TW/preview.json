@@ -281,12 +281,25 @@
       "profile": "瀏覽器設定檔",
       "sites": "網站（選填）",
       "domainsPlaceholder": "全部網站，或例如 gohighlevel.com, elementor.com",
-      "keychainHint": "macOS 會請求使用該瀏覽器的 Safe Storage 金鑰，允許後即可匯入。",
+      "keychainHint": "macOS 會請求使用該瀏覽器的 Safe Storage 金鑰。請選擇「允許」而不是「永遠允許」，這樣每次匯入都會再次詢問。",
       "import": "匯入",
       "none": "未在此 Mac 上找到 Chrome、Brave、Edge、Arc 或 Vivaldi 的設定檔。",
-      "result": "已從 {{sites}} 個網站匯入 {{cookies}} 個 Cookie",
+      "result_one": "已從 {{sitesText}}匯入 {{count}} 個 Cookie",
+      "result_other": "已從 {{sitesText}}匯入 {{count}} 個 Cookie",
+      "sitesCount_one": "{{count}} 個網站",
+      "sitesCount_other": "{{count}} 個網站",
       "skipped": "已略過：{{expired}} 個已過期，{{undecryptable}} 個無法讀取，{{rejected}} 個遭拒絕",
-      "failed": "無法匯入 Cookie：{{reason}}"
+      "invalidSites": "不是網站名稱：{{sites}}",
+      "errors": {
+        "keychain_denied": "存取 {{browser}} 的 Safe Storage 金鑰遭拒，未匯入任何內容。",
+        "keychain_missing": "鑰匙圈中沒有 {{browser}} 的 Safe Storage 金鑰，未匯入任何內容。",
+        "keychain_timeout": "{{browser}} 的鑰匙圈請求未及時得到回應。請重試並選擇「允許」。",
+        "source_not_found": "該 {{browser}} 設定檔已不在此 Mac 上。",
+        "read_failed": "無法讀取 {{browser}} 的 Cookie。請重試，或先結束 {{browser}}。",
+        "busy": "另一個匯入仍在進行，請等待其完成。",
+        "unknown": "無法匯入 Cookie，請重試。",
+        "list_failed": "無法在此 Mac 上尋找瀏覽器。"
+      }
     }
   }
 }

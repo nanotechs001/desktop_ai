@@ -11,10 +11,12 @@ import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type {
   BrowserTabProfile,
+  CookieImportErrorCode,
   CookieImportResult,
   CookieImportSource,
   CookieSourceBrowser,
 } from '@/common/types/browser';
+import { HOST_NAME_RE } from '@/common/utils/urlValidation';
 import { iconColors } from '@/renderer/styles/colors';
 import { profilePresentation } from './ProfileBadge';
 import { useProfileAgents } from './useBrowserProfiles';
@@ -30,25 +32,33 @@ const BROWSER_LABELS: Record<CookieSourceBrowser, string> = {
   vivaldi: 'Vivaldi',
 };
 
+/** One typed site as an ASCII host name: no scheme, port, path or leading `*.`/`.`, IDN punycode-encoded. */
+const toHostName = (entry: string): string | null => {
+  const bare = entry.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^(\*?\.)+/, '');
+  try {
+    // The URL parser lowercases, drops port and path, and IDN-encodes the host.
+    const host = new URL(`http://${bare}`).hostname.replace(/\.$/, '');
+    return HOST_NAME_RE.test(host) ? host : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
- * The host names in a typed site list ("https://GoHighLevel.com/x, *.elementor.com"), lowercased and without
- * scheme, path or leading `*.`/`.`; null when it names none, meaning every site.
+ * The host names in a typed site list ("https://GoHighLevel.com:443/x, *.elementor.com, bücher.de"), and the
+ * entries that are not host names. `domains` is null when the list names none, meaning every site.
  */
-export function parseDomains(text: string): string[] | null {
-  const domains = text
-    .split(/[\s,]+/)
-    .map((entry) =>
-      entry
-        .toLowerCase()
-        .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
-        .replace(/[/?#].*$/, '')
-        .replace(/^(\*?\.)+/, '')
-    )
-    .filter((domain) => domain !== '');
-  return domains.length === 0 ? null : [...new Set(domains)];
+export function parseDomains(text: string): { domains: string[] | null; invalid: string[] } {
+  const entries = text.split(/[\s,]+/).filter((entry) => entry !== '');
+  const hosts = entries.map(toHostName);
+  const domains = [...new Set(hosts.filter((host): host is string => host !== null))];
+  const invalid = entries.filter((_, index) => hosts[index] === null);
+  return { domains: domains.length === 0 ? null : domains, invalid };
 }
 
-type Outcome = { kind: 'done'; result: CookieImportResult } | { kind: 'failed'; reason: string };
+type Outcome =
+  | { kind: 'done'; result: CookieImportResult }
+  | { kind: 'failed'; code: CookieImportErrorCode | 'unknown'; browser: CookieSourceBrowser };
 
 type CookieImportModalProps = {
   visible: boolean;
@@ -64,10 +74,12 @@ type CookieImportModalProps = {
 const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, onClose }) => {
   const { t } = useTranslation();
   const agents = useProfileAgents(target.kind === 'agent');
-  const [sources, setSources] = useState<CookieImportSource[] | null>(null);
+  /** null while looking; 'failed' when main could not look. */
+  const [sources, setSources] = useState<CookieImportSource[] | 'failed' | null>(null);
   const [browser, setBrowser] = useState<CookieSourceBrowser | null>(null);
   const [profileDir, setProfileDir] = useState<string | null>(null);
   const [sitesText, setSitesText] = useState('');
+  const [invalidSites, setInvalidSites] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
@@ -79,42 +91,52 @@ const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, 
     ipcBridge.browser.cookieImport.listSources
       .invoke()
       .then((reply) => {
-        if (!reply.success) throw new Error(reply.msg ?? 'no sources');
+        if (!reply.success) throw new Error('main could not look for browsers');
         return reply.data ?? [];
       })
-      .catch((error: unknown): CookieImportSource[] => {
+      .catch((error: unknown): 'failed' => {
         console.warn('[CookieImport] could not list the browsers:', error);
-        return [];
+        return 'failed';
       })
       .then((found) => {
         if (!live) return;
         setSources(found);
-        setBrowser(found[0]?.browser ?? null);
-        setProfileDir(found[0]?.profileDir ?? null);
+        const first = found === 'failed' ? undefined : found[0];
+        setBrowser(first?.browser ?? null);
+        setProfileDir(first?.profileDir ?? null);
       });
     return () => {
       live = false;
     };
   }, [visible]);
 
-  const browsers = [...new Set((sources ?? []).map((source) => source.browser))];
-  const profiles = (sources ?? []).filter((source) => source.browser === browser);
+  const found = Array.isArray(sources) ? sources : [];
+  const browsers = [...new Set(found.map((source) => source.browser))];
+  const profiles = found.filter((source) => source.browser === browser);
 
   const chooseBrowser = (next: CookieSourceBrowser): void => {
     setBrowser(next);
-    setProfileDir((sources ?? []).find((source) => source.browser === next)?.profileDir ?? null);
+    setProfileDir(found.find((source) => source.browser === next)?.profileDir ?? null);
   };
 
   const handleImport = async (): Promise<void> => {
     if (browser === null || profileDir === null) return;
+    const { domains, invalid } = parseDomains(sitesText);
+    setInvalidSites(invalid);
+    if (invalid.length > 0) return;
     setRunning(true);
     setOutcome(null);
     const reply = await ipcBridge.browser.cookieImport.run
-      .invoke({ browser, profileDir, target, domains: parseDomains(sitesText) })
-      .catch((error: unknown) => ({ success: false, msg: error instanceof Error ? error.message : String(error) }));
+      .invoke({ browser, profileDir, target, domains })
+      .catch((error: unknown): { success: false; data?: undefined } => {
+        console.warn('[CookieImport] the import request failed:', error);
+        return { success: false };
+      });
     setRunning(false);
-    if (reply.success && 'data' in reply && reply.data) setOutcome({ kind: 'done', result: reply.data });
-    else setOutcome({ kind: 'failed', reason: reply.msg ?? t('common.error') });
+    const data = reply.success ? reply.data : undefined;
+    if (data?.ok === true) setOutcome({ kind: 'done', result: data });
+    else if (data?.ok === false) setOutcome({ kind: 'failed', code: data.code, browser: data.browser });
+    else setOutcome({ kind: 'failed', code: 'unknown', browser });
   };
 
   const intoName = profilePresentation(target, agents, t).name;
@@ -133,7 +155,8 @@ const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, 
       <div className='flex flex-col gap-12px'>
         <div className='text-12px text-t-secondary'>{t(`${K}.into`, { profile: intoName })}</div>
         {sources === null && <Spin />}
-        {sources?.length === 0 && <Alert type='info' content={t(`${K}.none`)} />}
+        {sources === 'failed' && <Alert type='error' content={t(`${K}.errors.list_failed`)} />}
+        {Array.isArray(sources) && sources.length === 0 && <Alert type='info' content={t(`${K}.none`)} />}
         {browsers.length > 0 && (
           <>
             <div className='flex flex-col gap-4px'>
@@ -162,7 +185,20 @@ const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, 
             </div>
             <div className='flex flex-col gap-4px'>
               <span className='text-13px text-t-primary'>{t(`${K}.sites`)}</span>
-              <Input value={sitesText} onChange={setSitesText} placeholder={t(`${K}.domainsPlaceholder`)} />
+              <Input
+                value={sitesText}
+                onChange={(value) => {
+                  setSitesText(value);
+                  setInvalidSites([]);
+                }}
+                status={invalidSites.length > 0 ? 'error' : undefined}
+                placeholder={t(`${K}.domainsPlaceholder`)}
+              />
+              {invalidSites.length > 0 && (
+                <span className='text-12px text-danger'>
+                  {t(`${K}.invalidSites`, { sites: invalidSites.join(', ') })}
+                </span>
+              )}
             </div>
             <div className='text-12px text-t-tertiary'>{t(`${K}.keychainHint`)}</div>
           </>
@@ -172,13 +208,23 @@ const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, 
             type='success'
             content={
               <div className='flex flex-col gap-2px'>
-                <span>{t(`${K}.result`, { cookies: outcome.result.imported, sites: outcome.result.sites })}</span>
+                <span>
+                  {t(`${K}.result`, {
+                    count: outcome.result.imported,
+                    sitesText: t(`${K}.sitesCount`, { count: outcome.result.sites }),
+                  })}
+                </span>
                 <span className='text-12px text-t-secondary'>{t(`${K}.skipped`, outcome.result.skipped)}</span>
               </div>
             }
           />
         )}
-        {outcome?.kind === 'failed' && <Alert type='error' content={t(`${K}.failed`, { reason: outcome.reason })} />}
+        {outcome?.kind === 'failed' && (
+          <Alert
+            type='error'
+            content={t(`${K}.errors.${outcome.code}`, { browser: BROWSER_LABELS[outcome.browser] })}
+          />
+        )}
       </div>
     </Modal>
   );

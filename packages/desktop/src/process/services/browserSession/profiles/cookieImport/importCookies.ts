@@ -5,15 +5,20 @@
  */
 
 import { execFile } from 'node:child_process';
-import type { BrowserTabProfile, CookieImportResult, CookieSourceBrowser } from '@/common/types/browser';
+import type {
+  BrowserTabProfile,
+  CookieImportErrorCode,
+  CookieImportOutcome,
+  CookieSourceBrowser,
+} from '@/common/types/browser';
 import { ensureBrowserSession } from '../../browserSession';
 import { partitionOfProfile } from '../browserProfiles';
-import { deriveKey, readChromiumCookies, type ImportedCookie } from './chromiumCookies';
+import { deriveKey, readChromiumCookies, type ChromiumCookieRead, type ImportedCookie } from './chromiumCookies';
 import type { BrowserSource } from './detect';
 
 /*
  * Privacy (spec R7): cookie values and the Keychain password never leave this module except into
- * `session.cookies.set` on the chosen partition. Nothing here logs a value, and callers get counts only.
+ * `session.cookies.set` on the chosen partition. Nothing here logs a value, and callers get counts or a code only.
  */
 
 /** The Keychain item each browser keeps its cookie password in. */
@@ -25,12 +30,20 @@ export const SAFE_STORAGE: Record<CookieSourceBrowser, string> = {
   vivaldi: 'Vivaldi Safe Storage',
 };
 
+const SECURITY_BIN = '/usr/bin/security';
+/** How long the macOS Keychain prompt may wait for the user before the import gives up. */
+const KEYCHAIN_TIMEOUT_MS = 120_000;
+/** `security` exits with errSecItemNotFound's low byte when the browser has no Safe Storage item. */
+const EXIT_ITEM_NOT_FOUND = 44;
+
 /** Runs a program with arguments (never through a shell) and resolves with its stdout. */
 export type ExecFile = (file: string, args: string[]) => Promise<{ stdout: string }>;
 
-const runProgram: ExecFile = (file, args) =>
+const runSecurity: ExecFile = (file, args) =>
   new Promise((resolve, reject) => {
-    execFile(file, args, { encoding: 'utf8' }, (error, stdout) => (error ? reject(error) : resolve({ stdout })));
+    execFile(file, args, { encoding: 'utf8', timeout: KEYCHAIN_TIMEOUT_MS }, (error, stdout) =>
+      error ? reject(error) : resolve({ stdout })
+    );
   });
 
 const SAME_SITE: Record<number, Electron.CookiesSetDetails['sameSite']> = {
@@ -40,20 +53,37 @@ const SAME_SITE: Record<number, Electron.CookiesSetDetails['sameSite']> = {
   2: 'strict',
 };
 
+type KeychainCode = Extract<CookieImportErrorCode, `keychain_${string}`>;
+
+/** Which Keychain failure a `security` error is: killed by the timeout, no such item, or refused. */
+function keychainFailure(error: unknown): KeychainCode {
+  const { code, killed } = (error ?? {}) as { code?: unknown; killed?: unknown };
+  if (killed === true) return 'keychain_timeout';
+  return code === EXIT_ITEM_NOT_FOUND ? 'keychain_missing' : 'keychain_denied';
+}
+
 /**
- * The browser's cookie password from the Keychain. macOS asks the user first; that prompt is the consent step.
- * Any failure (item missing, exit 44/51, the user denying it) means no access.
+ * The browser's cookie password from the Keychain, or why there is none. macOS asks the user first; that prompt is
+ * the consent step, and an unanswered one is given up after two minutes.
  */
-async function safeStoragePassword(browser: CookieSourceBrowser, exec: ExecFile): Promise<string> {
+async function safeStoragePassword(
+  browser: CookieSourceBrowser,
+  exec: ExecFile
+): Promise<{ password: string } | { code: KeychainCode }> {
   const item = SAFE_STORAGE[browser];
   try {
-    const password = (await exec('security', ['find-generic-password', '-w', '-s', item])).stdout.replace(/\r?\n$/, '');
-    if (password !== '') return password;
+    const password = (await exec(SECURITY_BIN, ['find-generic-password', '-w', '-s', item])).stdout.replace(
+      /\r?\n$/,
+      ''
+    );
+    if (password !== '') return { password };
     console.warn(`[CookieImport] ${item} is empty`);
+    return { code: 'keychain_missing' };
   } catch (error) {
-    console.warn(`[CookieImport] could not read ${item}; exit code:`, (error as { code?: unknown }).code);
+    const { code, signal } = (error ?? {}) as { code?: unknown; signal?: unknown };
+    console.warn(`[CookieImport] could not read ${item}; exit code:`, code, 'signal:', signal);
+    return { code: keychainFailure(error) };
   }
-  throw new Error(`Access to ${item} was denied`);
 }
 
 /**
@@ -77,22 +107,27 @@ function toSetDetails(cookie: ImportedCookie): Electron.CookiesSetDetails | null
   };
 }
 
-/**
- * Imports a browser profile's cookies into `target`'s partition and nothing else. Reads the Keychain password
- * (derived per import, never kept), reads a copy of the source DB, and sets each cookie. `domains` null means every
- * site. Throws "Access to <Browser> Safe Storage was denied" when the Keychain refuses, before reading anything.
- */
-export async function importCookies(
+/** True while an import runs: a second one would stack another Keychain prompt, so it is refused. */
+let importRunning = false;
+
+async function runImport(
   source: BrowserSource,
   target: BrowserTabProfile,
   domains: string[] | null,
-  exec: ExecFile = runProgram
-): Promise<CookieImportResult> {
+  exec: ExecFile
+): Promise<CookieImportOutcome> {
+  const fail = (code: CookieImportErrorCode): CookieImportOutcome => ({ ok: false, code, browser: source.browser });
   const partition = partitionOfProfile(target);
-  const key = deriveKey(await safeStoragePassword(source.browser, exec));
-  let read: Awaited<ReturnType<typeof readChromiumCookies>>;
+  const keychain = await safeStoragePassword(source.browser, exec);
+  if ('code' in keychain) return fail(keychain.code);
+  const key = deriveKey(keychain.password);
+  let read: ChromiumCookieRead;
   try {
     read = await readChromiumCookies(source.cookiesPath, key, domains);
+  } catch (error) {
+    // Detail (paths, SQLite text) for the log only; the renderer gets the code.
+    console.error(`[CookieImport] could not read the ${source.browser} cookie DB:`, error);
+    return fail('read_failed');
   } finally {
     key.fill(0);
   }
@@ -112,7 +147,33 @@ export async function importCookies(
     })
   );
   const sites = outcomes.filter((site): site is string => site !== null);
-  const rejected = outcomes.length - sites.length;
+  const rejected = outcomes.length - sites.length + read.skipped.partitioned;
   if (rejected > 0) console.warn(`[CookieImport] ${rejected} cookie(s) were rejected`);
-  return { imported: sites.length, sites: new Set(sites).size, skipped: { ...read.skipped, rejected } };
+  return {
+    ok: true,
+    imported: sites.length,
+    sites: new Set(sites).size,
+    skipped: { expired: read.skipped.expired, undecryptable: read.skipped.undecryptable, rejected },
+  };
+}
+
+/**
+ * Imports a browser profile's cookies into `target`'s partition and nothing else, one import at a time (`busy`
+ * otherwise). Reads the Keychain password (derived per import, never kept), reads a copy of the source DB, and sets
+ * each cookie. `domains` null means every site. A Keychain failure returns its code before anything is read.
+ * Partitioned (CHIPS) cookies count as rejected.
+ */
+export async function importCookies(
+  source: BrowserSource,
+  target: BrowserTabProfile,
+  domains: string[] | null,
+  exec: ExecFile = runSecurity
+): Promise<CookieImportOutcome> {
+  if (importRunning) return { ok: false, code: 'busy', browser: source.browser };
+  importRunning = true;
+  try {
+    return await runImport(source, target, domains, exec);
+  } finally {
+    importRunning = false;
+  }
 }

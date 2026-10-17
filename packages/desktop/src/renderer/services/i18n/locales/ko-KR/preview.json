@@ -281,12 +281,25 @@
       "profile": "브라우저 프로필",
       "sites": "사이트 (선택)",
       "domainsPlaceholder": "모든 사이트, 또는 예: gohighlevel.com, elementor.com",
-      "keychainHint": "macOS가 브라우저의 Safe Storage 키 사용을 묻습니다. 가져오려면 허용하세요.",
+      "keychainHint": "macOS가 브라우저의 Safe Storage 키 사용을 묻습니다. \"항상 허용\"이 아닌 \"허용\"을 선택하면 가져올 때마다 다시 묻습니다.",
       "import": "가져오기",
       "none": "이 Mac에서 Chrome, Brave, Edge, Arc 또는 Vivaldi 프로필을 찾지 못했습니다.",
-      "result": "{{sites}}개 사이트에서 쿠키 {{cookies}}개를 가져왔습니다",
+      "result_one": "{{sitesText}}에서 쿠키 {{count}}개를 가져왔습니다",
+      "result_other": "{{sitesText}}에서 쿠키 {{count}}개를 가져왔습니다",
+      "sitesCount_one": "사이트 {{count}}개",
+      "sitesCount_other": "사이트 {{count}}개",
       "skipped": "건너뜀: 만료 {{expired}}, 읽을 수 없음 {{undecryptable}}, 거부됨 {{rejected}}",
-      "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
+      "invalidSites": "사이트 이름이 아닙니다: {{sites}}",
+      "errors": {
+        "keychain_denied": "{{browser}} Safe Storage 키에 대한 접근이 거부되어 아무것도 가져오지 않았습니다.",
+        "keychain_missing": "{{browser}}의 Safe Storage 키가 키체인에 없어 아무것도 가져오지 않았습니다.",
+        "keychain_timeout": "{{browser}} 키체인 요청에 제때 응답이 없었습니다. 다시 시도하고 \"허용\"을 선택하세요.",
+        "source_not_found": "해당 {{browser}} 프로필이 더 이상 이 Mac에 없습니다.",
+        "read_failed": "{{browser}} 쿠키를 읽지 못했습니다. 다시 시도하거나 먼저 {{browser}}를 종료하세요.",
+        "busy": "다른 가져오기가 아직 진행 중입니다. 끝날 때까지 기다리세요.",
+        "unknown": "쿠키를 가져오지 못했습니다. 다시 시도하세요.",
+        "list_failed": "이 Mac에서 브라우저를 찾지 못했습니다."
+      }
     }
   }
 }

@@ -281,12 +281,25 @@
       "profile": "ブラウザのプロファイル",
       "sites": "サイト（任意）",
       "domainsPlaceholder": "すべてのサイト、または例：gohighlevel.com, elementor.com",
-      "keychainHint": "macOS がブラウザの Safe Storage キーの使用を確認します。許可すると読み込めます。",
+      "keychainHint": "macOS がブラウザの Safe Storage キーの使用を確認します。「常に許可」ではなく「許可」を選ぶと、読み込みのたびに確認されます。",
       "import": "読み込む",
       "none": "この Mac に Chrome、Brave、Edge、Arc、Vivaldi のプロファイルが見つかりませんでした。",
-      "result": "{{sites}} サイトから {{cookies}} 件の Cookie を読み込みました",
+      "result_one": "{{sitesText}}から {{count}} 件の Cookie を読み込みました",
+      "result_other": "{{sitesText}}から {{count}} 件の Cookie を読み込みました",
+      "sitesCount_one": "{{count}} サイト",
+      "sitesCount_other": "{{count}} サイト",
       "skipped": "スキップ：期限切れ {{expired}}、読み取り不可 {{undecryptable}}、拒否 {{rejected}}",
-      "failed": "Cookie を読み込めませんでした：{{reason}}"
+      "invalidSites": "サイト名ではありません：{{sites}}",
+      "errors": {
+        "keychain_denied": "{{browser}} の Safe Storage キーへのアクセスが拒否されたため、何も読み込まれませんでした。",
+        "keychain_missing": "{{browser}} の Safe Storage キーがキーチェーンにないため、何も読み込まれませんでした。",
+        "keychain_timeout": "{{browser}} のキーチェーン確認に時間内の応答がありませんでした。もう一度試して「許可」を選んでください。",
+        "source_not_found": "その {{browser}} プロファイルはこの Mac にもうありません。",
+        "read_failed": "{{browser}} の Cookie を読み取れませんでした。もう一度試すか、先に {{browser}} を終了してください。",
+        "busy": "別の読み込みがまだ実行中です。終わるまでお待ちください。",
+        "unknown": "Cookie を読み込めませんでした。もう一度お試しください。",
+        "list_failed": "この Mac でブラウザを探せませんでした。"
+      }
     }
   }
 }

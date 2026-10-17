@@ -281,12 +281,25 @@
       "profile": "Browser profile",
       "sites": "Sites (optional)",
       "domainsPlaceholder": "All sites, or e.g. gohighlevel.com, elementor.com",
-      "keychainHint": "macOS asks to use the browser's Safe Storage key. Allow it to import.",
+      "keychainHint": "macOS will ask to use the browser's Safe Storage key. Choose \"Allow\", not \"Always Allow\", so each import asks you again.",
       "import": "Import",
       "none": "No Chrome, Brave, Edge, Arc or Vivaldi profile was found on this Mac.",
-      "result": "Imported {{cookies}} cookies from {{sites}} sites",
+      "result_one": "Imported {{count}} cookie from {{sitesText}}",
+      "result_other": "Imported {{count}} cookies from {{sitesText}}",
+      "sitesCount_one": "{{count}} site",
+      "sitesCount_other": "{{count}} sites",
       "skipped": "Skipped: {{expired}} expired, {{undecryptable}} unreadable, {{rejected}} rejected",
-      "failed": "Couldn't import the cookies: {{reason}}"
+      "invalidSites": "Not a site name: {{sites}}",
+      "errors": {
+        "keychain_denied": "Access to the {{browser}} Safe Storage key was denied, so nothing was imported.",
+        "keychain_missing": "{{browser}} has no Safe Storage key in your Keychain, so nothing was imported.",
+        "keychain_timeout": "The Keychain prompt for {{browser}} got no answer in time. Try again and choose \"Allow\".",
+        "source_not_found": "That {{browser}} profile is no longer on this Mac.",
+        "read_failed": "Couldn't read the {{browser}} cookies. Try again, or quit {{browser}} first.",
+        "busy": "Another import is still running. Wait for it to finish.",
+        "unknown": "Couldn't import the cookies. Try again.",
+        "list_failed": "Couldn't look for browsers on this Mac."
+      }
     }
   }
 }

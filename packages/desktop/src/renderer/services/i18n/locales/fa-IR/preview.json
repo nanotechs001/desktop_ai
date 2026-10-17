@@ -281,12 +281,25 @@
       "profile": "نمایه مرورگر",
       "sites": "سایت‌ها (اختیاری)",
       "domainsPlaceholder": "همه سایت‌ها، یا مثلاً gohighlevel.com, elementor.com",
-      "keychainHint": "macOS برای استفاده از کلید Safe Storage مرورگر اجازه می‌خواهد. برای وارد کردن آن را مجاز کنید.",
+      "keychainHint": "macOS برای استفاده از کلید Safe Storage مرورگر اجازه می‌خواهد. «Allow» را انتخاب کنید، نه «Always Allow»، تا هر بار وارد کردن دوباره بپرسد.",
       "import": "وارد کردن",
       "none": "هیچ نمایه‌ای از Chrome، Brave، Edge، Arc یا Vivaldi روی این Mac پیدا نشد.",
-      "result": "{{cookies}} کوکی از {{sites}} سایت وارد شد",
+      "result_one": "{{count}} کوکی از {{sitesText}} وارد شد",
+      "result_other": "{{count}} کوکی از {{sitesText}} وارد شد",
+      "sitesCount_one": "{{count}} سایت",
+      "sitesCount_other": "{{count}} سایت",
       "skipped": "رد شده: {{expired}} منقضی، {{undecryptable}} ناخوانا، {{rejected}} نپذیرفته",
-      "failed": "کوکی‌ها وارد نشدند: {{reason}}"
+      "invalidSites": "نام سایت نیست: {{sites}}",
+      "errors": {
+        "keychain_denied": "دسترسی به کلید Safe Storage مرورگر {{browser}} رد شد، پس چیزی وارد نشد.",
+        "keychain_missing": "{{browser}} در Keychain شما کلید Safe Storage ندارد، پس چیزی وارد نشد.",
+        "keychain_timeout": "درخواست Keychain برای {{browser}} به‌موقع پاسخ نگرفت. دوباره امتحان کنید و «Allow» را انتخاب کنید.",
+        "source_not_found": "آن نمایه {{browser}} دیگر روی این Mac نیست.",
+        "read_failed": "کوکی‌های {{browser}} خوانده نشد. دوباره امتحان کنید یا اول {{browser}} را ببندید.",
+        "busy": "یک وارد کردن دیگر هنوز در حال اجراست. صبر کنید تا تمام شود.",
+        "unknown": "کوکی‌ها وارد نشدند. دوباره امتحان کنید.",
+        "list_failed": "جستجوی مرورگرها روی این Mac ممکن نشد."
+      }
     }
   }
 }

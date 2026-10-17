@@ -281,12 +281,25 @@
       "profile": "Perfil del navegador",
       "sites": "Sitios (opcional)",
       "domainsPlaceholder": "Todos los sitios, o p. ej. gohighlevel.com, elementor.com",
-      "keychainHint": "macOS pedirá usar la clave Safe Storage del navegador. Permítelo para importar.",
+      "keychainHint": "macOS pedirá usar la clave Safe Storage del navegador. Elige «Permitir», no «Permitir siempre», para que cada importación vuelva a preguntar.",
       "import": "Importar",
       "none": "No se encontró ningún perfil de Chrome, Brave, Edge, Arc o Vivaldi en este Mac.",
-      "result": "Se importaron {{cookies}} cookies de {{sites}} sitios",
+      "result_one": "Se importó {{count}} cookie de {{sitesText}}",
+      "result_other": "Se importaron {{count}} cookies de {{sitesText}}",
+      "sitesCount_one": "{{count}} sitio",
+      "sitesCount_other": "{{count}} sitios",
       "skipped": "Omitidas: {{expired}} caducadas, {{undecryptable}} ilegibles, {{rejected}} rechazadas",
-      "failed": "No se pudieron importar las cookies: {{reason}}"
+      "invalidSites": "No es un nombre de sitio: {{sites}}",
+      "errors": {
+        "keychain_denied": "Se denegó el acceso a la clave Safe Storage de {{browser}}, así que no se importó nada.",
+        "keychain_missing": "{{browser}} no tiene clave Safe Storage en tu llavero, así que no se importó nada.",
+        "keychain_timeout": "La solicitud del llavero para {{browser}} no recibió respuesta a tiempo. Inténtalo de nuevo y elige «Permitir».",
+        "source_not_found": "Ese perfil de {{browser}} ya no está en este Mac.",
+        "read_failed": "No se pudieron leer las cookies de {{browser}}. Inténtalo de nuevo o cierra {{browser}} primero.",
+        "busy": "Otra importación sigue en curso. Espera a que termine.",
+        "unknown": "No se pudieron importar las cookies. Inténtalo de nuevo.",
+        "list_failed": "No se pudo buscar navegadores en este Mac."
+      }
     }
   }
 }

@@ -281,12 +281,25 @@
       "profile": "Browserprofil",
       "sites": "Websites (optional)",
       "domainsPlaceholder": "Alle Websites, oder z. B. gohighlevel.com, elementor.com",
-      "keychainHint": "macOS fragt nach dem Safe-Storage-Schlüssel des Browsers. Erlauben Sie es, um zu importieren.",
+      "keychainHint": "macOS fragt nach dem Safe-Storage-Schlüssel des Browsers. Wählen Sie „Erlauben“, nicht „Immer erlauben“, damit jeder Import erneut fragt.",
       "import": "Importieren",
       "none": "Auf diesem Mac wurde kein Chrome-, Brave-, Edge-, Arc- oder Vivaldi-Profil gefunden.",
-      "result": "{{cookies}} Cookies von {{sites}} Websites importiert",
+      "result_one": "{{count}} Cookie von {{sitesText}} importiert",
+      "result_other": "{{count}} Cookies von {{sitesText}} importiert",
+      "sitesCount_one": "{{count}} Website",
+      "sitesCount_other": "{{count}} Websites",
       "skipped": "Übersprungen: {{expired}} abgelaufen, {{undecryptable}} unlesbar, {{rejected}} abgelehnt",
-      "failed": "Die Cookies konnten nicht importiert werden: {{reason}}"
+      "invalidSites": "Kein Websitename: {{sites}}",
+      "errors": {
+        "keychain_denied": "Der Zugriff auf den Safe-Storage-Schlüssel von {{browser}} wurde verweigert, daher wurde nichts importiert.",
+        "keychain_missing": "{{browser}} hat keinen Safe-Storage-Schlüssel in Ihrem Schlüsselbund, daher wurde nichts importiert.",
+        "keychain_timeout": "Die Schlüsselbund-Abfrage für {{browser}} wurde nicht rechtzeitig beantwortet. Versuchen Sie es erneut und wählen Sie „Erlauben“.",
+        "source_not_found": "Dieses {{browser}}-Profil ist nicht mehr auf diesem Mac.",
+        "read_failed": "Die Cookies von {{browser}} konnten nicht gelesen werden. Versuchen Sie es erneut oder beenden Sie zuerst {{browser}}.",
+        "busy": "Ein anderer Import läuft noch. Warten Sie, bis er fertig ist.",
+        "unknown": "Die Cookies konnten nicht importiert werden. Versuchen Sie es erneut.",
+        "list_failed": "Auf diesem Mac konnte nicht nach Browsern gesucht werden."
+      }
     }
   }
 }

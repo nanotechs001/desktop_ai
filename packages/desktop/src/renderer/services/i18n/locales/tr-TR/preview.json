@@ -281,12 +281,25 @@
       "profile": "Tarayıcı profili",
       "sites": "Siteler (isteğe bağlı)",
       "domainsPlaceholder": "Tüm siteler veya ör. gohighlevel.com, elementor.com",
-      "keychainHint": "macOS, tarayıcının Safe Storage anahtarını kullanmak için izin ister. İçe aktarmak için izin verin.",
+      "keychainHint": "macOS, tarayıcının Safe Storage anahtarını kullanmak için izin ister. \"Her Zaman İzin Ver\" yerine \"İzin Ver\"i seçin; böylece her içe aktarmada yeniden sorulur.",
       "import": "İçe aktar",
       "none": "Bu Mac’te Chrome, Brave, Edge, Arc veya Vivaldi profili bulunamadı.",
-      "result": "{{sites}} siteden {{cookies}} çerez içe aktarıldı",
+      "result_one": "{{sitesText}} üzerinden {{count}} çerez içe aktarıldı",
+      "result_other": "{{sitesText}} üzerinden {{count}} çerez içe aktarıldı",
+      "sitesCount_one": "{{count}} site",
+      "sitesCount_other": "{{count}} site",
       "skipped": "Atlanan: {{expired}} süresi dolmuş, {{undecryptable}} okunamayan, {{rejected}} reddedilen",
-      "failed": "Çerezler içe aktarılamadı: {{reason}}"
+      "invalidSites": "Site adı değil: {{sites}}",
+      "errors": {
+        "keychain_denied": "{{browser}} Safe Storage anahtarına erişim reddedildi, hiçbir şey içe aktarılmadı.",
+        "keychain_missing": "{{browser}} için Anahtar Zinciri’nde Safe Storage anahtarı yok, hiçbir şey içe aktarılmadı.",
+        "keychain_timeout": "{{browser}} için Anahtar Zinciri isteği zamanında yanıtlanmadı. Yeniden deneyin ve \"İzin Ver\"i seçin.",
+        "source_not_found": "Bu {{browser}} profili artık bu Mac’te yok.",
+        "read_failed": "{{browser}} çerezleri okunamadı. Yeniden deneyin veya önce {{browser}}’ı kapatın.",
+        "busy": "Başka bir içe aktarma hâlâ sürüyor. Bitmesini bekleyin.",
+        "unknown": "Çerezler içe aktarılamadı. Yeniden deneyin.",
+        "list_failed": "Bu Mac’te tarayıcılar aranamadı."
+      }
     }
   }
 }

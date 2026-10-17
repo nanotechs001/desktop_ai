@@ -97,3 +97,7 @@ export function isOpenAIHost(urlString: string): boolean {
 export function isAnthropicHost(urlString: string): boolean {
   return isOfficialHost(urlString, Object.values(API_HOST_CONFIG.anthropic));
 }
+
+/** A lowercase ASCII host name such as `gohighlevel.com` (IDN already punycode-encoded). */
+export const HOST_NAME_RE =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;

@@ -78,6 +78,20 @@ export type CookieImportResult = {
   skipped: Record<'expired' | 'undecryptable' | 'rejected', number>;
 };
 
+/** Why an import did nothing; the renderer words it, so main never sends paths or English text. */
+export type CookieImportErrorCode =
+  | 'keychain_denied'
+  | 'keychain_missing'
+  | 'keychain_timeout'
+  | 'source_not_found'
+  | 'read_failed'
+  | 'busy';
+
+/** An import's answer: its counts, or the reason it imported nothing. */
+export type CookieImportOutcome =
+  | ({ ok: true } & CookieImportResult)
+  | { ok: false; code: CookieImportErrorCode; browser: CookieSourceBrowser };
+
 /** Who may drive a browser tab through the agent relay. */
 export type TabOwnership = {
   webContentsId: number;
