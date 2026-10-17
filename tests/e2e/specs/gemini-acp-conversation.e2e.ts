@@ -11,13 +11,7 @@
  * without the CLI installed.
  */
 import { test, expect } from '../fixtures';
-import {
-  goToGuid,
-  selectAssistantForBackend,
-  sendMessageFromGuid,
-  waitForSessionActive,
-  deleteConversation,
-} from '../helpers';
+import { goToGuid, withEngineAgent, sendMessageFromGuid, waitForSessionActive, deleteConversation } from '../helpers';
 
 test.describe('Gemini (ACP) Conversation Lifecycle', () => {
   // Real Gemini CLI is slow on cold start (OAuth, token refresh)
@@ -26,7 +20,7 @@ test.describe('Gemini (ACP) Conversation Lifecycle', () => {
   test('gemini backend routes through the generic ACP pipeline', async ({ page }) => {
     await goToGuid(page);
 
-    const assistantId = await selectAssistantForBackend(page, 'gemini');
+    const assistantId = await withEngineAgent(page, 'gemini');
     if (!assistantId) {
       test.skip(true, 'gemini assistant pill not available — backend may not be installed');
       return;

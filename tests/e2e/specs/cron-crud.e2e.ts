@@ -15,7 +15,7 @@ import { goToGuid } from '../helpers/navigation';
 import {
   findAssistantIdForBackend,
   httpGet,
-  selectAssistantForBackend,
+  withEngineAgent,
   sendMessageFromGuid,
   waitForSessionActive,
   waitForAiReply,
@@ -175,7 +175,7 @@ test.describe('Cron via AI conversation', () => {
       test.skip(true, 'No usable assistant available on guid page');
       return;
     }
-    const assistantId = await selectAssistantForBackend(page, backend);
+    const assistantId = await withEngineAgent(page, backend);
     if (!assistantId) {
       test.skip(true, `No selectable assistant for backend ${backend}`);
       return;
@@ -320,7 +320,7 @@ test.describe('Cron via AI conversation', () => {
       test.skip(true, 'No usable assistant available on guid page');
       return;
     }
-    const assistantId = await selectAssistantForBackend(page, backend);
+    const assistantId = await withEngineAgent(page, backend);
     if (!assistantId) {
       test.skip(true, `No selectable assistant for backend ${backend}`);
       return;

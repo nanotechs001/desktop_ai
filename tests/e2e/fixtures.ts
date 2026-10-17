@@ -17,6 +17,7 @@ import { _electron as electron } from 'playwright';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { httpDelete } from './helpers/httpBridge';
 
 type Fixtures = {
   electronApp: ElectronApplication;
@@ -39,6 +40,11 @@ const e2eStateFile = path.join(e2eStateSandboxDir, 'extension-states.json');
 const e2eUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-userdata-'));
 // Where built-in browser downloads land during the run (read by the app via AIONUI_BROWSER_DOWNLOADS_DIR).
 export const e2eBrowserDownloadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-downloads-'));
+/**
+ * Temporary Agents the running test created on an engine (backend name -> assistant id), see `withEngineAgent`.
+ * The page fixture deletes them when the test ends, pass or fail.
+ */
+export const tempEngineAgents = new Map<string, string>();
 const rendererDiagnostics = new WeakMap<Page, RendererDiagnostic[]>();
 
 function isDevToolsWindow(page: Page): boolean {
@@ -322,6 +328,11 @@ export const test = base.extend<Fixtures>({
     }
     await ensureRendererAppMounted(mainPage);
     await use(mainPage);
+
+    for (const agentId of tempEngineAgents.values()) {
+      await httpDelete(mainPage, `/api/assistants/${encodeURIComponent(agentId)}`).catch(() => undefined);
+    }
+    tempEngineAgents.clear();
 
     // Attach screenshot on failure so it appears in the HTML report.
     // Playwright's built-in `screenshot: 'only-on-failure'` relies on its

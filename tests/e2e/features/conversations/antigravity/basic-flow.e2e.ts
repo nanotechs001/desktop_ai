@@ -81,7 +81,7 @@ test.describe('Antigravity Chat - Basic Flow', () => {
     await goToGuid(page);
     await takeScreenshot(page, 'chat-antigravity/basic/01-guid-page.png');
 
-    // Selects the assistant pill whose runtime key is `antigravity`.
+    // Selects a temporary Agent bound to the antigravity engine.
     await selectAgent(page, 'antigravity');
     await takeScreenshot(page, 'chat-antigravity/basic/02-agent-selected.png');
 

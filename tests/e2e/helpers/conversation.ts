@@ -8,9 +8,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
-import { expect } from '../fixtures';
+import { expect, tempEngineAgents } from '../fixtures';
 import { goToGuid } from './navigation';
-import { httpGet, httpInvoke } from './httpBridge';
+import { httpGet, httpInvoke, httpPost } from './httpBridge';
 import {
   GUID_INPUT,
   AGENT_STATUS_MESSAGE,
@@ -120,31 +120,20 @@ async function clickAssistantPillById(page: Page, assistantId: string): Promise<
   throw new Error(`Assistant "${assistantId}" was not rendered as a visible pill or overflow menu item within 10s`);
 }
 
-/** Select an assistant on the guid page by backend name (e.g. 'claude', 'codex'). */
+/**
+ * Select an Agent running on the `backend` engine on the guid page: the temporary Agent {@link withEngineAgent} makes.
+ * Waits up to 20s for the engine to come online and throws if it never does.
+ */
 export async function selectAgent(page: Page, backend: string, model?: string): Promise<void> {
-  // Historical tests still call this helper `selectAgent`, but Phase 2 Guid
-  // selection is assistant-first. Resolve the assistant catalog row, then click
-  // the assistant pill instead of using the removed direct agent pill bar.
   const deadline = Date.now() + 20_000;
   let selected = false;
   while (Date.now() < deadline && !selected) {
-    // An engine's own generated entry is never a guid pill (only Agents are), so only Agents can be clicked.
-    const assistants = (await httpGet<Assistant[]>(page, '/api/assistants').catch(() => [] as Assistant[])).filter(
-      (assistant) => assistant.source !== 'generated'
-    );
-    const assistant = pickAssistantForBackend(assistants, backend, { requireAvailable: true });
-    if (!assistant) {
-      await page.waitForTimeout(500);
-      continue;
-    }
-
     try {
-      await clickAssistantPillById(page, assistant.id);
-      selected = true;
+      selected = (await withEngineAgent(page, backend)) !== null;
     } catch {
       // Element may have been detached during click — retry
-      await page.waitForTimeout(300);
     }
+    if (!selected) await page.waitForTimeout(500);
   }
   if (!selected) {
     throw new Error(`Failed to select available assistant for backend "${backend}" within 20s`);
@@ -154,6 +143,38 @@ export async function selectAgent(page: Page, backend: string, model?: string): 
   }
 }
 
+/**
+ * Select, on the guid page, a temporary Agent bound to the online engine for `backend`. The guid page lists Agents
+ * only (never an engine's generated entry), so this creates a user Agent through the backend API
+ * (`POST /api/assistants { id: 'e2e-<backend>-<rand>', name: 'E2E <backend>', agent_id: <engine id> }`), clicks its pill,
+ * and leaves the deletion to the page fixture's teardown (`tempEngineAgents`). The Agent is reused for the rest of the
+ * test. Returns its id, or null when no engine for that backend is online, so the caller can `test.skip` with a reason.
+ */
+export async function withEngineAgent(page: Page, backend: string): Promise<string | null> {
+  const assistants = await httpGet<Assistant[]>(page, '/api/assistants');
+  let agentId = tempEngineAgents.get(backend);
+  if (!agentId || !assistants.some((assistant) => assistant.id === agentId)) {
+    const engine = assistants.find(
+      (assistant) =>
+        assistant.source === 'generated' &&
+        assistant.enabled !== false &&
+        assistant.agent_status === 'online' &&
+        assistantMatchesBackend(assistant, backend)
+    );
+    if (!engine?.agent_id) return null;
+
+    agentId = `e2e-${backend}-${Math.random().toString(36).slice(2, 8)}`;
+    await httpPost(page, '/api/assistants', { id: agentId, name: `E2E ${backend}`, agent_id: engine.agent_id });
+    tempEngineAgents.set(backend, agentId);
+    // The guid page keeps the Agent list it loaded; leaving and re-entering it fetches the new Agent.
+    await page.evaluate(() => window.location.assign('#/scheduled'));
+    await page.waitForFunction(() => window.location.hash === '#/scheduled', undefined, { timeout: 10_000 });
+    await goToGuid(page);
+  }
+  await clickAssistantPillById(page, agentId);
+  return agentId;
+}
+
 export async function findAssistantIdForBackend(
   page: Page,
   backend: string,
@@ -161,13 +182,6 @@ export async function findAssistantIdForBackend(
 ): Promise<string | null> {
   const assistants = await httpGet<Assistant[]>(page, '/api/assistants');
   return pickAssistantForBackend(assistants, backend, options)?.id ?? null;
-}
-
-export async function selectAssistantForBackend(page: Page, backend: string): Promise<string | null> {
-  const assistantId = await findAssistantIdForBackend(page, backend, { requireAvailable: true });
-  if (!assistantId) return null;
-  await clickAssistantPillById(page, assistantId);
-  return assistantId;
 }
 
 /**

@@ -55,7 +55,7 @@ export { httpInvoke, httpGet, httpPost, httpDelete } from './httpBridge';
 export {
   selectAgent,
   findAssistantIdForBackend,
-  selectAssistantForBackend,
+  withEngineAgent,
   selectModel,
   sendMessageFromGuid,
   waitForSessionActive,

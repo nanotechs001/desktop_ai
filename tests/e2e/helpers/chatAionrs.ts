@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { invokeBridge } from './bridge';
 import { httpGet } from './httpBridge';
-import { selectAssistantForBackend } from './conversation';
+import { withEngineAgent } from './conversation';
 import { goToGuid } from './navigation';
 import fs from 'fs';
 import path from 'path';
@@ -371,12 +371,12 @@ export function createTempWorkspace(scenario: string): { path: string; cleanup: 
   };
 }
 
-/** Select an available aionrs assistant on the guid page. */
+/** Select a temporary Agent on the aionrs engine on the guid page (see `withEngineAgent`). */
 export async function selectAionrsAgent(page: Page): Promise<void> {
   await goToGuid(page);
-  const assistantId = await selectAssistantForBackend(page, 'aionrs');
+  const assistantId = await withEngineAgent(page, 'aionrs');
   if (!assistantId) {
-    throw new Error('No available aionrs assistant found on guid page');
+    throw new Error('No online aionrs engine found for a temporary Agent');
   }
 }
 

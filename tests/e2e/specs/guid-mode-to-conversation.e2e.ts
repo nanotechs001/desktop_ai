@@ -1,7 +1,7 @@
 /**
  * Guid assistant mode → conversation mode sync — E2E tests.
  *
- * For each backend, selects the matching assistant (prefer the generated assistant)
+ * For each backend, selects a temporary Agent on that backend's engine (the guid page lists Agents only)
  * and verifies the permission mode set on the Guid page is correctly carried
  * into the conversation page.
  */
@@ -12,7 +12,7 @@ import {
   waitForSessionActive,
   MODE_SELECTOR,
   httpDelete,
-  selectAssistantForBackend,
+  withEngineAgent,
 } from '../helpers';
 
 test.describe.configure({ timeout: 240_000 });
@@ -90,7 +90,7 @@ async function runModeVerificationCycle(
   targetMode: string
 ): Promise<void> {
   await goToGuid(page);
-  const assistantId = await selectAssistantForBackend(page, backend);
+  const assistantId = await withEngineAgent(page, backend);
   if (!assistantId) {
     test.skip(true, `${backend} assistant not available`);
     return;
@@ -125,7 +125,7 @@ test.describe('Guid Mode → Conversation Sync', () => {
     test(`${backend}: two mode switches both carry into conversation`, async ({ page }) => {
       await goToGuid(page);
 
-      const assistantId = await selectAssistantForBackend(page, backend);
+      const assistantId = await withEngineAgent(page, backend);
       if (!assistantId) {
         test.skip(true, `${backend} assistant not available`);
         return;

@@ -13,7 +13,7 @@ import {
   goToNewChat,
   selectAgent,
   findAssistantIdForBackend,
-  selectAssistantForBackend,
+  withEngineAgent,
   sendMessageFromGuid,
   waitForSessionActive,
   waitForAiReply,
@@ -711,7 +711,7 @@ test.describe('Conversation Full Cycle', () => {
       return;
     }
 
-    const assistantId = await selectAssistantForBackend(page, backend);
+    const assistantId = await withEngineAgent(page, backend);
     if (!assistantId) {
       test.skip(true, `No selectable assistant for backend ${backend}`);
       return;

@@ -11,7 +11,7 @@ import {
   httpGet,
   httpInvoke,
   httpPost,
-  selectAssistantForBackend,
+  withEngineAgent,
   sendMessageFromGuid,
   waitForPermissionMessageCard,
 } from '../../../helpers';
@@ -243,7 +243,7 @@ test.describe('ACP cron busy handling', () => {
         return;
       }
 
-      const selectedAssistantId = await selectAssistantForBackend(page, backend);
+      const selectedAssistantId = await withEngineAgent(page, backend);
       if (!selectedAssistantId) {
         test.skip(true, `No selectable assistant for backend ${backend}`);
         return;
