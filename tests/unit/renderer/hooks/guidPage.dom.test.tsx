@@ -673,9 +673,6 @@ describe('GuidPage', () => {
 
     expect(screen.queryByTestId('guid-no-engine')).toBeNull();
     expect(screen.getByTestId('assistant-selection-area')).toBeInTheDocument();
-    expect(useGuidAssistantSelectionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ defaultEngineId: 'engine-claude' })
-    );
     expect(capturedGuidSendDeps.at(-1)?.selectedAssistantId).toBe('bare-aionrs');
     expect(capturedGuidActionRowProps.at(-1)?.isButtonDisabled).toBe(false);
   });

@@ -99,6 +99,10 @@ vi.mock('@/common', () => ({
   },
 }));
 
+vi.mock('@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal', () => ({
+  default: () => null,
+}));
+
 const renderWithProviders = (ui: React.ReactElement) =>
   render(
     <MemoryRouter>
@@ -950,6 +954,29 @@ describe('AssistantEditorSections', () => {
     expect(
       within(screen.getByTestId('assistant-card-rules')).getByRole('button', { name: 'Edit' })
     ).toBeInTheDocument();
+  });
+
+  it("shows the default Agent's browser profile with Clear and Import, and no delete", () => {
+    renderWithProviders(
+      <AssistantEditorSections
+        editor={createEditor({ isCreating: false })}
+        activeAssistant={{
+          id: 'aion-default-agent',
+          name: 'Agent',
+          sort_order: 1,
+          source: 'user',
+          enabled: true,
+          agent_id: 'agent-claude',
+        }}
+      />
+    );
+
+    const section = screen.getByTestId('assistant-card-browser-profile');
+    expect(within(section).getByRole('button', { name: 'Clear browsing data' })).toBeInTheDocument();
+    expect(
+      within(section).getByRole('button', { name: 'preview.browserChrome.cookieImport.menu' })
+    ).toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: /delete/i })).toBeNull();
   });
 
   it('renders single default-skill and default-mcp controls with hub links', () => {

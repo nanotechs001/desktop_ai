@@ -7,6 +7,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import {
   buildAgentRuntimeModeState,
@@ -95,23 +96,26 @@ describe('useGuidAssistantSelection', () => {
     });
   });
 
-  it('selects an assistant bound to the default engine when nothing was selected before', async () => {
+  it("starts on the default Agent and never offers an engine's own entry", async () => {
     mockAssistants = [
       assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),
       assistantFixture({ id: 'assistant-claude', runtimeKey: 'claude', source: 'builtin', sortOrder: 2 }),
+      assistantFixture({ id: DEFAULT_AGENT_ID, runtimeKey: 'claude', source: 'user', sortOrder: 3 }),
     ];
+    configGetMock.mockImplementation((key: string) => (key === 'guid.lastAssistantId' ? 'bare-aionrs' : undefined));
 
     const { result } = renderHook(() =>
       useGuidAssistantSelection({
         resetAssistant: false,
-        defaultEngineId: 'agent-claude',
+        preselectAssistantId: 'bare-aionrs',
       })
     );
 
     await waitFor(() => {
-      expect(result.current.selectedAssistantId).toBe('assistant-claude');
+      expect(result.current.selectedAssistantId).toBe(DEFAULT_AGENT_ID);
     });
-    expect(result.current.defaultAssistantId).toBe('assistant-claude');
+    expect(result.current.defaultAssistantId).toBe(DEFAULT_AGENT_ID);
+    expect(result.current.assistants.map((assistant) => assistant.id)).toEqual(['assistant-claude', DEFAULT_AGENT_ID]);
   });
 
   it('restores the last selected guid assistant before falling back to the aionrs default', async () => {
@@ -159,6 +163,7 @@ describe('useGuidAssistantSelection', () => {
     mockAssistants = [
       assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),
       assistantFixture({ id: 'assistant-claude', runtimeKey: 'claude', source: 'builtin', sortOrder: 2 }),
+      assistantFixture({ id: 'user-writer', runtimeKey: 'claude', source: 'user', sortOrder: 3 }),
     ];
 
     const { result } = renderHook(() =>
@@ -168,14 +173,14 @@ describe('useGuidAssistantSelection', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.selectedAssistantId).toBe('bare-aionrs');
+      expect(result.current.selectedAssistantId).toBe('assistant-claude');
     });
 
     act(() => {
-      result.current.setSelectedAssistantId('assistant-claude');
+      result.current.setSelectedAssistantId('user-writer');
     });
 
-    expect(configSetMock).toHaveBeenCalledWith('guid.lastAssistantId', 'assistant-claude');
+    expect(configSetMock).toHaveBeenCalledWith('guid.lastAssistantId', 'user-writer');
   });
 
   it('falls back to the default assistant when the persisted guid assistant no longer exists', async () => {
@@ -194,7 +199,7 @@ describe('useGuidAssistantSelection', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.selectedAssistantId).toBe('bare-aionrs');
+      expect(result.current.selectedAssistantId).toBe('assistant-claude');
     });
   });
 
@@ -442,7 +447,7 @@ describe('useGuidAssistantSelection', () => {
     mockAssistants = [
       {
         id: 'assistant-claude-empty',
-        source: 'generated',
+        source: 'user',
         name: 'Claude',
         name_i18n: {},
         description_i18n: {},
@@ -482,7 +487,7 @@ describe('useGuidAssistantSelection', () => {
     mockAssistants = [
       {
         id: 'bare:632f31d2',
-        source: 'generated',
+        source: 'user',
         name: 'Aion CLI',
         name_i18n: {},
         description_i18n: {},

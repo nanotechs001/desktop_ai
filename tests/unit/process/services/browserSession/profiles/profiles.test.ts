@@ -285,13 +285,22 @@ describe('the browser-profile IPC', () => {
     expect(ipc.forgetPermissions).toHaveBeenCalledWith(partition);
   });
 
-  it('refuses to clear or delete the shared default Agent profile', async () => {
+  it('refuses to delete the shared default Agent profile', async () => {
     ipc.fromPartition.mockClear();
     ipc.profileRemoved.mockClear();
 
     expect((await call('deleteProfileData', { agentId: 'aion-default-agent' })).success).toBe(false);
-    expect((await call('clearProfileData', { agentId: 'aion-default-agent' })).success).toBe(false);
     expect(ipc.fromPartition).not.toHaveBeenCalled();
     expect(ipc.profileRemoved).not.toHaveBeenCalled();
+  });
+
+  it("clears the default Agent's browsing data like any other Agent's", async () => {
+    const partition = agentPartition('aion-default-agent');
+    ipc.fromPartition.mockReset().mockReturnValue(fakeSession(null).session);
+    ipc.forgetPermissions.mockClear();
+
+    expect(await call('clearProfileData', { agentId: 'aion-default-agent' })).toEqual({ success: true });
+    expect(ipc.fromPartition).toHaveBeenCalledWith(partition);
+    expect(ipc.forgetPermissions).toHaveBeenCalledWith(partition);
   });
 });

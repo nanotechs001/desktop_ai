@@ -14,7 +14,17 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   responseStreamOn: vi.fn(),
   loadLatestConversationMessages: vi.fn(),
+  createAssistant: vi.fn(),
+  ensureAgentRule: vi.fn(),
+  writeAssistantRule: vi.fn(),
+  defaultEngineId: 'engine-1' as string | null,
 }));
+
+vi.mock('@/renderer/hooks/agent/useDefaultEngine', () => ({
+  useDefaultEngine: () => ({ agentId: mocks.defaultEngineId }),
+}));
+vi.mock('swr', () => ({ mutate: vi.fn() }));
+vi.mock('@/common/utils', () => ({ uuid: () => 'msg-generated' }));
 
 vi.mock('@arco-design/web-react', () => {
   const Button = ({ children, icon, ...props }: any) => (
@@ -91,8 +101,11 @@ vi.mock('@/common', () => ({
     },
     assistants: {
       create: {
-        invoke: vi.fn(),
+        invoke: mocks.createAssistant,
       },
+    },
+    agentBrowser: {
+      ensureAgentRule: { invoke: mocks.ensureAgentRule },
     },
     conversation: {
       responseStream: {
@@ -110,7 +123,7 @@ vi.mock('@/common', () => ({
         invoke: vi.fn(),
       },
       writeAssistantRule: {
-        invoke: vi.fn(),
+        invoke: mocks.writeAssistantRule,
       },
     },
   },
@@ -128,6 +141,9 @@ describe('SkillRuleGenerator', () => {
     vi.clearAllMocks();
     mocks.responseStreamOn.mockReturnValue(() => {});
     mocks.sendMessage.mockResolvedValue(undefined);
+    mocks.defaultEngineId = 'engine-1';
+    mocks.createAssistant.mockResolvedValue({ id: 'preset-1' });
+    mocks.ensureAgentRule.mockResolvedValue({ success: true });
     mocks.loadLatestConversationMessages.mockResolvedValue({
       items: [
         {
@@ -162,5 +178,24 @@ describe('SkillRuleGenerator', () => {
         contentMode: 'compact',
       });
     });
+  });
+
+  it('registers the generated preset as an Agent on the default engine, with its rule written through main', async () => {
+    render(<SkillRuleGenerator conversation_id='conversation-1' workspace='/tmp/workspace' />);
+    fireEvent.click(screen.getByText('Generate from History'));
+    fireEvent.change(screen.getByPlaceholderText('e.g. Excel Translator'), { target: { value: 'Repo Summarizer' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByText('Generate'));
+    await waitFor(() => expect(mocks.responseStreamOn).toHaveBeenCalled());
+    const onStream = mocks.responseStreamOn.mock.calls[0][0] as (msg: Record<string, unknown>) => void;
+
+    const reply = { conversation_id: 'conversation-1', msg_id: 'msg-generated' };
+    onStream({ ...reply, type: 'content', data: 'Saved. ---PRESET_BEGIN---Summarize repos.---PRESET_END---' });
+    onStream({ ...reply, type: 'finish' });
+
+    await waitFor(() =>
+      expect(mocks.ensureAgentRule).toHaveBeenCalledWith({ assistantId: 'preset-1', content: 'Summarize repos.' })
+    );
+    expect(mocks.createAssistant).toHaveBeenCalledWith({ name: 'Repo Summarizer', agent_id: 'engine-1' });
+    expect(mocks.writeAssistantRule).not.toHaveBeenCalled();
   });
 });

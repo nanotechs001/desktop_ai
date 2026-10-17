@@ -22,6 +22,7 @@ import {
   getDefaultChannelAssistant,
   resolveChannelAssistantSelection,
 } from './assistantBinding';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 
 /**
  * Preference row component
@@ -132,7 +133,7 @@ const LarkConfigForm: React.FC<LarkConfigFormProps> = ({ pluginStatus, modelSele
     const loadAssistantsAndSelection = async () => {
       try {
         const [assistantList, saved] = await Promise.all([
-          assistants.list.invoke(),
+          assistants.list.invoke().then(pickableAgents),
           channel.getPlatformSettings.invoke({ platform: 'lark' }),
         ]);
 

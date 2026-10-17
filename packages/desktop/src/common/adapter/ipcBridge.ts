@@ -1581,6 +1581,8 @@ export const agentNotes = {
     'agent-notes.update'
   ),
   delete: bridge.buildProvider<IBridgeResponse<void>, { agentId: string; id: string }>('agent-notes.delete'),
+  // a deleted Agent: its notebook, and main's cached chats of it
+  removeAgent: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('agent-notes.remove-agent'),
 };
 
 // ---------------------------------------------------------------------------

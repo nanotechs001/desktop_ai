@@ -75,6 +75,23 @@ const syncEnginePin = async (assistantId: string, usesDefault: boolean, engineId
 };
 
 /**
+ * After an Agent is deleted: drop its notebook (and main's cached chats of it) and its engine pin. Failures are logged
+ * only: the Agent is already gone, and a leftover notebook or pin is never read again.
+ */
+const forgetDeletedAgent = async (assistantId: string): Promise<void> => {
+  const reply = await ipcBridge.agentNotes.removeAgent
+    .invoke({ agentId: assistantId })
+    .catch((error: unknown) => ({ success: false, msg: error instanceof Error ? error.message : String(error) }));
+  if (!reply.success) console.warn('[useAssistantEditor] could not remove the deleted Agent notebook:', reply.msg);
+  // Only when pinned: writing an empty record would skip the first-run pin seeding.
+  if (configService.get('agent.enginePins')?.[assistantId]) {
+    await persistEnginePin(assistantId, null).catch((error: unknown) =>
+      console.warn('[useAssistantEditor] could not drop the deleted Agent engine pin:', error)
+    );
+  }
+};
+
+/**
  * Manages all assistant editing state and handlers:
  * create, edit, duplicate, save, delete, and toggle enabled.
  */
@@ -644,6 +661,7 @@ export const useAssistantEditor = ({
         browserDataDeleted = true;
       }
       await ipcBridge.assistants.delete.invoke({ id: activeAssistant.id });
+      await forgetDeletedAgent(activeAssistant.id);
       await refreshAssistantCatalog();
       setDeleteConfirmVisible(false);
       setEditVisible(false);

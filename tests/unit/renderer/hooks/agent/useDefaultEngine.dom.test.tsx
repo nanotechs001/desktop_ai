@@ -146,9 +146,10 @@ describe('planEngineRebinds', () => {
     expect(plan.map((item) => [item.assistant.id, item.agentId])).toEqual([['x', 'b']]);
   });
 
-  it('ignores a pin that points at an engine that no longer exists', () => {
-    const plan = planEngineRebinds([assistant('x', 'b')], 'a', { x: 'gone' }, engines);
-    expect(plan.map((item) => [item.assistant.id, item.agentId])).toEqual([['x', 'a']]);
+  it('leaves an Agent pinned to an engine missing from the catalog where it is, never on the default', () => {
+    // The engine may only be missing for now (a failed or partial catalog); moving the Agent would lose its pin's intent.
+    expect(planEngineRebinds([assistant('x', 'b')], 'a', { x: 'gone' }, engines)).toEqual([]);
+    expect(planEngineRebinds([assistant('x', 'gone')], 'a', { x: 'gone' }, engines)).toEqual([]);
   });
 
   it('never re-binds generated (bare CLI) assistants', () => {

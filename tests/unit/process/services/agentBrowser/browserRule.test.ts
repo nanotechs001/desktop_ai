@@ -64,8 +64,16 @@ describe('BROWSER_RULE_TEXT', () => {
 
   it('tells the agent to show pages with the artifacts tool, not a file, and stays within the cap', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      'To show the user a page, document or diagram you made, use the `artifacts` tool, not a file.'
+      'To show the user a page, document or diagram you made, use `artifacts` (the `create` tool of `aionui-artifacts`), not a file.'
     );
+    expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+  });
+
+  it('says the agent browses in its own profile and asks the user to sign in or import cookies', () => {
+    expect(BROWSER_RULE_TEXT).toContain(
+      "- You browse in this Agent's own browser profile, apart from the user's. When a site needs a sign-in, ask the user to sign in in the pane or to import cookies."
+    );
+    expect(BROWSER_RULE_TEXT).not.toMatch(/shared across tabs/i);
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });
 

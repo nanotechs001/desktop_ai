@@ -54,4 +54,6 @@ export const NOTE_LIMITS = {
   maxLearnedPerAgent: 100,
   /** Notes one chat may add per app run. */
   maxAddsPerConversation: 10,
+  /** The notebook block in an Agent's rule; past it the oldest agent and page notes are left out, never the user's. */
+  maxBlockChars: 8000,
 } as const;

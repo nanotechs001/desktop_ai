@@ -20,6 +20,7 @@ import { uuid } from '@/common/utils';
 import type { TMessage } from '@/common/chat/chatLib';
 import type { IDirOrFile } from '@/common/adapter/ipcBridge';
 import { loadLatestConversationMessages } from '@/renderer/utils/chat/messagePagination';
+import { useDefaultEngine } from '@/renderer/hooks/agent/useDefaultEngine';
 
 interface SkillRuleGeneratorProps {
   conversation_id: string;
@@ -167,6 +168,7 @@ const SkillRuleGenerator: React.FC<SkillRuleGeneratorProps> = ({ conversation_id
   const [type, setType] = useState<'skill' | 'rule'>('skill');
   const [presetName, setPresetName] = useState('');
   const [loading, setLoading] = useState(false);
+  const { agentId: defaultEngineId } = useDefaultEngine();
 
   const handleGenerate = async () => {
     if (!workspace) {
@@ -268,16 +270,16 @@ Requirements:
   };
 
   const registerPreset = async (name: string, content: string) => {
+    // A new Agent needs an engine; it starts on the default one, like an Agent made in the editor.
+    if (!defaultEngineId) {
+      Message.error(t('guid.noEngine.message', { defaultValue: 'Connect an AI account in Settings → Engine.' }));
+      return;
+    }
     try {
-      const created = await ipcBridge.assistants.create.invoke({ name });
-      // Persist the rule content separately via the skill-md dispatch endpoint
-      // (backend spec §6.4); the Assistant row doesn't carry inline context.
-      if (content.trim()) {
-        await ipcBridge.fs.writeAssistantRule.invoke({
-          assistant_id: created.id,
-          content,
-        });
-      }
+      const created = await ipcBridge.assistants.create.invoke({ name, agent_id: defaultEngineId });
+      // Main writes the rule with the AionUi blocks (browser, notebook), in the Agent's rule queue.
+      const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({ assistantId: created.id, content });
+      if (!reply.success) console.warn('[SkillRuleGenerator] could not save the preset rule:', reply.msg);
       await mutate('assistants.list');
       Message.success(
         t('conversation.skill_generator.preset_registered', { defaultValue: 'Agent preset registered successfully!' })

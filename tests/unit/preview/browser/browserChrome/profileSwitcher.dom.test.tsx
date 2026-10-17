@@ -106,6 +106,21 @@ describe('the new-tab profile switcher', () => {
   });
 });
 
+describe("the new-tab profile switcher and engines' own entries", () => {
+  it("never offers an engine's own generated entry as a profile", async () => {
+    mocks.assistants.mockResolvedValue([
+      ...AGENTS,
+      { id: 'bare:2d23ff1c', name: 'Claude Code', avatar: '/logos/claude.svg', source: 'generated', enabled: true },
+    ]);
+    renderFresh(<ProfileSwitcher onOpen={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'preview.browserChrome.profile.newTabIn' }));
+    await screen.findByText('Sales');
+    // Personal, Sales and the default Agent: no fourth row for the engine entry.
+    expect(screen.getAllByRole('menuitem')).toHaveLength(3);
+  });
+});
+
 describe('a browser tab in an Agent profile', () => {
   const renderViewer = (profile?: BrowserTabProfile, agentOwnedHint = false) =>
     renderFresh(

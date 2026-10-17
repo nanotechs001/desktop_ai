@@ -10,6 +10,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import { iconColors } from '@/renderer/styles/colors';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 import { profilePresentation } from './ProfileBadge';
 import { useProfileAgents } from './useBrowserProfiles';
 
@@ -34,7 +35,7 @@ const ProfileSwitcher: React.FC<ProfileSwitcherProps> = ({ onOpen }) => {
   const label = t('preview.browserChrome.profile.newTabIn');
   const profiles: BrowserTabProfile[] = [
     { kind: 'personal' },
-    ...agents.map((agent): BrowserTabProfile => ({ kind: 'agent', agentId: agent.id })),
+    ...pickableAgents(agents).map((agent): BrowserTabProfile => ({ kind: 'agent', agentId: agent.id })),
   ];
 
   const handleClick = (key: string): void => {

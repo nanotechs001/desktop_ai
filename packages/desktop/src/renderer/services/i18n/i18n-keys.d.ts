@@ -31,6 +31,7 @@ export type I18nKey =
   | 'agent.browserProfile.deleteFailed'
   | 'agent.browserProfile.deleteWithAgent'
   | 'agent.browserProfile.hint'
+  | 'agent.browserProfile.keptOnDisk'
   | 'agent.browserProfile.partialDelete'
   | 'agent.browserProfile.title'
   | 'agent.cannotDeleteDefault'

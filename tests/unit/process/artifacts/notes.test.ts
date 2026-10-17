@@ -211,6 +211,32 @@ describe('notes rule block', () => {
     expect(renderNotesBlock([note('Answer in French', 'user')])).not.toContain('## Your own notes');
   });
 
+  it('stays within 8,000 characters by dropping the oldest agent and page notes, never the user notes', () => {
+    const learned = (i: number, source: Note['source']) => ({ ...note(`${i} ${'x'.repeat(280)}`, source), at: i });
+    const notes = [
+      { ...note('Always cite sources', 'user'), at: 0 },
+      ...Array.from({ length: 40 }, (_, i) => learned(i + 1, i % 2 ? 'page' : 'agent')),
+      { ...note('Answer in French', 'user'), at: 99 },
+    ];
+    const block = renderNotesBlock(notes) as string;
+
+    expect(block.length).toBeLessThanOrEqual(NOTE_LIMITS.maxBlockChars);
+    expect(block).toContain('- Always cite sources');
+    expect(block).toContain('- Answer in French');
+    expect(block).toContain('40 xxx'); // the newest learned note stays
+    expect(block).toContain('39 xxx');
+    expect(block).not.toContain('- 1 xxx'); // the oldest go first
+    expect(block).not.toContain('> 2 xxx');
+  });
+
+  it('keeps every user note even past the cap', () => {
+    const users = Array.from({ length: 40 }, (_, i) => ({ ...note(`${i} ${'u'.repeat(280)}`, 'user'), at: i }));
+    const block = renderNotesBlock([...users, { ...note('learned', 'agent'), at: 50 }]) as string;
+    expect(block.length).toBeGreaterThan(NOTE_LIMITS.maxBlockChars);
+    expect(users.every((n) => block.includes(n.text))).toBe(true);
+    expect(block).not.toContain('- learned');
+  });
+
   it('rule block stays balanced when notes contain marker-like text', () => {
     const user = 'Be nice.';
     const hostile = [
@@ -554,5 +580,35 @@ describe('agentNotes IPC handlers', () => {
     });
     expect(await handlers.delete({ agentId: 'a', id })).toEqual({ success: true });
     expect(await handlers.delete({ agentId: 'a', id })).toMatchObject({ success: false });
+  });
+});
+
+describe('forgetting a deleted Agent', () => {
+  it("removeAgent deletes only that Agent's notebook file", async () => {
+    const store = createNotesStore(root);
+    await store.add('bare:gone', 'Prefers tables', 'agent');
+    await store.add('keep', 'Prefers lists', 'agent');
+
+    await store.removeAgent('bare:gone');
+
+    expect(await store.list('bare:gone')).toEqual([]);
+    expect(await fs.readdir(root)).toEqual(['keep.json']);
+    // A second removal (nothing left) is fine.
+    await expect(store.removeAgent('bare:gone')).resolves.toBeUndefined();
+  });
+
+  it('the removeAgent IPC drops the notebook and the chat lookups of that Agent, never the default Agent', async () => {
+    const store = createNotesStore(root);
+    await store.add('bare:gone', 'Prefers tables', 'agent');
+    const forgetAgent = vi.fn();
+    const handlers = createNotesIpcHandlers(store, forgetAgent);
+
+    expect(await handlers.removeAgent({ agentId: 'bare:gone' })).toEqual({ success: true });
+    expect(await store.list('bare:gone')).toEqual([]);
+    expect(forgetAgent).toHaveBeenCalledWith('bare:gone');
+
+    expect(await handlers.removeAgent({ agentId: 'aion-default-agent' })).toMatchObject({ success: false });
+    expect(await handlers.removeAgent({ agentId: 7 })).toMatchObject({ success: false });
+    expect(forgetAgent).toHaveBeenCalledTimes(1);
   });
 });

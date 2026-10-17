@@ -213,7 +213,7 @@ function buildBuiltinBrowserServer(): McpImportServer {
     BUILTIN_BROWSER_MCP_NAME,
     BUILTIN_BROWSER_SCRIPT,
     "Use AionUi's built-in browser pane: open and manage tabs, and read and act on pages with the tools listed. " +
-      'Sign-in state is shared across tabs and preserved between sessions.'
+      'Each Agent browses in its own browser profile; when a site needs a sign-in, ask the user to sign in in the pane or import cookies.'
   );
 }
 

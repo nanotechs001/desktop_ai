@@ -96,6 +96,7 @@
     "clearFailed": "Impossible d'effacer les données de navigation.",
     "deleteWithAgent": "Supprimer aussi ses données de navigateur (cookies, connexions, données de sites, extensions)",
     "deleteFailed": "Impossible de supprimer les données de navigateur de cet Agent ; l'Agent a donc été conservé. Réessayez.",
-    "partialDelete": "Les données de navigateur de l'Agent ont été supprimées, mais l'Agent n'a pas été supprimé. Supprimez-le à nouveau pour terminer."
+    "partialDelete": "Les données de navigateur de l'Agent ont été supprimées, mais l'Agent n'a pas été supprimé. Supprimez-le à nouveau pour terminer.",
+    "keptOnDisk": "Ses données de navigation (cookies, connexions, données de sites) restent sur cet ordinateur."
   }
 }

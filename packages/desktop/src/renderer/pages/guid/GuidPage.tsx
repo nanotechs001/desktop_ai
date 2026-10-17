@@ -137,14 +137,12 @@ const GuidPage: React.FC = () => {
   const resetAssistantRequested = navState?.resetAssistant === true;
   const preselectAssistantId = navState?.selectedAssistantId;
   // Agents already run on the default engine (kept bound by useDefaultEngine),
-  // so there is no engine picker here; the default only seeds which Agent is
-  // preselected, and with no engine at all there is nothing to send to.
+  // so there is no engine picker here; with no engine at all there is nothing to send to.
   const defaultEngine = useDefaultEngine();
   // A failed engine list is its own (retryable) state, never "no engine connected".
   const engineLoadFailed = defaultEngine.error;
   const noEngine = !defaultEngine.loading && !engineLoadFailed && !defaultEngine.hasConnectedEngine;
   const agentSelection = useGuidAssistantSelection({
-    defaultEngineId: defaultEngine.agentId,
     resetAssistant: resetAssistantRequested,
     preselectAssistantId,
     locationKey: location.key,

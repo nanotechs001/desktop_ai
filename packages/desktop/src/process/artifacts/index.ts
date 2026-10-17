@@ -160,10 +160,11 @@ const toNoteReply = (result: Awaited<ReturnType<NotesStore['add']>>): NotesReply
 
 /**
  * The renderer's notebook IPC (`agentNotes.*`): the user lists, adds (as instructions), edits and deletes an Agent's
- * notes. Requests come from the renderer, so every field is checked; the store validates ids and text again. A store
+ * notes, and `removeAgent` forgets a deleted Agent (its notebook, and its chats in the lookup via `forgetAgent`).
+ * Requests come from the renderer, so every field is checked; the store validates ids and text again. A store
  * failure that throws (an unreadable file) rejects; `startAgentNotes` wraps each handler in `guardAsync`.
  */
-export function createNotesIpcHandlers(store: NotesStore) {
+export function createNotesIpcHandlers(store: NotesStore, forgetAgent: (agentId: string) => void = () => undefined) {
   return {
     list: async (request: unknown): Promise<NotesReply<Note[]>> => {
       const [agentId] = strings(request, ['agentId']) ?? [];
@@ -181,6 +182,14 @@ export function createNotesIpcHandlers(store: NotesStore) {
       const args = strings(request, ['agentId', 'id']);
       if (!args) return INVALID_NOTE_REQUEST;
       return (await store.remove(args[0], args[1])) ? { success: true } : { success: false, msg: 'Note not found' };
+    },
+    removeAgent: async (request: unknown): Promise<NotesReply> => {
+      const [agentId] = strings(request, ['agentId']) ?? [];
+      // The default Agent can't be deleted, so its notebook is never forgotten this way.
+      if (agentId === undefined || agentId === DEFAULT_AGENT_ID) return INVALID_NOTE_REQUEST;
+      await store.removeAgent(agentId);
+      forgetAgent(agentId);
+      return { success: true };
     },
   };
 }
@@ -216,10 +225,11 @@ export async function startAgentNotes(): Promise<NotesApi> {
   // Loaded here, not at the top: services.ts pulls in Electron, which this module's unit tests run without.
   const { guardAsync } = await import('@process/services/agentBrowser/services');
   const store = createNotesStore(notesRoot(), (agentId) => syncNotesToRule(agentId));
-  const handlers = createNotesIpcHandlers(store);
+  const handlers = createNotesIpcHandlers(store, (agentId) => resolveChatAgent.forgetAgent(agentId));
   ipcBridge.agentNotes.list.provider((request) => guardAsync(() => handlers.list(request)));
   ipcBridge.agentNotes.add.provider((request) => guardAsync(() => handlers.add(request)));
   ipcBridge.agentNotes.update.provider((request) => guardAsync(() => handlers.update(request)));
   ipcBridge.agentNotes.delete.provider((request) => guardAsync(() => handlers.delete(request)));
+  ipcBridge.agentNotes.removeAgent.provider((request) => guardAsync(() => handlers.removeAgent(request)));
   return { store, resolveAgent: resolveChatAgent };
 }

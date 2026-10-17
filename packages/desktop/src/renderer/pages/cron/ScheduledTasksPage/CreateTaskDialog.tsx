@@ -14,6 +14,7 @@ import { ipcBridge } from '@/common';
 import { resolveLocaleKey } from '@/common/utils';
 import type { ICreateCronJobParams, ICronJob, ICronJobUpdateParams } from '@/common/adapter/ipcBridge';
 import { useConversationAssistants } from '@renderer/pages/conversation/hooks/useConversationAssistants';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 import dayjs from 'dayjs';
 import type { TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import { type AcpModelInfo } from '@/common/types/platform/acpTypes';
@@ -242,7 +243,9 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const localeKey = resolveLocaleKey(i18n?.language ?? 'en-US');
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
-  const { presetAssistants } = useConversationAssistants();
+  const { presetAssistants: assistantCatalog } = useConversationAssistants();
+  // The Agent picker offers Agents only; the engines' own entries live in Settings -> Engine.
+  const presetAssistants = useMemo(() => pickableAgents(assistantCatalog), [assistantCatalog]);
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
   const { providers, getAvailableModels } = useModelProviderList();
   const [frequency, setFrequency] = useState<FrequencyType>('manual');

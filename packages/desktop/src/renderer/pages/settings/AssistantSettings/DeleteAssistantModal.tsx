@@ -63,6 +63,13 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
           defaultValue: 'Also delete its browser data (cookies, sign-ins, site data, extensions)',
         })}
       </Checkbox>
+      {!deleteBrowserData && (
+        <p className='mt-8px text-12px text-t-secondary'>
+          {t('agent.browserProfile.keptOnDisk', {
+            defaultValue: 'Its browser data (cookies, sign-ins, site data) stays on this computer.',
+          })}
+        </p>
+      )}
     </Modal>
   );
 };

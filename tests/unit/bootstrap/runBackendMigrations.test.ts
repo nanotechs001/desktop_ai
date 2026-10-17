@@ -274,6 +274,18 @@ describe('runBackendMigrations', () => {
       expect(importedNames()).not.toContain('aionui-artifacts');
     });
 
+    it("describes the browser MCP as each Agent's own profile, never as shared sign-in state", async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      listServersMock.mockResolvedValue([]);
+      await runBackendMigrations(configFile as never);
+      const browser = batchImportServersMock.mock.calls
+        .flatMap(([arg]) => arg.servers as IMcpServer[])
+        .find((server) => server.name === 'aionui-browser');
+      expect(browser?.description).toContain('Each Agent browses in its own browser profile');
+      expect(browser?.description).toContain('ask the user to sign in in the pane or import cookies');
+      expect(browser?.description).not.toMatch(/shared across tabs/i);
+    });
+
     it('registers the notes MCP on a fresh install and repairs its drifted path', async () => {
       vi.spyOn(console, 'info').mockImplementation(() => {});
       listServersMock.mockResolvedValue([]);

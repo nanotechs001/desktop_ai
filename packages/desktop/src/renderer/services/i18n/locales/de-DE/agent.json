@@ -96,6 +96,7 @@
     "clearFailed": "Die Browserdaten konnten nicht gelöscht werden.",
     "deleteWithAgent": "Auch seine Browserdaten löschen (Cookies, Anmeldungen, Websitedaten, Erweiterungen)",
     "deleteFailed": "Die Browserdaten dieses Agenten konnten nicht gelöscht werden, daher wurde der Agent behalten. Versuchen Sie es erneut.",
-    "partialDelete": "Die Browserdaten des Agenten wurden entfernt, aber der Agent wurde nicht gelöscht. Löschen Sie ihn erneut, um den Vorgang abzuschließen."
+    "partialDelete": "Die Browserdaten des Agenten wurden entfernt, aber der Agent wurde nicht gelöscht. Löschen Sie ihn erneut, um den Vorgang abzuschließen.",
+    "keptOnDisk": "Seine Browserdaten (Cookies, Anmeldungen, Websitedaten) bleiben auf diesem Computer."
   }
 }

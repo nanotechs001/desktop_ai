@@ -353,6 +353,18 @@ describe('CreateTaskDialog', () => {
     expect(updates.metadata).not.toHaveProperty('agent_config');
   });
 
+  it("offers Agents only, never an engine's own entry", async () => {
+    const user = userEvent.setup();
+    currentAssistants = [bareAssistant(), ...assistants()];
+
+    render(<CreateTaskDialog visible onClose={() => {}} />);
+
+    await user.click(await screen.findByTestId('cron-assistant-select'));
+    await waitFor(() => expect(document.querySelectorAll('.arco-select-option').length).toBeGreaterThan(0));
+    const optionTexts = [...document.querySelectorAll('.arco-select-option')].map((option) => option.textContent);
+    expect(optionTexts.some((text) => text?.includes('Codex') || text?.includes('代码助手'))).toBe(false);
+  });
+
   it('passes the selected assistant id when manually creating a task', async () => {
     const user = userEvent.setup();
 

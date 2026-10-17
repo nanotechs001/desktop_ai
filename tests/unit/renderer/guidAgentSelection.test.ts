@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import {
   pickDefaultAssistantSelectionKey,
   resolveAssistantSelectionKey,
@@ -22,24 +23,20 @@ describe('guid assistant selection helpers', () => {
     expect(resolveAssistantSelectionKey('aionrs', assistants)).toBeUndefined();
   });
 
-  it('defaults to the generated aionrs assistant when available', () => {
-    expect(pickDefaultAssistantSelectionKey(assistants)).toBe('bare-aionrs');
+  it("rejects an engine's own generated entry, saved or preselected", () => {
+    expect(resolveAssistantSelectionKey('bare-aionrs', assistants)).toBeUndefined();
+    expect(resolveAssistantSelectionKey('custom:bare-aionrs', assistants)).toBeUndefined();
   });
 
-  it("defaults to an assistant bound to the default engine, preferring the engine's own bare entry", () => {
-    const onGemini = [
-      ...assistants,
-      assistant({ id: 'bare-gemini', source: 'generated', runtimeKey: 'gemini', sort_order: 40 }),
-    ];
-    expect(pickDefaultAssistantSelectionKey(onGemini, 'agent-gemini')).toBe('bare-gemini');
-    expect(pickDefaultAssistantSelectionKey(assistants, 'agent-gemini')).toBe('user-research');
+  it('defaults to the built-in default Agent, never a generated entry', () => {
+    const withDefault = [...assistants, assistant({ id: DEFAULT_AGENT_ID, source: 'user', runtimeKey: 'claude' })];
+    expect(pickDefaultAssistantSelectionKey(withDefault)).toBe(DEFAULT_AGENT_ID);
   });
 
-  it('ignores disabled assistants and falls back when none is bound to the default engine', () => {
+  it('falls back to the first enabled Agent that is not an engine entry', () => {
     const disabled = [assistant({ id: 'off', source: 'user', runtimeKey: 'gemini', enabled: false }), ...assistants];
-    expect(pickDefaultAssistantSelectionKey(disabled, 'agent-gemini')).toBe('user-research');
-    expect(pickDefaultAssistantSelectionKey(assistants, 'agent-unknown')).toBe('bare-aionrs');
-    expect(pickDefaultAssistantSelectionKey(assistants, null)).toBe('bare-aionrs');
+    expect(pickDefaultAssistantSelectionKey(disabled)).toBe('builtin-writer');
+    expect(pickDefaultAssistantSelectionKey([assistants[1]])).toBeNull();
   });
 
   it('returns null when no assistants are available', () => {

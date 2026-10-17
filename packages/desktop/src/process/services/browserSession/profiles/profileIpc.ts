@@ -60,12 +60,14 @@ const failure = (error: unknown): Reply => {
 };
 
 /**
- * The request's `agentId` when it is a string, but never the default Agent's: its profile is shared by every chat
- * without an Agent and is not the user's to clear or delete. The profile helpers validate it as an Agent id.
+ * The request's `agentId` when it is a string. With `forDelete`, never the default Agent's: its profile is shared by
+ * every chat without an Agent and always exists, so the user may clear it but not delete it. The profile helpers
+ * validate it as an Agent id.
  */
-const agentIdOf = (request: unknown): string | null => {
+const agentIdOf = (request: unknown, forDelete = false): string | null => {
   const agentId = (request as { agentId?: unknown } | null)?.agentId;
-  return typeof agentId === 'string' && agentId !== DEFAULT_AGENT_ID ? agentId : null;
+  if (typeof agentId !== 'string') return null;
+  return forDelete && agentId === DEFAULT_AGENT_ID ? null : agentId;
 };
 
 const MAX_IMPORT_DOMAINS = 100;
@@ -152,7 +154,7 @@ export function registerBrowserProfileIpc(): void {
     }
   });
   ipcBridge.browser.deleteProfileData.provider(async (request) => {
-    const agentId = agentIdOf(request);
+    const agentId = agentIdOf(request, true);
     if (agentId === null) return INVALID;
     try {
       await deleteAgentBrowserData(agentId, {

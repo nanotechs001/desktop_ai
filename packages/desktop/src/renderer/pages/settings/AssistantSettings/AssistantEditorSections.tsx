@@ -24,7 +24,6 @@ import DefaultsSection from './editor/DefaultsSection';
 import RulesSection from './editor/RulesSection';
 import AgentNotebook from './editor/AgentNotebook';
 import BrowserProfileSection from './editor/BrowserProfileSection';
-import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 
 /** Select value for "follow the default engine"; never a real engine id. */
 const USE_DEFAULT_ENGINE = '__use_default_engine__';
@@ -592,11 +591,9 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
 
       {/* Built-ins reject rule writes, so their notes could never reach the agent. */}
       {activeAssistant && !isCreating && !isBuiltin ? <AgentNotebook agentId={activeAssistant.id} /> : null}
-      {/* Built-in chats use the shared default Agent profile, so only user-made Agents have their own; that shared
-          profile is not the user's to clear (main refuses it too). */}
-      {activeAssistant && !isCreating && !isBuiltin && activeAssistant.id !== DEFAULT_AGENT_ID ? (
-        <BrowserProfileSection agentId={activeAssistant.id} />
-      ) : null}
+      {/* Built-in chats use the default Agent's profile, so only user-made Agents (the default one included) have a
+          profile here. It offers clear and import; deleting a profile is part of deleting its Agent. */}
+      {activeAssistant && !isCreating && !isBuiltin ? <BrowserProfileSection agentId={activeAssistant.id} /> : null}
     </div>
   );
 };

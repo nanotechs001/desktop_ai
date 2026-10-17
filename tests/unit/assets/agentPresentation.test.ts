@@ -9,7 +9,7 @@ import type { TFunction } from 'i18next';
 import { isValidElement, type ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
-import { agentFromPresetInfo, getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
+import { agentFromPresetInfo, getAgentPresentation, pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 
 const t = ((key: string) => (key === 'agent.displayName' ? 'Agent' : key)) as TFunction;
 
@@ -92,5 +92,16 @@ describe('agentFromPresetInfo', () => {
   it('drops identities derived from the engine instead of an assistant record', () => {
     expect(agentFromPresetInfo(engineInfo)).toBeNull();
     expect(agentFromPresetInfo(null)).toBeNull();
+  });
+});
+
+describe('pickableAgents', () => {
+  it("drops an engine's own generated entries and keeps every Agent", () => {
+    const list = [
+      { id: 'bare:1', source: 'generated' },
+      { id: 'aion-default-agent', source: 'user' },
+      { id: 'writer', source: 'builtin' },
+    ];
+    expect(pickableAgents(list).map((record) => record.id)).toEqual(['aion-default-agent', 'writer']);
   });
 });

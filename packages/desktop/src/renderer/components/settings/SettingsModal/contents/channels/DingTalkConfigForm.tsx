@@ -22,6 +22,7 @@ import {
   getDefaultChannelAssistant,
   resolveChannelAssistantSelection,
 } from './assistantBinding';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 
 /**
  * Preference row component
@@ -127,7 +128,7 @@ const DingTalkConfigForm: React.FC<DingTalkConfigFormProps> = ({ pluginStatus, m
     const loadAssistantsAndSelection = async () => {
       try {
         const [assistantList, saved] = await Promise.all([
-          assistants.list.invoke(),
+          assistants.list.invoke().then(pickableAgents),
           channel.getPlatformSettings.invoke({ platform: 'dingtalk' }),
         ]);
 

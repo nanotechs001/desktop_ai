@@ -23,6 +23,7 @@ import {
   getDefaultChannelAssistant,
   resolveChannelAssistantSelection,
 } from './assistantBinding';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 
 type LoginState = 'idle' | 'loading_qr' | 'showing_qr' | 'scanned' | 'connected';
 
@@ -199,7 +200,7 @@ const WeixinConfigForm: React.FC<WeixinConfigFormProps> = ({ pluginStatus, model
     const load = async () => {
       try {
         const [assistantList, saved] = await Promise.all([
-          assistants.list.invoke(),
+          assistants.list.invoke().then(pickableAgents),
           channel.getPlatformSettings.invoke({ platform: 'weixin' }),
         ]);
 

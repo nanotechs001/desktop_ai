@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { isAionrsAssistant, type Assistant } from '@/common/types/agent/assistantTypes';
+import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
+import { isEngineEntry } from '@/renderer/utils/ui/agentPresentation';
 import type { IChannelAssistantBindingRead, IChannelAssistantBindingWrite } from '@/common/types/channel/channel';
 
 /**
@@ -20,11 +22,11 @@ export type ResolvedChannelAssistantSelection = {
   hasBrokenSavedAssistant: boolean;
 };
 
+/** A channel starts on the default Agent, else the first Agent; an engine's own entry is never one. */
 export function getDefaultChannelAssistant(assistants: Assistant[]): Assistant | undefined {
   return (
-    assistants.find((assistant) => assistant.source === 'generated' && isAionrsAssistant(assistant)) ||
-    assistants.find((assistant) => isAionrsAssistant(assistant)) ||
-    assistants[0]
+    assistants.find((assistant) => assistant.id === DEFAULT_AGENT_ID) ??
+    assistants.find((assistant) => !isEngineEntry(assistant))
   );
 }
 

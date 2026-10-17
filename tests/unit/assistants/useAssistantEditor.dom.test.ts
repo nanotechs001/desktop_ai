@@ -31,6 +31,7 @@ vi.mock('@/common', () => ({
       importSkills: { invoke: vi.fn() },
     },
     browser: { deleteProfileData: { invoke: vi.fn() } },
+    agentNotes: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
     // The rule is saved through main, which adds the managed blocks.
     agentBrowser: {
       ensureAgentRule: { invoke: vi.fn(async () => ({ success: true })) },
@@ -198,6 +199,30 @@ describe('useAssistantEditor', () => {
 
       expect(ipcBridge.browser.deleteProfileData.invoke).not.toHaveBeenCalled();
       expect(ipcBridge.assistants.delete.invoke).toHaveBeenCalledWith({ id: 'bare:gone' });
+    });
+
+    it('forgets what the Agent learned: its notebook in main and its engine pin', async () => {
+      engineConfig.store.set('agent.enginePins', { 'bare:gone': 'engine-x', other: 'engine-y' });
+      (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
+
+      await deleteWith(false);
+
+      expect(ipcBridge.agentNotes.removeAgent.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({ other: 'engine-y' });
+      expect(mockMessage.success).toHaveBeenCalled();
+    });
+
+    it('writes no engine pins when the Agent had none (first-run seeding stays possible)', async () => {
+      (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
+      await deleteWith(false);
+      expect(engineConfig.configService.set).not.toHaveBeenCalledWith('agent.enginePins', expect.anything());
+    });
+
+    it('keeps the notebook when the Agent delete fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('backend down'));
+      await deleteWith(false);
+      expect(ipcBridge.agentNotes.removeAgent.invoke).not.toHaveBeenCalled();
     });
 
     it('keeps the Agent, and says so, when its browser data could not be removed', async () => {

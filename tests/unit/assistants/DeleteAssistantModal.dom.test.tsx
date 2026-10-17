@@ -97,6 +97,16 @@ describe('DeleteAssistantModal', () => {
     expect(onConfirmSpy).toHaveBeenLastCalledWith(false);
   });
 
+  it('says the browser data stays on disk when the user keeps it', async () => {
+    const assistant: AssistantListItem = { id: 'a1', name: 'Test', sort_order: 1, source: 'user', enabled: true };
+    const user = userEvent.setup();
+    renderWithProviders(<DeleteAssistantModal {...defaultProps} visible={true} activeAssistant={assistant} />);
+
+    expect(screen.queryByText('agent.browserProfile.keptOnDisk')).toBeNull();
+    await user.click(screen.getByRole('checkbox', { name: 'agent.browserProfile.deleteWithAgent' }));
+    expect(screen.getByText('agent.browserProfile.keptOnDisk')).toBeInTheDocument();
+  });
+
   it('calls onCancel when Cancel button is clicked (callback spy)', async () => {
     const onCancelSpy = vi.fn();
     const assistant: AssistantListItem = { id: 'a1', name: 'Test', sort_order: 1, source: 'user', enabled: true };

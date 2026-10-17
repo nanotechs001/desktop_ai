@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { assistantRuntimeKey, isAionrsAssistant, type Assistant } from '@/common/types/agent/assistantTypes';
+import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
 import type { AcpModelInfo } from '../types';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
@@ -18,6 +19,7 @@ import {
 } from '@/renderer/utils/model/agentRuntimeCatalog';
 import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
+import { isEngineEntry, pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCustomAgentsLoader } from './useCustomAgentsLoader';
 
@@ -76,17 +78,10 @@ export function resolveAssistantSelectionKey(
   assistants: Assistant[]
 ): string | undefined {
   if (!savedKey) return undefined;
-
-  if (savedKey.startsWith('custom:')) {
-    const assistantId = savedKey.slice(7);
-    return assistants.some((assistant) => assistant.id === assistantId) ? assistantId : undefined;
-  }
-
-  if (assistants.some((assistant) => assistant.id === savedKey)) {
-    return savedKey;
-  }
-
-  return undefined;
+  const assistantId = savedKey.startsWith('custom:') ? savedKey.slice(7) : savedKey;
+  // An engine's own entry is not an Agent, so a saved or preselected id can't pick one.
+  const match = assistants.find((assistant) => assistant.id === assistantId);
+  return match && !isEngineEntry(match) ? assistantId : undefined;
 }
 
 function readPersistedGuidAssistantSelectionKey(assistants: Assistant[]): string | undefined {
@@ -101,37 +96,19 @@ function persistGuidAssistantSelectionKey(assistantId: string): void {
   });
 }
 
-/**
- * With a default engine, the Agent to start on is one already bound to it
- * (the engine's own bare entry first); otherwise the legacy aionrs-first order.
- */
-export function pickDefaultAssistantSelectionKey(
-  assistants: Assistant[],
-  defaultEngineId?: string | null
-): string | null {
-  const enabledAssistants = assistants.filter((assistant) => assistant.enabled !== false);
-  const onDefaultEngine = defaultEngineId
-    ? enabledAssistants.filter((assistant) => assistant.agent_id === defaultEngineId)
-    : [];
-  const preferred =
-    onDefaultEngine.find((assistant) => assistant.source === 'generated') ??
-    onDefaultEngine[0] ??
-    enabledAssistants.find((assistant) => assistant.source === 'generated' && isAionrsAssistant(assistant)) ??
-    enabledAssistants.find((assistant) => isAionrsAssistant(assistant)) ??
-    enabledAssistants[0];
-  return preferred?.id ?? null;
+/** A fresh guid page starts on the default Agent, else the first enabled Agent; never on an engine's own entry. */
+export function pickDefaultAssistantSelectionKey(assistants: Assistant[]): string | null {
+  const agents = pickableAgents(assistants).filter((assistant) => assistant.enabled !== false);
+  return (agents.find((assistant) => assistant.id === DEFAULT_AGENT_ID) ?? agents[0])?.id ?? null;
 }
 
 type UseGuidAssistantSelectionOptions = {
-  /** Default engine id (Settings -> Engine); picks which Agent a fresh guid page starts on. */
-  defaultEngineId?: string | null;
   resetAssistant?: boolean;
   preselectAssistantId?: string;
   locationKey?: string;
 };
 
 export const useGuidAssistantSelection = ({
-  defaultEngineId,
   resetAssistant,
   preselectAssistantId,
   locationKey,
@@ -140,7 +117,9 @@ export const useGuidAssistantSelection = ({
   const [selectedMode, _setSelectedMode] = useState<string>('default');
   const [selectedAcpModel, _setSelectedAcpModel] = useState<string | null>(null);
   const [selectedThoughtLevelValue, _setSelectedThoughtLevelValue] = useState<string>('');
-  const { assistants } = useCustomAgentsLoader();
+  const { assistants: catalog } = useCustomAgentsLoader();
+  // The pills offer Agents only; the engines' own entries live in Settings -> Engine.
+  const assistants = useMemo(() => pickableAgents(catalog), [catalog]);
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
 
   const setSelectedMode = useCallback(
@@ -205,11 +184,10 @@ export const useGuidAssistantSelection = ({
     if (resetAssistant) {
       resetHandledRef.current = true;
       const fallbackId =
-        readPersistedGuidAssistantSelectionKey(assistants) ??
-        pickDefaultAssistantSelectionKey(assistants, defaultEngineId);
+        readPersistedGuidAssistantSelectionKey(assistants) ?? pickDefaultAssistantSelectionKey(assistants);
       _setSelectedAssistantId(fallbackId);
     }
-  }, [assistants, defaultEngineId, preselectAssistantId, resetAssistant]);
+  }, [assistants, preselectAssistantId, resetAssistant]);
 
   useEffect(() => {
     if (assistants.length === 0) return;
@@ -217,11 +195,10 @@ export const useGuidAssistantSelection = ({
     if (preselectAssistantId && resolveAssistantSelectionKey(preselectAssistantId, assistants)) return;
     if (!selectedAssistantIdState || !assistants.some((assistant) => assistant.id === selectedAssistantIdState)) {
       _setSelectedAssistantId(
-        readPersistedGuidAssistantSelectionKey(assistants) ??
-          pickDefaultAssistantSelectionKey(assistants, defaultEngineId)
+        readPersistedGuidAssistantSelectionKey(assistants) ?? pickDefaultAssistantSelectionKey(assistants)
       );
     }
-  }, [assistants, defaultEngineId, preselectAssistantId, resetAssistant, selectedAssistantIdState]);
+  }, [assistants, preselectAssistantId, resetAssistant, selectedAssistantIdState]);
 
   const selectedAssistant = useMemo(
     () =>
@@ -348,10 +325,7 @@ export const useGuidAssistantSelection = ({
     return buildAssistantModelInfo(selectedAssistantModels);
   }, [selectedAssistantModels, selectedAgentRuntimeModelInfo]);
 
-  const defaultAssistantId = useMemo(
-    () => pickDefaultAssistantSelectionKey(assistants, defaultEngineId),
-    [assistants, defaultEngineId]
-  );
+  const defaultAssistantId = useMemo(() => pickDefaultAssistantSelectionKey(assistants), [assistants]);
 
   return {
     selectedAssistantId,

@@ -41,6 +41,8 @@ export type NotesStore = {
   update(agentId: string, id: string, text: string): Promise<ArtifactResult<Note>>;
   /** False when there is no such note; rejects when the file can't be written. */
   remove(agentId: string, id: string): Promise<boolean>;
+  /** Deletes a deleted Agent's whole notebook; nothing to do when it has none. Rejects when the file can't go. */
+  removeAgent(agentId: string): Promise<void>;
 };
 
 const fail = (error: ArtifactError, message: string) => ({ ok: false as const, error, message });
@@ -182,7 +184,13 @@ export function createNotesStore(rootDir: string, onChange?: (agentId: string) =
     });
   };
 
-  return { add, list: (agentId) => readNotes(rootDir, agentId), update, remove };
+  const removeAgent: NotesStore['removeAgent'] = async (agentId) => {
+    if (!AGENT_ID_RE.test(agentId)) return;
+    // No onChange: the Agent, and so its rule, is gone.
+    await serialised(agentId, () => fs.rm(notesFile(rootDir, agentId), { force: true }));
+  };
+
+  return { add, list: (agentId) => readNotes(rootDir, agentId), update, remove, removeAgent };
 }
 
 /** Comment syntax in a note is broken up, so no note can open or close a managed block. */
@@ -213,17 +221,37 @@ const SECTIONS: ReadonlyArray<{ source: NoteSource; head: string[]; item: (text:
   },
 ];
 
+const renderAllNotes = (notes: readonly Note[]): string => {
+  const sections = SECTIONS.flatMap(({ source, head, item }) => {
+    const items = notes.filter((n) => n.source === source).map((n) => item(neutralise(n.text)));
+    return items.length > 0 ? [...head, ...items] : [];
+  });
+  return ['# Notebook', ...sections].join('\n');
+};
+
+/** The oldest note that isn't the user's, or undefined when only the user's are left. */
+const oldestLearned = (notes: readonly Note[]): Note | undefined =>
+  notes
+    .filter((n) => n.source !== 'user')
+    .reduce<Note | undefined>((old, n) => (!old || n.at < old.at ? n : old), undefined);
+
 /**
  * The notebook as rule text, or null when there are no notes. Only the user's notes are instructions; the agent's
  * own notes are observations that never override anything, and notes from web pages are quoted as unverified data.
  */
 export function renderNotesBlock(notes: readonly Note[]): string | null {
   if (notes.length === 0) return null;
-  const sections = SECTIONS.flatMap(({ source, head, item }) => {
-    const items = notes.filter((n) => n.source === source).map((n) => item(neutralise(n.text)));
-    return items.length > 0 ? [...head, ...items] : [];
-  });
-  return ['# Notebook', ...sections].join('\n');
+  // Past the cap the oldest agent and page notes are left out of the rule (they stay in the notebook); the user's
+  // notes always stay, even if they alone go past it.
+  let kept = notes;
+  let block = renderAllNotes(kept);
+  while (block.length > NOTE_LIMITS.maxBlockChars) {
+    const drop = oldestLearned(kept);
+    if (!drop) break;
+    kept = kept.filter((n) => n !== drop);
+    block = renderAllNotes(kept);
+  }
+  return block;
 }
 
 /** Put the notes block into an Agent's rule (or remove it when there are none). */

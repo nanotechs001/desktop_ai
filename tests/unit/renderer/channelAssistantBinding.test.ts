@@ -5,6 +5,7 @@
  */
 
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import {
   buildChannelAssistantBinding,
   getDefaultChannelAssistant,
@@ -45,8 +46,13 @@ describe('channel assistant binding helpers', () => {
     assistant({ id: 'user-writer', name: 'Writer', source: 'user', preset_agent_type: 'claude' }),
   ];
 
-  it('prefers the generated aionrs assistant as the default selection', () => {
-    expect(getDefaultChannelAssistant(assistants)?.id).toBe('bare-aionrs');
+  it('defaults to the built-in default Agent, never an engine entry', () => {
+    const withDefault = [
+      ...assistants,
+      assistant({ id: DEFAULT_AGENT_ID, name: 'Agent', preset_agent_type: 'claude' }),
+    ];
+    expect(getDefaultChannelAssistant(withDefault)?.id).toBe(DEFAULT_AGENT_ID);
+    expect(getDefaultChannelAssistant(assistants)?.id).toBe('user-writer');
   });
 
   it('resolves explicit assistant ids from new channel bindings', () => {
@@ -54,7 +60,7 @@ describe('channel assistant binding helpers', () => {
   });
 
   it('falls back to the default assistant only when no binding was saved', () => {
-    expect(resolveChannelAssistantId(undefined, assistants)).toBe('bare-aionrs');
+    expect(resolveChannelAssistantId(undefined, assistants)).toBe('user-writer');
   });
 
   it('marks unresolved saved bindings instead of silently selecting a default assistant', () => {

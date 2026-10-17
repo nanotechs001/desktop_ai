@@ -65,6 +65,10 @@ export function getAgentPresentation(
 export const isEngineEntry = (record: { source?: string } | null | undefined): boolean =>
   record?.source === 'generated';
 
+/** The records an Agent picker may offer: every Agent, without the engines' own entries. */
+export const pickableAgents = <T extends { source?: string }>(records: readonly T[]): T[] =>
+  records.filter((record) => !isEngineEntry(record));
+
 /**
  * The Agent a resolved conversation identity names. Only assistant records are Agents, and not every one: identities
  * usePresetAssistantInfo derives from `extra.agent_name` / `extra.backend`, and an engine's own generated entry,

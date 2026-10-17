@@ -44,9 +44,9 @@ export function resolveDefaultEngine(
 }
 
 /**
- * Agents whose `agent_id` differs from where they should run: their pin, or
- * the default engine when unpinned (or pinned to an engine that is gone).
- * Generated assistants are the engines' own bare CLI entries and never move.
+ * Agents whose `agent_id` differs from where they should run: their pin, or the default engine when unpinned.
+ * An Agent pinned to an engine missing from the catalog is skipped: the engine may come back, and moving the Agent
+ * would drop the user's choice. Generated assistants are the engines' own bare CLI entries and never move.
  */
 export function planEngineRebinds(
   assistants: readonly Assistant[],
@@ -56,10 +56,8 @@ export function planEngineRebinds(
 ): EngineRebind[] {
   return assistants
     .filter((assistant) => assistant.source !== 'generated')
-    .map((assistant) => {
-      const pin = pins[assistant.id];
-      return { assistant, agentId: pin && engineIds.has(pin) ? pin : defaultId };
-    })
+    .filter((assistant) => !pins[assistant.id] || engineIds.has(pins[assistant.id]))
+    .map((assistant) => ({ assistant, agentId: pins[assistant.id] || defaultId }))
     .filter(({ assistant, agentId }) => assistant.agent_id !== agentId);
 }
 

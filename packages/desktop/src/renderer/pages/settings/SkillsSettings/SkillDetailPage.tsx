@@ -19,6 +19,7 @@ import { ipcBridge } from '@/common';
 import type { Assistant, UpdateAssistantRequest } from '@/common/types/agent/assistantTypes';
 import { resolveLocaleKey } from '@/common/utils';
 import AssistantAvatar from '@/renderer/pages/settings/AssistantSettings/AssistantAvatar';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 import { Button, Dropdown, Menu, Message, Spin, Typography } from '@arco-design/web-react';
 import { ArrowLeft, Close, Plus, Right } from '@icon-park/react';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -95,7 +96,10 @@ const SkillDetailPage: React.FC = () => {
   );
   // Attachment editing covers user + generated assistants; builtin assistants'
   // update endpoint only accepts agent_id/defaults (see useAssistantEditor).
-  const editableAssistants = useMemo(() => (assistants ?? []).filter((a) => a.source !== 'builtin'), [assistants]);
+  const editableAssistants = useMemo(
+    () => pickableAgents(assistants ?? []).filter((a) => a.source !== 'builtin'),
+    [assistants]
+  );
   const readonlyUsers = useMemo(() => usingAssistants.filter((a) => a.source === 'builtin'), [usingAssistants]);
 
   const assistantLabel = useCallback(
