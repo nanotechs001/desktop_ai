@@ -27,6 +27,8 @@ import {
 
 const OUT_MAIN = path.resolve(__dirname, '../../../../out/main');
 const DEFAULT_AGENT_ID = 'aion-default-agent';
+/** Where the artifact store and notebooks of an e2e (second dev instance) app live: outside its temp userData. */
+const E2E_DATA_HOME = path.join(os.homedir(), '.aionui-dev-2');
 /** Vendor and product names that must not show in a chat's chrome. Case-sensitive: lowercase ids live in paths. */
 const VENDOR_TEXT =
   /\b(Claude|Anthropic|Codex|OpenAI|ChatGPT|Gemini|Google|Qwen|iFlow|Goose|Copilot|OpenCode|Kimi|Droid)\b/;
@@ -240,7 +242,10 @@ test.describe('Neutral Agent and Artifacts', () => {
 
   test.afterAll(async ({ page }) => {
     await Promise.allSettled(cleanups.map((cleanup) => cleanup()));
-    if (chatId) await httpInvoke(page, 'DELETE', `/api/conversations/${chatId}`).catch(() => undefined);
+    if (chatId) {
+      await httpInvoke(page, 'DELETE', `/api/conversations/${chatId}`).catch(() => undefined);
+      fs.rmSync(path.join(E2E_DATA_HOME, 'artifacts', chatId), { recursive: true, force: true });
+    }
     if (claude) {
       if (previousDefault && previousDefault !== claude.id)
         await setDefaultEngine(page, previousDefault).catch(() => undefined);
@@ -456,7 +461,7 @@ test.describe('Neutral Agent and Artifacts', () => {
     test.afterAll(async ({ page }) => {
       if (agentChat) await httpInvoke(page, 'DELETE', `/api/conversations/${agentChat}`).catch(() => undefined);
       await httpInvoke(page, 'DELETE', `/api/assistants/${encodeURIComponent(agentId)}`).catch(() => undefined);
-      fs.rmSync(path.join(os.homedir(), '.aionui-dev-2', 'agent-notes', `${encodeURIComponent(agentId)}.json`), {
+      fs.rmSync(path.join(E2E_DATA_HOME, 'agent-notes', `${encodeURIComponent(agentId)}.json`), {
         force: true,
       });
       await servers?.close();
