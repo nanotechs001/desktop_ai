@@ -1,15 +1,15 @@
 /**
  * E2E: Preview panel — file click triggers preview.
  *
- * Seeds a workspace with an HTML file and a Markdown file, creates a
- * conversation pointing at it, then clicks the file in the workspace tree
- * to trigger the preview panel. Verifies the preview renders content and
- * the toolbar shows action buttons.
+ * Seeds a workspace with an HTML file and a Markdown file, starts a single chat on it from the guid page (see
+ * `startWorkspaceChat`; the claude command is a stub, so no model session starts), then clicks the file in the project
+ * panel's tree to trigger the preview panel. Verifies the preview renders content and the toolbar shows action buttons.
  *
  * This is deterministic — no dependency on agent output.
  */
+import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures';
-import { goToGuid } from '../../helpers';
+import { openProjectPanel, startWorkspaceChat, type WorkspaceChat } from '../../helpers';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -22,72 +22,45 @@ const HTML_CONTENT = `<!DOCTYPE html>
 const MD_CONTENT = `# Preview Test\n\nThis is **bold** and *italic*.\n\n- Item 1\n- Item 2\n`;
 
 test.describe('Preview — file click triggers preview', () => {
-  let workspace: string;
+  const workspaces: string[] = [];
+  const chats: WorkspaceChat[] = [];
 
-  test.beforeAll(() => {
-    workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-preview-'));
+  test.afterAll(async () => {
+    for (const chat of chats.toReversed()) {
+      // eslint-disable-next-line no-await-in-loop -- each cleanup may restore the default engine through the UI
+      await chat.cleanup();
+    }
+    for (const workspace of workspaces) fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  /**
+   * Starts a chat on a fresh workspace (its own project, so no preview from an earlier test takes the panel's room)
+   * and clicks `fileName` in its project tree; returns the preview panel.
+   */
+  async function previewFile(page: Page, electronApp: ElectronApplication, fileName: string, message: string) {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-preview-'));
+    workspaces.push(workspace);
     fs.writeFileSync(path.join(workspace, 'page.html'), HTML_CONTENT);
     fs.writeFileSync(path.join(workspace, 'notes.md'), MD_CONTENT);
     fs.writeFileSync(path.join(workspace, 'data.json'), '{"key":"value","count":42}');
-  });
-
-  test.afterAll(() => {
-    fs.rmSync(workspace, { recursive: true, force: true });
-  });
+    const chat = await startWorkspaceChat(page, electronApp, workspace, message);
+    test.skip(!chat, 'Needs an installed claude agent to start a chat');
+    chats.push(chat as WorkspaceChat);
+    await openProjectPanel(page);
+    const tree = page.locator('.workspace-tree');
+    await expect(tree).toBeVisible({ timeout: 15_000 });
+    const file = tree.getByText(fileName).first();
+    await expect(file).toBeVisible({ timeout: 10_000 });
+    await file.click();
+    const previewPanel = page.locator('.preview-panel');
+    await expect(previewPanel).toBeVisible({ timeout: 15_000 });
+    return previewPanel;
+  }
 
   test('clicking HTML file in workspace tree opens preview panel', async ({ page, electronApp }) => {
     test.setTimeout(120_000);
-
-    await electronApp.evaluate(async ({ dialog }, target) => {
-      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
-    }, workspace);
-
-    await goToGuid(page);
-
-    const agentPill = page.locator('[data-testid^="agent-pill-"]').first();
-    if (!(await agentPill.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      test.skip(true, 'No agent pills available');
-      return;
-    }
-    await agentPill.click();
-
-    const wsBtn = page.locator('[data-testid="workspace-selector-btn"]');
-    if (await wsBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await wsBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    const input = page.locator('[data-testid="guid-input"] textarea, [data-testid="guid-input"] input').first();
-    await input.fill('check the HTML file');
-    await page.locator('[data-testid="guid-send-btn"]').click();
-    await page.waitForURL(/\/conversation\//, { timeout: 30_000 });
-
-    // Wait for workspace panel and file tree
-    const wsPanel = page.locator('.chat-workspace');
-    if (!(await wsPanel.isVisible({ timeout: 30_000 }).catch(() => false))) {
-      test.skip(true, 'Workspace panel not available');
-      return;
-    }
-
-    const tree = wsPanel.locator('.workspace-tree');
-    if (!(await tree.isVisible({ timeout: 15_000 }).catch(() => false))) {
-      test.skip(true, 'File tree not loaded');
-      return;
-    }
-
-    // Click page.html in the tree → should trigger preview
-    const htmlFile = wsPanel.getByText('page.html').first();
-    await expect(htmlFile).toBeVisible({ timeout: 10_000 });
-    await htmlFile.click();
-
+    const previewPanel = await previewFile(page, electronApp, 'page.html', 'check the HTML file');
     await page.screenshot({ path: 'tests/e2e/results/preview-conv-01-clicked.png' });
-
-    // Preview panel should appear
-    const previewPanel = page.locator('.preview-panel');
-    if (!(await previewPanel.isVisible({ timeout: 15_000 }).catch(() => false))) {
-      test.skip(true, 'Preview panel did not open on file click');
-      return;
-    }
 
     // Preview should have content (iframe for HTML, or viewer)
     const content = previewPanel.locator('iframe, [class*="viewer"], [class*="editor"], pre, .cm-editor').first();
@@ -105,57 +78,12 @@ test.describe('Preview — file click triggers preview', () => {
 
   test('clicking markdown file opens preview with rendered content', async ({ page, electronApp }) => {
     test.setTimeout(120_000);
+    const previewPanel = await previewFile(page, electronApp, 'notes.md', 'read the notes');
 
-    await electronApp.evaluate(async ({ dialog }, target) => {
-      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
-    }, workspace);
-
-    await goToGuid(page);
-
-    const agentPill = page.locator('[data-testid^="agent-pill-"]').first();
-    if (!(await agentPill.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      test.skip(true, 'No agent pills available');
-      return;
-    }
-    await agentPill.click();
-
-    const wsBtn = page.locator('[data-testid="workspace-selector-btn"]');
-    if (await wsBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await wsBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    const input = page.locator('[data-testid="guid-input"] textarea, [data-testid="guid-input"] input').first();
-    await input.fill('read the notes');
-    await page.locator('[data-testid="guid-send-btn"]').click();
-    await page.waitForURL(/\/conversation\//, { timeout: 30_000 });
-
-    const wsPanel = page.locator('.chat-workspace');
-    if (!(await wsPanel.isVisible({ timeout: 30_000 }).catch(() => false))) {
-      test.skip(true, 'Workspace panel not available');
-      return;
-    }
-
-    const tree = wsPanel.locator('.workspace-tree');
-    if (!(await tree.isVisible({ timeout: 15_000 }).catch(() => false))) {
-      test.skip(true, 'File tree not loaded');
-      return;
-    }
-
-    // Click notes.md
-    const mdFile = wsPanel.getByText('notes.md').first();
-    await expect(mdFile).toBeVisible({ timeout: 10_000 });
-    await mdFile.click();
-
-    const previewPanel = page.locator('.preview-panel');
-    if (!(await previewPanel.isVisible({ timeout: 15_000 }).catch(() => false))) {
-      test.skip(true, 'Preview panel did not open');
-      return;
-    }
-
-    // Should have rendered markdown content or editor with source
-    const viewer = previewPanel.locator('iframe, [class*="viewer"], .cm-editor, pre').first();
+    // The rendered markdown (or its source in the editor) shows the file's heading
+    const viewer = previewPanel.locator('.aionui-markdown, .cm-editor').first();
     await expect(viewer).toBeVisible({ timeout: 10_000 });
+    await expect(viewer).toContainText('Preview Test');
 
     await page.screenshot({ path: 'tests/e2e/results/preview-conv-03-markdown.png' });
   });

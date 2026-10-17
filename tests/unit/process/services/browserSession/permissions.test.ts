@@ -112,6 +112,21 @@ describe('permission store', () => {
     expect(loadPermissionStores(file)).toEqual({ [PERSONAL]: { [ORIGIN]: { media: 'allow' } } });
   });
 
+  it('a flat (pre-profile) file survives a save: read as Personal, written partitioned, read back the same', () => {
+    const file = path.join(mocks.home, 'store.json');
+    writeFileSync(file, JSON.stringify({ [ORIGIN]: { media: 'allow', geolocation: 'deny' } }));
+    const loaded = loadPermissionStores(file);
+    const withAgent = { ...loaded, [AGENT_PARTITION]: { [ORIGIN]: { media: 'deny' as const } } };
+
+    savePermissionStores(file, withAgent);
+
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ partitions: withAgent });
+    expect(loadPermissionStores(file)).toEqual({
+      [PERSONAL]: { [ORIGIN]: { media: 'allow', geolocation: 'deny' } },
+      [AGENT_PARTITION]: { [ORIGIN]: { media: 'deny' } },
+    });
+  });
+
   it('savePermissionStores removes its temp file and rethrows when the rename fails', () => {
     const file = path.join(mocks.home, 'blocked');
     mkdirSync(file); // renaming a file over a directory fails

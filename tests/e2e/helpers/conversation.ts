@@ -20,6 +20,7 @@ import {
   presetPillById,
 } from './selectors';
 import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 
 type FindAssistantOptions = {
   requireAvailable?: boolean;
@@ -39,6 +40,7 @@ function pickAssistantForBackend(assistants: Assistant[], backend: string, optio
 
   return (
     selectableCandidates.find((assistant) => assistant.source === 'generated') ??
+    selectableCandidates.find((assistant) => assistant.id === DEFAULT_AGENT_ID) ??
     selectableCandidates.find((assistant) => assistant.source === 'user') ??
     selectableCandidates[0] ??
     null
@@ -126,7 +128,10 @@ export async function selectAgent(page: Page, backend: string, model?: string): 
   const deadline = Date.now() + 20_000;
   let selected = false;
   while (Date.now() < deadline && !selected) {
-    const assistants = await httpGet<Assistant[]>(page, '/api/assistants').catch(() => [] as Assistant[]);
+    // An engine's own generated entry is never a guid pill (only Agents are), so only Agents can be clicked.
+    const assistants = (await httpGet<Assistant[]>(page, '/api/assistants').catch(() => [] as Assistant[])).filter(
+      (assistant) => assistant.source !== 'generated'
+    );
     const assistant = pickAssistantForBackend(assistants, backend, { requireAvailable: true });
     if (!assistant) {
       await page.waitForTimeout(500);
@@ -407,9 +412,24 @@ export async function runConversationCycle(
 /** A chat started by {@link startWorkspaceChat}; `cleanup` restores the agent override and deletes the chat. */
 export type WorkspaceChat = { conversationId: string; cleanup: () => Promise<void> };
 
+/** Sets the default engine the way the user does, in Settings → Engine. */
+export async function setDefaultEngine(page: Page, engineId: string): Promise<void> {
+  await page.goto(`${page.url().split('#')[0]}#/settings/agent`);
+  const setDefault = page.locator(`[data-testid="agent-row-set-default-${engineId}"]`);
+  const isDefault = page.locator(`[data-testid="agent-row-default-${engineId}"]`);
+  await setDefault.or(isDefault).first().waitFor({ state: 'visible', timeout: 20_000 });
+  if (await setDefault.isVisible()) await setDefault.click();
+  await expect(isDefault).toBeVisible({ timeout: 10_000 });
+}
+
+/** The engine the default Agent runs on (it follows the default engine). */
+const defaultAgentEngine = async (page: Page): Promise<string> =>
+  (await httpGet<Assistant[]>(page, '/api/assistants')).find((a) => a.id === DEFAULT_AGENT_ID)?.agent_id ?? '';
+
 /**
- * Create a single chat whose workspace is `workspace`, through the real guid flow: pick the claude assistant, choose
- * the folder with `workspace-selector-btn` (the native folder dialog is mocked), type in `guid-input` and send.
+ * Create a single chat whose workspace is `workspace`, through the real guid flow: make claude the default engine so
+ * the default Agent runs on it, pick that Agent, choose the folder with `workspace-selector-btn` (the native folder
+ * dialog is mocked), type in `guid-input` and send.
  *
  * The claude command is pointed at a stub that exits at once (the technique of agent-browser-pane.e2e.ts), so no real
  * model session starts; the chat and its project panel exist all the same. Returns null (after `test.skip`-worthy
@@ -433,6 +453,7 @@ export async function startWorkspaceChat(
 
   const overridesUrl = `/api/agents/${encodeURIComponent(claude.id)}/overrides`;
   const before = await httpGet<{ command_override?: string; env_override?: unknown[] }>(page, overridesUrl);
+  const engineBefore = await defaultAgentEngine(page);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-claude-'));
   const stub = path.join(dir, 'claude');
   fs.writeFileSync(
@@ -447,6 +468,7 @@ export async function startWorkspaceChat(
       env_override: before.env_override ?? [],
     }).catch(() => undefined);
     if (conversationId) await httpInvoke(page, 'DELETE', `/api/conversations/${conversationId}`).catch(() => undefined);
+    if (engineBefore && engineBefore !== claude.id) await setDefaultEngine(page, engineBefore).catch(() => undefined);
     fs.rmSync(dir, { recursive: true, force: true });
   };
 
@@ -456,7 +478,10 @@ export async function startWorkspaceChat(
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
     }, workspace);
 
-    await selectAgent(page, 'claude');
+    await setDefaultEngine(page, claude.id);
+    await expect.poll(() => defaultAgentEngine(page), { timeout: 20_000 }).toBe(claude.id);
+    await goToGuid(page);
+    await clickAssistantPillById(page, DEFAULT_AGENT_ID);
 
     // With no recent workspaces the button opens the (mocked) folder dialog straight away; with recents it opens
     // a menu whose "Choose a different folder" item does.

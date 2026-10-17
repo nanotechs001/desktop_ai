@@ -22,6 +22,7 @@ import {
   invokeBridge,
   openHistoryPanel,
   sendMessageFromGuid,
+  setDefaultEngine,
   waitForAiReply,
 } from '../../helpers';
 
@@ -150,16 +151,6 @@ async function openChat(page: Page, conversationId: string): Promise<void> {
 async function openAgentsPage(page: Page): Promise<void> {
   await page.goto(`${page.url().split('#')[0]}#/assistants`);
   await expect.poll(() => page.evaluate(() => window.location.hash)).toMatch(/^#\/assistants/);
-}
-
-/** Sets the default engine the way the user does, in Settings → Engine. */
-async function setDefaultEngine(page: Page, engineId: string): Promise<void> {
-  await page.goto(`${page.url().split('#')[0]}#/settings/agent`);
-  const setDefault = page.locator(`[data-testid="agent-row-set-default-${engineId}"]`);
-  const isDefault = page.locator(`[data-testid="agent-row-default-${engineId}"]`);
-  await setDefault.or(isDefault).first().waitFor({ state: 'visible', timeout: 20_000 });
-  if (await setDefault.isVisible()) await setDefault.click();
-  await expect(isDefault).toBeVisible({ timeout: 10_000 });
 }
 
 /** Opens an Agent in the Agent editor from the Agents page's enabled list. */

@@ -23,8 +23,10 @@ import {
   httpInvoke,
   selectAgent,
   sendMessageFromGuid,
+  setDefaultEngine,
 } from '../../../helpers';
 
+const DEFAULT_AGENT_ID = 'aion-default-agent';
 const MCP_SCRIPT = path.resolve(__dirname, '../../../../../out/main/builtin-mcp-browser.js');
 const BRIDGE_EVENT_KEY = 'office-ai-bridge-adapter';
 const OBSERVE_TIMEOUT_MS = 15_000;
@@ -562,8 +564,16 @@ test.describe('A new conversation gets the browser tools', () => {
       { mode: 0o755 }
     );
     let conversationId = '';
+    let engineBefore = '';
     try {
       await httpInvoke(page, 'PUT', overridesUrl, { command_override: stub, env_override: before.env_override ?? [] });
+      // The guid page offers Agents only, so the default Agent is put on claude by making claude the default engine.
+      engineBefore =
+        (await httpGet<{ id: string; agent_id?: string }[]>(page, '/api/assistants')).find(
+          (a) => a.id === DEFAULT_AGENT_ID
+        )?.agent_id ?? '';
+      await setDefaultEngine(page, claude?.id ?? '');
+      await goToGuid(page);
       await selectAgent(page, 'claude');
       conversationId = await sendMessageFromGuid(page, 'hello');
 
@@ -587,6 +597,8 @@ test.describe('A new conversation gets the browser tools', () => {
       });
       if (conversationId)
         await httpInvoke(page, 'DELETE', `/api/conversations/${conversationId}`).catch(() => undefined);
+      if (engineBefore && engineBefore !== claude?.id)
+        await setDefaultEngine(page, engineBefore).catch(() => undefined);
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });

@@ -7,14 +7,16 @@
  * The version-history dropdown this file also used to cover is gone: that
  * feature (and its backend routes) were removed, so the test went with it.
  */
+import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures';
-import { goToGuid } from '../../helpers';
+import { openProjectPanel, startWorkspaceChat, type WorkspaceChat } from '../../helpers';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
 test.describe('Preview — view mode toggle', () => {
   let workspace: string;
+  let chat: WorkspaceChat | null = null;
 
   test.beforeAll(() => {
     workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-preview-hist-'));
@@ -22,50 +24,23 @@ test.describe('Preview — view mode toggle', () => {
     fs.writeFileSync(path.join(workspace, 'style.css'), 'body { margin: 0; }');
   });
 
-  test.afterAll(() => {
+  test.afterAll(async () => {
+    await chat?.cleanup();
     fs.rmSync(workspace, { recursive: true, force: true });
   });
 
-  /** Create conversation with workspace, click a file, return preview panel or null. */
-  async function openPreviewViaFileClick(
-    page: import('@playwright/test').Page,
-    electronApp: import('@playwright/test').ElectronApplication,
-    fileName: string
-  ) {
-    await electronApp.evaluate(async ({ dialog }, target) => {
-      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [target] });
-    }, workspace);
-
-    await goToGuid(page);
-
-    const agentPill = page.locator('[data-testid^="agent-pill-"]').first();
-    if (!(await agentPill.isVisible({ timeout: 10_000 }).catch(() => false))) return null;
-    await agentPill.click();
-
-    const wsBtn = page.locator('[data-testid="workspace-selector-btn"]');
-    if (await wsBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await wsBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    const input = page.locator('[data-testid="guid-input"] textarea, [data-testid="guid-input"] input').first();
-    await input.fill('review the files');
-    await page.locator('[data-testid="guid-send-btn"]').click();
-    await page.waitForURL(/\/conversation\//, { timeout: 30_000 });
-
-    const wsPanel = page.locator('.chat-workspace');
-    if (!(await wsPanel.isVisible({ timeout: 30_000 }).catch(() => false))) return null;
-
-    const tree = wsPanel.locator('.workspace-tree');
-    if (!(await tree.isVisible({ timeout: 15_000 }).catch(() => false))) return null;
-
-    const fileNode = wsPanel.getByText(fileName).first();
-    if (!(await fileNode.isVisible({ timeout: 10_000 }).catch(() => false))) return null;
+  /** Starts a chat on the workspace (see `startWorkspaceChat`), clicks a file in its project tree, returns the preview. */
+  async function openPreviewViaFileClick(page: Page, electronApp: ElectronApplication, fileName: string) {
+    chat = await startWorkspaceChat(page, electronApp, workspace, 'review the files');
+    test.skip(!chat, 'Needs an installed claude agent to start a chat');
+    await openProjectPanel(page);
+    const tree = page.locator('.workspace-tree');
+    await expect(tree).toBeVisible({ timeout: 15_000 });
+    const fileNode = tree.getByText(fileName).first();
+    await expect(fileNode).toBeVisible({ timeout: 10_000 });
     await fileNode.click();
-
     const previewPanel = page.locator('.preview-panel');
-    if (!(await previewPanel.isVisible({ timeout: 15_000 }).catch(() => false))) return null;
-
+    await expect(previewPanel).toBeVisible({ timeout: 15_000 });
     return previewPanel;
   }
 
@@ -73,19 +48,11 @@ test.describe('Preview — view mode toggle', () => {
     test.setTimeout(120_000);
 
     const panel = await openPreviewViaFileClick(page, electronApp, 'app.html');
-    if (!panel) {
-      test.skip(true, 'Preview panel not available');
-      return;
-    }
 
-    // Find Editor and Preview toggle text spans
-    const editorToggle = panel.getByText(/^Editor$|^编辑器$/).first();
+    // The toolbar's source and preview toggles (an HTML file's source toggle reads "Code")
+    const editorToggle = panel.getByText(/^Code$|^代码$/).first();
     const previewToggle = panel.getByText(/^Preview$|^预览$/).first();
-
-    if (!(await editorToggle.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      test.skip(true, 'View mode toggle not available for this file type');
-      return;
-    }
+    await expect(editorToggle).toBeVisible({ timeout: 5_000 });
 
     // Switch to Editor mode
     await editorToggle.click();

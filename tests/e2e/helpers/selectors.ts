@@ -80,22 +80,6 @@ export function agentLogoByBackend(backend: string): string {
 /** Stable selector for all agent pills on guid page. */
 export const AGENT_PILL = '[data-agent-pill="true"]';
 
-/**
- * Match an agent pill by backend (claude/gemini/...).
- *
- * The guid pill bar used to expose `data-agent-backend`, but after the ACP
- * unification it now consistently exposes `data-testid="agent-pill-${backend}"`
- * and `data-agent-key`. Keep the old selector path as a fallback so older
- * packaged builds remain testable.
- */
-export function agentPillByBackend(backend: string): string {
-  return [
-    `[data-testid="agent-pill-${backend}"]`,
-    `${AGENT_PILL}[data-agent-key="${backend}"]`,
-    `${AGENT_PILL}[data-agent-backend="${backend}"]`,
-  ].join(', ');
-}
-
 /** Match currently selected agent pill. */
 export const AGENT_PILL_SELECTED = `${AGENT_PILL}[data-agent-selected="true"]`;
 

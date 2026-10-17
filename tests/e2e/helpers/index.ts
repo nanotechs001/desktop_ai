@@ -29,7 +29,6 @@ export {
   agentLogoByBackend,
   AGENT_PILL,
   AGENT_PILL_SELECTED,
-  agentPillByBackend,
   MODE_SELECTOR,
   modeMenuItemByValue,
   MODEL_SELECTOR_BTN,
@@ -67,6 +66,7 @@ export {
   runConversationCycle,
   startWorkspaceChat,
   openProjectPanel,
+  setDefaultEngine,
   type WorkspaceChat,
 } from './conversation';
 export { startAutoApprovePermissionMessages, waitForPermissionMessageCard } from './permissions';
