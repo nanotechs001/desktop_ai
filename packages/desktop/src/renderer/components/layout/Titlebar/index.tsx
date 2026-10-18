@@ -255,15 +255,74 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       } as React.CSSProperties)
     : undefined;
 
-  const menuStyle: React.CSSProperties = useMemo(() => {
-    if (!isMacRuntime || !showSiderToggle) return {};
-    // macOS: sit the menu buttons right next to the traffic lights (which occupy ~70px).
-    // Mobile keeps its own layout (no traffic lights).
-    const marginLeft = layout?.isMobile ? '0px' : '76px';
-    return {
-      marginLeft,
-    };
-  }, [isMacRuntime, showSiderToggle, layout?.isMobile]);
+  // Back to chat, sidebar toggle, search and history arrows. Phones keep them on the left; on desktop they sit in the
+  // right-hand toolbar with the rest of the navigation, leaving the top-left corner free (macOS traffic lights).
+  const menuButtons = (
+    <>
+      {showBackToChatButton && (
+        <button
+          type='button'
+          className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}
+          onClick={handleBackToChat}
+          aria-label={backToChatTooltip}
+        >
+          <ArrowCircleLeft theme='outline' size={iconSize} fill='currentColor' />
+        </button>
+      )}
+      {showSiderToggle && (
+        <Button
+          type='text'
+          size='mini'
+          className={titlebarButtonClass}
+          icon={<SidebarIcon size={iconSize} strokeWidth={desktopIconStroke} />}
+          onClick={handleSiderToggle}
+          aria-label={siderTooltip}
+        />
+      )}
+      <Button
+        type='text'
+        size='mini'
+        className={titlebarButtonClass}
+        icon={
+          <Search
+            theme='outline'
+            size={iconSize}
+            fill='currentColor'
+            strokeWidth={desktopIconStroke}
+            className='block leading-none'
+            style={{ lineHeight: 0 }}
+          />
+        }
+        onClick={() => setHistoryOpen(true)}
+        aria-label={searchTooltip}
+        title={searchTooltip}
+      />
+      {showHistoryNav && (
+        <>
+          <Button
+            type='text'
+            size='mini'
+            className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
+            icon={<ArrowLeft theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
+            onClick={() => chatNav.back()}
+            disabled={!chatNav.canBack}
+            aria-label={historyBackTooltip}
+            title={historyBackTooltip}
+          />
+          <Button
+            type='text'
+            size='mini'
+            className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
+            icon={<ArrowRight theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
+            onClick={() => chatNav.forward()}
+            disabled={!chatNav.canForward}
+            aria-label={historyForwardTooltip}
+            title={historyForwardTooltip}
+          />
+        </>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -276,69 +335,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         'app-titlebar--mac': isMacRuntime,
       })}
     >
-      <div ref={menuRef} className='app-titlebar__menu' style={menuStyle}>
-        {showBackToChatButton && (
-          <button
-            type='button'
-            className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}
-            onClick={handleBackToChat}
-            aria-label={backToChatTooltip}
-          >
-            <ArrowCircleLeft theme='outline' size={iconSize} fill='currentColor' />
-          </button>
-        )}
-        {showSiderToggle && (
-          <Button
-            type='text'
-            size='mini'
-            className={titlebarButtonClass}
-            icon={<SidebarIcon size={iconSize} strokeWidth={desktopIconStroke} />}
-            onClick={handleSiderToggle}
-            aria-label={siderTooltip}
-          />
-        )}
-        <Button
-          type='text'
-          size='mini'
-          className={titlebarButtonClass}
-          icon={
-            <Search
-              theme='outline'
-              size={iconSize}
-              fill='currentColor'
-              strokeWidth={desktopIconStroke}
-              className='block leading-none'
-              style={{ lineHeight: 0 }}
-            />
-          }
-          onClick={() => setHistoryOpen(true)}
-          aria-label={searchTooltip}
-          title={searchTooltip}
-        />
-        {showHistoryNav && (
-          <>
-            <Button
-              type='text'
-              size='mini'
-              className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
-              icon={<ArrowLeft theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
-              onClick={() => chatNav.back()}
-              disabled={!chatNav.canBack}
-              aria-label={historyBackTooltip}
-              title={historyBackTooltip}
-            />
-            <Button
-              type='text'
-              size='mini'
-              className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
-              icon={<ArrowRight theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
-              onClick={() => chatNav.forward()}
-              disabled={!chatNav.canForward}
-              aria-label={historyForwardTooltip}
-              title={historyForwardTooltip}
-            />
-          </>
-        )}
+      <div ref={menuRef} className='app-titlebar__menu'>
+        {layout?.isMobile && menuButtons}
       </div>
       <div
         className={classNames('app-titlebar__brand', {
@@ -371,7 +369,10 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         {layout?.isMobile && <div id='app-titlebar-actions-slot' className='app-titlebar__actions-slot' />}
         {IS_DISCONTINUED_BUILD && <MigrationInviteCapsule />}
         {!layout?.isMobile && (
-          <TitlebarNav buttonClassName={titlebarButtonClass} iconSize={iconSize} strokeWidth={desktopIconStroke} />
+          <>
+            {menuButtons}
+            <TitlebarNav buttonClassName={titlebarButtonClass} iconSize={iconSize} strokeWidth={desktopIconStroke} />
+          </>
         )}
         {showWorkspaceButton && (
           <button
