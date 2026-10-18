@@ -116,6 +116,18 @@ const AgentWidgetPage: React.FC = () => {
     if (!id) return;
     void ipcBridge.agentWidget.reportState.invoke({ conversation_id: id, state, transitioning }).catch(() => {});
   }, [id, state, transitioning]);
+
+  // While the dropped robot falls, step the fall once per display frame so its path is smooth (main-process timers
+  // tick unevenly on Windows). The main process stops the fall itself; this loop ends when the phase changes.
+  const landing = layout?.drag_phase === 'landing';
+  useEffect(() => {
+    if (!id || !landing) return;
+    let frame = requestAnimationFrame(function step() {
+      void ipcBridge.agentWidget.landStep.invoke({ conversation_id: id }).catch(() => {});
+      frame = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [id, landing]);
   const pressRef = useRef<{ startX: number; startY: number; dragging: boolean } | null>(null);
   const ignoreRef = useRef<boolean | null>(null);
   const target = { conversation_id: id };

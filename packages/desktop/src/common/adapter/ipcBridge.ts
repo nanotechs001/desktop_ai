@@ -1709,6 +1709,8 @@ export const agentWidget = {
   /** The pointer moved during a drag (sent once per frame): the robot follows the cursor now. */
   dragMove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-move'),
   dragEnd: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-end'),
+  /** A display frame while the dropped robot falls (sent once per frame): it moves to where the fall is now. */
+  landStep: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:land-step'),
   setIgnoreMouse: bridge.buildProvider<void, AgentWidgetTarget & { ignore: boolean }>('agent-widget:set-ignore-mouse'),
   /** Return the chat to the main window and bring that window forward on the conversation. */
   openInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:open-in-main'),

@@ -132,6 +132,7 @@ vi.mock('@/common', () => {
     'dragStart',
     'dragMove',
     'dragEnd',
+    'landStep',
     'setIgnoreMouse',
     'openInMain',
     'rendererReady',
@@ -929,6 +930,39 @@ describe('dragging and drop-landing', () => {
     expect(lastDragPhase(A)).toBe('none');
     expect(robotTop(win)).toBe(TRACK_Y);
     expect(win.bounds.y + win.bounds.height).toBe(1040);
+  });
+
+  it('each renderer frame steps the fall at once; the timer stays out of the way meanwhile', async () => {
+    const { manager, win } = await liveRobot();
+    pick(manager, win);
+    h.cursor = { x: 800, y: 300 };
+    manager.dragMove(A);
+    const releasedTop = robotTop(win);
+    manager.dragEnd(A);
+
+    for (let i = 0; i < 8; i++) {
+      vi.advanceTimersByTime(15); // frames arrive faster than the fallback considers them quiet
+      manager.landStep(A);
+    }
+    const afterFrames = robotTop(win);
+    expect(afterFrames).toBeGreaterThan(releasedTop);
+
+    vi.advanceTimersByTime(16); // a timer tick right after a frame step does nothing
+    expect(robotTop(win)).toBe(afterFrames);
+
+    vi.advanceTimersByTime(100); // frames stopped: the fallback timer carries on with the fall
+    expect(robotTop(win)).toBeGreaterThan(afterFrames);
+    vi.advanceTimersByTime(1_000);
+    expect(lastDragPhase(A)).toBe('none');
+    expect(robotTop(win)).toBe(TRACK_Y);
+  });
+
+  it('a frame step outside a fall does nothing', async () => {
+    const { manager, win } = await liveRobot();
+    const before = { ...win.bounds };
+    manager.landStep(A);
+    expect(win.bounds).toEqual(before);
+    expect(lastDragPhase(A) ?? 'none').toBe('none');
   });
 
   it('does not stroll off right after landing', async () => {

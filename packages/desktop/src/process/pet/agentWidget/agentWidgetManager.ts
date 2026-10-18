@@ -50,8 +50,8 @@ const POPUP_SIZE = { width: 380, height: 540 };
 const DRAG_TICK_MS = 16;
 // Bounds that differ by at most this much after a move are DIP rounding, not a display rescale.
 const DPI_ROUNDING_TOLERANCE_PX = 1;
-// The fallback drag timer only moves the robot when the renderer's pointer moves have gone quiet this long.
-const DRAG_POINTER_IDLE_MS = 50;
+// The fallback drag/fall timers only move the robot when the renderer's per-frame steps have gone quiet this long.
+const FRAME_IDLE_MS = 50;
 // Same safety net as the desktop pet: a lost pointerup must never leave the robot glued to the cursor
 // (counted from the last pointer move, so a long, steady drag is not cut short).
 const DRAG_WATCHDOG_MS = 8000;
@@ -108,6 +108,10 @@ type WidgetEntry = {
   airY: number | null;
   dragPhase: AgentWidgetDragPhase;
   landTimer: ReturnType<typeof setInterval> | null;
+  /** The fall in progress after a drop: from/to window-top y, start (ms epoch) and duration. */
+  landing: { fromY: number; toY: number; startedAt: number; durationMs: number } | null;
+  /** When the renderer last stepped the fall (ms epoch; 0 = not yet). */
+  lastLandStepAt: number;
   dragTimer: ReturnType<typeof setInterval> | null;
   dragWatchdog: ReturnType<typeof setTimeout> | null;
   /** When the renderer last reported a pointer move during the current drag (ms epoch; 0 = none yet). */
@@ -366,7 +370,7 @@ export class AgentWidgetManager {
     // frame. Windows timers fire at ~15.6 ms granularity, so a timer-driven path stutters (16 / 31 ms steps).
     entry.dragTimer = setInterval(() => {
       if (entry.win.isDestroyed()) return this.dragEnd(conversationId);
-      if (Date.now() - entry.lastDragMoveAt < DRAG_POINTER_IDLE_MS) return;
+      if (Date.now() - entry.lastDragMoveAt < FRAME_IDLE_MS) return;
       this.followCursor(entry);
     }, DRAG_TICK_MS);
     this.armDragWatchdog(entry, conversationId);
@@ -418,14 +422,33 @@ export class AgentWidgetManager {
     }
     entry.dragPhase = 'landing';
     this.place(entry);
-    const startedAt = Date.now();
-    const durationMs = robotAnimationMs('drop-landing');
+    entry.landing = { fromY, toY: track.y, startedAt: Date.now(), durationMs: robotAnimationMs('drop-landing') };
+    entry.lastLandStepAt = 0;
+    // Fallback only: the robot's renderer steps the fall once per display frame (landStep). Windows timers fire at
+    // ~15.6 ms granularity, so a timer-driven fall stutters.
     entry.landTimer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed >= durationMs) return this.endLanding(entry);
-      entry.airY = landingY(fromY, track.y, elapsed, DROP_IMPACT_MS);
-      this.place(entry);
+      if (Date.now() - entry.lastLandStepAt < FRAME_IDLE_MS) return;
+      this.stepLanding(entry);
     }, LAND_TICK_MS);
+  }
+
+  /** A display frame of the falling robot's renderer: move it to where the fall is now. */
+  landStep(conversationId: string): void {
+    const entry = this.entries.get(conversationId);
+    if (!entry || entry.dragPhase !== 'landing' || entry.win.isDestroyed()) return;
+    entry.lastLandStepAt = Date.now();
+    this.stepLanding(entry);
+  }
+
+  private stepLanding(entry: WidgetEntry): void {
+    const landing = entry.landing;
+    if (!landing) return;
+    const elapsed = Date.now() - landing.startedAt;
+    if (elapsed >= landing.durationMs) return this.endLanding(entry);
+    const y = landingY(landing.fromY, landing.toY, elapsed, DROP_IMPACT_MS);
+    if (y === entry.airY) return;
+    entry.airY = y;
+    this.place(entry);
   }
 
   /** The user is watching this VA Bot's chat in the main window: the robot steps away until they stop. */
@@ -573,6 +596,8 @@ export class AgentWidgetManager {
       airY: null,
       dragPhase: 'none',
       landTimer: null,
+      landing: null,
+      lastLandStepAt: 0,
       dragTimer: null,
       dragWatchdog: null,
       lastDragMoveAt: 0,
@@ -952,6 +977,7 @@ export class AgentWidgetManager {
   private stopLanding(entry: WidgetEntry): void {
     if (entry.landTimer) clearInterval(entry.landTimer);
     entry.landTimer = null;
+    entry.landing = null;
   }
 
   /** Touch down exactly on the walk track and hand the robot back to its runtime state; strolls wait a while. */
