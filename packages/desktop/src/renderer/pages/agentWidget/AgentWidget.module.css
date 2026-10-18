@@ -31,7 +31,7 @@
   cursor: grabbing;
 }
 
-/* Status pill under the robot while its chat is closed. */
+/* Name pill under the robot while its chat is closed; shown only on hover or keyboard focus. */
 .marker {
   position: absolute;
   left: 50%;
@@ -53,6 +53,19 @@
   line-height: 16px;
   text-align: center;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.bot:hover .marker,
+.bot:focus-visible .marker {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marker {
+    transition: none;
+  }
 }
 
 .badge {

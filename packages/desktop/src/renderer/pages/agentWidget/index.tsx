@@ -13,6 +13,7 @@ import type { AgentWidgetLayout, AgentWidgetSettings } from '@/common/types/agen
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
+import { addEventListener } from '@/renderer/utils/emitter';
 import { useChatLocation } from './chatLocation';
 import { isTurning, resolveRobotVisual, type RobotInteraction, type RobotStrip } from './agentAnimationState';
 import RobotSprite, { preloadRobotStrips } from './RobotSprite';
@@ -29,6 +30,9 @@ const LIKELY_NEXT_STRIPS: RobotStrip[] = ['turn-to-user', 'facing-user', 'draggi
 const CLICK_DEBOUNCE_MS = 200;
 // Slime-hop height in physical pixels (converted to CSS px for the display's scale).
 const HOP_HEIGHT_PHYSICAL_PX = 8;
+// Clickable parts of the window. Arco menus, dialogs and toasts render into <body>, outside the popup, so they are
+// listed too; otherwise hovering them would make the window click-through and their clicks would reach the desktop.
+const WIDGET_HIT_SELECTOR = '[data-widget-hit], .arco-trigger, .arco-modal-wrapper, .arco-message-wrapper';
 
 /**
  * Floating desktop robot for one conversation (rendered in its own transparent
@@ -145,6 +149,21 @@ const AgentWidgetPage: React.FC = () => {
     }
   }, [id, isLoading, conversation]);
 
+  // Archived or deleted from this robot's own history panel: the main window's listener never hears this window's
+  // events, so drop the robot here (as the main window does when the chat is archived or deleted there).
+  useEffect(() => {
+    if (!id) return;
+    const removeIfCurrent = (conversationId: string) => {
+      if (conversationId === id) void ipcBridge.agentWidget.remove.invoke({ conversation_id: id }).catch(() => {});
+    };
+    const offArchived = addEventListener('conversation.archived', removeIfCurrent);
+    const offDeleted = addEventListener('conversation.deleted', removeIfCurrent);
+    return () => {
+      offArchived();
+      offDeleted();
+    };
+  }, [id]);
+
   // History loads lazily on the first open, and the chat unmounts when it goes back to the main window.
   useEffect(() => {
     if (expanded) setChatMounted(true);
@@ -195,7 +214,7 @@ const AgentWidgetPage: React.FC = () => {
         } as React.CSSProperties
       }
       onMouseMove={(e) => {
-        if (expanded && !pressRef.current) setIgnoreMouse(!(e.target as Element).closest('[data-widget-hit]'));
+        if (expanded && !pressRef.current) setIgnoreMouse(!(e.target as Element).closest(WIDGET_HIT_SELECTOR));
       }}
     >
       {(chatMounted || expanded) && (
@@ -265,7 +284,7 @@ const AgentWidgetPage: React.FC = () => {
         {state === 'notification' && <span className={styles.badge} aria-label={t('pet.widget.state.notification')} />}
         {!expanded && lifecycle === null && layout.drag_phase === 'none' && (
           <span className={styles.marker} aria-hidden>
-            {t(`pet.widget.state.${state}`)}
+            {conversation?.assistant?.name || name}
           </span>
         )}
       </div>
