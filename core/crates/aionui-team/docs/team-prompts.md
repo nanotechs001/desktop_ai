@@ -4,7 +4,6 @@
 > 源码路径前缀：`/Volumes/Macintosh HD/Users/zhuqingyu/project/AionUi/src/process/team/prompts/`
 
 **相关文档**：
-
 - [MCP 通信](./mcp.md) — Team 内部 MCP 的 `team_*` 工具定义
 - [内部调度](./internals.md) — scheduler 状态机、wake 机制（prompt 里的 "Standing By" 与 wake 紧密关联）
 - [前端接入指南](./frontend-guide.md) — 前端视角的 team 接入
@@ -33,7 +32,6 @@
 ```
 
 辅助文件：
-
 - `buildRolePrompt.ts` — 入口分发，根据 `agent.role` 选 leader 或 teammate prompt
 - `toolDescriptions.ts` — `team_spawn_agent` 工具的描述文本
 
@@ -51,12 +49,12 @@
 
 ### 动态注入的上下文
 
-| 区块                                          | 条件                       | 内容                                                                     |
-| --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
-| `## Your Teammates`                           | 始终有                     | 每个 teammate 的 name + agentType + status；无人时提示"先提方案再 spawn" |
-| `## Available Agent Types for Spawning`       | `availableAgentTypes` 非空 | 每种 type 一行（`claude — general-purpose AI assistant`）                |
-| `## Available Preset Assistants for Spawning` | `availableAssistants` 非空 | preset 的 customAgentId + name + backend + description + skills          |
-| `## Team Workspace`                           | `teamWorkspace` 非空       | 共享工作目录路径                                                         |
+| 区块 | 条件 | 内容 |
+|------|------|------|
+| `## Your Teammates` | 始终有 | 每个 teammate 的 name + agentType + status；无人时提示"先提方案再 spawn" |
+| `## Available Agent Types for Spawning` | `availableAgentTypes` 非空 | 每种 type 一行（`claude — general-purpose AI assistant`） |
+| `## Available Preset Assistants for Spawning` | `availableAssistants` 非空 | preset 的 customAgentId + name + backend + description + skills |
+| `## Team Workspace` | `teamWorkspace` 非空 | 共享工作目录路径 |
 
 ### Spawn 阵容确认流程
 
@@ -86,10 +84,10 @@ Step 10: 分配任务 → team_send_message
 
 ### Agent Type 表格格式规则
 
-| 来源             | 格式                                             |
-| ---------------- | ------------------------------------------------ |
+| 来源 | 格式 |
+|------|------|
 | Preset Assistant | `显示名 (backend)` 例：`Story Roleplay (gemini)` |
-| 通用 CLI Agent   | 纯 backend 名 例：`claude`                       |
+| 通用 CLI Agent | 纯 backend 名 例：`claude` |
 
 ### 关键行为规则
 
@@ -132,7 +130,6 @@ When the user explicitly asks to dismiss/fire/shut down teammates:
 > Name: {agentName}, Role: {roleDescription(agentType)}
 
 `roleDescription` 映射：
-
 - claude → general-purpose AI assistant
 - gemini → Google Gemini AI assistant
 - codex → code generation specialist
@@ -141,9 +138,9 @@ When the user explicitly asks to dismiss/fire/shut down teammates:
 
 ### 动态注入
 
-| 区块            | 内容                                                  |
-| --------------- | ----------------------------------------------------- |
-| `## Your Team`  | Leader 名 + Teammates 名列表（含 rename 历史）        |
+| 区块 | 内容 |
+|------|------|
+| `## Your Team` | Leader 名 + Teammates 名列表（含 rename 历史） |
 | `## Workspaces` | Team workspace（项目文件）+ 个人工作目录（笔记/日志） |
 
 ### 工作流程
@@ -162,18 +159,15 @@ Step 6: team_send_message → 向 leader 汇报
 > "Standing by" 意味着**结束 turn**，不是在 LLM stream 里生成空闲文字。
 
 三种 standing by 触发条件：
-
 1. 任务板为空且消息里没有具体任务
 2. Leader 要求等前置（如"等 reviewer-1 完成"）
 3. 当前任务完成，没有新任务
 
 正确做法：
-
 1. （可选）发一条简短确认给 leader
 2. **停止生成，交回控制权**
 
 错误做法（会导致 ~300s 超时 fail）：
-
 - 持续输出 "I am waiting..." / "still standing by..."
 - 推理循环
 - 重复状态更新
@@ -181,7 +175,6 @@ Step 6: team_send_message → 向 leader 汇报
 ### Shutdown 协议
 
 收到 `shutdown_request` 消息后：
-
 - 同意下线 → `team_send_message("shutdown_approved")`
 - 拒绝 → `team_send_message("shutdown_rejected: <reason>")`
 
@@ -196,7 +189,6 @@ Step 6: team_send_message → 向 leader 汇报
 #### team_send_message
 
 **Description**：
-
 ```
 Send a message to a teammate by name. The message is delivered to their mailbox and they will be woken up to process it.
 
@@ -211,7 +203,6 @@ Use "*" to broadcast to all teammates.
 ```
 
 **Schema**：
-
 ```
 to: string — Recipient teammate name, or "*" for broadcast to all
 message: string — The message content to send
@@ -221,7 +212,6 @@ summary: string (optional) — A short 5-10 word summary for the UI
 #### team_spawn_agent
 
 **Description**（来自 `TEAM_SPAWN_AGENT_DESCRIPTION`）：
-
 ```
 Create a new teammate agent to join the team.
 
@@ -244,7 +234,6 @@ The new agent will be created and added to the team. You can then assign tasks a
 ```
 
 **Schema**：
-
 ```
 name: string — Name for the new teammate (e.g., "researcher", "developer", "tester")
 agent_type: string (optional) — Agent type/backend to use for the new teammate. Must be one of the types listed in "Available Agent Types for Spawning". Defaults to the leader type when omitted. Ignored when assistant_id is set.
@@ -255,7 +244,6 @@ model: string (optional) — Model ID to use for this agent (e.g. "claude-sonnet
 #### team_task_create
 
 **Description**：
-
 ```
 Create a new task on the team's shared task board.
 
@@ -269,7 +257,6 @@ Best practices:
 ```
 
 **Schema**：
-
 ```
 subject: string — Short task title (what needs to be done)
 description: string (optional) — Detailed description of the task
@@ -279,7 +266,6 @@ owner: string (optional) — Teammate name to assign this task to
 #### team_task_update
 
 **Description**：
-
 ```
 Update the status or assignment of an existing task.
 
@@ -290,7 +276,6 @@ Use this to:
 ```
 
 **Schema**：
-
 ```
 task_id: string — Task ID (first 8 chars are enough)
 status: enum [pending, in_progress, completed, deleted] (optional) — New task status
@@ -300,7 +285,6 @@ owner: string (optional) — New owner (teammate name)
 #### team_task_list
 
 **Description**：
-
 ```
 List all tasks on the team's task board.
 
@@ -313,7 +297,6 @@ Use this to check what work is pending, in progress, or completed.
 #### team_members
 
 **Description**：
-
 ```
 List all current team members with their names, types, and status.
 Use this to discover available teammates before sending messages or assigning tasks.
@@ -324,13 +307,11 @@ Use this to discover available teammates before sending messages or assigning ta
 #### team_rename_agent
 
 **Description**：
-
 ```
 Rename a teammate. Use this to give a teammate a more descriptive name.
 ```
 
 **Schema**：
-
 ```
 agent: string — Current agent name or slot ID
 new_name: string — New name for the agent
@@ -339,7 +320,6 @@ new_name: string — New name for the agent
 #### team_shutdown_agent
 
 **Description**：
-
 ```
 Request a teammate to shut down gracefully. The teammate can accept or reject the request.
 
@@ -351,7 +331,6 @@ You will be notified of the result either way.
 ```
 
 **Schema**：
-
 ```
 agent: string — Teammate name to request shutdown
 ```
@@ -359,7 +338,6 @@ agent: string — Teammate name to request shutdown
 #### team_describe_assistant
 
 **Description**：
-
 ```
 Get detailed information about a preset assistant before spawning it as a teammate.
 
@@ -372,7 +350,6 @@ After confirming a match, call team_spawn_agent with the same assistant_id.
 ```
 
 **Schema**：
-
 ```
 assistant_id: string — The preset assistant ID from the "Available Preset Assistants" catalog (e.g., "word-creator").
 locale: string (optional) — Locale like "zh-CN" or "en-US". Defaults to the user's current UI language when omitted.
@@ -381,7 +358,6 @@ locale: string (optional) — Locale like "zh-CN" or "en-US". Defaults to the us
 #### team_list_models
 
 **Description**：
-
 ```
 Query available models for team agent types. Returns the real-time model list that matches the frontend model selector.
 
@@ -394,7 +370,6 @@ Pass agent_type to query a specific backend, or omit it to see all.
 ```
 
 **Schema**：
-
 ```
 agent_type: string (optional) — Agent type/backend to query (e.g. "gemini", "claude", "codex"). Shows all when omitted.
 ```
@@ -404,12 +379,10 @@ agent_type: string (optional) — Agent type/backend to query (e.g. "gemini", "c
 ## 5. 后端实现现状
 
 **后端（aionui-backend）已有**：
-
 - `crates/aionui-team/src/prompts.rs` — leader + teammate prompt 的基础版本
 - `crates/aionui-team/src/mcp/tools.rs` — `team_spawn_agent` 工具描述
 
 **后端缺失**：
-
 - ⚠️ `availableAgentTypes` / `availableAssistants` 动态注入 — 没有 AgentRegistry
 - ⚠️ `leaderLabel`（preset assistant 显示名） — 没有 preset 机制
 - ⚠️ Preset Assistant 选择逻辑 — 没有 `team_describe_assistant` 工具
@@ -418,7 +391,6 @@ agent_type: string (optional) — Agent type/backend to query (e.g. "gemini", "c
 ### 后端已有 prompt vs AionUi prompt 对比
 
 后端的 `prompts.rs` 需要与 AionUi 对齐的点：
-
 1. Leader prompt 的"先出阵容表、等确认、再 spawn"流程是否已包含
 2. Teammate prompt 的 "Standing By" 超时防护是否已包含
 3. "依赖串行调度"规则是否已包含

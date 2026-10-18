@@ -105,7 +105,9 @@
     },
     "minimax": {
       "api": "https://api.minimaxi.com/v1",
-      "models": ["MiniMax-M3"]
+      "models": [
+        "MiniMax-M3"
+      ]
     },
     "novita": {
       "api": "https://api.novita.ai/openai/v1",
@@ -485,7 +487,11 @@
     },
     "xai": {
       "api": "https://api.x.ai/v1",
-      "models": ["grok-4.5", "grok-4.5-latest", "grok-build-latest"]
+      "models": [
+        "grok-4.5",
+        "grok-4.5-latest",
+        "grok-build-latest"
+      ]
     },
     "ark": {
       "api": "https://ark.cn-beijing.volces.com/api/v3",
@@ -536,7 +542,10 @@
     },
     "lingyi": {
       "api": "https://api.lingyiwanwu.com/v1",
-      "models": ["Yi-Vision-V2", "yi-vision-v2"]
+      "models": [
+        "Yi-Vision-V2",
+        "yi-vision-v2"
+      ]
     },
     "poe": {
       "api": "https://api.poe.com/v1",
@@ -579,7 +588,14 @@
     },
     "infiniai": {
       "api": "https://cloud.infini-ai.com/maas/v1",
-      "models": ["deepseek-ocr-2", "glm-4.5v", "glm-4.6v", "qwen2.5-vl-72b-instruct", "qwen3.6-27b", "qwen3.6-35b-a3b"]
+      "models": [
+        "deepseek-ocr-2",
+        "glm-4.5v",
+        "glm-4.6v",
+        "qwen2.5-vl-72b-instruct",
+        "qwen3.6-27b",
+        "qwen3.6-35b-a3b"
+      ]
     },
     "ctyun": {
       "api": "https://wishub-x1.ctyun.cn/v1",
@@ -587,7 +603,10 @@
     },
     "stepfun": {
       "api": "https://api.stepfun.com/v1",
-      "models": ["step-3.7-flash", "step-1o-turbo-vision"]
+      "models": [
+        "step-3.7-flash",
+        "step-1o-turbo-vision"
+      ]
     }
   }
 }

@@ -5,17 +5,17 @@ description: 3D Morph PPT — extends morph-ppt with GLB model insertion, cinema
 
 > **⚠️ Platform note — read before running any command.** The shell snippets in this skill are written for **macOS / Linux** (bash/zsh). Always check which OS you are on first. On **Windows** do **not** run them verbatim — the underlying tool/CLI commands are usually cross-platform, but the surrounding shell syntax is not. Translate it to PowerShell before running:
 >
-> | bash (macOS / Linux)              | PowerShell (Windows)                                                                |
-> | --------------------------------- | ----------------------------------------------------------------------------------- |
-> | `a && b`                          | run as two steps, or `a; if ($?) { b }`                                             |
-> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool                 |
-> | `VAR=$(cmd)` … `$VAR`             | `$VAR = cmd` … `$VAR`                                                               |
-> | `cmd > /dev/null`                 | `cmd > $null`                                                                       |
-> | `… \| grep PAT`                   | `… \| Select-String PAT`                                                            |
-> | `… \| jq …`                       | `… \| ConvertFrom-Json`, then read the fields                                       |
-> | `python3 x.py`                    | `python x.py` (or `py x.py`)                                                        |
-> | `~/dir`, `/tmp`                   | `$env:USERPROFILE\dir`, `$env:TEMP`                                                 |
-> | `cp` / `mkdir -p` / `rm -rf`      | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
+> | bash (macOS / Linux) | PowerShell (Windows) |
+> | --- | --- |
+> | `a && b` | run as two steps, or `a; if ($?) { b }` |
+> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool |
+> | `VAR=$(cmd)` … `$VAR` | `$VAR = cmd` … `$VAR` |
+> | `cmd > /dev/null` | `cmd > $null` |
+> | `… \| grep PAT` | `… \| Select-String PAT` |
+> | `… \| jq …` | `… \| ConvertFrom-Json`, then read the fields |
+> | `python3 x.py` | `python x.py` (or `py x.py`) |
+> | `~/dir`, `/tmp` | `$env:USERPROFILE\dir`, `$env:TEMP` |
+> | `cp` / `mkdir -p` / `rm -rf` | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
 >
 > If a command has no obvious Windows equivalent, prefer the built-in file/HTTP tools over raw shell.
 
@@ -57,16 +57,16 @@ When the user gives a topic but no `.glb` file, **proactively help them find a m
 
 Based on the user's topic, suggest what kind of 3D model would work:
 
-| Topic type         | Model suggestion                    | Example                                           |
-| ------------------ | ----------------------------------- | ------------------------------------------------- |
-| Product/brand      | The actual product or a similar one | "coffee brand" → coffee cup, coffee machine, bean |
-| Animal/character   | The animal or mascot                | "fox mascot" → fox 3D model                       |
-| Architecture/space | Building, room, or structure        | "new office" → office building, interior          |
-| Vehicle/transport  | The vehicle itself                  | "EV launch" → car, motorcycle, bicycle            |
-| Food/cooking       | The dish or ingredient              | "Japanese food" → sushi platter, ramen bowl       |
-| Tech/gadget        | The device                          | "phone launch" → phone, tablet, laptop            |
-| Nature/science     | The subject                         | "solar system" → planet, sun, earth               |
-| Abstract concept   | A symbolic object                   | "teamwork" → puzzle pieces, gears, bridge         |
+| Topic type         | Model suggestion                    | Example                                               |
+| ------------------ | ----------------------------------- | ----------------------------------------------------- |
+| Product/brand      | The actual product or a similar one | "coffee brand" → coffee cup, coffee machine, bean     |
+| Animal/character   | The animal or mascot                | "fox mascot" → fox 3D model                           |
+| Architecture/space | Building, room, or structure        | "new office" → office building, interior              |
+| Vehicle/transport  | The vehicle itself                  | "EV launch" → car, motorcycle, bicycle                |
+| Food/cooking       | The dish or ingredient              | "Japanese food" → sushi platter, ramen bowl           |
+| Tech/gadget        | The device                          | "phone launch" → phone, tablet, laptop                |
+| Nature/science     | The subject                         | "solar system" → planet, sun, earth                   |
+| Abstract concept   | A symbolic object                   | "teamwork" → puzzle pieces, gears, bridge             |
 
 Tell the user: "Your topic is [X]. I suggest using a 3D model of [description]. Here are some free sources to find one:"
 

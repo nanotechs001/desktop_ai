@@ -5,17 +5,17 @@ description: "Use this skill to create fillable Word forms (.docx) with real Con
 
 > **⚠️ Platform note — read before running any command.** The shell snippets in this skill are written for **macOS / Linux** (bash/zsh). Always check which OS you are on first. On **Windows** do **not** run them verbatim — the underlying tool/CLI commands are usually cross-platform, but the surrounding shell syntax is not. Translate it to PowerShell before running:
 >
-> | bash (macOS / Linux)              | PowerShell (Windows)                                                                |
-> | --------------------------------- | ----------------------------------------------------------------------------------- |
-> | `a && b`                          | run as two steps, or `a; if ($?) { b }`                                             |
-> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool                 |
-> | `VAR=$(cmd)` … `$VAR`             | `$VAR = cmd` … `$VAR`                                                               |
-> | `cmd > /dev/null`                 | `cmd > $null`                                                                       |
-> | `… \| grep PAT`                   | `… \| Select-String PAT`                                                            |
-> | `… \| jq …`                       | `… \| ConvertFrom-Json`, then read the fields                                       |
-> | `python3 x.py`                    | `python x.py` (or `py x.py`)                                                        |
-> | `~/dir`, `/tmp`                   | `$env:USERPROFILE\dir`, `$env:TEMP`                                                 |
-> | `cp` / `mkdir -p` / `rm -rf`      | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
+> | bash (macOS / Linux) | PowerShell (Windows) |
+> | --- | --- |
+> | `a && b` | run as two steps, or `a; if ($?) { b }` |
+> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool |
+> | `VAR=$(cmd)` … `$VAR` | `$VAR = cmd` … `$VAR` |
+> | `cmd > /dev/null` | `cmd > $null` |
+> | `… \| grep PAT` | `… \| Select-String PAT` |
+> | `… \| jq …` | `… \| ConvertFrom-Json`, then read the fields |
+> | `python3 x.py` | `python x.py` (or `py x.py`) |
+> | `~/dir`, `/tmp` | `$env:USERPROFILE\dir`, `$env:TEMP` |
+> | `cp` / `mkdir -p` / `rm -rf` | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
 >
 > If a command has no obvious Windows equivalent, prefer the built-in file/HTTP tools over raw shell.
 
@@ -71,7 +71,7 @@ A Word form is a `.docx` plus four OpenXML payload layers plain-docx skills do n
 2. **Single-quote any prop containing `$`** — `"Total: $50,000"` becomes `"Total: ,000"` after `$50` variable expansion. Correct: `'Total: $50,000'`.
 3. **`--after find:<text>` uses outer single quotes, never inner double quotes** — `--after find:"Client Signature:"` makes the quotes part of the search string; match fails. Correct: `--after 'find:Client Signature:'`.
 
-**`WARNING: UNSUPPORTED` (exit 2) is a silently-wrong element.** The CLI created the element _without_ the rejected prop. Any UNSUPPORTED in your build log means a prop name the current CLI does not accept on that element — stop, check `help docx <element>` for the right prop name (most SDT props such as `items`/`format`/`lock` ARE accepted now; `maxlength` is not), fix the command, and re-run. Do not ship on top.
+**`WARNING: UNSUPPORTED` (exit 2) is a silently-wrong element.** The CLI created the element *without* the rejected prop. Any UNSUPPORTED in your build log means a prop name the current CLI does not accept on that element — stop, check `help docx <element>` for the right prop name (most SDT props such as `items`/`format`/`lock` ARE accepted now; `maxlength` is not), fix the command, and re-run. Do not ship on top.
 
 **`protection=forms` is the LAST structural command.** Once it is set, `protection=forms` locks non-field content (those edits need `--force` or `raw-set`) but still allows form-field (SDT) edits — which is the point of forms protection. A non-field content edit (e.g. `set /body/p[N] --prop text=`) is refused (`ERROR: Document is protected … use --force`); a form-field edit (e.g. `set /body/sdt[N] --prop text=` / `--prop alias=`) succeeds (exit 0). Use `Query("editable")` to find fillable fields. So finish all non-field (static layout) edits first, then lock; if you must edit static content afterward, pass `--force` (or temporarily clear protection, edit, re-lock).
 
@@ -100,12 +100,12 @@ Inline SDT via `--after find:` is added as a child of the matched paragraph, not
 
 A real fillable form requires **structured fields** + **document protection**.
 
-| Approach                                | Word user sees                               | CLI-readable                     | Real form?              |
-| --------------------------------------- | -------------------------------------------- | -------------------------------- | ----------------------- |
-| SDT controls + `protection=forms`       | Gray-bordered fields; rest locked            | `query sdt` / `view forms`       | **YES**                 |
-| FormField checkbox + `protection=forms` | Real clickable checkbox; rest locked         | `query formfield` / `view forms` | **YES** (checkbox only) |
-| MERGEFIELD placeholders                 | `«CustomerName»` merged by downstream engine | `query field`                    | **YES** (template-time) |
-| Underscores `___` / blank lines         | Visual-only; whole doc editable              | No — no structured fields        | **NO**                  |
+| Approach | Word user sees | CLI-readable | Real form? |
+|---|---|---|---|
+| SDT controls + `protection=forms` | Gray-bordered fields; rest locked | `query sdt` / `view forms` | **YES** |
+| FormField checkbox + `protection=forms` | Real clickable checkbox; rest locked | `query formfield` / `view forms` | **YES** (checkbox only) |
+| MERGEFIELD placeholders | `«CustomerName»` merged by downstream engine | `query field` | **YES** (template-time) |
+| Underscores `___` / blank lines | Visual-only; whole doc editable | No — no structured fields | **NO** |
 
 **Do not simulate fields with underscores.** `姓名：_______________` produces zero structured data and leaks past every verification. Always use `--type sdt` or `--type formfield`.
 
@@ -179,17 +179,17 @@ officecli set "$FILE" / --prop protection=forms
 
 ### Decision table
 
-| Need                                                     | Path           | Note                                                            |
-| -------------------------------------------------------- | -------------- | --------------------------------------------------------------- |
-| text / richtext SDT with default string                  | **A**          | `--prop type/alias/tag/text`                                    |
-| text SDT that must be locked                             | **A**          | `--prop lock=sdtLocked` works on `add` (and `set`)              |
-| dropdown / combobox **with options**                     | **A**          | `--prop items="A,B,C"`                                          |
-| date SDT with non-default format                         | **A**          | `--prop format="yyyy年MM月dd日"`                                |
-| signature picture SDT, grouped SDT                       | **A**          | `--prop type=picture` / `type=group` add directly               |
-| dropdown whose stored value ≠ display text               | **B**          | raw-set append `<w:listItem w:value=…>`                         |
-| real checkbox                                            | **FormField**  | `--type formfield --prop type=checkbox` (see §Legacy FormField) |
-| mail-merge placeholder                                   | **MERGEFIELD** | `--type field --prop fieldType=mergefield` (see §MERGEFIELD)    |
-| real SDT checkbox / placeholder part / custom appearance | **C**          | build skeleton in Word, fill via CLI                            |
+| Need | Path | Note |
+|---|---|---|
+| text / richtext SDT with default string | **A** | `--prop type/alias/tag/text` |
+| text SDT that must be locked | **A** | `--prop lock=sdtLocked` works on `add` (and `set`) |
+| dropdown / combobox **with options** | **A** | `--prop items="A,B,C"` |
+| date SDT with non-default format | **A** | `--prop format="yyyy年MM月dd日"` |
+| signature picture SDT, grouped SDT | **A** | `--prop type=picture` / `type=group` add directly |
+| dropdown whose stored value ≠ display text | **B** | raw-set append `<w:listItem w:value=…>` |
+| real checkbox | **FormField** | `--type formfield --prop type=checkbox` (see §Legacy FormField) |
+| mail-merge placeholder | **MERGEFIELD** | `--type field --prop fieldType=mergefield` (see §MERGEFIELD) |
+| real SDT checkbox / placeholder part / custom appearance | **C** | build skeleton in Word, fill via CLI |
 
 ## Quick Start — Path A + FormField (minimal intake form)
 
@@ -290,19 +290,19 @@ officecli get "$FILE" '/body/sdt[N]'   # expect: type=date format=yyyy年MM月dd
 
 ### raw-set actions & errors
 
-| `--action` | Form use                                                         |
-| ---------- | ---------------------------------------------------------------- |
-| `append`   | Insert new child at end of target (B1, B2 — listItem)            |
-| `setattr`  | Change one attribute; `--xml "key=value"` (B3 — dateFormat/@val) |
-| `replace`  | Replace entire target (rare — reset a full `<w:date>` wrapper)   |
-| `remove`   | Delete the target (clear options before re-populate)             |
+| `--action` | Form use |
+|---|---|
+| `append` | Insert new child at end of target (B1, B2 — listItem) |
+| `setattr` | Change one attribute; `--xml "key=value"` (B3 — dateFormat/@val) |
+| `replace` | Replace entire target (rare — reset a full `<w:date>` wrapper) |
+| `remove` | Delete the target (clear options before re-populate) |
 
-| Symptom                                                         | Fix                                                                                                                                                   |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raw-set: 0 element(s) affected`                                | XPath did not match. Check the `tag` value and whether the SDT is block or inline. Fall back to `officecli raw $FILE /document` to read the real XML. |
-| `Error: prefix 'w' is not defined`                              | Missing `xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` on the fragment — every root element in `--xml` needs it.            |
-| Items readback empty after append                               | `<w:dropDownList/>` must already exist (Path A `type=dropdown` ensures this). If absent, append has nowhere to insert.                                |
-| `VALIDATION: N new error(s) introduced` on same line as success | Your append introduced a schema-invalid child. Treat as stop-and-fix even though `raw-set` exits 0.                                                   |
+| Symptom | Fix |
+|---|---|
+| `raw-set: 0 element(s) affected` | XPath did not match. Check the `tag` value and whether the SDT is block or inline. Fall back to `officecli raw $FILE /document` to read the real XML. |
+| `Error: prefix 'w' is not defined` | Missing `xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` on the fragment — every root element in `--xml` needs it. |
+| Items readback empty after append | `<w:dropDownList/>` must already exist (Path A `type=dropdown` ensures this). If absent, append has nowhere to insert. |
+| `VALIDATION: N new error(s) introduced` on same line as success | Your append introduced a schema-invalid child. Treat as stop-and-fix even though `raw-set` exits 0. |
 
 ## Path C — Word template workflow
 
@@ -339,17 +339,17 @@ officecli add "$FILE" '/body/p[1]' --type field --prop fieldType=mergefield --pr
 
 ### Common field patterns
 
-| Pattern                                          | Call shape                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mail-merge placeholder                           | `--type field --prop fieldType=mergefield --prop name=<FieldName>`                                                                                                                                                                                                                                                                                                      |
+| Pattern | Call shape |
+|---|---|
+| Mail-merge placeholder | `--type field --prop fieldType=mergefield --prop name=<FieldName>` |
 | Mail-merge with numeric picture (money, percent) | `--type field --prop fieldType=mergefield --prop name=Amount --prop instr='MERGEFIELD Amount \# "#,##0.00"'`. The typed `format` prop is ignored for mergefield (prints a warning) — use `instr` (alias `instruction`) to embed the full field code. Verify: `query "$FILE" field --json \| jq '.data.results[].format.instruction'` must contain `\#` and the picture. |
-| Mail-merge with date picture                     | `--type field --prop fieldType=mergefield --prop name=StartDate --prop instr='MERGEFIELD StartDate \@ "yyyy-MM-dd"'`                                                                                                                                                                                                                                                    |
-| Cross-reference to bookmark text                 | `--type field --prop fieldType=ref --prop name=<BookmarkName>`                                                                                                                                                                                                                                                                                                          |
-| Cross-reference to bookmark's page number        | `--type field --prop fieldType=pageref --prop name=<BookmarkName>`                                                                                                                                                                                                                                                                                                      |
-| Auto-numbering (Figure 1 / 2 / 3)                | `--type field --prop fieldType=seq --prop identifier=Figure`                                                                                                                                                                                                                                                                                                            |
-| Page number in footer                            | `--type field --prop fieldType=page`                                                                                                                                                                                                                                                                                                                                    |
-| "Page X of Y"                                    | two fields: `fieldType=page` + `fieldType=numpages`                                                                                                                                                                                                                                                                                                                     |
-| Conditional text                                 | `--type field --prop fieldType=if --prop expression='{ MERGEFIELD Gender } = "Male"' --prop trueText="Mr." --prop falseText="Ms."`                                                                                                                                                                                                                                      |
+| Mail-merge with date picture | `--type field --prop fieldType=mergefield --prop name=StartDate --prop instr='MERGEFIELD StartDate \@ "yyyy-MM-dd"'` |
+| Cross-reference to bookmark text | `--type field --prop fieldType=ref --prop name=<BookmarkName>` |
+| Cross-reference to bookmark's page number | `--type field --prop fieldType=pageref --prop name=<BookmarkName>` |
+| Auto-numbering (Figure 1 / 2 / 3) | `--type field --prop fieldType=seq --prop identifier=Figure` |
+| Page number in footer | `--type field --prop fieldType=page` |
+| "Page X of Y" | two fields: `fieldType=page` + `fieldType=numpages` |
+| Conditional text | `--type field --prop fieldType=if --prop expression='{ MERGEFIELD Gender } = "Male"' --prop trueText="Mr." --prop falseText="Ms."` |
 
 ### IF conditional (CLI-expressible)
 
@@ -409,13 +409,13 @@ officecli get "$FILE" /                                  # look for: protectionE
 
 ### Protection modes
 
-| Mode             | Word user can                  | CLI behavior                                                                              |
-| ---------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| `forms`          | Fill SDT + formfield only      | Form-field (SDT) edits work (exit 0); non-field content edits need `--force` or `raw-set` |
-| `readOnly`       | Read only                      | Non-field edits need `--force`; raw-set bypasses                                          |
-| `comments`       | Add comments only              | Non-field edits need `--force`; raw-set bypasses                                          |
-| `trackedChanges` | Edit with tracked changes only | Non-field edits need `--force`; raw-set bypasses                                          |
-| `none`           | Full editing                   | All ops work                                                                              |
+| Mode | Word user can | CLI behavior |
+|---|---|---|
+| `forms` | Fill SDT + formfield only | Form-field (SDT) edits work (exit 0); non-field content edits need `--force` or `raw-set` |
+| `readOnly` | Read only | Non-field edits need `--force`; raw-set bypasses |
+| `comments` | Add comments only | Non-field edits need `--force`; raw-set bypasses |
+| `trackedChanges` | Edit with tracked changes only | Non-field edits need `--force`; raw-set bypasses |
+| `none` | Full editing | All ops work |
 
 **KEY:** Document protection restricts Word users AND the CLI. Under `protection=forms`, form-field (SDT) edits — `set /body/sdt[N] --prop text=` / `--prop alias=` — succeed (exit 0); this is the point of forms protection. Only NON-field content edits (e.g. `set /body/p[N] --prop text=`) are refused with `ERROR: Document is protected (mode: forms). … use --force to override`; pass `--force` (or `raw-set`, the only verb that fully bypasses protection) to edit static content anyway. Use `Query("editable")` to find the fields a Word user could still fill.
 
@@ -432,14 +432,14 @@ officecli set "$FILE" '/body/sdt[1]' --prop lock=sdtcontentlocked    # both lock
 
 ### lock × `protection=forms` interaction
 
-| lock value                           | `protection=forms` active | Word user can edit?                                       | Word user can delete control? |
-| ------------------------------------ | ------------------------- | --------------------------------------------------------- | ----------------------------- |
-| (none)                               | yes                       | **Yes**                                                   | **Yes**                       |
-| `sdtlocked`                          | yes                       | Yes                                                       | No                            |
-| `contentlocked`                      | yes                       | No                                                        | Yes                           |
-| `sdtcontentlocked`                   | yes                       | No                                                        | No                            |
-| block-level SDT wrap `contentlocked` | any                       | No (wrapped paragraph read-only regardless of protection) | No                            |
-| any                                  | `readOnly` mode           | No                                                        | No                            |
+| lock value | `protection=forms` active | Word user can edit? | Word user can delete control? |
+|---|---|---|---|
+| (none) | yes | **Yes** | **Yes** |
+| `sdtlocked` | yes | Yes | No |
+| `contentlocked` | yes | No | Yes |
+| `sdtcontentlocked` | yes | No | No |
+| block-level SDT wrap `contentlocked` | any | No (wrapped paragraph read-only regardless of protection) | No |
+| any | `readOnly` mode | No | No |
 
 ### Block-level lock (paragraph-wrapping SDT)
 
@@ -569,12 +569,12 @@ Short text → type=text | Long text → type=richtext | Boolean → formfield c
 
 **Typography scale.** Spacing unit trap: `spaceBefore` / `spaceAfter` / `spaceLine` default to **twips** (1/20 pt) — always write `spaceBefore=18pt`.
 
-| Element              | Size | Style                 | Spacing                              |
-| -------------------- | ---- | --------------------- | ------------------------------------ |
-| Form title (H1)      | 20pt | Bold                  | `spaceBefore=0pt`, `spaceAfter=12pt` |
-| Section heading (H2) | 14pt | Bold                  | `spaceBefore=18pt`, `spaceAfter=8pt` |
-| Field label          | 11pt | Bold                  | `spaceAfter=4pt`                     |
-| Instructions / notes | 11pt | Italic `color=666666` | `spaceAfter=18pt`                    |
+| Element | Size | Style | Spacing |
+|---|---|---|---|
+| Form title (H1) | 20pt | Bold | `spaceBefore=0pt`, `spaceAfter=12pt` |
+| Section heading (H2) | 14pt | Bold | `spaceBefore=18pt`, `spaceAfter=8pt` |
+| Field label | 11pt | Bold | `spaceAfter=4pt` |
+| Instructions / notes | 11pt | Italic `color=666666` | `spaceAfter=18pt` |
 
 **Accessibility bump.** For medical / geriatric / accessibility-focused forms, raise field label + instruction to **12pt** (11pt default is tight for older users); keep section headings at 14pt.
 
@@ -655,33 +655,33 @@ BAD_CB=$(officecli query "$FILE" sdt --json | jq '[.data.results[] | select(.for
 
 ## Known Issues
 
-| #   | Issue                                                                           | Behavior                                                                                                                                                                                                                                 | Workaround                                                                                                                                                                                                             |
-| --- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| K1  | SDT `type=checkbox` not implemented                                             | `add ... --type sdt --prop type=checkbox` → `Error: SDT type 'checkbox' is not implemented`, exit 1 (error now lists the supported types incl. group/picture)                                                                            | Use `--type formfield --prop type=checkbox`                                                                                                                                                                            |
-| K3  | SDT `maxlength` UNSUPPORTED on `add`                                            | `WARNING: UNSUPPORTED: maxlength`, exit 2; element still created. (`items` / `format` / `lock` / `placeholderText` are NOW supported on `add` — only `maxlength` is rejected; `name` is accepted but a no-op on SDT — use `alias`/`tag`) | Enforce length downstream; use `text` for initial content                                                                                                                                                              |
-| K4  | SDT `items` / `format` / `type` not settable AFTER creation                     | `set --prop items=...` → `UNSUPPORTED props (use raw-set instead)`. (They ARE settable on `add` — set them inline at creation)                                                                                                           | Set at `add` time; to change later, Path B `raw-set` or `remove` + re-add                                                                                                                                              |
-| K5  | FormField `maxlength` UNSUPPORTED                                               | `WARNING: UNSUPPORTED: maxlength`; formfield created                                                                                                                                                                                     | Enforce length in downstream validation                                                                                                                                                                                |
-| K6  | FormField dropdown `items` UNSUPPORTED                                          | Dropdown formfield is created with empty option list                                                                                                                                                                                     | Use an SDT dropdown with `--prop items=` instead                                                                                                                                                                       |
-| K7  | Watermark `width` / `height` not settable                                       | Watermark created without them; `opacity` IS settable on `add` and reads back (real dims are computed)                                                                                                                                   | For an exact size, open Word + adjust the shape (Phase 2)                                                                                                                                                              |
-| K9  | Batch mode silently drops genuinely-UNSUPPORTED props                           | No `WARNING` line; batch reports "N succeeded" even when a prop (e.g. `maxlength`) was dropped                                                                                                                                           | Keep batch SDT entries to props `help docx sdt` lists; verify with a readback after the batch                                                                                                                          |
-| K13 | FormField `name` > 20 characters                                                | `add` returns exit 0 with no warning; `validate` later reports `[Schema] ... MaxLength=20` on `/w:ffData/w:name`                                                                                                                         | Keep `name` ≤ 20 characters (OpenXML schema limit). SDT `alias` / `tag` have no such limit                                                                                                                             |
-| K14 | `shd.fill` on a paragraph emits schema-invalid `<w:pPr>/<w:shd>`                | `validate` reports 2 schema errors per instance (`unexpected child element`, `required attribute 'val' missing`); Word renders it anyway                                                                                                 | Apply highlight on the run instead (`shading=HEX`, flat canonical), or raw-set `<w:shd w:val="clear" w:fill="HEX"/>` into the run's `<w:rPr>`                                                                          |
-| K15 | `view forms` does NOT list MERGEFIELDs                                          | Only SDT + formfield in output; MERGEFIELDs are template-time, not end-user fillable                                                                                                                                                     | Treat `query field` and `view forms` as two disjoint inventories. Every recipe verifies both                                                                                                                           |
-| K16 | Header / footer are predefined at section creation (default/first/even, 3 each) | `add $FILE /header ...` returns `already exists` or silently no-ops on the first call                                                                                                                                                    | First mutation uses `set` against the existing part: `officecli query $FILE header --json` to read `type`, then `set '/header[@type=default]' --prop text=...`. Only use `add` for a brand-new section's header/footer |
-| K17 | Watermark injected into header emits `<w:noProof>` child that is schema-invalid | `validate` adds an extra `[Schema]` error at `/header[N]/w:sdt/.../w:noProof` — a real schema error to fix, not a benign one                                                                                                             | After `add $FILE / --type watermark`, run once per header part: `officecli raw-set $FILE /word/header1.xml --xpath "//w:noProof" --action remove` (repeat for `header2.xml`, `header3.xml` if present)                 |
-| K18 | `query`/`get --json` wrap prop fields under `.data.results[N].format.{prop}`    | Writing jq against bare `.alias` / `.tag` / `.protection`, or `.data.format.*`, returns null/0 matches and Gate 4/5 falsely report "missing=N"                                                                                           | Use `.data.results[].format.alias` / `.format.tag`; for `get /` use `.data.results[0].format.protection` (NOT `.data.format.protection`). Same for `.format.type` / `.format.paraId`                                   |
-| K19 | LibreOffice renders formfield checkbox as `☐☐` (double box) in PDF export       | Cosmetic only — Word / WPS render a single box, clickable to toggle ☑. A LibreOffice renderer quirk, flagged as [RENDERER-BUG]                                                                                                           | Do not try to "fix" in the skill. If an evaluator screenshots from LibreOffice-generated PDF and sees `☐☐`, attribute to [RENDERER-BUG], not a form-quality defect                                                     |
+| # | Issue | Behavior | Workaround |
+|---|---|---|---|
+| K1 | SDT `type=checkbox` not implemented | `add ... --type sdt --prop type=checkbox` → `Error: SDT type 'checkbox' is not implemented`, exit 1 (error now lists the supported types incl. group/picture) | Use `--type formfield --prop type=checkbox` |
+| K3 | SDT `maxlength` UNSUPPORTED on `add` | `WARNING: UNSUPPORTED: maxlength`, exit 2; element still created. (`items` / `format` / `lock` / `placeholderText` are NOW supported on `add` — only `maxlength` is rejected; `name` is accepted but a no-op on SDT — use `alias`/`tag`) | Enforce length downstream; use `text` for initial content |
+| K4 | SDT `items` / `format` / `type` not settable AFTER creation | `set --prop items=...` → `UNSUPPORTED props (use raw-set instead)`. (They ARE settable on `add` — set them inline at creation) | Set at `add` time; to change later, Path B `raw-set` or `remove` + re-add |
+| K5 | FormField `maxlength` UNSUPPORTED | `WARNING: UNSUPPORTED: maxlength`; formfield created | Enforce length in downstream validation |
+| K6 | FormField dropdown `items` UNSUPPORTED | Dropdown formfield is created with empty option list | Use an SDT dropdown with `--prop items=` instead |
+| K7 | Watermark `width` / `height` not settable | Watermark created without them; `opacity` IS settable on `add` and reads back (real dims are computed) | For an exact size, open Word + adjust the shape (Phase 2) |
+| K9 | Batch mode silently drops genuinely-UNSUPPORTED props | No `WARNING` line; batch reports "N succeeded" even when a prop (e.g. `maxlength`) was dropped | Keep batch SDT entries to props `help docx sdt` lists; verify with a readback after the batch |
+| K13 | FormField `name` > 20 characters | `add` returns exit 0 with no warning; `validate` later reports `[Schema] ... MaxLength=20` on `/w:ffData/w:name` | Keep `name` ≤ 20 characters (OpenXML schema limit). SDT `alias` / `tag` have no such limit |
+| K14 | `shd.fill` on a paragraph emits schema-invalid `<w:pPr>/<w:shd>` | `validate` reports 2 schema errors per instance (`unexpected child element`, `required attribute 'val' missing`); Word renders it anyway | Apply highlight on the run instead (`shading=HEX`, flat canonical), or raw-set `<w:shd w:val="clear" w:fill="HEX"/>` into the run's `<w:rPr>` |
+| K15 | `view forms` does NOT list MERGEFIELDs | Only SDT + formfield in output; MERGEFIELDs are template-time, not end-user fillable | Treat `query field` and `view forms` as two disjoint inventories. Every recipe verifies both |
+| K16 | Header / footer are predefined at section creation (default/first/even, 3 each) | `add $FILE /header ...` returns `already exists` or silently no-ops on the first call | First mutation uses `set` against the existing part: `officecli query $FILE header --json` to read `type`, then `set '/header[@type=default]' --prop text=...`. Only use `add` for a brand-new section's header/footer |
+| K17 | Watermark injected into header emits `<w:noProof>` child that is schema-invalid | `validate` adds an extra `[Schema]` error at `/header[N]/w:sdt/.../w:noProof` — a real schema error to fix, not a benign one | After `add $FILE / --type watermark`, run once per header part: `officecli raw-set $FILE /word/header1.xml --xpath "//w:noProof" --action remove` (repeat for `header2.xml`, `header3.xml` if present) |
+| K18 | `query`/`get --json` wrap prop fields under `.data.results[N].format.{prop}` | Writing jq against bare `.alias` / `.tag` / `.protection`, or `.data.format.*`, returns null/0 matches and Gate 4/5 falsely report "missing=N" | Use `.data.results[].format.alias` / `.format.tag`; for `get /` use `.data.results[0].format.protection` (NOT `.data.format.protection`). Same for `.format.type` / `.format.paraId` |
+| K19 | LibreOffice renders formfield checkbox as `☐☐` (double box) in PDF export | Cosmetic only — Word / WPS render a single box, clickable to toggle ☑. A LibreOffice renderer quirk, flagged as [RENDERER-BUG] | Do not try to "fix" in the skill. If an evaluator screenshots from LibreOffice-generated PDF and sees `☐☐`, attribute to [RENDERER-BUG], not a form-quality defect |
 
 ## Phase 2 — enhance in Word
 
 Some polish is out of CLI scope. Hand the file to a human for these; none are required for a valid form.
 
-| Need                                       | Why open Word                                                                                               |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Real SDT checkbox with specific locking    | `type=checkbox` exits 1; use Developer → Check Box Content Control (or a legacy FormField checkbox via CLI) |
-| Prompt text ("Click here to enter a date") | Needs `placeholderDocPart` in `/word/glossary/document.xml`                                                 |
-| Custom richtext default appearance         | Adjust the referenced style in Word's style pane                                                            |
-| Watermark resize                           | `width` / `height` not settable; drag shape handles                                                         |
+| Need | Why open Word |
+|---|---|
+| Real SDT checkbox with specific locking | `type=checkbox` exits 1; use Developer → Check Box Content Control (or a legacy FormField checkbox via CLI) |
+| Prompt text ("Click here to enter a date") | Needs `placeholderDocPart` in `/word/glossary/document.xml` |
+| Custom richtext default appearance | Adjust the referenced style in Word's style pane |
+| Watermark resize | `width` / `height` not settable; drag shape handles |
 
 (`picture` and `group` SDTs add directly via `--type sdt --prop type=picture` / `type=group` — no longer Phase-2 items.)
 

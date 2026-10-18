@@ -67,7 +67,10 @@ async-trait.workspace = true
 rpassword.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

@@ -3,17 +3,17 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_call:
     inputs:
       tag_name:
-        description: 'Release tag to build and publish (e.g., v0.2.0)'
+        description: "Release tag to build and publish (e.g., v0.2.0)"
         required: true
         type: string
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag to build and publish (e.g., v0.2.0)'
+        description: "Release tag to build and publish (e.g., v0.2.0)"
         required: true
         type: string
 
@@ -23,12 +23,12 @@ permissions:
 env:
   BINARY_NAME: aioncore
   CARGO_TERM_COLOR: always
-  CARGO_HTTP_TIMEOUT: '600'
-  CARGO_NET_RETRY: '10'
+  CARGO_HTTP_TIMEOUT: "600"
+  CARGO_NET_RETRY: "10"
   # cross commit used by the v0.1.39/v0.1.40 Linux ARM64 release builds.
-  CROSS_GIT_REV: '29d00c7803f221f1b3f35e561b03792368fb8339'
-  LINUX_X64_GLIBC_MAX: 'GLIBC_2.34'
-  LINUX_ARM64_GLIBC_MAX: 'GLIBC_2.30'
+  CROSS_GIT_REV: "29d00c7803f221f1b3f35e561b03792368fb8339"
+  LINUX_X64_GLIBC_MAX: "GLIBC_2.34"
+  LINUX_ARM64_GLIBC_MAX: "GLIBC_2.30"
   RELEASE_TAG: ${{ inputs.tag_name || github.ref_name }}
 
 jobs:
@@ -82,11 +82,11 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: aioncore.exe
-            rustflags: '-C target-feature=+crt-static'
+            rustflags: "-C target-feature=+crt-static"
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             binary_name: aioncore.exe
-            rustflags: '-C target-feature=+crt-static'
+            rustflags: "-C target-feature=+crt-static"
 
     steps:
       - uses: actions/checkout@v6
@@ -95,7 +95,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.95.0'
+          toolchain: "1.95.0"
           targets: ${{ matrix.target }}
 
       - name: Fix MSVC linker (remove Git's link.exe)

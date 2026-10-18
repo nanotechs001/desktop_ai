@@ -5,17 +5,17 @@ description: "Use this skill any time a .docx file is involved -- as input, outp
 
 > **⚠️ Platform note — read before running any command.** The shell snippets in this skill are written for **macOS / Linux** (bash/zsh). Always check which OS you are on first. On **Windows** do **not** run them verbatim — the underlying tool/CLI commands are usually cross-platform, but the surrounding shell syntax is not. Translate it to PowerShell before running:
 >
-> | bash (macOS / Linux)              | PowerShell (Windows)                                                                |
-> | --------------------------------- | ----------------------------------------------------------------------------------- |
-> | `a && b`                          | run as two steps, or `a; if ($?) { b }`                                             |
-> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool                 |
-> | `VAR=$(cmd)` … `$VAR`             | `$VAR = cmd` … `$VAR`                                                               |
-> | `cmd > /dev/null`                 | `cmd > $null`                                                                       |
-> | `… \| grep PAT`                   | `… \| Select-String PAT`                                                            |
-> | `… \| jq …`                       | `… \| ConvertFrom-Json`, then read the fields                                       |
-> | `python3 x.py`                    | `python x.py` (or `py x.py`)                                                        |
-> | `~/dir`, `/tmp`                   | `$env:USERPROFILE\dir`, `$env:TEMP`                                                 |
-> | `cp` / `mkdir -p` / `rm -rf`      | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
+> | bash (macOS / Linux) | PowerShell (Windows) |
+> | --- | --- |
+> | `a && b` | run as two steps, or `a; if ($?) { b }` |
+> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool |
+> | `VAR=$(cmd)` … `$VAR` | `$VAR = cmd` … `$VAR` |
+> | `cmd > /dev/null` | `cmd > $null` |
+> | `… \| grep PAT` | `… \| Select-String PAT` |
+> | `… \| jq …` | `… \| ConvertFrom-Json`, then read the fields |
+> | `python3 x.py` | `python x.py` (or `py x.py`) |
+> | `~/dir`, `/tmp` | `$env:USERPROFILE\dir`, `$env:TEMP` |
+> | `cp` / `mkdir -p` / `rm -rf` | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
 >
 > If a command has no obvious Windows equivalent, prefer the built-in file/HTTP tools over raw shell.
 
@@ -101,7 +101,7 @@ Six steps. Every non-trivial build follows this shape.
 2. **Orient.** Existing file: `officecli view "$FILE" outline` — heading tree, section count, whether a TOC / watermark / tracked changes already exist. Never edit blind.
 3. **Build incrementally.** Structural first, content next, formatting last: styles & numbering defs → sections / page setup → headings & body → tables / images / fields / TOC → headers / footers → comments. After each structural op, `get` it back before stacking on top.
 4. **Format to spec.** Explicit heading sizes, spacing, widths, alignment, tabs, list indents — formatting is part of the deliverable, not optional polish.
-5. **Close, then trust structure over cached text.** `officecli close "$FILE"` writes the XML. TOC / PAGE / NUMPAGES / SEQ / PAGEREF fields carry **cached values** that may be stale or empty until a human recalculates (F9 in Word). Confirm fields _exist_ (`get --depth 3` finds `<w:fldChar>`) rather than trusting the visible text.
+5. **Close, then trust structure over cached text.** `officecli close "$FILE"` writes the XML. TOC / PAGE / NUMPAGES / SEQ / PAGEREF fields carry **cached values** that may be stale or empty until a human recalculates (F9 in Word). Confirm fields *exist* (`get --depth 3` finds `<w:fldChar>`) rather than trusting the visible text.
 6. **QA — assume there are problems.** You are done after one fix-and-verify cycle finds zero new issues, not when your last command exited 0. See QA.
 
 ## Quick Start
@@ -231,13 +231,13 @@ officecli add "$FILE" "/body/p[1]" --type tab --prop pos=6in --prop val=right --
 
 Fields are live values computed at render time. `fieldType` picks the field; `name` supplies the target (merge name or `ref` bookmark); `format` / `instr` add switches.
 
-| Field        | Use                           | Example                                                          |
-| ------------ | ----------------------------- | ---------------------------------------------------------------- |
-| `page`       | current page number           | `--prop field=page` on footer, or `--prop fieldType=page` inline |
-| `numpages`   | total pages                   | `--prop field=numpages` / `--prop fieldType=numpages`            |
-| `date`       | today                         | `--prop fieldType=date --prop format='yyyy-MM-dd'`               |
-| `mergefield` | template merge token          | `--prop fieldType=mergefield --prop name=CustomerName`           |
-| `ref`        | cross-reference to a bookmark | `--prop fieldType=ref --prop name=bookmarkName`                  |
+| Field | Use | Example |
+|---|---|---|
+| `page` | current page number | `--prop field=page` on footer, or `--prop fieldType=page` inline |
+| `numpages` | total pages | `--prop field=numpages` / `--prop fieldType=numpages` |
+| `date` | today | `--prop fieldType=date --prop format='yyyy-MM-dd'` |
+| `mergefield` | template merge token | `--prop fieldType=mergefield --prop name=CustomerName` |
+| `ref` | cross-reference to a bookmark | `--prop fieldType=ref --prop name=bookmarkName` |
 
 Full `fieldType` enum (30+ values incl. `pageref`, `seq`, `styleref`, `docproperty`, `createdate`, …) is in `help docx field`. **There is NO `fieldInstr` fieldType** — use the `instruction` prop for raw field instruction text when typed shortcuts fall short. Picture switches (`MERGEFIELD Amount \# "#,##0.00"`, `DATE \@ "yyyy年MM月"`) go via `--prop instruction='…'` (mergefield's `format` prop is ignored with a warning — use `instruction`).
 
@@ -461,7 +461,7 @@ Borders use the format `style;size;color;space`: `single;4;FF0000;1`. Hex colors
 2. `officecli view "$FILE" outline` — heading hierarchy (no H1 → H3 skips), TOC presence, section count.
 3. `officecli view "$FILE" text --max-lines 400` — typos, stray `\$`/`\t`/`\n` literals, placeholder tokens.
 4. `officecli validate "$FILE"` — schema check (the Delivery Gate re-runs this on the closed, on-disk file).
-5. **Visual pass — whole document as a contact sheet** (vision-capable agents only — if you cannot interpret images, skip this step: steps 1–4 are your ceiling, and flag the document "not visually verified" at handoff). `officecli view "$FILE" screenshot --grid auto -o /tmp/sheet.png`, then Read it. `--grid auto` tiles **every page** into one image (auto column count; `--grid 4` to force) — you _see_ pagination, blank pages, heading rhythm, lopsided margins, and TOC/cover placement, not just the DOM. Windows+Word renders each page through real Word; elsewhere HTML. No headless browser (needs Chrome/Edge/Chromium/Firefox or `playwright`)? Fall back to `view html` and flag cross-page breaks / alignment / rhythm as "not visually verified". Thumbnails only **locate**: confirm any fine call (column alignment, line spacing, indents, dark-on-dark, caption placement) on the suspect page at full resolution with `screenshot --page N` (no `--grid`; real Word on Windows). "validate pass" is not delivery; "looks like a real document" is.
+5. **Visual pass — whole document as a contact sheet** (vision-capable agents only — if you cannot interpret images, skip this step: steps 1–4 are your ceiling, and flag the document "not visually verified" at handoff). `officecli view "$FILE" screenshot --grid auto -o /tmp/sheet.png`, then Read it. `--grid auto` tiles **every page** into one image (auto column count; `--grid 4` to force) — you *see* pagination, blank pages, heading rhythm, lopsided margins, and TOC/cover placement, not just the DOM. Windows+Word renders each page through real Word; elsewhere HTML. No headless browser (needs Chrome/Edge/Chromium/Firefox or `playwright`)? Fall back to `view html` and flag cross-page breaks / alignment / rhythm as "not visually verified". Thumbnails only **locate**: confirm any fine call (column alignment, line spacing, indents, dark-on-dark, caption placement) on the suspect page at full resolution with `screenshot --page N` (no `--grid`; real Word on Windows). "validate pass" is not delivery; "looks like a real document" is.
 6. If anything failed, fix, then **rerun the full cycle** — one fix commonly creates another problem.
 
 ### Delivery Gate (run before handing off — any failure = REJECT, do NOT deliver)
@@ -518,24 +518,24 @@ Before calling a color/field/chart broken, open the file in the user's target vi
 
 ### Common pitfalls
 
-| Pitfall                                                         | Correct approach                                                                                                                                                 |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--index` vs `[N]`                                              | `--index` is 0-based; `[N]` paths are 1-based                                                                                                                    |
-| Multiple `add --index N` with the same N                        | Each insert shifts later content down; reusing N puts later items BEFORE earlier ones — insert in reverse order, or `move --after/--before` anchored on `paraId` |
-| Unquoted `[N]` in zsh/bash                                      | Quote every path: `"/body/p[1]"`                                                                                                                                 |
-| `[last]` as predicate                                           | Must be `[last()]` with parens                                                                                                                                   |
-| Raw twips in spacing                                            | Use unit-qualified values: `12pt`, `0.5cm`, `1.5x`                                                                                                               |
-| Empty paragraphs for spacing                                    | Use `spaceBefore` / `spaceAfter`                                                                                                                                 |
-| Row-level `set` for cell formatting                             | Row `set` only supports `height`, `header`, `c1..cN` text; format goes on the cell paragraph / run                                                               |
-| `listStyle` on a run                                            | It's a paragraph property                                                                                                                                        |
-| Indent via leading spaces                                       | `indent=720` / `firstLineIndent=360` / `hangingIndent=720` (dotted `ind.left` / `ind.firstLine` also work)                                                       |
-| Cover page-number suppression via `set differentFirstPage=true` | UNSUPPORTED — add a first-type footer: `--type footer --prop type=first --prop text=""`                                                                          |
-| `--type pagebreak` OR `pageBreakBefore` alone not breaking      | Apply BOTH (see Forcing page breaks)                                                                                                                             |
-| Multiple bullet paragraphs in one cell                          | `c1="a\nb"` makes a `<w:br/>` line break (one paragraph); for separate bullet paragraphs use recipe (e)                                                          |
-| `raw-set` when dotted-attr would work                           | Prefer L2 dotted-attr over L3 raw-set                                                                                                                            |
-| Next paragraph inherits the previous Heading style              | Set explicit `--prop style=Normal` on the following paragraph                                                                                                    |
-| Modifying a file open in Word                                   | Close it in Word first                                                                                                                                           |
-| Echo into batch breaks on `$`/`'`                               | Heredoc with single-quoted delimiter: `cat <<'EOF' \| officecli batch …`                                                                                         |
+| Pitfall | Correct approach |
+|---|---|
+| `--index` vs `[N]` | `--index` is 0-based; `[N]` paths are 1-based |
+| Multiple `add --index N` with the same N | Each insert shifts later content down; reusing N puts later items BEFORE earlier ones — insert in reverse order, or `move --after/--before` anchored on `paraId` |
+| Unquoted `[N]` in zsh/bash | Quote every path: `"/body/p[1]"` |
+| `[last]` as predicate | Must be `[last()]` with parens |
+| Raw twips in spacing | Use unit-qualified values: `12pt`, `0.5cm`, `1.5x` |
+| Empty paragraphs for spacing | Use `spaceBefore` / `spaceAfter` |
+| Row-level `set` for cell formatting | Row `set` only supports `height`, `header`, `c1..cN` text; format goes on the cell paragraph / run |
+| `listStyle` on a run | It's a paragraph property |
+| Indent via leading spaces | `indent=720` / `firstLineIndent=360` / `hangingIndent=720` (dotted `ind.left` / `ind.firstLine` also work) |
+| Cover page-number suppression via `set differentFirstPage=true` | UNSUPPORTED — add a first-type footer: `--type footer --prop type=first --prop text=""` |
+| `--type pagebreak` OR `pageBreakBefore` alone not breaking | Apply BOTH (see Forcing page breaks) |
+| Multiple bullet paragraphs in one cell | `c1="a\nb"` makes a `<w:br/>` line break (one paragraph); for separate bullet paragraphs use recipe (e) |
+| `raw-set` when dotted-attr would work | Prefer L2 dotted-attr over L3 raw-set |
+| Next paragraph inherits the previous Heading style | Set explicit `--prop style=Normal` on the following paragraph |
+| Modifying a file open in Word | Close it in Word first |
+| Echo into batch breaks on `$`/`'` | Heredoc with single-quoted delimiter: `cat <<'EOF' \| officecli batch …` |
 
 ## Raw-set XML appendix (L3 patterns)
 
