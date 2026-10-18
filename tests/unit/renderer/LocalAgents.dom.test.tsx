@@ -123,6 +123,17 @@ const makeAgents = () => [
     status: 'online',
   },
   {
+    id: 'acp-gemini',
+    name: 'Gemini CLI',
+    agent_type: 'acp',
+    agent_source: 'builtin',
+    backend: 'gemini',
+    enabled: true,
+    available: true,
+    installed: true,
+    status: 'online',
+  },
+  {
     id: 'acp-claude',
     name: 'Claude Code',
     agent_type: 'acp',
@@ -159,16 +170,16 @@ const makeAgents = () => [
 
 describe('LocalAgents', () => {
   it('marks the default engine and lets another connected engine be set as the default', async () => {
-    defaultEngine.agentId = 'aionrs';
+    defaultEngine.agentId = 'acp-gemini';
     defaultEngine.setDefault.mockClear();
     const agents = [
       ...makeAgents(),
       {
-        id: 'acp-gemini',
-        name: 'Gemini CLI',
+        id: 'acp-codex',
+        name: 'Codex',
         agent_type: 'acp',
         agent_source: 'builtin',
-        backend: 'gemini',
+        backend: 'codex',
         enabled: true,
         available: true,
         installed: true,
@@ -179,33 +190,20 @@ describe('LocalAgents', () => {
 
     render(<LocalAgents />);
 
-    // Aion CLI is the default; Gemini (online) offers the action; Claude (missing) and the custom one do not
+    // Gemini is the default; Codex (online) offers the action; Claude (missing) is on the Unavailable tab
     expect(screen.getAllByText('agent.engine.default')).toHaveLength(1);
-    expect(within(screen.getByTestId('agent-row-aionrs')).getByText('agent.engine.default')).toBeTruthy();
-    expect(within(screen.getByTestId('agent-row-aionrs')).queryByText('agent.engine.setDefault')).toBeNull();
-    expect(within(screen.getByTestId('agent-row-acp-claude')).queryByText('agent.engine.setDefault')).toBeNull();
+    expect(within(screen.getByTestId('agent-row-acp-gemini')).getByText('agent.engine.default')).toBeTruthy();
+    expect(within(screen.getByTestId('agent-row-acp-gemini')).queryByText('agent.engine.setDefault')).toBeNull();
+    expect(screen.queryByTestId('agent-row-acp-claude')).toBeNull();
 
-    fireEvent.click(within(screen.getByTestId('agent-row-acp-gemini')).getByText('agent.engine.setDefault'));
-    await waitFor(() => expect(defaultEngine.setDefault).toHaveBeenCalledWith('acp-gemini'));
+    fireEvent.click(within(screen.getByTestId('agent-row-acp-codex')).getByText('agent.engine.setDefault'));
+    await waitFor(() => expect(defaultEngine.setDefault).toHaveBeenCalledWith('acp-codex'));
   });
 
   it('warns and keeps the page usable when setting the default fails', async () => {
     defaultEngine.agentId = 'aionrs';
     defaultEngine.setDefault.mockRejectedValueOnce(new Error('offline'));
-    const agents = [
-      ...makeAgents(),
-      {
-        id: 'acp-gemini',
-        name: 'Gemini CLI',
-        agent_type: 'acp',
-        agent_source: 'builtin',
-        backend: 'gemini',
-        enabled: true,
-        available: true,
-        installed: true,
-        status: 'online',
-      },
-    ];
+    const agents = makeAgents();
     useManagedAgents.mockReturnValue({ agents, revalidate: vi.fn(), refreshCatalog: vi.fn() });
 
     render(<LocalAgents />);
@@ -218,7 +216,7 @@ describe('LocalAgents', () => {
     const refreshCatalog = vi.fn().mockResolvedValue(undefined);
     useManagedAgents.mockReturnValue({ agents: makeAgents(), revalidate: vi.fn(), refreshCatalog });
     vi.mocked(ipcBridge.acpConversation.checkManagedAgentHealthById.invoke).mockResolvedValue({
-      ...makeAgents()[0],
+      ...makeAgents()[1],
       status: 'online',
     });
 
@@ -227,7 +225,7 @@ describe('LocalAgents', () => {
     fireEvent.click(screen.getAllByText('settings.agentManagement.testConnection')[0]);
 
     await waitFor(() => {
-      expect(ipcBridge.acpConversation.checkManagedAgentHealthById.invoke).toHaveBeenCalledWith({ id: 'aionrs' });
+      expect(ipcBridge.acpConversation.checkManagedAgentHealthById.invoke).toHaveBeenCalledWith({ id: 'acp-gemini' });
     });
     await waitFor(() => {
       expect(refreshCatalog).toHaveBeenCalled();
@@ -239,7 +237,7 @@ describe('LocalAgents', () => {
     const refreshCatalog = vi.fn().mockResolvedValue(undefined);
     useManagedAgents.mockReturnValue({ agents: makeAgents(), revalidate: vi.fn(), refreshCatalog });
     vi.mocked(ipcBridge.acpConversation.checkManagedAgentHealthById.invoke).mockResolvedValue({
-      ...makeAgents()[0],
+      ...makeAgents()[1],
       status: 'offline',
       last_check_error_code: 'auth_required',
     });
@@ -265,9 +263,10 @@ describe('LocalAgents', () => {
 
     // Proves L30 (useManagedAgents) ran and fed the derived lists.
     expect(useManagedAgents).toHaveBeenCalled();
-    expect(screen.getByText('Aion CLI')).toBeTruthy();
-    expect(screen.getByText('Claude Code')).toBeTruthy();
+    expect(screen.getByText('Gemini CLI')).toBeTruthy();
     expect(screen.getByText('My Agent')).toBeTruthy();
+    // The built-in CLI ships with the app and is not listed.
+    expect(screen.queryByText('Aion CLI')).toBeNull();
   });
 
   it('shows the empty state when no detected agents are present', () => {
@@ -291,9 +290,11 @@ describe('LocalAgents', () => {
 
     expect(screen.getByText('settings.agents')).toBeTruthy();
     expect(screen.getByText('settings.agentManagement.customAgents')).toBeTruthy();
-    // Only Claude Code shows 'missing' now; openclaw-gateway is filtered out as deprecated
-    expect(screen.getByText('settings.agentManagement.statusMissing')).toBeTruthy();
+    // The custom agent (always listed) is offline
     expect(screen.getByText('settings.agentManagement.statusOffline')).toBeTruthy();
+    // Only Claude Code shows 'missing' (Unavailable tab); openclaw-gateway is filtered out as deprecated
+    fireEvent.click(screen.getByTestId('settings-tab-unavailable'));
+    expect(screen.getByText('settings.agentManagement.statusMissing')).toBeTruthy();
     expect(screen.queryByText('settings.agentManagement.goToChat')).toBeNull();
     // Verify deprecated agent is filtered out
     expect(screen.queryByText('OpenClaw Gateway')).toBeNull();
@@ -310,7 +311,7 @@ describe('LocalAgents', () => {
     render(<LocalAgents />);
 
     expect(screen.getByText('settings.agentManagement.refreshingStatuses')).toBeInTheDocument();
-    expect(screen.getByText('Aion CLI')).toBeInTheDocument();
+    expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
   });
 
   it('renders official agents as diagnostics cards and filters out deprecated types', () => {
@@ -322,14 +323,14 @@ describe('LocalAgents', () => {
 
     render(<LocalAgents />);
 
-    // Agent names render
-    expect(screen.getByText('Aion CLI')).toBeInTheDocument();
+    // Agent names and status tags render (Available tab by default)
+    expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
+    expect(screen.getByText('settings.agentManagement.statusOnline')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('settings-tab-unavailable'));
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
+    expect(screen.getByText('settings.agentManagement.statusMissing')).toBeInTheDocument();
     // Deprecated openclaw-gateway agent is filtered out
     expect(screen.queryByText('OpenClaw Gateway')).toBeNull();
-    // Status tags render
-    expect(screen.getByText('settings.agentManagement.statusOnline')).toBeInTheDocument();
-    expect(screen.getByText('settings.agentManagement.statusMissing')).toBeInTheDocument();
   });
 
   it('does not render the market-install CTA in the diagnostics-only agent page', () => {
@@ -360,7 +361,9 @@ describe('LocalAgents', () => {
   });
 
   it('binds assistants to managed agents by agent_id instead of runtime backend', () => {
-    const [aionrsAgent, claudeAgent] = makeAgents();
+    const agents = makeAgents();
+    const aionrsAgent = agents.find((agent) => agent.id === 'aionrs')!;
+    const claudeAgent = agents.find((agent) => agent.id === 'acp-claude')!;
     const assistants: Assistant[] = [
       {
         id: 'assistant-on-claude-runtime',
@@ -412,7 +415,7 @@ describe('LocalAgents', () => {
     expect(getBoundAssistants(aionrsAgent, assistants)).toEqual([]);
   });
 
-  it('pins Kimi right after the aionrs agent in the official list', () => {
+  it('pins Kimi ahead of the alphabetical order in the official list', () => {
     useManagedAgents.mockReturnValue({
       agents: [
         ...makeAgents(),
@@ -433,13 +436,12 @@ describe('LocalAgents', () => {
     });
 
     render(<LocalAgents />);
+    fireEvent.click(screen.getByTestId('settings-tab-unavailable'));
 
     // Alphabetically Claude Code < Kimi, so this order proves the pin rule:
-    // aionrs stays first, Kimi jumps ahead of the localeCompare ordering.
-    const aion = screen.getByText('Aion CLI');
+    // Kimi jumps ahead of the localeCompare ordering.
     const kimi = screen.getByText('Kimi');
     const claude = screen.getByText('Claude Code');
-    expect(kimi.compareDocumentPosition(aion) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     expect(claude.compareDocumentPosition(kimi) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
@@ -458,7 +460,7 @@ describe('LocalAgents', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Aion CLI')).toBeInTheDocument();
+    expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
     expect(screen.queryByText('settings.agentManagement.localAgents')).toBeNull();
   });
 
@@ -496,24 +498,23 @@ describe('LocalAgents', () => {
 
     render(<LocalAgents />);
 
-    // Filter tabs render as buttons (underline-tab style), not an Arco radio group.
-    const allTab = screen.getByTestId('settings-tab-all');
+    // Filter tabs render as buttons (underline-tab style), not an Arco radio group. There is no "All" tab.
     const availableTab = screen.getByTestId('settings-tab-available');
     const unavailableTab = screen.getByTestId('settings-tab-unavailable');
-    expect(allTab.tagName).toBe('BUTTON');
+    expect(availableTab.tagName).toBe('BUTTON');
+    expect(screen.queryByTestId('settings-tab-all')).toBeNull();
 
-    // Default "all": both official agents visible (Aion CLI online, Claude Code missing).
-    expect(screen.getByText('Aion CLI')).toBeInTheDocument();
-    expect(screen.getByText('Claude Code')).toBeInTheDocument();
-
-    // "available" keeps only the online agent.
-    fireEvent.click(availableTab);
-    expect(screen.getByText('Aion CLI')).toBeInTheDocument();
+    // Default "available" keeps only the online agent; the built-in CLI is never listed.
+    expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
     expect(screen.queryByText('Claude Code')).toBeNull();
+    expect(screen.queryByText('Aion CLI')).toBeNull();
 
     // "unavailable" keeps only the non-online agent.
     fireEvent.click(unavailableTab);
-    expect(screen.queryByText('Aion CLI')).toBeNull();
+    expect(screen.queryByText('Gemini CLI')).toBeNull();
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
+
+    fireEvent.click(availableTab);
+    expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
   });
 });

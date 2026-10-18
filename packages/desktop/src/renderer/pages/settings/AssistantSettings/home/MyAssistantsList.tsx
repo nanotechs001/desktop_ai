@@ -7,6 +7,7 @@
 import type { AssistantListItem } from '../types';
 import { type AssistantEnabledFilter, filterByEnabled, groupMyAssistants } from '../assistantUtils';
 import MyAssistantCard from './MyAssistantCard';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { Dropdown, Menu, Button } from '@arco-design/web-react';
 import { AllApplication, Down } from '@icon-park/react';
 import React, { useMemo, useState } from 'react';
@@ -49,10 +50,12 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   const { t } = useTranslation();
   const [filter, setFilter] = useState<AssistantEnabledFilter>('all');
 
+  const [defaultAgentId] = useConfig('agent.builtinDefaultId');
+
   const { createdAssistants } = useMemo(() => {
     const filtered = filterByEnabled(assistants, filter);
-    return groupMyAssistants(filtered);
-  }, [assistants, filter]);
+    return groupMyAssistants(filtered, defaultAgentId);
+  }, [assistants, filter, defaultAgentId]);
 
   const filterMenu = (
     <Menu onClickMenuItem={(key) => setFilter(key as AssistantEnabledFilter)}>

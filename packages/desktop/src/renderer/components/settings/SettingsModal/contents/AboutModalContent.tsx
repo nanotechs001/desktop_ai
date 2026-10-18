@@ -12,6 +12,7 @@ import classNames from 'classnames';
 import { useSettingsViewMode } from '../settingsViewContext';
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { ipcBridge } from '@/common';
+import { APP_PRODUCT_NAME, APP_REPO_URL } from '@/common/config/constants';
 import { getIncludePrerelease, runUpdateCheck } from '@/renderer/components/settings/checkForUpdatesShared';
 import { UPDATE_AVAILABLE_EVENT } from '@/renderer/components/settings/useUpdateNotificationController';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
@@ -107,25 +108,21 @@ const AboutModalContent: React.FC = () => {
     }
   };
 
+  // No project website yet: help, changelog and contact all live in the GitHub repository.
   const linkItems: LinkItem[] = [
     {
       title: t('settings.helpDocumentation'),
-      url: 'https://github.com/iOfficeAI/AionUi/wiki',
+      url: `${APP_REPO_URL}#readme`,
       icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
       title: t('settings.updateLog'),
-      url: 'https://github.com/iOfficeAI/AionUi/releases',
+      url: `${APP_REPO_URL}/releases`,
       icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
       title: t('settings.contactMe'),
-      url: 'https://x.com/WailiVery',
-      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
-    },
-    {
-      title: t('settings.officialWebsite'),
-      url: 'https://www.aionui.com',
+      url: `${APP_REPO_URL}/issues`,
       icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
   ];
@@ -143,7 +140,7 @@ const AboutModalContent: React.FC = () => {
           {/* App Info Section */}
           <div className='flex flex-col items-center pb-24px'>
             <Typography.Title heading={3} className='text-24px font-bold text-t-primary mb-8px'>
-              AionUi
+              {APP_PRODUCT_NAME}
             </Typography.Title>
             <Typography.Text className='text-14px text-t-secondary mb-12px text-center'>
               {t('settings.appDescription')}
@@ -154,11 +151,7 @@ const AboutModalContent: React.FC = () => {
               </span>
               <div
                 className='text-t-primary cursor-pointer hover:text-t-secondary transition-colors p-4px'
-                onClick={() =>
-                  openLink('https://github.com/iOfficeAI/AionUi').catch((error) =>
-                    console.error('Failed to open link:', error)
-                  )
-                }
+                onClick={() => openLink(APP_REPO_URL).catch((error) => console.error('Failed to open link:', error))}
               >
                 <Github theme='outline' size='20' />
               </div>

@@ -2,6 +2,7 @@ import { resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import { isBackendRelativeAssetPath, isLikelyLocalFilePath } from '@/renderer/utils/model/assistantAvatar';
 import type { AssistantListItem, AvailableBackend } from './types';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
+import { isVaBotAgent } from '@/common/types/agent/defaultAgent';
 
 export type AssistantListFilter = 'all' | 'enabled' | 'disabled' | 'builtin' | 'user';
 
@@ -157,9 +158,14 @@ const ASSISTANT_EDITOR_AGENT_TYPES = new Set(['acp', 'aionrs', 'antigravity']);
 
 const isAssistantEditorAgent = (agent: ManagedAgent): boolean => ASSISTANT_EDITOR_AGENT_TYPES.has(agent.agent_type);
 
-/** The user's own Agents, sorted by sort_order. Engine entries and official (builtin) presets are not in it. */
-export const groupMyAssistants = (assistants: AssistantListItem[]) => ({
-  createdAssistants: assistants.filter((a) => a.source === 'user').toSorted(byAssistantSortOrder),
+/**
+ * The user's own Agents (VA Bots), sorted by sort_order. Engine entries, official (builtin) presets and the default
+ * chat agent (a regular chat agent with no robot, stored as a user Agent) are not in it.
+ */
+export const groupMyAssistants = (assistants: AssistantListItem[], storedDefaultId?: string) => ({
+  createdAssistants: assistants
+    .filter((a) => a.source === 'user' && isVaBotAgent(a, storedDefaultId))
+    .toSorted(byAssistantSortOrder),
 });
 
 /**

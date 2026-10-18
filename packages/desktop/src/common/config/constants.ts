@@ -8,6 +8,15 @@
  * AionUI应用程序共用常量
  */
 
+// ===== App identity =====
+
+/** Product name shown in the UI (the About page title). */
+export const APP_PRODUCT_NAME = 'Pixebot Browser';
+
+/** GitHub `owner/repo` this app is developed and released from (About links and update checks). */
+export const APP_GITHUB_REPO = 'nanotechs001/desktop_ai';
+export const APP_REPO_URL = `https://github.com/${APP_GITHUB_REPO}`;
+
 // ===== 应用内浏览器 / In-app browser =====
 
 /**

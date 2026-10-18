@@ -9,6 +9,8 @@ import EnabledAssistantsList from './EnabledAssistantsList';
 import MyAssistantsList from './MyAssistantsList';
 import OfficialAssistantsGrid from './OfficialAssistantsGrid';
 import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
+import { isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import AddActionButton from '@/renderer/components/base/AddActionButton';
 import { AionSearchInput } from '@/renderer/components/base';
@@ -65,6 +67,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
     onTabChange?.(next);
   };
 
+  const [defaultAgentId] = useConfig('agent.builtinDefaultId');
   const counts = useMemo(() => {
     let enabled = 0;
     let mine = 0;
@@ -72,10 +75,11 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
     for (const assistant of assistants) {
       if (assistant.enabled !== false) enabled += 1;
       if (assistant.source === 'builtin') official += 1;
-      else mine += 1;
+      // The default chat agent is a regular chat agent, not a VA Bot (same rule as the My VA Bots list).
+      else if (isVaBotAgent(assistant, defaultAgentId)) mine += 1;
     }
     return { enabled, mine, official };
-  }, [assistants]);
+  }, [assistants, defaultAgentId]);
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredAssistants = useMemo(() => {

@@ -14,6 +14,7 @@ import {
   resolveAssistantSourceTag,
   buildAssistantEditorBackends,
   filterAssistantEditorBackends,
+  groupMyAssistants,
 } from '@/renderer/pages/settings/AssistantSettings/assistantUtils';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import type { AssistantListItem } from '@/renderer/pages/settings/AssistantSettings/types';
@@ -336,5 +337,22 @@ describe('filterAssistantEditorBackends', () => {
 
   it('returns nothing when nothing matches, rather than falling back to everything', () => {
     expect(filterAssistantEditorBackends(backends, 'zzz')).toHaveLength(0);
+  });
+});
+
+describe('groupMyAssistants', () => {
+  const list = [
+    mockAssistant({ id: 'aion-default-agent', name: 'Agent', source: 'user' }),
+    mockAssistant({ id: 'stored-default', name: 'Chat', source: 'user' }),
+    mockAssistant({ id: 'bot-1', name: 'Research Bot', source: 'user' }),
+    mockAssistant({ id: 'word-creator', name: 'Word Creator', source: 'builtin' }),
+  ];
+
+  it('lists only VA Bots: not the default chat agent, nor official presets', () => {
+    expect(groupMyAssistants(list, 'stored-default').createdAssistants.map((a) => a.id)).toEqual(['bot-1']);
+  });
+
+  it('still excludes the fixed default agent id before the stored setting is known', () => {
+    expect(groupMyAssistants(list).createdAssistants.map((a) => a.id)).toEqual(['stored-default', 'bot-1']);
   });
 });

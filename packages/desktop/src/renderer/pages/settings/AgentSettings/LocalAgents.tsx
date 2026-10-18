@@ -30,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   filterAgentsByAvailability,
   getAgentAvailabilityFilterStats,
+  isBuiltinAionCli,
   type AgentAvailabilityFilter,
 } from './agentFilters';
 
@@ -41,7 +42,7 @@ const LocalAgents: React.FC = () => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const [testingAgentId, setTestingAgentId] = useState<string | null>(null);
-  const [agentFilter, setAgentFilter] = useState<AgentAvailabilityFilter>('all');
+  const [agentFilter, setAgentFilter] = useState<AgentAvailabilityFilter>('available');
   const [searchQuery, setSearchQuery] = useState('');
   const { assistants } = useAssistantsForAgents();
   const defaultEngine = useDefaultEngine();
@@ -54,8 +55,9 @@ const LocalAgents: React.FC = () => {
 
   // Hide deprecated runtime backends (nanobot / openclaw-gateway / remote / gemini)
   // — they are no longer offered as agents and shouldn't appear on the detection page.
+  // The built-in CLI ships with the app (see the page description), so it is not listed either.
   const officialAgents = allAgents.filter(
-    (a) => a.agent_source !== 'custom' && !isDeprecatedRuntimeAgentType(a.agent_type)
+    (a) => a.agent_source !== 'custom' && !isDeprecatedRuntimeAgentType(a.agent_type) && !isBuiltinAionCli(a)
   );
 
   const customAgents: ManagedAgent[] = allAgents.filter((a) => a.agent_source === 'custom');
@@ -259,11 +261,6 @@ const LocalAgents: React.FC = () => {
           </>
         }
         tabs={[
-          {
-            key: 'all',
-            label: t('settings.agentManagement.filterAll', { defaultValue: 'All' }),
-            count: officialFilterStats.all,
-          },
           {
             key: 'available',
             label: t('settings.agentManagement.filterAvailable', { defaultValue: 'Available' }),
