@@ -53,6 +53,7 @@
     }
   ],
   "ignorePatterns": [
+    "core/",
     "node_modules/",
     "dist/",
     "build/",

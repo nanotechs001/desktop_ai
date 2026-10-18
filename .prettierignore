@@ -1,1 +1,3 @@
 mobile/
+# Backend sources (git subtree of AionCore): keep upstream formatting
+core/
