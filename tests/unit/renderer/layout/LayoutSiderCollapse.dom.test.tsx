@@ -29,7 +29,10 @@ vi.mock('@/common', () => ({
     task: { stopAll: { invoke: () => Promise.resolve({ success: false }) } },
   },
 }));
-vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
+vi.mock('@/common/config/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/common/config/constants')>()),
+  TEAM_MODE_ENABLED: false,
+}));
 vi.mock('@/renderer/components/layout/PwaPullToRefresh', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar', () => ({ default: () => null }));
 vi.mock('@/renderer/components/settings/UpdateModal', () => ({ default: () => null }));

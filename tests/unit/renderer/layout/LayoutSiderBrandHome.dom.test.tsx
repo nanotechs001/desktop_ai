@@ -45,7 +45,8 @@ vi.mock('@/common', () => ({
 }));
 
 // Trim Layout's collaborators to keep this a focused brand-behaviour test.
-vi.mock('@/common/config/constants', () => ({
+vi.mock('@/common/config/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/common/config/constants')>()),
   get TEAM_MODE_ENABLED() {
     return featureMocks.teamModeEnabled;
   },
