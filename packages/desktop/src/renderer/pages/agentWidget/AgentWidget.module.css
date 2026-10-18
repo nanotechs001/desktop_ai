@@ -57,7 +57,8 @@
   transition: opacity 0.15s ease;
 }
 
-.bot:hover .marker,
+/* Visibility comes from pointer events (data-visible), not :hover, which can stick in this window. */
+.marker[data-visible='true'],
 .bot:focus-visible .marker {
   opacity: 1;
 }

@@ -32,7 +32,9 @@ const CLICK_DEBOUNCE_MS = 200;
 const HOP_HEIGHT_PHYSICAL_PX = 8;
 // Clickable parts of the window. Arco menus, dialogs and toasts render into <body>, outside the popup, so they are
 // listed too; otherwise hovering them would make the window click-through and their clicks would reach the desktop.
-const WIDGET_HIT_SELECTOR = '[data-widget-hit], .arco-trigger, .arco-modal-wrapper, .arco-message-wrapper';
+// The name pill hides this long after the last pointer movement over the robot.
+const NAME_HOVER_IDLE_MS = 2000;
+const WIDGET_HIT_SELECTOR ='[data-widget-hit], .arco-trigger, .arco-modal-wrapper, .arco-message-wrapper';
 
 /**
  * Floating desktop robot for one conversation (rendered in its own transparent
@@ -131,6 +133,31 @@ const AgentWidgetPage: React.FC = () => {
   const pressRef = useRef<{ startX: number; startY: number; dragging: boolean } | null>(null);
   const ignoreRef = useRef<boolean | null>(null);
   const target = { conversation_id: id };
+
+  // The name pill shows only while the pointer is over the robot. CSS :hover can stick in this always-on-top window
+  // (it moves away under a still cursor, or loses the mouse to the desktop without a leave event), so hover is
+  // tracked from pointer events and expires after a short idle.
+  const [nameVisible, setNameVisible] = useState(false);
+  const nameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideName = useCallback(() => {
+    if (nameTimerRef.current) clearTimeout(nameTimerRef.current);
+    nameTimerRef.current = null;
+    setNameVisible(false);
+  }, []);
+  const showName = useCallback(() => {
+    setNameVisible(true);
+    if (nameTimerRef.current) clearTimeout(nameTimerRef.current);
+    nameTimerRef.current = setTimeout(hideName, NAME_HOVER_IDLE_MS);
+  }, [hideName]);
+  useEffect(() => {
+    window.addEventListener('blur', hideName);
+    document.addEventListener('mouseleave', hideName);
+    return () => {
+      window.removeEventListener('blur', hideName);
+      document.removeEventListener('mouseleave', hideName);
+      if (nameTimerRef.current) clearTimeout(nameTimerRef.current);
+    };
+  }, [hideName]);
 
   useEffect(() => {
     if (!id) return;
@@ -261,9 +288,14 @@ const AgentWidgetPage: React.FC = () => {
           e.currentTarget.setPointerCapture(e.pointerId);
           pressRef.current = { startX: e.screenX, startY: e.screenY, dragging: false };
         }}
+        onPointerEnter={showName}
+        onPointerLeave={hideName}
         onPointerMove={(e) => {
           const press = pressRef.current;
-          if (!press) return;
+          if (!press) {
+            showName();
+            return;
+          }
           // While carried, every pointer move (one per frame) moves the robot, so its path tracks the mouse.
           if (press.dragging) {
             void ipcBridge.agentWidget.dragMove.invoke(target).catch(() => {});
@@ -300,7 +332,7 @@ const AgentWidgetPage: React.FC = () => {
         />
         {state === 'notification' && <span className={styles.badge} aria-label={t('pet.widget.state.notification')} />}
         {!expanded && lifecycle === null && layout.drag_phase === 'none' && (
-          <span className={styles.marker} aria-hidden>
+          <span className={styles.marker} data-visible={nameVisible} aria-hidden>
             {conversation?.assistant?.name || name}
           </span>
         )}
