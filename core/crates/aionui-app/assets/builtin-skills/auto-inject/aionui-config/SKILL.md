@@ -1,6 +1,6 @@
 ---
 name: aionui-config
-description: Configure Pixebot Browser itself with the bundled aioncore CLI. Use when asked to set up or change assistants, assistant rules, skills, MCP servers, model providers, agents, scheduled tasks, or settings.
+description: Configure Pixebot Browser with the bundled aioncore CLI. Use when asked to set up or change assistants, assistant rules, skills, MCP servers, model providers, agents, scheduled tasks, or settings.
 ---
 
 # Pixebot Browser Config
