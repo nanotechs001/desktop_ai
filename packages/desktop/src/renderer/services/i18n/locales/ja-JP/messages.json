@@ -110,5 +110,10 @@
     "fromChat": "このチャットで学習",
     "fromPage": "Web ページから · 未確認",
     "open": "ノートブックを開く"
+  },
+  "fileLinks": {
+    "title": "ファイル",
+    "openInPreview": "プレビューで開く",
+    "openFileAria": "{{name}} をプレビューで開く"
   }
 }

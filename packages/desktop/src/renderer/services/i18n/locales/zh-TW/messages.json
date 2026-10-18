@@ -110,5 +110,10 @@
     "fromChat": "在此對話中學到",
     "fromPage": "來自網頁 · 未經核實",
     "open": "開啟筆記本"
+  },
+  "fileLinks": {
+    "title": "檔案",
+    "openInPreview": "在預覽中開啟",
+    "openFileAria": "在預覽中開啟 {{name}}"
   }
 }

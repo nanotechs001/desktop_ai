@@ -110,5 +110,10 @@
     "fromChat": "Aprendido en este chat",
     "fromPage": "De una página web · sin verificar",
     "open": "Abrir cuaderno"
+  },
+  "fileLinks": {
+    "title": "Archivos",
+    "openInPreview": "Abrir en la vista previa",
+    "openFileAria": "Abrir {{name}} en la vista previa"
   }
 }

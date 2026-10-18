@@ -110,5 +110,10 @@
     "fromChat": "Aprendido nesta conversa",
     "fromPage": "De uma página da web · não verificado",
     "open": "Abrir caderno"
+  },
+  "fileLinks": {
+    "title": "Arquivos",
+    "openInPreview": "Abrir na visualização",
+    "openFileAria": "Abrir {{name}} na visualização"
   }
 }

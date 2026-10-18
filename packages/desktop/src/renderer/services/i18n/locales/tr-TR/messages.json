@@ -110,5 +110,10 @@
     "fromChat": "Bu sohbette öğrenildi",
     "fromPage": "Bir web sayfasından · doğrulanmadı",
     "open": "Not defterini aç"
+  },
+  "fileLinks": {
+    "title": "Dosyalar",
+    "openInPreview": "Önizlemede aç",
+    "openFileAria": "{{name}} dosyasını önizlemede aç"
   }
 }

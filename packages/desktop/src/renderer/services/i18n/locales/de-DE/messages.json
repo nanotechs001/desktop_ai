@@ -110,5 +110,10 @@
     "fromChat": "In diesem Chat gelernt",
     "fromPage": "Von einer Webseite · ungeprüft",
     "open": "Notizbuch öffnen"
+  },
+  "fileLinks": {
+    "title": "Dateien",
+    "openInPreview": "In der Vorschau öffnen",
+    "openFileAria": "{{name}} in der Vorschau öffnen"
   }
 }

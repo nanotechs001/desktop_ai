@@ -110,5 +110,10 @@
     "fromChat": "Learned in this chat",
     "fromPage": "From a web page · unverified",
     "open": "Open notebook"
+  },
+  "fileLinks": {
+    "title": "Files",
+    "openInPreview": "Open in preview",
+    "openFileAria": "Open {{name}} in preview"
   }
 }

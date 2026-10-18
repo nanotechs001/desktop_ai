@@ -29,6 +29,9 @@ import HOC from '@renderer/utils/ui/HOC';
 import type { FileChangeInfo } from './MessageFileChanges';
 import MessageFileChanges, { parseDiff } from './MessageFileChanges';
 import { useConversationArtifacts } from './artifacts';
+import MessageFileLinks from './fileLinks/MessageFileLinks';
+import { groupTurnFiles, mapTurnFilesToAnchors } from './fileLinks/turnFiles';
+import { useAutoOpenTurnFiles } from './fileLinks/useAutoOpenTurnFiles';
 import { MessageAnchorRail } from './anchorRail';
 import {
   useLoadAnchorMessageWindow,
@@ -461,6 +464,23 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     );
   }, [artifacts, list]);
 
+  // Documents (html / docx / pptx / xlsx / pdf / md) the agent wrote, one chip row
+  // per turn, rendered after the turn's last row. Computed from the raw list rather
+  // than processedList: WriteFile tool groups are folded into file summaries there.
+  const turnFileGroups = useMemo(() => groupTurnFiles(list), [list]);
+  const turnFilesByAnchor = useMemo(
+    () =>
+      mapTurnFilesToAnchors(
+        processedList.map((item) => ({
+          anchorId: getProcessedItemAnchorId(item),
+          sourceMessageIds: getProcessedItemSourceMessageIds(item),
+        })),
+        turnFileGroups
+      ),
+    [processedList, turnFileGroups]
+  );
+  useAutoOpenTurnFiles(conversationContext?.conversation_id, list);
+
   // An AI reply can be split into several messages (thinking / multiple text /
   // tool blocks). The hover copy + timestamp row should appear once per turn,
   // after the turn's last text — not under every intermediate text block.
@@ -761,9 +781,20 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
               }}
             >
               <div className='h-10px' />
-              {processedList.map((item, index) => (
-                <React.Fragment key={getProcessedItemAnchorId(item) || index}>{renderItem(index, item)}</React.Fragment>
-              ))}
+              {processedList.map((item, index) => {
+                const anchorId = getProcessedItemAnchorId(item);
+                const turnFiles = turnFilesByAnchor.get(anchorId);
+                return (
+                  <React.Fragment key={anchorId || index}>
+                    {renderItem(index, item)}
+                    {turnFiles && (
+                      <div className={`${rowWidthClass} min-w-0 message-item px-8px m-t-8px`}>
+                        <MessageFileLinks files={turnFiles} />
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
               <div className='h-20px' />
             </div>
           </div>

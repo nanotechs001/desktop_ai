@@ -110,5 +110,10 @@
     "fromChat": "Appris dans cette discussion",
     "fromPage": "D’une page web · non vérifié",
     "open": "Ouvrir le carnet"
+  },
+  "fileLinks": {
+    "title": "Fichiers",
+    "openInPreview": "Ouvrir dans l’aperçu",
+    "openFileAria": "Ouvrir {{name}} dans l’aperçu"
   }
 }

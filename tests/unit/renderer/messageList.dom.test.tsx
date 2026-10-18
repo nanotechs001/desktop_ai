@@ -152,6 +152,12 @@ vi.mock('@/renderer/pages/conversation/Messages/MessageFileChanges', () => ({
   parseDiff: parseDiffMock,
 }));
 
+vi.mock('@/renderer/pages/conversation/Messages/fileLinks/MessageFileLinks', () => ({
+  default: ({ files }: { files: Array<{ name: string }> }) => (
+    <div data-testid='turn-file-links'>{files.map((file) => file.name).join(',')}</div>
+  ),
+}));
+
 vi.mock('@/renderer/pages/conversation/Messages/components/SelectionReplyButton', () => ({
   default: () => null,
 }));
@@ -656,5 +662,47 @@ describe('MessageList', () => {
     expect(screen.getByTestId('tool-summary')).toHaveTextContent(message.id);
     expect(screen.queryByTestId('file-changes')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tool-group')).not.toBeInTheDocument();
+  });
+  it('renders one file-link row per turn, after the turn’s last row', () => {
+    const userMessage = (id: string, created_at: number): TMessage =>
+      ({
+        id,
+        conversation_id: 'conversation-1',
+        type: 'text',
+        position: 'right',
+        created_at,
+        content: { content: 'make docs' },
+      }) as TMessage;
+    const writeCall = (id: string, path: string, created_at: number): IMessageAcpToolCall => {
+      const message = createAcpToolCall({ id });
+      message.content.update.rawInput = { file_path: path };
+      message.created_at = created_at;
+      return message;
+    };
+    const reply: TMessage = { ...createTextMessage(), id: 'reply-1', created_at: 5 };
+
+    render(<MessageList />, {
+      wrapper: ({ children }) => (
+        <Wrapper
+          messages={[
+            userMessage('user-1', 1),
+            writeCall('w1', '/workspace/report.html', 2),
+            writeCall('w2', '/workspace/report.html', 3),
+            writeCall('w3', '/workspace/main.ts', 4),
+            reply,
+            userMessage('user-2', 6),
+            writeCall('w4', 'deck.pptx', 7),
+          ]}
+        >
+          {children}
+        </Wrapper>
+      ),
+    });
+
+    const rows = screen.getAllByTestId('turn-file-links');
+    expect(rows.map((row) => row.textContent)).toEqual(['report.html', 'deck.pptx']);
+    // The first turn's row follows its final text reply, not the tool summary.
+    const replyRow = screen.getByTestId('msgtext-reply-1');
+    expect(replyRow.compareDocumentPosition(rows[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
