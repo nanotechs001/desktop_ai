@@ -71,7 +71,7 @@ const makeGitHubReleaseResponse = () => [
     tag_name: 'v1.9.22',
     name: 'v1.9.22',
     body: 'release notes',
-    html_url: 'https://github.com/iOfficeAI/AionUi/releases/tag/v1.9.22',
+    html_url: 'https://github.com/nanotechs001/desktop_ai/releases/tag/v1.9.22',
     published_at: '2026-04-29T00:00:00Z',
     prerelease: false,
     draft: false,
@@ -79,20 +79,21 @@ const makeGitHubReleaseResponse = () => [
       {
         name: 'AionUi-1.9.22-mac-arm64.dmg',
         browser_download_url:
-          'https://github.com/iOfficeAI/AionUi/releases/download/v1.9.22/AionUi-1.9.22-mac-arm64.dmg',
+          'https://github.com/nanotechs001/desktop_ai/releases/download/v1.9.22/AionUi-1.9.22-mac-arm64.dmg',
         size: 123,
         content_type: 'application/x-apple-diskimage',
       },
       {
         name: 'AionUi-1.9.22-win-x64.exe',
-        browser_download_url: 'https://github.com/iOfficeAI/AionUi/releases/download/v1.9.22/AionUi-1.9.22-win-x64.exe',
+        browser_download_url:
+          'https://github.com/nanotechs001/desktop_ai/releases/download/v1.9.22/AionUi-1.9.22-win-x64.exe',
         size: 456,
         content_type: 'application/vnd.microsoft.portable-executable',
       },
       {
         name: 'AionUi-1.9.22-linux-amd64.deb',
         browser_download_url:
-          'https://github.com/iOfficeAI/AionUi/releases/download/v1.9.22/AionUi-1.9.22-linux-amd64.deb',
+          'https://github.com/nanotechs001/desktop_ai/releases/download/v1.9.22/AionUi-1.9.22-linux-amd64.deb',
         size: 789,
       },
     ],
@@ -134,9 +135,10 @@ const makeDeferred = () => {
   return { promise, resolve, reject };
 };
 
-// The check flow is CDN-first: the channel yml is the authoritative source of
-// version + assets, GitHub only enriches release notes. Serve both hosts.
-const CDN_CHANNEL_YML = `version: 1.9.22
+// The latest release's channel yml is the authoritative source of version + assets;
+// the GitHub API only enriches release notes. Serve both.
+const RELEASES = 'https://github.com/nanotechs001/desktop_ai/releases';
+const CHANNEL_YML = `version: 1.9.22
 files:
   - url: AionUi-1.9.22-mac-arm64.dmg
     size: 123
@@ -148,11 +150,11 @@ path: AionUi-1.9.22-mac-arm64.dmg
 releaseDate: '2026-04-29T00:00:00Z'
 `;
 
-const stubCdnAndGitHubFetch = () => {
+const stubReleaseAndApiFetch = () => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.startsWith('https://static.aionui.com/releases/latest')) {
-      return new Response(CDN_CHANNEL_YML, { status: 200 });
+    if (url.startsWith(`${RELEASES}/latest/download/`)) {
+      return new Response(CHANNEL_YML, { status: 200 });
     }
     if (url.startsWith('https://api.github.com/')) {
       return new Response(JSON.stringify(makeGitHubReleaseResponse()), { status: 200 });
@@ -163,17 +165,17 @@ const stubCdnAndGitHubFetch = () => {
   return fetchMock;
 };
 
-describe('updateBridge CDN URL rewriting', () => {
+describe('updateBridge release asset URLs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('rewrites asset.url to the CDN path and keeps GitHub URL in fallbackUrl', async () => {
-    const fetchMock = stubCdnAndGitHubFetch();
+  it('points asset.url at the GitHub release download with no CDN fallback', async () => {
+    const fetchMock = stubReleaseAndApiFetch();
 
     try {
       const handler = await getCheckHandler();
-      const result = await handler({ repo: 'iOfficeAI/AionUi' });
+      const result = await handler({ repo: 'nanotechs001/desktop_ai' });
 
       expect(result.success).toBe(true);
       expect(result.data?.currentVersion).toBe('1.0.0');
@@ -182,36 +184,35 @@ describe('updateBridge CDN URL rewriting', () => {
 
       const macAsset = assets.find((a: { name: string }) => a.name === 'AionUi-1.9.22-mac-arm64.dmg');
       expect(macAsset).toBeDefined();
-      expect(macAsset?.url).toBe('https://static.aionui.com/releases/1.9.22/AionUi-1.9.22-mac-arm64.dmg');
-      expect(macAsset?.fallbackUrl).toBe(
-        'https://github.com/iOfficeAI/AionUi/releases/download/v1.9.22/AionUi-1.9.22-mac-arm64.dmg'
-      );
+      expect(macAsset?.url).toBe(`${RELEASES}/download/v1.9.22/AionUi-1.9.22-mac-arm64.dmg`);
+      expect(macAsset?.fallbackUrl).toBeUndefined();
 
       const linuxAsset = assets.find((a: { name: string }) => a.name === 'AionUi-1.9.22-linux-amd64.deb');
-      expect(linuxAsset?.url).toBe('https://static.aionui.com/releases/1.9.22/AionUi-1.9.22-linux-amd64.deb');
+      expect(linuxAsset?.url).toBe(`${RELEASES}/download/v1.9.22/AionUi-1.9.22-linux-amd64.deb`);
       expect(fetchMock).toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it('uses the normalized version (no v prefix) in the CDN path', async () => {
-    stubCdnAndGitHubFetch();
+  it('defaults to this project repo when the request names none', async () => {
+    const fetchMock = stubReleaseAndApiFetch();
 
     try {
       const handler = await getCheckHandler();
-      const result = await handler({ repo: 'iOfficeAI/AionUi' });
+      const result = await handler({});
       const asset = result.data?.latest?.assets?.[0];
-      expect(asset?.url).toMatch(/^https:\/\/static\.aionui\.com\/releases\/1\.9\.22\//);
-      expect(asset?.url).not.toMatch(/\/v1\.9\.22\//);
+      expect(asset?.url).toMatch(/^https:\/\/github\.com\/nanotechs001\/desktop_ai\/releases\/download\/v1\.9\.22\//);
+      const urls = fetchMock.mock.calls.map(([input]) => String(input));
+      expect(urls).toContain('https://api.github.com/repos/nanotechs001/desktop_ai/releases');
     } finally {
       vi.unstubAllGlobals();
     }
   });
 });
 
-describe('updateBridge allowlist includes CDN host', () => {
-  it('accepts static.aionui.com URLs for download', async () => {
+describe('updateBridge download allowlist', () => {
+  it('accepts GitHub release URLs for download', async () => {
     vi.resetModules();
     vi.clearAllMocks();
 
@@ -239,7 +240,7 @@ describe('updateBridge allowlist includes CDN host', () => {
 
       const result = await handler({
         downloadId: 'manual-download-1',
-        url: 'https://static.aionui.com/releases/1.9.22/AionUi-1.9.22-mac-arm64.dmg',
+        url: `${RELEASES}/download/v1.9.22/AionUi-1.9.22-mac-arm64.dmg`,
         file_name: 'AionUi-1.9.22-mac-arm64.dmg',
       });
 
@@ -250,7 +251,11 @@ describe('updateBridge allowlist includes CDN host', () => {
     }
   });
 
-  it('rejects non-allowlisted hosts', async () => {
+  it.each([
+    'https://evil.example.com/fake.dmg',
+    // The upstream AionUi CDN is no longer an update source.
+    'https://static.aionui.com/releases/1.9.22/AionUi-1.9.22-mac-arm64.dmg',
+  ])('rejects non-allowlisted host %s', async (url) => {
     vi.resetModules();
     vi.clearAllMocks();
 
@@ -265,7 +270,7 @@ describe('updateBridge allowlist includes CDN host', () => {
     const handler = lastCall[0];
 
     const result = await handler({
-      url: 'https://evil.example.com/fake.dmg',
+      url,
       file_name: 'fake.dmg',
     });
 

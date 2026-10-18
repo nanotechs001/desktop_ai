@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { APP_REPO_URL } from '@/common/config/constants';
 import type { AutoUpdateStatus, UpdateDownloadProgressEvent } from '@/common/update/updateTypes';
 import { uuid } from '@/common/utils';
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
@@ -59,7 +60,7 @@ const reduceNotificationState = (
   event: UpdateNotificationEvent
 ): UpdateNotificationState => updateNotificationReducer(current, event).state;
 
-const RELEASES_PAGE_URL = 'https://github.com/iOfficeAI/AionUi/releases';
+const RELEASES_PAGE_URL = `${APP_REPO_URL}/releases`;
 
 const getVersionLabelFromState = (state: UpdateNotificationState): string =>
   state.updateInfo?.version || state.autoUpdateInfo?.version || '';

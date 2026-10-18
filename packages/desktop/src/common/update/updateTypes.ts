@@ -6,9 +6,9 @@
 
 export interface GitHubReleaseAsset {
   name: string;
-  /** Primary download URL — rewritten to CDN for faster download. */
+  /** Primary download URL (GitHub release asset). */
   url: string;
-  /** Original GitHub download URL — used as fallback when CDN fails. */
+  /** Optional second URL tried when the primary download fails. */
   fallbackUrl?: string;
   size: number;
   contentType?: string;
@@ -35,7 +35,7 @@ export interface UpdateCheckResult {
 
 export interface UpdateCheckRequest {
   includePrerelease?: boolean;
-  /** Defaults to iOfficeAI/AionUi when omitted */
+  /** Defaults to APP_GITHUB_REPO when omitted */
   repo?: string;
 }
 
@@ -43,7 +43,7 @@ export interface UpdateDownloadRequest {
   /** Optional caller-provided id so renderer can match progress events immediately. */
   downloadId?: string;
   url: string;
-  /** Fallback URL tried when the primary URL fails (e.g. CDN down). */
+  /** Fallback URL tried when the primary URL fails. */
   fallbackUrl?: string;
   file_name?: string;
 }

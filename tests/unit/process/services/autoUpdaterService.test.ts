@@ -106,7 +106,7 @@ describe('AutoUpdaterService', () => {
     setPlatform(originalPlatform);
   });
 
-  it('does not use the stable CDN updater when prerelease manual mode is enabled', async () => {
+  it('does not use the stable release feed when prerelease manual mode is enabled', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValue({
       isUpdateAvailable: true,
       updateInfo: {
@@ -170,17 +170,53 @@ describe('AutoUpdaterService', () => {
     expect(result).toEqual({ success: true, updateInfo });
   });
 
-  it('configures electron-updater to read stable metadata from the CDN', async () => {
+  it("configures electron-updater to read stable metadata from this project's GitHub releases", async () => {
     const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
-    const { CdnGenericProvider } = await import('@/process/services/cdnGenericProvider');
+    const { GitHubReleaseProvider } = await import('@/process/services/githubReleaseProvider');
 
     autoUpdaterService.resetForTest();
 
     expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
       provider: 'custom',
-      url: 'https://static.aionui.com/releases',
-      updateProvider: CdnGenericProvider,
+      url: 'https://github.com/nanotechs001/desktop_ai/releases',
+      updateProvider: GitHubReleaseProvider,
     });
+  });
+
+  const makeChannelFileNotFoundError = (): Error =>
+    Object.assign(new Error('Cannot find channel "latest.yml" update info: HttpError: 404'), {
+      code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND',
+    });
+
+  it('reports no update (not a failure) while no release is published', async () => {
+    autoUpdaterMock.checkForUpdates.mockRejectedValue(makeChannelFileNotFoundError());
+
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    autoUpdaterService.initialize();
+
+    await expect(autoUpdaterService.checkForUpdates()).resolves.toEqual({ success: true });
+  });
+
+  it('still reports other check failures', async () => {
+    autoUpdaterMock.checkForUpdates.mockRejectedValue(new Error('net::ERR_INTERNET_DISCONNECTED'));
+
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    autoUpdaterService.initialize();
+
+    await expect(autoUpdaterService.checkForUpdates()).resolves.toEqual({
+      success: false,
+      error: 'net::ERR_INTERNET_DISCONNECTED',
+    });
+  });
+
+  it('keeps the startup check silent while no release is published', async () => {
+    autoUpdaterMock.checkForUpdatesAndNotify.mockRejectedValue(makeChannelFileNotFoundError());
+    const log = (await import('electron-log')).default;
+
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    await expect(autoUpdaterService.checkForUpdatesAndNotify()).resolves.toBeUndefined();
+
+    expect(log.error).not.toHaveBeenCalled();
   });
 
   it('enables forced updater checks in unpacked dev builds when requested', async () => {
@@ -240,6 +276,16 @@ describe('AutoUpdaterService', () => {
     if (!entry) throw new Error('checking-for-update handler not registered');
     return entry[1] as () => void;
   };
+
+  it('does not broadcast an error status when no release is published', async () => {
+    const broadcast = vi.fn();
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    autoUpdaterService.initialize(broadcast);
+
+    getErrorHandler()(makeChannelFileNotFoundError());
+
+    expect(broadcast).not.toHaveBeenCalled();
+  });
 
   it('clarifies the Squirrel bundle error in dev mode', async () => {
     appMock.isPackaged = false;
@@ -342,7 +388,7 @@ describe('AutoUpdaterService', () => {
       releaseDate: '2026-06-08T00:00:00.000Z',
     };
     const fileInfo = {
-      url: new URL('https://static.aionui.com/releases/2.1.14/AionUi-2.1.14-mac.zip'),
+      url: new URL('https://github.com/nanotechs001/desktop_ai/releases/download/v2.1.14/AionUi-2.1.14-mac.zip'),
       info: { url: 'AionUi-2.1.14-mac.zip', sha512: 'sha512-value' },
     };
     const cachedUpdatePath = path.join('/cache/pending', 'AionUi-2.1.14-mac.zip');
@@ -386,7 +432,7 @@ describe('AutoUpdaterService', () => {
       releaseDate: '2026-06-08T00:00:00.000Z',
     };
     const fileInfo = {
-      url: new URL('https://static.aionui.com/releases/2.1.14/AionUi-2.1.14-mac.zip'),
+      url: new URL('https://github.com/nanotechs001/desktop_ai/releases/download/v2.1.14/AionUi-2.1.14-mac.zip'),
       info: { url: 'AionUi-2.1.14-mac.zip', sha512: 'sha512-value' },
     };
     const validateDownloadedPath = vi.fn().mockResolvedValue(null);

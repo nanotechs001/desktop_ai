@@ -220,7 +220,7 @@ electronDownload:
 
 publish:
   provider: github
-  owner: iOfficeAI
-  repo: AionUi
+  owner: nanotechs001
+  repo: desktop_ai
   publishAutoUpdate: true
   releaseType: release

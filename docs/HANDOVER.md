@@ -23,7 +23,7 @@ Commits on the branch (oldest first):
 5. `a8c9ec823` chore(core): undo accidental formatting of the backend sources (`core/` now matches `2e3c38dab` exactly)
 6. `3d69252c2` chore: keep formatter and linter out of `core/` (`.prettierignore`, `.oxlintrc.json`)
 
-**Status check (2026-10-18):** working tree clean; branch has no upstream (not pushed). `core/target/release/aioncore.exe` is built (14:14). Installer steps 1–2 below were done and the backend bundle verified later the same day, the appId and data folder were switched (Decisions 1–2), and a test installer was rebuilt (all uncommitted); next is step 4, installing and checking it. The upstream-disconnect items are still open (`publish` and `DEFAULT_REPO` still point at `iOfficeAI/AionUi`).
+**Status check (2026-10-18):** working tree clean; branch has no upstream (not pushed). `core/target/release/aioncore.exe` is built (14:14). Installer steps 1–2 below were done and the backend bundle verified later the same day, the appId and data folder were switched (Decisions 1–2), and a test installer was rebuilt (all uncommitted); next is step 4, installing and checking it. The update paths no longer touch upstream (both read `nanotechs001/desktop_ai` releases); the remaining upstream-disconnect items are under Next.
 
 ## Run it
 
@@ -64,7 +64,7 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 
 - VA Bots page: the default chat agent (stored as a `source: 'user'` Agent) is no longer listed or counted under "My VA Bots" (`groupMyAssistants(assistants, storedDefaultId)` + `isVaBotAgent` in `AssistantHomeTabs`). It still counts under "Enabled".
 - Engine page (`AgentSettings/LocalAgents.tsx`): no "All" tab (default tab is "Available"); the built-in CLI (`isBuiltinAionCli`: `agent_type 'aionrs'`, `agent_source 'internal'`) is not listed. It is still the default engine everywhere else, but there is no longer a UI to set it back as default after picking another engine.
-- About page: title from `APP_PRODUCT_NAME`; GitHub icon, Help (`#readme`), Update Log (`/releases`) and Contact (`/issues`) point at `APP_REPO_URL` (`common/config/constants.ts`); "Official Website" removed (no site yet). The update check itself is unchanged (see Next).
+- About page: title from `APP_PRODUCT_NAME`; GitHub icon, Help (`#readme`), Update Log (`/releases`) and Contact (`/issues`) point at `APP_REPO_URL` (`common/config/constants.ts`); "Official Website" removed (no site yet). The update check reads the same repo's releases (see Next).
 
 **Official agents (VA Bots "Official" tab)**
 
@@ -96,9 +96,13 @@ Plan:
 
 Functional (do first; these would talk to upstream):
 
-- [ ] Auto-updater — **decided 2026-10-18: point it at `nanotechs001/desktop_ai` releases** (`APP_GITHUB_REPO`). Bigger than a repo swap: the source of truth is upstream's CDN `static.aionui.com/releases` — `process/services/updateFeed.ts` (`CDN_UPDATE_BASE_URL`, electron-updater feed via `CdnGenericProvider`, asset path `{base}/{version}/{file}`) and `process/bridge/updateBridge.ts` (`CDN_HOST`, `fetchCdnManifest`, `rewriteAssetUrlToCDN`, `DEFAULT_REPO`). GitHub layout differs: channel file at `releases/latest/download/latest.yml`, assets at `releases/download/v{version}/{file}`. A missing manifest (no releases yet) should read as "up to date", not an error. Tests: `tests/unit/updateBridgeCdn*.test.ts`, `tests/unit/process/services/{autoUpdaterService,cdnUpdateFeed}.test.ts`. Today the app could offer to "update" to stock AionUi once upstream ships a newer version.
-- [ ] `packages/desktop/electron-builder.yml` `publish.owner/repo` (`iOfficeAI/AionUi`) → `nanotechs001/desktop_ai`.
-- [ ] `useUpdateNotificationController.ts` releases URL → own releases page.
+- [x] Auto-updater (done 2026-10-18): both update paths read `nanotechs001/desktop_ai` GitHub releases (`APP_GITHUB_REPO`); nothing requests `static.aionui.com` or `iOfficeAI/AionUi` any more.
+  - Automatic (electron-updater): `process/services/updateFeed.ts` → `GitHubReleaseProvider` (`process/services/githubReleaseProvider.ts`, a `GenericProvider` subclass). Channel file from `releases/latest/download/{latest.yml|latest-mac.yml|latest-arm64-mac.yml|latest-win-arm64.yml|latest-linux*.yml}`, files from `releases/download/v{version}/{file}`. Chosen over electron-updater's built-in `github` provider because it needs no API/atom lookup and keeps the per-arch channel names, which the built-in provider misreads as prerelease tags. A missing channel file (`ERR_UPDATER_CHANNEL_FILE_NOT_FOUND`: no release yet, or none for this platform) counts as "no update" and is not broadcast as an error.
+  - Manual "Check for updates" (`process/bridge/updateBridge.ts`): stable reads the same `latest/download` channel file (a 404 means "up to date"), then attaches notes from the GitHub API on a best-effort basis. With **Include prerelease** on, it lists releases via the API, takes the highest semver non-draft tag (prereleases included) and reads that tag's channel file. If the API fails, it falls back to the stable lookup. Download links are `releases/download/{tag}/{file}` with no CDN fallback; the download allowlist is GitHub hosts only.
+  - Not verified against a real release yet (the repo has none). For the first release: publish with electron-builder (`publish:` now targets this repo) so the `latest*.yml` files are uploaded. The tag must be `v{version}` and the version must be above the installed `2.2.2`. Check that each `latest*.yml` `url` matches the uploaded asset name (`artifactName` contains the space in "Pixebot Browser"). A prerelease must be marked as a prerelease on GitHub, or `latest/download` will serve it to stable users.
+  - Tests: `tests/unit/updateBridgeRelease{Check,Manifest,Assets}.test.ts`, `updateBridgeDownloadDedupe.test.ts`, `tests/unit/process/services/{autoUpdaterService,updateFeed}.test.ts`.
+- [x] `packages/desktop/electron-builder.yml` `publish` → `nanotechs001/desktop_ai` (produces `resources/app-update.yml`; the runtime feed is set in code).
+- [x] `useUpdateNotificationController.ts` releases URL → `${APP_REPO_URL}/releases`.
 - [ ] Backend download (`packages/shared-scripts/src/prepare-aioncore.js`, `scripts/prepareAioncore.js`) — replaced by the step above; keep only as an optional fallback or remove.
 
 In-app links (repoint to the own repo, or hide when there is no equivalent):
@@ -114,7 +118,7 @@ Repo infrastructure:
 
 1. ✅ **Installer identity — decided 2026-10-18:** `appId: com.nanotechs.pixebot` (`electron-builder.yml`, `WINDOWS_APP_USER_MODEL_ID` in `process/startup/windowsAppUserModelId.ts`, dev updater `updaterCacheDirName`). It no longer replaces or upgrades a stock AionUi install.
 2. ✅ **Production data folder — decided 2026-10-18:** `%APPDATA%\Pixebot Browser` (`PRODUCTION_DATA_DIR_NAME` in `process/utils/configureChromium.ts`). The installer failure marker follows it (`process/services/installerLastFailure.ts` and `resources/windows/installer-process-control.nsh`); keep all three in sync. Dev data stays in `%APPDATA%\AionUi-Dev`.
-3. **Updates.** Point the updater at `nanotechs001/desktop_ai` releases, or turn it off until there is a release process.
+3. ✅ **Updates — decided 2026-10-18:** the updater reads `nanotechs001/desktop_ai` GitHub releases (see Next). Until there is a release it reports "up to date".
 
 ## Notes and gotchas
 

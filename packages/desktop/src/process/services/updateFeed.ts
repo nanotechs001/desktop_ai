@@ -4,19 +4,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CdnGenericProvider } from './cdnGenericProvider';
-import type { CdnGenericProviderConfiguration } from './cdnGenericProvider';
+import { APP_GITHUB_REPO } from '@/common/config/constants';
+import { GitHubReleaseProvider } from './githubReleaseProvider';
+import type { GitHubReleaseProviderConfiguration } from './githubReleaseProvider';
 
-export const CDN_UPDATE_BASE_URL = 'https://static.aionui.com/releases';
+/** Releases page the app updates from; the provider derives channel and asset URLs from it. */
+export const UPDATE_RELEASES_URL = `https://github.com/${APP_GITHUB_REPO}/releases`;
 
-export type CdnFeedOptions = CdnGenericProviderConfiguration & {
-  updateProvider: typeof CdnGenericProvider;
+export type UpdateFeedOptions = GitHubReleaseProviderConfiguration & {
+  updateProvider: typeof GitHubReleaseProvider;
 };
 
-export function buildCdnFeedOptions(): CdnFeedOptions {
+export function buildUpdateFeedOptions(): UpdateFeedOptions {
   return {
     provider: 'custom',
-    url: CDN_UPDATE_BASE_URL,
-    updateProvider: CdnGenericProvider,
+    url: UPDATE_RELEASES_URL,
+    updateProvider: GitHubReleaseProvider,
   };
 }

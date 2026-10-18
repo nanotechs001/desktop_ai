@@ -24,11 +24,19 @@ import {
   recordAutoUpdateQuitAndInstall,
   recordAutoUpdateStatus,
 } from './autoUpdateDiagnostics';
-import { buildCdnFeedOptions } from './updateFeed';
+import { buildUpdateFeedOptions } from './updateFeed';
 
 const FORCE_DEV_AUTO_UPDATE_ENV = 'AIONUI_FORCE_DEV_AUTO_UPDATE';
 const DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV = 'AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION';
 const MAC_NATIVE_INSTALL_READY_TIMEOUT_MS = 60_000;
+
+/**
+ * True when the feed has no channel file to read: no release is published yet, or the
+ * latest release has no build for this platform. That means "no update", not a failure.
+ */
+export function isNoPublishedReleaseError(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND';
+}
 
 /**
  * Returns the appropriate update channel name based on the current platform and architecture.
@@ -131,7 +139,7 @@ class AutoUpdaterService extends EventEmitter {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
     this.configureDevAutoUpdateDebug();
-    const cdnFeedOptions = buildCdnFeedOptions();
+    const feedOptions = buildUpdateFeedOptions();
 
     // Set the correct update channel based on platform and architecture before
     // any update checks are performed
@@ -140,11 +148,11 @@ class AutoUpdaterService extends EventEmitter {
       autoUpdater.channel = channel;
       log.info(`Update channel set to: ${channel}`);
     }
-    autoUpdater.setFeedURL(cdnFeedOptions);
-    log.info('Update feed set to CDN provider');
-    log.debug('[auto-update] CDN feed configured', {
-      provider: cdnFeedOptions.provider,
-      url: cdnFeedOptions.url,
+    autoUpdater.setFeedURL(feedOptions);
+    log.info('Update feed set to GitHub releases provider');
+    log.debug('[auto-update] GitHub releases feed configured', {
+      provider: feedOptions.provider,
+      url: feedOptions.url,
       channel: channel ?? 'latest',
       platform: process.platform,
       arch: process.arch,
@@ -194,10 +202,10 @@ class AutoUpdaterService extends EventEmitter {
    */
   private ensureDevUpdateConfig(): void {
     try {
-      const cdnFeedOptions = buildCdnFeedOptions();
+      const feedOptions = buildUpdateFeedOptions();
       const devConfig = [
         'provider: generic',
-        `url: ${cdnFeedOptions.url}`,
+        `url: ${feedOptions.url}`,
         'updaterCacheDirName: com.nanotechs.pixebot',
         '',
       ].join('\n');
@@ -447,6 +455,11 @@ class AutoUpdaterService extends EventEmitter {
         log.debug('[auto-update] Ignoring error after cancellation');
         return;
       }
+      if (isNoPublishedReleaseError(error)) {
+        // Expected while the repo has no release (or none for this platform): stay silent.
+        log.info('[auto-update] No published release found; nothing to update');
+        return;
+      }
       log.error('Auto-updater error:', error);
       this._activeDownloadPromise = null;
       this._activeDownloadCancellationToken = null;
@@ -618,7 +631,7 @@ class AutoUpdaterService extends EventEmitter {
 
       if (this._allowPrerelease) {
         log.info('Skipping electron-updater check for prerelease manual mode');
-        log.debug('[auto-update] CDN stable feed skipped because prerelease mode is handled by GitHub API');
+        log.debug('[auto-update] Stable release feed skipped because prerelease mode is handled by GitHub API');
         return { success: true };
       }
 
@@ -632,7 +645,7 @@ class AutoUpdaterService extends EventEmitter {
       // When isUpdateAvailable is false, updateInfoAndProvider is NOT set internally,
       // so a subsequent downloadUpdate() call would fail with "Please check update first".
       if (!result.isUpdateAvailable) {
-        log.debug('[auto-update] no update available from CDN feed', {
+        log.debug('[auto-update] no update available from release feed', {
           version: result.updateInfo.version,
         });
         return { success: true };
@@ -651,7 +664,7 @@ class AutoUpdaterService extends EventEmitter {
         });
         return { success: true };
       }
-      log.debug('[auto-update] update available from CDN feed', {
+      log.debug('[auto-update] update available from release feed', {
         version: result.updateInfo.version,
         releaseDate: result.updateInfo.releaseDate,
       });
@@ -660,6 +673,10 @@ class AutoUpdaterService extends EventEmitter {
         updateInfo: result.updateInfo,
       };
     } catch (error) {
+      if (isNoPublishedReleaseError(error)) {
+        log.info('[auto-update] No published release found; reporting no update');
+        return { success: true };
+      }
       const message = error instanceof Error ? error.message : String(error);
       log.error('Check for updates failed:', message);
       return {
@@ -908,6 +925,10 @@ class AutoUpdaterService extends EventEmitter {
       autoUpdater.allowDowngrade = false;
       await autoUpdater.checkForUpdatesAndNotify();
     } catch (error) {
+      if (isNoPublishedReleaseError(error)) {
+        log.info('[auto-update] No published release found at startup');
+        return;
+      }
       log.error('Auto-update check failed:', error);
     }
   }

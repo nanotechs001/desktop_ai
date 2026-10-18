@@ -112,7 +112,7 @@ describe('UpdateNotificationCard', () => {
           assets: [],
           recommendedAsset: {
             name: 'AionUi-2.1.14-mac-arm64.dmg',
-            url: 'https://static.aionui.com/releases/2.1.14/AionUi-2.1.14-mac-arm64.dmg',
+            url: 'https://github.com/nanotechs001/desktop_ai/releases/download/v2.1.14/AionUi-2.1.14-mac-arm64.dmg',
             fallbackUrl: 'https://github.com/iOfficeAI/AionUi/releases/download/v2.1.14/AionUi-2.1.14-mac-arm64.dmg',
             size: 123,
           },
