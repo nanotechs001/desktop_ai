@@ -237,7 +237,11 @@ describe('WebviewHost in-page navigations', () => {
   it('ignores an iframe hash change instead of loading the iframe page into the tab', () => {
     const onUrlChange = vi.fn();
     const { container } = render(
-      <WebviewHost url='https://drive.google.com/drive/my-drive' interceptNavigation={false} onUrlChange={onUrlChange} />
+      <WebviewHost
+        url='https://drive.google.com/drive/my-drive'
+        interceptNavigation={false}
+        onUrlChange={onUrlChange}
+      />
     );
     const webview = getWebview(container);
 
