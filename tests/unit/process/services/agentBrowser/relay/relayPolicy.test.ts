@@ -58,6 +58,9 @@ describe('decideRelayCommand: methods', () => {
     ['Page.createIsolatedWorld', { frameId: 'F', worldName: 'aion' }],
     ['Page.reload', { ignoreCache: true }],
     ['DOM.getBoxModel', { backendNodeId: 4 }],
+    ['Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 0, mobile: true }],
+    ['Emulation.clearDeviceMetricsOverride', {}],
+    ['Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }],
   ])('allows %s on an own tab', (method, params) => {
     expect(decide(method, params)).toEqual({ allow: true });
   });

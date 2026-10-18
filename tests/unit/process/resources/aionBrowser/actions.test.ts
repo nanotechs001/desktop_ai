@@ -690,7 +690,15 @@ describe('drag tool', () => {
 describe('fallback tools', () => {
   it('describes screenshot and click_point as fallbacks and every new tool as a pane tool', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(['tabs', 'observe', 'act', 'drag', 'screenshot', 'click_point']);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'tabs',
+      'observe',
+      'act',
+      'drag',
+      'screenshot',
+      'click_point',
+      'viewport',
+    ]);
     for (const tool of tools) expect(tool.description?.startsWith(PANE_SENTENCE)).toBe(true);
     for (const name of ['screenshot', 'click_point']) {
       expect(tools.find((tool) => tool.name === name)?.description).toMatch(/fallback/i);

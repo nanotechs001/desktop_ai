@@ -185,6 +185,58 @@ const clickPointInput = {
   y: z.number().finite(),
 };
 
+const VIEWPORT_DESCRIPTION = `${PANE_SENTENCE} Show a tab at another screen size, e.g. to check a site's mobile layout (BugHerd notes taken on phone screenshots) before verifying a fix.
+- preset mobile (390×844, touch), tablet (820×1180, touch) or desktop (back to the pane's own size).
+- Or width (and optionally height) in CSS px; widths under 768 also emulate a touch phone.
+Stays until you set desktop or the tab closes. Pages that only read their size on load may need a reload. observe, act and screenshot then see the page at that size.`;
+
+/** Emulated screen sizes for the viewport presets (CSS px). */
+const VIEWPORT_PRESETS = {
+  mobile: { width: 390, height: 844, mobile: true },
+  tablet: { width: 820, height: 1180, mobile: true },
+} as const;
+/** Below this width a custom viewport is treated as a phone (touch, mobile meta viewport). */
+const MOBILE_MAX_WIDTH = 767;
+
+const viewportInput = {
+  tab: z.string().optional().describe('A tab id from tabs. Defaults to the current tab.'),
+  preset: z.enum(['mobile', 'tablet', 'desktop']).optional().describe('A ready-made size; desktop clears emulation.'),
+  width: z.number().int().min(240).max(3840).optional().describe('Custom width in CSS px (instead of a preset).'),
+  height: z.number().int().min(240).max(4096).optional().describe('Custom height in CSS px. Defaults per width.'),
+};
+
+type ViewportArgs = { preset?: 'mobile' | 'tablet' | 'desktop'; width?: number; height?: number };
+
+/** Applies (or clears) device emulation on the tab's page session. */
+const setViewport = async (ctx: ActionContext, { preset, width, height }: ViewportArgs): Promise<CallToolResult> => {
+  if (preset === 'desktop' || (!preset && width === undefined)) {
+    if (!preset) return fail('viewport needs a preset (mobile, tablet, desktop) or a width.');
+    await ctx.conn.send('Emulation.clearDeviceMetricsOverride', {}, ctx.sessionId);
+    await ctx.conn.send('Emulation.setTouchEmulationEnabled', { enabled: false }, ctx.sessionId);
+    return ok({ viewport: 'desktop' });
+  }
+  const size = preset
+    ? VIEWPORT_PRESETS[preset]
+    : {
+        width: width as number,
+        height: height ?? ((width as number) <= MOBILE_MAX_WIDTH ? 844 : 1024),
+        mobile: (width as number) <= MOBILE_MAX_WIDTH,
+      };
+  const finalHeight = preset && height ? height : size.height;
+  // deviceScaleFactor 0 keeps the display's own pixel ratio, so screenshots stay a sensible size.
+  await ctx.conn.send(
+    'Emulation.setDeviceMetricsOverride',
+    { width: size.width, height: finalHeight, deviceScaleFactor: 0, mobile: size.mobile },
+    ctx.sessionId
+  );
+  await ctx.conn.send(
+    'Emulation.setTouchEmulationEnabled',
+    size.mobile ? { enabled: true, maxTouchPoints: 5 } : { enabled: false },
+    ctx.sessionId
+  );
+  return ok({ viewport: { width: size.width, height: finalHeight, mobile: size.mobile } });
+};
+
 /** One operation per tab at a time, in call order: concurrent observes of one tab would mint two keys for a frame. */
 const createTabQueue = () => {
   const tails = new Map<string, Promise<unknown>>();
@@ -270,6 +322,12 @@ export function createBrowserMcpServer(relay: RelayClient): McpServer {
     'click_point',
     { description: CLICK_POINT_DESCRIPTION, inputSchema: clickPointInput },
     ({ tab, x, y }) => guarded(() => onTab(relay, queue, tab, async (ctx) => ok(await clickPoint(ctx, x, y))))
+  );
+  server.registerTool(
+    'viewport',
+    { description: VIEWPORT_DESCRIPTION, inputSchema: viewportInput },
+    ({ tab, preset, width, height }) =>
+      guarded(() => onTab(relay, queue, tab, (ctx) => setViewport(ctx, { preset, width, height })))
   );
   return server;
 }

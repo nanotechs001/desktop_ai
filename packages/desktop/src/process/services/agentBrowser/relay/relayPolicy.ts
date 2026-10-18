@@ -104,6 +104,18 @@ const ALLOWED_PARAMS: Readonly<Record<string, ReadonlySet<string>>> = {
   // Only into the client's own isolated world (decideValues): act compares a frame's owner iframe with a hit test.
   'DOM.resolveNode': keys('backendNodeId', 'executionContextId'),
   'Emulation.setFocusEmulationEnabled': keys('enabled'),
+  // The viewport tool: show the tab at a phone/tablet/custom size (and back), e.g. to check a mobile layout.
+  'Emulation.setDeviceMetricsOverride': keys(
+    'width',
+    'height',
+    'deviceScaleFactor',
+    'mobile',
+    'screenWidth',
+    'screenHeight',
+    'screenOrientation'
+  ),
+  'Emulation.clearDeviceMetricsOverride': keys(),
+  'Emulation.setTouchEmulationEnabled': keys('enabled', 'maxTouchPoints'),
   'Input.dispatchMouseEvent': keys(
     ...MOUSE_KEYS,
     'deltaX',
