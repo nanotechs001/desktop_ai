@@ -67,7 +67,7 @@ const EnabledAssistantRow: React.FC<EnabledAssistantRowProps> = ({
   const sourceTag = resolveAssistantSourceTag(assistant.source);
   const sourceLabel =
     sourceTag === 'builtin'
-      ? t('settings.assistantSourceOfficial', { defaultValue: 'Official' })
+      ? t('settings.assistantSourceOfficial', { defaultValue: 'Built-in' })
       : sourceTag === 'cli'
         ? t('settings.assistantSourceCli', { defaultValue: 'CLI' })
         : t('settings.assistantSourceCustom', { defaultValue: 'Custom' });

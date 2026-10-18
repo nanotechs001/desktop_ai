@@ -215,7 +215,7 @@ describe('AssistantSettings', () => {
       'enabled-assistant-row-cli',
     ]);
     expect(screen.queryByTestId('enabled-assistant-row-disabled')).not.toBeInTheDocument();
-    expect(screen.getByText('Official')).toBeInTheDocument();
+    expect(screen.getByText('Built-in')).toBeInTheDocument();
     expect(screen.getByText('Custom')).toBeInTheDocument();
     expect(screen.getByText('CLI')).toBeInTheDocument();
     // Runtime engine is shown with a label + logo (same "Agent: {logo}" style as

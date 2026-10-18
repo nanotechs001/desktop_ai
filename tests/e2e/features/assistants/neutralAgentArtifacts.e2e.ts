@@ -390,11 +390,13 @@ test.describe('Neutral Agent and Artifacts', () => {
 
     // Butler is not an Agent the user can pick or edit.
     await openAgentsPage(page);
+    // The page opens on My VA Bots; the default agent is listed under Enabled.
+    await page.getByTestId('settings-tab-enabled').click();
     await expect(page.locator(`[data-testid="enabled-assistant-row-${DEFAULT_AGENT_ID}"]`)).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.locator('[data-testid*="aionui-assistant"]')).toHaveCount(0);
-    await page.getByText('Official', { exact: true }).first().click();
+    await page.getByTestId('settings-tab-official').click();
     await expect(page.locator('[data-testid*="word-creator"]').first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('[data-testid*="aionui-assistant"]')).toHaveCount(0);
     expect((await chromeText(page, '#root')).filter((text) => REMOVED_FEATURES.test(text))).toEqual([]);

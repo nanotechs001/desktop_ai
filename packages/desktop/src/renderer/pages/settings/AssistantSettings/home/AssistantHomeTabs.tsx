@@ -50,7 +50,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
   onToggleEnabled,
   onReorderEnabled,
   onStartChat,
-  initialTab = 'enabled',
+  initialTab = 'mine',
   onTabChange,
 }) => {
   const { t, i18n } = useTranslation();
@@ -136,18 +136,18 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
             }
             tabs={[
               {
+                key: 'mine',
+                label: t('settings.assistantTabMine', { defaultValue: 'My VA Bots' }),
+                count: counts.mine,
+              },
+              {
                 key: 'enabled',
                 label: t('settings.assistantSectionEnabled', { defaultValue: 'Enabled' }),
                 count: counts.enabled,
               },
               {
-                key: 'mine',
-                label: t('settings.assistantTabMine', { defaultValue: 'My Agents' }),
-                count: counts.mine,
-              },
-              {
                 key: 'official',
-                label: t('settings.assistantTabOfficial', { defaultValue: 'Official' }),
+                label: t('settings.assistantTabOfficial', { defaultValue: 'Built-in' }),
                 count: counts.official,
               },
             ]}

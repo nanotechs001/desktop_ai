@@ -53,13 +53,15 @@ const renderTabs = () =>
 describe('AssistantHomeTabs', () => {
   it("lists Agents only: an engine's generated entry belongs to Settings -> Engine (N-22)", () => {
     renderTabs();
+    // The page opens on My VA Bots; the agents list is under Enabled.
+    fireEvent.click(screen.getByText('Enabled'));
 
     expect(screen.getByTestId('enabled-assistant-row-writer')).toBeInTheDocument();
     expect(screen.getByTestId('enabled-assistant-row-preset')).toBeInTheDocument();
     expect(screen.queryByTestId('enabled-assistant-row-engine')).not.toBeInTheDocument();
     expect(screen.queryByText('Claude Code')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('My Agents'));
+    fireEvent.click(screen.getByText('My VA Bots'));
     expect(screen.queryByTestId('group-cli')).not.toBeInTheDocument();
     expect(screen.queryByText('Claude Code')).not.toBeInTheDocument();
   });
