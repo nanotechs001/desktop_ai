@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "Perfil del navegador",
     "hint": "Las cookies, sesiones, datos de sitios y extensiones propios de este Agente en el panel del navegador, separados de los tuyos.",
+    "importMacOnly": "Importar inicios de sesión desde tu navegador solo funciona en macOS. En Windows, inicia sesión una vez en los sitios dentro del navegador de este Agente; conservará la sesión.",
     "clear": "Borrar datos de navegación",
     "clearConfirm": "¿Borrar las cookies, sesiones y datos de sitios de este Agente? Las pestañas abiertas se actualizan al recargarlas.",
     "clearConfirmOk": "Borrar",

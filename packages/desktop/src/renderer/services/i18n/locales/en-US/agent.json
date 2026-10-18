@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "Browser profile",
     "hint": "This Agent's own cookies, sign-ins, site data and extensions in the browser pane, separate from yours.",
+    "importMacOnly": "Importing sign-ins from your browser works on macOS only. On Windows, sign in to sites inside this Agent's browser once; it keeps the session.",
     "clear": "Clear browsing data",
     "clearConfirm": "Clear this Agent's cookies, sign-ins and site data? Open tabs update after a reload.",
     "clearConfirmOk": "Clear",

@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "瀏覽器設定檔",
     "hint": "此智慧體在瀏覽器窗格中獨立的 Cookie、登入狀態、網站資料與擴充功能，與你的分開。",
+    "importMacOnly": "從你的瀏覽器匯入登入資訊僅支援 macOS。在 Windows 上，請在此智慧體的瀏覽器中登入一次網站，工作階段會被保留。",
     "clear": "清除瀏覽資料",
     "clearConfirm": "清除此智慧體的 Cookie、登入狀態與網站資料？已開啟的標籤頁需重新整理後生效。",
     "clearConfirmOk": "清除",

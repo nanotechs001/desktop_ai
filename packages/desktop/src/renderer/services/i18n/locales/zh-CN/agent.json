@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "浏览器资料",
     "hint": "此智能体在浏览器窗格中独立的 Cookie、登录状态、网站数据和扩展，与你的分开。",
+    "importMacOnly": "从你的浏览器导入登录信息仅支持 macOS。在 Windows 上，请在此智能体的浏览器中登录一次网站，会话会被保留。",
     "clear": "清除浏览数据",
     "clearConfirm": "清除此智能体的 Cookie、登录状态和网站数据？已打开的标签页需刷新后生效。",
     "clearConfirmOk": "清除",

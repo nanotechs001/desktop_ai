@@ -50,6 +50,14 @@ const BrowserProfileSection: React.FC<BrowserProfileSectionProps> = ({ agentId }
             "This Agent's own cookies, sign-ins, site data and extensions in the browser pane, separate from yours.",
         })}
       </div>
+      {!isCookieImportSupported() && (
+        <div className='mb-8px text-12px leading-18px text-t-tertiary' data-testid='browser-profile-import-mac-only'>
+          {t('agent.browserProfile.importMacOnly', {
+            defaultValue:
+              "Importing sign-ins from your browser works on macOS only. On Windows, sign in to sites inside this Agent's browser once; it keeps the session.",
+          })}
+        </div>
+      )}
       <div className='flex flex-wrap gap-8px'>
         {isCookieImportSupported() && (
           <Button type='outline' size='small' className='!rounded-full' onClick={() => setImporting(true)}>

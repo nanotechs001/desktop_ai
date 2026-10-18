@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "Browserprofil",
     "hint": "Eigene Cookies, Anmeldungen, Websitedaten und Erweiterungen dieses Agenten im Browserbereich, getrennt von Ihren.",
+    "importMacOnly": "Anmeldungen aus deinem Browser importieren geht nur unter macOS. Unter Windows meldest du dich einmal im Browser dieses Agenten an; die Sitzung bleibt erhalten.",
     "clear": "Browserdaten löschen",
     "clearConfirm": "Cookies, Anmeldungen und Websitedaten dieses Agenten löschen? Offene Tabs übernehmen das nach dem Neuladen.",
     "clearConfirmOk": "Löschen",

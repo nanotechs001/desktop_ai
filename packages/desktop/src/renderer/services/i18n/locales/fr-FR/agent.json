@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "Profil de navigateur",
     "hint": "Les cookies, connexions, données de sites et extensions propres à cet Agent dans le volet navigateur, séparés des vôtres.",
+    "importMacOnly": "L'import des connexions depuis votre navigateur ne fonctionne que sur macOS. Sous Windows, connectez-vous une fois aux sites dans le navigateur de cet Agent ; la session est conservée.",
     "clear": "Effacer les données de navigation",
     "clearConfirm": "Effacer les cookies, connexions et données de sites de cet Agent ? Les onglets ouverts sont mis à jour après un rechargement.",
     "clearConfirmOk": "Effacer",

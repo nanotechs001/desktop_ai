@@ -89,6 +89,7 @@
   "browserProfile": {
     "title": "Perfil do navegador",
     "hint": "Os cookies, logins, dados de sites e extensões próprios deste Agente no painel do navegador, separados dos seus.",
+    "importMacOnly": "Importar logins do seu navegador funciona apenas no macOS. No Windows, entre nos sites uma vez dentro do navegador deste Agente; a sessão fica salva.",
     "clear": "Limpar dados de navegação",
     "clearConfirm": "Limpar os cookies, logins e dados de sites deste Agente? As abas abertas são atualizadas depois de recarregar.",
     "clearConfirmOk": "Limpar",

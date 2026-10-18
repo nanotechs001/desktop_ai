@@ -99,10 +99,11 @@ vi.mock('@/common', () => ({
   },
 }));
 
+const cookieImport = vi.hoisted(() => ({ supported: true }));
 vi.mock('@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal', () => ({
   default: () => null,
-  // Import from browser is offered on macOS only; these tests cover the macOS editor.
-  isCookieImportSupported: () => true,
+  // Import from browser is offered on macOS only; most tests cover the macOS editor.
+  isCookieImportSupported: () => cookieImport.supported,
 }));
 
 const renderWithProviders = (ui: React.ReactElement) =>
@@ -979,6 +980,31 @@ describe('AssistantEditorSections', () => {
       within(section).getByRole('button', { name: 'preview.browserChrome.cookieImport.menu' })
     ).toBeInTheDocument();
     expect(within(section).queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+
+  it('off macOS, explains that import is Mac-only instead of offering it', () => {
+    cookieImport.supported = false;
+    try {
+      renderWithProviders(
+        <AssistantEditorSections
+          editor={createEditor({ isCreating: false })}
+          activeAssistant={{
+            id: 'aion-default-agent',
+            name: 'Agent',
+            sort_order: 1,
+            source: 'user',
+            enabled: true,
+            agent_id: 'agent-claude',
+          }}
+        />
+      );
+      const section = screen.getByTestId('assistant-card-browser-profile');
+      expect(within(section).getByTestId('browser-profile-import-mac-only')).toBeInTheDocument();
+      expect(within(section).queryByRole('button', { name: 'preview.browserChrome.cookieImport.menu' })).toBeNull();
+      expect(within(section).getByRole('button', { name: 'Clear browsing data' })).toBeInTheDocument();
+    } finally {
+      cookieImport.supported = true;
+    }
   });
 
   it('renders single default-skill and default-mcp controls with hub links', () => {
