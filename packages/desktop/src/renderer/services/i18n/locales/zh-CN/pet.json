@@ -24,6 +24,8 @@
     "closePopup": "关闭对话",
     "returnToMain": "在主窗口中打开",
     "hideWidget": "隐藏小助手",
+    "showHiddenRobots": "显示已隐藏的机器人",
+    "showAllRobots": "全部显示",
     "state": {
       "idle": "就绪",
       "listening": "正在聆听…",

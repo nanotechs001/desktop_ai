@@ -11,6 +11,7 @@ import { initMainAdapterWithWindow } from '@/common/adapter/main';
 import type {
   AgentAnimationState,
   AgentChatLocation,
+  AgentWidgetHiddenRobot,
   AgentWidgetLayout,
   AgentWidgetPersistedState,
   AgentWidgetRecord,
@@ -217,6 +218,7 @@ export class AgentWidgetManager {
     if (sibling) this.retarget(sibling.conversation_id, conversationId);
     const existing = this.state.widgets[conversationId];
     if (!force && (existing ? existing.hidden : !this.state.settings.autoLaunch)) return false;
+    const wasHidden = existing?.hidden === true;
     const record: AgentWidgetRecord = existing ?? {
       widget_id: randomUUID(),
       conversation_id: conversationId,
@@ -229,7 +231,19 @@ export class AgentWidgetManager {
     this.state.widgets[conversationId] = record;
     if (this.needsWindow(conversationId)) this.open(record);
     void this.persist();
+    if (wasHidden || sibling?.hidden) this.emitHiddenChanged();
     return true;
+  }
+
+  /** Robots the user hid, so the app can offer to show them again. */
+  listHidden(): AgentWidgetHiddenRobot[] {
+    return Object.values(this.state.widgets)
+      .filter((record) => record.hidden)
+      .map((record) => ({ conversation_id: record.conversation_id, agent_id: record.agent_id }));
+  }
+
+  private emitHiddenChanged(): void {
+    ipcBridge.agentWidget.hiddenChanged.emit(this.listHidden());
   }
 
   /** Remove the desktop widget only; the agent keeps running and the chat returns to the main window. */
@@ -242,6 +256,7 @@ export class AgentWidgetManager {
     const entry = this.entries.get(conversationId);
     if (entry) this.disappear(entry, 'destroy');
     void this.persist();
+    this.emitHiddenChanged();
   }
 
   /** The conversation is gone (deleted/archived/terminated): drop window, draft and saved state. */
@@ -249,9 +264,11 @@ export class AgentWidgetManager {
     const entry = this.entries.get(conversationId);
     if (entry) this.disappear(entry, 'destroy');
     this.drafts.delete(conversationId);
-    if (this.state.widgets[conversationId]) {
+    const record = this.state.widgets[conversationId];
+    if (record) {
       delete this.state.widgets[conversationId];
       void this.persist();
+      if (record.hidden) this.emitHiddenChanged();
     }
   }
 

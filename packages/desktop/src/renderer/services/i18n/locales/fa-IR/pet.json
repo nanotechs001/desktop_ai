@@ -24,6 +24,8 @@
     "closePopup": "بستن گفتگو",
     "returnToMain": "باز کردن در پنجره اصلی",
     "hideWidget": "پنهان کردن ویجت",
+    "showHiddenRobots": "نمایش ربات‌های پنهان",
+    "showAllRobots": "نمایش همه",
     "state": {
       "idle": "آماده",
       "listening": "در حال شنیدن…",

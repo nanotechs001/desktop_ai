@@ -24,6 +24,8 @@
     "closePopup": "Sohbeti kapat",
     "returnToMain": "Ana pencerede aç",
     "hideWidget": "Widget’ı gizle",
+    "showHiddenRobots": "Gizli robotları göster",
+    "showAllRobots": "Tümünü göster",
     "state": {
       "idle": "Hazır",
       "listening": "Dinliyor…",

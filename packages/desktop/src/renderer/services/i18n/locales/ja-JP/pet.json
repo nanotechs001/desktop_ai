@@ -24,6 +24,8 @@
     "closePopup": "チャットを閉じる",
     "returnToMain": "メインウィンドウで開く",
     "hideWidget": "ウィジェットを非表示",
+    "showHiddenRobots": "非表示のロボットを表示",
+    "showAllRobots": "すべて表示",
     "state": {
       "idle": "待機中",
       "listening": "聞き取り中…",

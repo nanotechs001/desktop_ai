@@ -48,6 +48,7 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
     return manager.ensure(conversation_id, force, agent_id);
   });
   w.hide.provider(async (p) => manager.hide(parse(target, p, 'hide').conversation_id));
+  w.listHidden.provider(async () => manager.listHidden());
   w.remove.provider(async (p) => manager.remove(parse(target, p, 'remove').conversation_id));
   w.getSnapshot.provider(async (p) => manager.getSnapshot(parse(target, p, 'getSnapshot').conversation_id));
   w.setExpanded.provider(async (p) => {

@@ -24,6 +24,8 @@
     "closePopup": "채팅 닫기",
     "returnToMain": "메인 창에서 열기",
     "hideWidget": "위젯 숨기기",
+    "showHiddenRobots": "숨긴 로봇 표시",
+    "showAllRobots": "모두 표시",
     "state": {
       "idle": "준비됨",
       "listening": "듣는 중…",

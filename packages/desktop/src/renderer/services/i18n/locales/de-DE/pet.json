@@ -24,6 +24,8 @@
     "closePopup": "Chat schließen",
     "returnToMain": "Im Hauptfenster öffnen",
     "hideWidget": "Widget ausblenden",
+    "showHiddenRobots": "Ausgeblendete Roboter anzeigen",
+    "showAllRobots": "Alle anzeigen",
     "state": {
       "idle": "Bereit",
       "listening": "Hört zu…",

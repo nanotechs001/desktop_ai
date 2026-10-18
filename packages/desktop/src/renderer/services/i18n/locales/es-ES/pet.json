@@ -24,6 +24,8 @@
     "closePopup": "Cerrar chat",
     "returnToMain": "Abrir en la ventana principal",
     "hideWidget": "Ocultar widget",
+    "showHiddenRobots": "Mostrar robots ocultos",
+    "showAllRobots": "Mostrar todos",
     "state": {
       "idle": "Listo",
       "listening": "Escuchando…",

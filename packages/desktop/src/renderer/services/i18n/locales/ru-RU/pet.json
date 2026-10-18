@@ -24,6 +24,8 @@
     "closePopup": "Закрыть чат",
     "returnToMain": "Открыть в главном окне",
     "hideWidget": "Скрыть виджет",
+    "showHiddenRobots": "Показать скрытых роботов",
+    "showAllRobots": "Показать всех",
     "state": {
       "idle": "Готов",
       "listening": "Слушает…",

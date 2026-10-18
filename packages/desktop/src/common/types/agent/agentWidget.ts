@@ -70,6 +70,9 @@ export type AgentWidgetRecord = {
   modified_at?: number;
 };
 
+/** A robot the user hid ("Hide widget"); the titlebar lists these so they can be shown again. */
+export type AgentWidgetHiddenRobot = { conversation_id: string; agent_id?: string };
+
 export type AgentWidgetPersistedState = {
   settings: AgentWidgetSettings;
   widgets: Record<string, AgentWidgetRecord>;

@@ -24,6 +24,8 @@
     "closePopup": "Fermer la conversation",
     "returnToMain": "Ouvrir dans la fenêtre principale",
     "hideWidget": "Masquer le widget",
+    "showHiddenRobots": "Afficher les robots masqués",
+    "showAllRobots": "Tout afficher",
     "state": {
       "idle": "Prêt",
       "listening": "À l’écoute…",

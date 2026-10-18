@@ -113,6 +113,7 @@ import type { AttachFolderRequest, ProjectDetailDto, ProjectEntryDto } from '@/c
 import type {
   AgentAnimationState,
   AgentChatLocation,
+  AgentWidgetHiddenRobot,
   AgentWidgetLayout,
   AgentWidgetLifecycleAnimation,
   AgentWidgetSettings,
@@ -1687,6 +1688,10 @@ export const agentWidget = {
   ),
   /** Remove the desktop widget; the agent keeps running. */
   hide: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:hide'),
+  /** Robots the user hid (shown again with `ensure` + `force`). */
+  listHidden: bridge.buildProvider<AgentWidgetHiddenRobot[], void>('agent-widget:list-hidden'),
+  /** Main → renderers: the set of hidden robots changed. */
+  hiddenChanged: bridge.buildEmitter<AgentWidgetHiddenRobot[]>('agent-widget:hidden-changed'),
   /** Conversation deleted/archived: destroy the window and forget its saved state. */
   remove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:remove'),
   getSnapshot: bridge.buildProvider<AgentWidgetSnapshot | null, AgentWidgetTarget>('agent-widget:get-snapshot'),

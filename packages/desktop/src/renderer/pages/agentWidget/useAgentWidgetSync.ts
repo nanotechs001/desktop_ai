@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
-import type { AgentWidgetSettings } from '@/common/types/agent/agentWidget';
+import type { AgentWidgetHiddenRobot, AgentWidgetSettings } from '@/common/types/agent/agentWidget';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
@@ -95,4 +95,43 @@ export function useSuspendAgentWidget(conversationId: string | undefined, chatOp
     set(true);
     return () => set(false);
   }, [conversationId, suspended]);
+}
+
+/** The robots the user hid (main window only; [] elsewhere), kept current as robots are hidden or shown. */
+export function useHiddenRobots(): AgentWidgetHiddenRobot[] {
+  const [hidden, setHidden] = useState<AgentWidgetHiddenRobot[]>([]);
+  useEffect(() => {
+    if (!isElectronDesktop() || getWidgetConversationId()) return;
+    let active = true;
+    void ipcBridge.agentWidget.listHidden
+      .invoke()
+      .then((list) => active && setHidden(list ?? []))
+      .catch(() => {});
+    const off = ipcBridge.agentWidget.hiddenChanged.on((list) => setHidden(list ?? []));
+    return () => {
+      active = false;
+      off();
+    };
+  }, []);
+  return hidden;
+}
+
+/**
+ * Chatting with a VA Bot in the main window brings back its robot if the user had hidden it (the robot still steps
+ * aside while this chat is open, see useSuspendAgentWidget). Bots that never had a robot are left alone.
+ */
+export function useRestoreHiddenAgentWidget(conversationId: string | undefined, agentId: string | undefined): void {
+  useEffect(() => {
+    if (!conversationId || !isElectronDesktop() || getWidgetConversationId()) return;
+    void ipcBridge.agentWidget.listHidden
+      .invoke()
+      .then((list) => {
+        const hiddenHere = (list ?? []).some(
+          (robot) => robot.conversation_id === conversationId || (agentId && robot.agent_id === agentId)
+        );
+        if (!hiddenHere) return;
+        return ipcBridge.agentWidget.ensure.invoke({ conversation_id: conversationId, force: true, agent_id: agentId });
+      })
+      .catch(() => {});
+  }, [conversationId, agentId]);
 }

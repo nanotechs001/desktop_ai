@@ -13,6 +13,7 @@ import type { TChatConversation } from '@/common/config/storage';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
+import HiddenRobotsButton from './HiddenRobotsButton';
 import HistoryPanel from './HistoryPanel';
 
 /** The VA Bots mark: the robot's helmet, visor and orbit ring, drawn in the toolbar's current color. */
@@ -130,16 +131,21 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
   return (
     <>
       {items.map((item) => (
-        <Button
-          key={item.key}
-          type='text'
-          size='mini'
-          className={buttonClassName}
-          icon={item.icon}
-          onClick={item.onClick}
-          aria-label={item.label}
-          title={item.label}
-        />
+        <React.Fragment key={item.key}>
+          <Button
+            type='text'
+            size='mini'
+            className={buttonClassName}
+            icon={item.icon}
+            onClick={item.onClick}
+            aria-label={item.label}
+            title={item.label}
+          />
+          {/* Next to VA Bots: only rendered while some bots' robots are hidden. */}
+          {item.key === 'assistants' && (
+            <HiddenRobotsButton buttonClassName={buttonClassName} iconSize={iconSize} strokeWidth={strokeWidth} />
+          )}
+        </React.Fragment>
       ))}
       <HistoryPanel
         open={historyOpen}

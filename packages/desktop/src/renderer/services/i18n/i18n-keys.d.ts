@@ -1354,6 +1354,8 @@ export type I18nKey =
   | 'pet.widget.settings.returnChats'
   | 'pet.widget.settings.scale'
   | 'pet.widget.settings.title'
+  | 'pet.widget.showAllRobots'
+  | 'pet.widget.showHiddenRobots'
   | 'pet.widget.showWidget'
   | 'pet.widget.state.error'
   | 'pet.widget.state.idle'

@@ -22,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { emitter } from '../../../utils/emitter';
 import { useChatLocation } from '@/renderer/pages/agentWidget/chatLocation';
-import { useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
+import { useRestoreHiddenAgentWidget, useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 import WidgetChatPlaceholder, { ShowAgentWidgetButton } from '@/renderer/pages/agentWidget/WidgetChatPlaceholder';
 import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
 import {
@@ -279,6 +279,11 @@ const ChatConversation: React.FC<{
   const chatLocation = useChatLocation(conversation?.id);
   // Watching this VA Bot's chat here: its taskbar robot steps away until the chat closes or the user moves on.
   useSuspendAgentWidget(isVaBot ? conversation?.id : undefined, !isVaChatCollapsed && chatLocation === 'main');
+  // Chatting with a VA Bot brings back its robot if it was hidden (not for read-only legacy chats).
+  useRestoreHiddenAgentWidget(
+    isVaBot && !isLegacyReadOnlyConversation ? conversation?.id : undefined,
+    conversation?.assistant?.id
+  );
   const conversationNode = useMemo(() => {
     if (!conversation || isAionrsConversation) return null;
     // The floating widget owns this chat right now; the browser/preview pane stays here.

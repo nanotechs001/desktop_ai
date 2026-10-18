@@ -120,6 +120,7 @@ vi.mock('@/common', () => {
     'setSettings',
     'ensure',
     'hide',
+    'listHidden',
     'remove',
     'getSnapshot',
     'setExpanded',
@@ -145,6 +146,7 @@ vi.mock('@/common', () => {
     'settingsChanged',
     'lifecycle',
     'retargeted',
+    'hiddenChanged',
   ];
   const agentWidget: Record<string, unknown> = {};
   for (const name of providerNames) {
@@ -686,6 +688,51 @@ describe('appearing and disappearing', () => {
     expect(manager.ensure(A, true)).toBe(true);
     expect(liveWindows()).toHaveLength(1);
     expect(manager.getSnapshot(A)).not.toBeNull();
+  });
+});
+
+describe('showing hidden robots again', () => {
+  it('lists the robots the user hid and announces each change', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    manager.ensure(B, false, 'bot-2');
+    expect(manager.listHidden()).toEqual([]);
+
+    manager.hide(A);
+    expect(manager.listHidden()).toEqual([{ conversation_id: A, agent_id: 'bot-1' }]);
+    expect(emittedOf('hiddenChanged').at(-1)).toEqual([{ conversation_id: A, agent_id: 'bot-1' }]);
+
+    expect(manager.ensure(A, true, 'bot-1')).toBe(true);
+    expect(manager.listHidden()).toEqual([]);
+    expect(emittedOf('hiddenChanged').at(-1)).toEqual([]);
+    expect(liveWindows()).toHaveLength(2);
+  });
+
+  it('showing a bot again from another of its chats moves the hidden robot there', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    manager.hide(A);
+    expect(manager.ensure(B, true, 'bot-1')).toBe(true);
+    expect(manager.listHidden()).toEqual([]);
+    expect(manager.getSnapshot(B)?.record).toMatchObject({ conversation_id: B, hidden: false });
+    expect(emittedOf('hiddenChanged').at(-1)).toEqual([]);
+  });
+
+  it('a hidden robot whose chat is removed leaves the list', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.hide(A);
+    manager.remove(A);
+    expect(manager.listHidden()).toEqual([]);
+    expect(emittedOf('hiddenChanged').at(-1)).toEqual([]);
+  });
+
+  it('lists hidden robots over IPC', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A);
+    manager.hide(A);
+    await expect(h.providers.listHidden(undefined)).resolves.toEqual([{ conversation_id: A, agent_id: undefined }]);
   });
 });
 
