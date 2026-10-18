@@ -228,6 +228,38 @@ describe('WebviewHost __WEBVIEW_HOST_NAVIGATE__ marker', () => {
   });
 });
 
+const inPageNavigation = (url: string, isMainFrame: boolean): Event =>
+  Object.assign(new Event('did-navigate-in-page'), { url, isMainFrame });
+
+describe('WebviewHost in-page navigations', () => {
+  const IFRAME_URL = 'https://studio.workspace.google.com/u/0/sidepanel#state=1';
+
+  it('ignores an iframe hash change instead of loading the iframe page into the tab', () => {
+    const onUrlChange = vi.fn();
+    const { container } = render(
+      <WebviewHost url='https://drive.google.com/drive/my-drive' interceptNavigation={false} onUrlChange={onUrlChange} />
+    );
+    const webview = getWebview(container);
+
+    fire(webview, inPageNavigation(IFRAME_URL, false));
+
+    expect(webview.getAttribute('src')).toBe('https://drive.google.com/drive/my-drive');
+    expect(onUrlChange).not.toHaveBeenCalledWith(IFRAME_URL);
+  });
+
+  it('still follows a main-frame hash change', () => {
+    const onUrlChange = vi.fn();
+    const { container } = render(
+      <WebviewHost url='https://mail.google.com/mail/u/0/' interceptNavigation={false} onUrlChange={onUrlChange} />
+    );
+    const webview = getWebview(container);
+
+    fire(webview, inPageNavigation('https://mail.google.com/mail/u/0/#inbox', true));
+
+    expect(onUrlChange).toHaveBeenCalledWith('https://mail.google.com/mail/u/0/#inbox');
+  });
+});
+
 describe('WebviewHost StarOffice zoom with interceptNavigation=false', () => {
   // isStarOfficeUrl: localhost / 127.0.0.1 on port 18791, 18888 or 19000.
   const STAROFFICE_URL = 'http://127.0.0.1:18791/';

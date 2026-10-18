@@ -350,7 +350,11 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       }
     };
 
-    const handleDidNavigate = (event: Event & { url?: string }) => {
+    const handleDidNavigate = (event: Event & { url?: string; isMainFrame?: boolean }) => {
+      // `did-navigate-in-page` also fires for iframes (isMainFrame: false). Gmail/Drive iframes (contacts hovercard,
+      // Workspace side panel) change their #hash constantly; taking their URL as the tab's would reload the whole tab
+      // with the iframe page (src={currentUrl}). `did-navigate` only fires for the main frame.
+      if (event.isMainFrame === false) return;
       const newUrl = event.url;
       if (newUrl && newUrl !== currentUrl) {
         internalNavRef.current.record(newUrl);
