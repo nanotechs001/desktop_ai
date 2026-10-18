@@ -40,7 +40,21 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 **Branding**
 
 - All user-facing text, titles, tray, installer name (`Pixebot Browser`, executable `PixebotBrowser`) rebranded in 13 languages. Internal names kept on purpose: `aioncore`, `AIONUI_*` env vars, `@aionui` packages, dev data folder `AionUi-Dev`. The installed app uses `com.nanotechs.pixebot` and `%APPDATA%\Pixebot Browser` (see Decisions).
-- Logo: the transparent robot (`assets/branding/logo-mark.webp`) is the app icon, tray/notification icon, PWA icons and in-app logo. Rebuild with `node tools/build-app-icons.cjs`. macOS `app.icns` is **not** regenerated (needs a Mac).
+- Logo: the transparent robot (`assets/branding/logo-mark.webp`) is the app icon, tray/notification icon, PWA icons and in-app logo. Rebuild with `node tools/build-app-icons.cjs`, which also writes macOS `resources/app.icns` (PNG-encoded entries, no Mac needed; 2026-10-18) and the mobile icons.
+
+**macOS build (status 2026-10-18: not built yet)**
+
+- Icon and identity are rebranded (`app.icns`, `productName`, `appId com.nanotechs.pixebot`); data lands in `~/Library/Application Support/Pixebot Browser`.
+- Needs a Mac (or a macOS CI runner): `scripts/prepareLocalCore.js` builds `core/` for the host only, so run `bun run build-mac:arm64` / `build-mac:x64` on that architecture (or `AIONUI_BACKEND_SOURCE=release`, which bundles the stock backend without our fixes).
+- Signing/notarization: `electron-builder.yml` `mac` uses hardened runtime + `entitlements.plist`; `scripts/afterSign.js` notarizes only when `appleId` / `appleIdPassword` (and a Developer ID certificate via `CSC_LINK`/keychain) are set — otherwise the app is unsigned and Gatekeeper blocks it on other Macs.
+- Never run on macOS: the robot widget (always-on-top level `floating`, click-through), browser panel and updater (`latest-mac.yml` in GitHub releases) need a check on a real Mac.
+- `.github/workflows/build-and-release.yml` etc. are upstream's CI; they don't use `prepareLocalCore` and need adapting before CI can produce Mac builds.
+
+**Mobile app (`mobile/`, Expo) — rebranded 2026-10-18, not built yet**
+
+- Name "Pixebot", slug `pixebot-mobile`, scheme `pixebot`, bundle id / package `com.nanotechs.pixebot.mobile`, new icon (`icon.png`, opaque navy for iOS) + Android adaptive foreground (`adaptive-icon.png`, bg `#0E1630`), QR-login hints point at "Pixebot Browser → Settings → Remote → QR Code Login" in all 5 locales. Storage keys (`aionui_connection`, `aionui_language`) kept so saved logins survive.
+- Upstream's Expo project id (`extra.eas.projectId`) and the upstream author's Apple ID / team were removed from `app.config.ts`, `eas.json` and `scripts/build.js`. Before building: create an Expo account/project and run `eas init` in `mobile/`; set `EXPO_APPLE_ID`, `EXPO_APPLE_TEAM_ID` (and `APPLE_ID` for direct TestFlight upload); iOS builds need an Apple Developer account and a Mac (or EAS cloud build).
+- What it is: a remote client for the desktop app's Remote (WebUI) server, paired by QR code; it has no VA Bot robots.
 - README rewritten for the new app.
 
 **Layout and navigation**
@@ -58,7 +72,8 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 - Multi-monitor fix for mixed scaling (125% laptop + 100% monitor).
 - Code: `packages/desktop/src/process/pet/agentWidget/` (window manager), `packages/desktop/src/renderer/pages/agentWidget/` (robot page, animation clock, popup). Tests: `tests/integration/agentWidget/` (113 passing).
 - (2026-10-18, uncommitted) No status label under the robot; its VA Bot name (`conversation.assistant.name`, else the chat title) fades in on hover/keyboard focus (`.marker` in `AgentWidget.module.css`).
-- (2026-10-18, uncommitted) Popup history: the row "..." menu (archive, pin, rename…), dialogs and toasts render into `<body>`, outside `[data-widget-hit]`, so the click-through logic let clicks fall to the desktop. `WIDGET_HIT_SELECTOR` in `pages/agentWidget/index.tsx` now also counts `.arco-trigger`, `.arco-modal-wrapper`, `.arco-message-wrapper`. Archiving/deleting the robot's current chat from its own popup now removes the robot (the main window's listener never hears the widget window's events). Not yet checked: whether the main window's sidebar refreshes after an archive done in the widget (the backend sends no `listChanged` for archives).
+- (2026-10-18, uncommitted) Smooth drag path: the robot now moves on each renderer pointer move (`agentWidget.dragMove`, once per frame) instead of only a 16 ms main-process timer (Windows timers fire at ~15.6 ms granularity, so the path stepped unevenly). The timer remains as a fallback when pointer moves go quiet for 50 ms; the 8 s watchdog counts from the last move; `restoreAfterDpiChange` ignores 1px DIP rounding so a step never moves the window twice.
+- (2026-10-18) Popup history: the row "..." menu (archive, pin, rename…), dialogs and toasts render into `<body>`, outside `[data-widget-hit]`, so the click-through logic let clicks fall to the desktop. `WIDGET_HIT_SELECTOR` in `pages/agentWidget/index.tsx` now also counts `.arco-trigger`, `.arco-modal-wrapper`, `.arco-message-wrapper`. Archiving/deleting the robot's current chat from its own popup now removes the robot (the main window's listener never hears the widget window's events). Not yet checked: whether the main window's sidebar refreshes after an archive done in the widget (the backend sends no `listChanged` for archives).
 
 **Settings pages (2026-10-18, uncommitted)**
 
