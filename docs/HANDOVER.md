@@ -19,6 +19,11 @@ Commits on the branch (oldest first):
 1. `5160386ec` feat: Pixebot Browser rebrand, VA Bots and floating desktop robots
 2. `7ae079286` / `2e3c38dab` chore(core): add AionCore backend under `core/`
 3. `94404d22d` build(core): run the app on the in-repo backend
+4. `d02d36c74` feat(titlebar): halo-orb VA Bots icon, drop logo from nav; add handover notes (also reformatted `core/` by accident)
+5. `a8c9ec823` chore(core): undo accidental formatting of the backend sources (`core/` now matches `2e3c38dab` exactly)
+6. `3d69252c2` chore: keep formatter and linter out of `core/` (`.prettierignore`, `.oxlintrc.json`)
+
+**Status check (2026-10-18):** working tree clean; branch has no upstream (not pushed). `core/target/release/aioncore.exe` is built (14:14). Installer steps 1–2 below were done and the backend bundle verified later the same day, the appId and data folder were switched (Decisions 1–2), and a test installer was rebuilt (all uncommitted); next is step 4, installing and checking it. The upstream-disconnect items are still open (`publish` and `DEFAULT_REPO` still point at `iOfficeAI/AionUi`).
 
 ## Run it
 
@@ -34,7 +39,7 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 
 **Branding**
 
-- All user-facing text, titles, tray, installer name (`Pixebot Browser`, executable `PixebotBrowser`) rebranded in 13 languages. Internal names kept on purpose: `aioncore`, `AIONUI_*` env vars, `@aionui` packages, data folder `AionUi`.
+- All user-facing text, titles, tray, installer name (`Pixebot Browser`, executable `PixebotBrowser`) rebranded in 13 languages. Internal names kept on purpose: `aioncore`, `AIONUI_*` env vars, `@aionui` packages, dev data folder `AionUi-Dev`. The installed app uses `com.nanotechs.pixebot` and `%APPDATA%\Pixebot Browser` (see Decisions).
 - Logo: the transparent robot (`assets/branding/logo-mark.webp`) is the app icon, tray/notification icon, PWA icons and in-app logo. Rebuild with `node tools/build-app-icons.cjs`. macOS `app.icns` is **not** regenerated (needs a Mac).
 - README rewritten for the new app.
 
@@ -52,6 +57,20 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 - One robot per bot: a new session moves the existing robot; older per-conversation robots collapse to the newest on startup. Robot popup history (overlay with back button) switches the robot's conversation.
 - Multi-monitor fix for mixed scaling (125% laptop + 100% monitor).
 - Code: `packages/desktop/src/process/pet/agentWidget/` (window manager), `packages/desktop/src/renderer/pages/agentWidget/` (robot page, animation clock, popup). Tests: `tests/integration/agentWidget/` (113 passing).
+- (2026-10-18, uncommitted) No status label under the robot; its VA Bot name (`conversation.assistant.name`, else the chat title) fades in on hover/keyboard focus (`.marker` in `AgentWidget.module.css`).
+- (2026-10-18, uncommitted) Popup history: the row "..." menu (archive, pin, rename…), dialogs and toasts render into `<body>`, outside `[data-widget-hit]`, so the click-through logic let clicks fall to the desktop. `WIDGET_HIT_SELECTOR` in `pages/agentWidget/index.tsx` now also counts `.arco-trigger`, `.arco-modal-wrapper`, `.arco-message-wrapper`. Archiving/deleting the robot's current chat from its own popup now removes the robot (the main window's listener never hears the widget window's events). Not yet checked: whether the main window's sidebar refreshes after an archive done in the widget (the backend sends no `listChanged` for archives).
+
+**Settings pages (2026-10-18, uncommitted)**
+
+- VA Bots page: the default chat agent (stored as a `source: 'user'` Agent) is no longer listed or counted under "My VA Bots" (`groupMyAssistants(assistants, storedDefaultId)` + `isVaBotAgent` in `AssistantHomeTabs`). It still counts under "Enabled".
+- Engine page (`AgentSettings/LocalAgents.tsx`): no "All" tab (default tab is "Available"); the built-in CLI (`isBuiltinAionCli`: `agent_type 'aionrs'`, `agent_source 'internal'`) is not listed. It is still the default engine everywhere else, but there is no longer a UI to set it back as default after picking another engine.
+- About page: title from `APP_PRODUCT_NAME`; GitHub icon, Help (`#readme`), Update Log (`/releases`) and Contact (`/issues`) point at `APP_REPO_URL` (`common/config/constants.ts`); "Official Website" removed (no site yet). The update check itself is unchanged (see Next).
+
+**Official agents (VA Bots "Official" tab)**
+
+- Defined only in this repo and compiled into the backend: `core/crates/aionui-app/assets/builtin-assistants/` (`assistants.json`, `rules/<id>.<locale>.md`, `avatars/<id>.jpg`) and `core/crates/aionui-app/assets/builtin-skills/` (embedded via `include_dir!` in `aionui-assistant/src/builtin.rs` and `aionui-extension/src/skill_service.rs`). Nothing fetches them at runtime. Edit them there and rebuild `core/`.
+- They come from upstream only if the backend does: `AIONUI_BACKEND_SOURCE=release` builds and `scripts/pack-web-cli.js` (always downloads) bundle the stock AionCore with upstream's agents. A `git subtree pull` into `core/` can overwrite local edits to these files.
+- Their texts still say "AionUi" in places (`assistants.json` descriptions, ~10 English rule files); some of those are internal names (e.g. `aionui-config` skill), so rebrand by hand, not search-and-replace.
 
 **Backend**
 
@@ -65,8 +84,11 @@ Goal: `bun run build-win:x64` produces a Pixebot Browser installer that bundles 
 
 Plan:
 
-1. Add `scripts/prepareLocalCore.js`: run `scripts/buildCore.js`, copy `core/target/release/aioncore(.exe)` to `resources/bundled-aioncore/<platform>-<arch>/`, then run `aioncore prepare-managed-resources --bundle-out <that dir>/managed-resources` (produces the bundled Node runtime) and write `manifest.json` (`sourceType: "local-core"`). Host platform/arch only.
-2. In `scripts/build-with-builder.js` step 5, replace `prepareAioncore(...)` (downloads from `iOfficeAI/AionCore`) with `prepareLocalCore(...)`.
+1. ✅ `scripts/prepareLocalCore.js` (uncommitted): runs `scripts/buildCore.js`, copies `core/target/release/aioncore(.exe)` to `resources/bundled-aioncore/<platform>-<arch>/`, runs `aioncore prepare-managed-resources` into `managed-resources/`, writes `manifest.json` (`sourceType: "local-core"`, version from `core/Cargo.toml`) and runs the bundle verifier. Host platform/arch only; any other target fails with a clear message. Run alone: `node scripts/prepareLocalCore.js`. Test: `tests/unit/assets/prepareLocalCore.test.ts`.
+2. ✅ `scripts/build-with-builder.js` step 5 now calls `prepareLocalCore(...)`. Set `AIONUI_BACKEND_SOURCE=release` to get the old behaviour (stock download from `iOfficeAI/AionCore`, needed for cross-arch builds). `prepareManagedResources` is now exported from `packages/shared-scripts/src/prepare-aioncore.js`; the build test mock covers the new module.
+   - **Verified 2026-10-18:** `node scripts/prepareLocalCore.js` succeeded. `resources/bundled-aioncore/win32-x64/` now has `sourceType: "local-core"`, `version: "v0.2.2"`, an `aioncore.exe` byte-identical to `core/target/release/aioncore.exe` (contains the `updatedPermissions` fix), `managed-resources/` with Node v24.11.0 (196 MB in total), and it passes the bundle verifier. The bundled binary starts (`--help`).
+   - **Gotcha:** close the dev app (`bun run start`) first. Windows locks `core/target/release/aioncore.exe` while it runs, and cargo then fails with "Access is denied (os error 5)".
+   - **Installer built 2026-10-18** with `bun run build-win:x64:fast` (~8 min): `out/Pixebot Browser-2.2.2-win-x64.exe` (246 MB, unsigned test build). `out/win-unpacked/resources/bundled-aioncore/win32-x64/` holds `sourceType: "local-core"` and an `aioncore.exe` byte-identical to the `core/` build. The installer version is still `2.2.2`, inherited from AionUi's `package.json`.
 3. Build: `bun run build-win:x64` (or `build-win:x64:fast` for an unsigned, low-compression test build). Output in `out/`.
 4. Install it and check: app starts, backend healthy, robots appear, "Always allow" sticks.
 
@@ -74,14 +96,14 @@ Plan:
 
 Functional (do first; these would talk to upstream):
 
-- [ ] Auto-updater: `packages/desktop/src/process/bridge/updateBridge.ts` `DEFAULT_REPO = 'iOfficeAI/AionUi'` → `nanotechs001/desktop_ai`, or disable updates until releases exist. Today the app could offer to "update" to stock AionUi.
+- [ ] Auto-updater — **decided 2026-10-18: point it at `nanotechs001/desktop_ai` releases** (`APP_GITHUB_REPO`). Bigger than a repo swap: the source of truth is upstream's CDN `static.aionui.com/releases` — `process/services/updateFeed.ts` (`CDN_UPDATE_BASE_URL`, electron-updater feed via `CdnGenericProvider`, asset path `{base}/{version}/{file}`) and `process/bridge/updateBridge.ts` (`CDN_HOST`, `fetchCdnManifest`, `rewriteAssetUrlToCDN`, `DEFAULT_REPO`). GitHub layout differs: channel file at `releases/latest/download/latest.yml`, assets at `releases/download/v{version}/{file}`. A missing manifest (no releases yet) should read as "up to date", not an error. Tests: `tests/unit/updateBridgeCdn*.test.ts`, `tests/unit/process/services/{autoUpdaterService,cdnUpdateFeed}.test.ts`. Today the app could offer to "update" to stock AionUi once upstream ships a newer version.
 - [ ] `packages/desktop/electron-builder.yml` `publish.owner/repo` (`iOfficeAI/AionUi`) → `nanotechs001/desktop_ai`.
 - [ ] `useUpdateNotificationController.ts` releases URL → own releases page.
 - [ ] Backend download (`packages/shared-scripts/src/prepare-aioncore.js`, `scripts/prepareAioncore.js`) — replaced by the step above; keep only as an optional fallback or remove.
 
 In-app links (repoint to the own repo, or hide when there is no equivalent):
 
-- [ ] About page (repo, wiki, releases), home quick-action GitHub link, LLM config and ACP setup wiki links, tools page wiki links, skills-market banner discussions, AionHub link, DingTalk docs link.
+- [x] About page (done 2026-10-18). Still open: home quick-action GitHub link, LLM config and ACP setup wiki links, tools page wiki links, skills-market banner discussions, AionHub link, DingTalk docs link.
 - Keep: OfficeCLI links (`iOfficeAI/OfficeCLI` is a third-party tool the app uses).
 
 Repo infrastructure:
@@ -90,8 +112,8 @@ Repo infrastructure:
 
 ## Decisions needed
 
-1. **Installer identity (`appId: com.aionui.app`).** Same id as stock AionUi, so installing one upgrades/replaces the other on Windows. Recommend a new id (e.g. `com.nanotechs.pixebot`).
-2. **Production data folder (`%APPDATA%\AionUi`).** Kept earlier so chats would carry over, but it is shared with a stock AionUi install, and their backends can disagree on database migrations. Recommend `Pixebot Browser` unless existing installed-app data must carry over (none exists on this machine).
+1. ✅ **Installer identity — decided 2026-10-18:** `appId: com.nanotechs.pixebot` (`electron-builder.yml`, `WINDOWS_APP_USER_MODEL_ID` in `process/startup/windowsAppUserModelId.ts`, dev updater `updaterCacheDirName`). It no longer replaces or upgrades a stock AionUi install.
+2. ✅ **Production data folder — decided 2026-10-18:** `%APPDATA%\Pixebot Browser` (`PRODUCTION_DATA_DIR_NAME` in `process/utils/configureChromium.ts`). The installer failure marker follows it (`process/services/installerLastFailure.ts` and `resources/windows/installer-process-control.nsh`); keep all three in sync. Dev data stays in `%APPDATA%\AionUi-Dev`.
 3. **Updates.** Point the updater at `nanotechs001/desktop_ai` releases, or turn it off until there is a release process.
 
 ## Notes and gotchas
