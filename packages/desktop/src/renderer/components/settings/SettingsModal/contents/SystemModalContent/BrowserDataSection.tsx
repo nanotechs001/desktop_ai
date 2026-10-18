@@ -10,7 +10,9 @@ import { Alert, Button, Message, Modal, Switch } from '@arco-design/web-react';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR, { mutate } from 'swr';
-import CookieImportModal from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal';
+import CookieImportModal, {
+  isCookieImportSupported,
+} from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal';
 import PreferenceRow from './PreferenceRow';
 
 /**
@@ -132,15 +134,19 @@ const BrowserDataSection: React.FC = () => {
         />
       )}
 
-      <PreferenceRow
-        label={t('preview.browserChrome.cookieImport.title')}
-        description={t('settings.browserData.importDesc')}
-      >
-        <Button size='small' onClick={() => setImporting(true)}>
-          {t('preview.browserChrome.cookieImport.menu')}
-        </Button>
-      </PreferenceRow>
-      <CookieImportModal visible={importing} target={{ kind: 'personal' }} onClose={() => setImporting(false)} />
+      {isCookieImportSupported() && (
+        <>
+          <PreferenceRow
+            label={t('preview.browserChrome.cookieImport.title')}
+            description={t('settings.browserData.importDesc')}
+          >
+            <Button size='small' onClick={() => setImporting(true)}>
+              {t('preview.browserChrome.cookieImport.menu')}
+            </Button>
+          </PreferenceRow>
+          <CookieImportModal visible={importing} target={{ kind: 'personal' }} onClose={() => setImporting(false)} />
+        </>
+      )}
 
       <PreferenceRow label={t('settings.browserData.clearLabel')} description={t('settings.browserData.clearDesc')}>
         <Button size='small' status='danger' loading={clearing} onClick={handleClear}>

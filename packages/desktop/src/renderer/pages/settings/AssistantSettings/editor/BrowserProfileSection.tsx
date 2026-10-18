@@ -8,7 +8,9 @@ import { ipcBridge } from '@/common';
 import { Button, Message, Popconfirm } from '@arco-design/web-react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import CookieImportModal from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal';
+import CookieImportModal, {
+  isCookieImportSupported,
+} from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal';
 import { SectionCard } from './editorSectionPrimitives';
 
 type BrowserProfileSectionProps = {
@@ -49,9 +51,11 @@ const BrowserProfileSection: React.FC<BrowserProfileSectionProps> = ({ agentId }
         })}
       </div>
       <div className='flex flex-wrap gap-8px'>
-        <Button type='outline' size='small' className='!rounded-full' onClick={() => setImporting(true)}>
-          {t('preview.browserChrome.cookieImport.menu')}
-        </Button>
+        {isCookieImportSupported() && (
+          <Button type='outline' size='small' className='!rounded-full' onClick={() => setImporting(true)}>
+            {t('preview.browserChrome.cookieImport.menu')}
+          </Button>
+        )}
         <Popconfirm
           title={t('agent.browserProfile.clearConfirm', {
             defaultValue: "Clear this Agent's cookies, sign-ins and site data? Open tabs update after a reload.",

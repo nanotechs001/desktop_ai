@@ -18,6 +18,7 @@ import type {
 } from '@/common/types/browser';
 import { HOST_NAME_RE } from '@/common/utils/urlValidation';
 import { iconColors } from '@/renderer/styles/colors';
+import { isMacOS } from '@/renderer/utils/platform';
 import { profilePresentation } from './ProfileBadge';
 import { useProfileAgents } from './useBrowserProfiles';
 
@@ -230,11 +231,19 @@ const CookieImportModal: React.FC<CookieImportModalProps> = ({ visible, target, 
   );
 };
 
-/** The browser pane's menu for a tab: "Import from browser…" into that tab's profile. */
+/**
+ * Importing cookies is macOS-only: it reads each browser's key from the Keychain. On Windows, Chrome 127+ seals its
+ * cookies with App-Bound Encryption (no other app can decrypt them) and locks the cookie file while it runs, so the
+ * feature is not offered there rather than reporting "no browser found".
+ */
+export const isCookieImportSupported = (): boolean => isMacOS();
+
+/** The browser pane's menu for a tab: "Import from browser…" into that tab's profile (macOS only). */
 export const CookieImportMenu: React.FC<{ profile: BrowserTabProfile }> = ({ profile }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const label = t(`${K}.more`);
+  if (!isCookieImportSupported()) return null;
   return (
     <>
       <Dropdown

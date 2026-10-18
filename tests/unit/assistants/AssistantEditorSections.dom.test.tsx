@@ -101,6 +101,8 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal', () => ({
   default: () => null,
+  // Import from browser is offered on macOS only; these tests cover the macOS editor.
+  isCookieImportSupported: () => true,
 }));
 
 const renderWithProviders = (ui: React.ReactElement) =>

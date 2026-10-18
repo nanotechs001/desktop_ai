@@ -25,6 +25,12 @@ vi.mock('@/common', () => ({
 /** The mocked `t`: the key, then its options as JSON. */
 const tr = (key: string, options?: Record<string, unknown>): string =>
   options ? `${key} ${JSON.stringify(options)}` : key;
+const platform = vi.hoisted(() => ({ mac: true }));
+vi.mock('@/renderer/utils/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/utils/platform')>()),
+  isMacOS: () => platform.mac,
+}));
+
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: tr, i18n: { language: 'en' } }) }));
 
 import CookieImportModal, {
@@ -180,6 +186,7 @@ describe('CookieImportModal', () => {
   });
 
   it('the pane menu opens the modal for the tab’s profile', async () => {
+    platform.mac = true;
     mocks.listSources.mockResolvedValue({ success: true, data: SOURCES });
     render(
       <SWRConfig value={{ provider: () => new Map() }}>
@@ -191,6 +198,18 @@ describe('CookieImportModal', () => {
     fireEvent.click(await screen.findByText(`${K}.menu`));
     expect(await screen.findByText('Chrome')).toBeInTheDocument();
     expect(mocks.listSources).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not offered off macOS (the import reads the macOS Keychain)', () => {
+    platform.mac = false;
+    const { container } = render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <CookieImportMenu profile={{ kind: 'personal' }} />
+      </SWRConfig>
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByLabelText(`${K}.more`)).toBeNull();
+    platform.mac = true;
   });
 });
 
