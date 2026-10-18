@@ -346,7 +346,7 @@ describe('LocalAgents', () => {
     expect(screen.queryByText('settings.agentManagement.discoverMoreAgents')).toBeNull();
   });
 
-  it('does not link to an external setup guide (the upstream wiki has no equivalent here)', () => {
+  it('renders the setup-guide action for official agents diagnostics', () => {
     useManagedAgents.mockReturnValue({
       agents: makeAgents(),
       revalidate: vi.fn(),
@@ -355,8 +355,9 @@ describe('LocalAgents', () => {
 
     render(<LocalAgents />);
 
-    expect(screen.queryByText('settings.agentManagement.localAgentsSetupLink')).toBeNull();
-    expect(screen.getByText('settings.agentManagement.localAgentsDescription')).toBeTruthy();
+    fireEvent.click(screen.getByText('settings.agentManagement.localAgentsSetupLink'));
+
+    expect(openExternalUrl).toHaveBeenCalledWith('https://github.com/nanotechs001/desktop_ai#readme');
   });
 
   it('binds assistants to managed agents by agent_id instead of runtime backend', () => {

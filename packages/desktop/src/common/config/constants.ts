@@ -16,6 +16,8 @@ export const APP_PRODUCT_NAME = 'Pixebot Browser';
 /** GitHub `owner/repo` this app is developed and released from (About links and update checks). */
 export const APP_GITHUB_REPO = 'nanotechs001/desktop_ai';
 export const APP_REPO_URL = `https://github.com/${APP_GITHUB_REPO}`;
+/** Help/setup links point here until the app has its own docs (temporary target for former upstream wiki links). */
+export const APP_DOCS_URL = `${APP_REPO_URL}#readme`;
 
 // ===== 应用内浏览器 / In-app browser =====
 

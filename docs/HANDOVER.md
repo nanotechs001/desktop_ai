@@ -113,7 +113,7 @@ Functional (do first; these would talk to upstream):
 In-app links (repoint to the own repo, or hide when there is no equivalent):
 
 - [x] About page (done 2026-10-18).
-- [x] Rest (done 2026-10-18): home quick-action GitHub button → `APP_REPO_URL`; "download latest" in `InstallationIntegrityDialog` and the (discontinued-build only) `UpdateMigrationDialog` → `${APP_REPO_URL}/releases/latest`; DingTalk link (its text says "DingTalk Open Platform") → `https://open-dev.dingtalk.com/`. Hidden because there is no equivalent: LLM config wiki sentence (model settings empty state), image-generation help icon (tools page), ACP setup guide link (agents page), skills-market "details" link, "Open a PR on AionHub" hint. Their i18n keys are left in the locales, unused.
+- [x] Rest (done 2026-10-18): home quick-action GitHub button → `APP_REPO_URL`; "download latest" in `InstallationIntegrityDialog` and the (discontinued-build only) `UpdateMigrationDialog` → `${APP_REPO_URL}/releases/latest`; DingTalk link (its text says "DingTalk Open Platform") → `https://open-dev.dingtalk.com/`. Former upstream wiki/discussion links (LLM config guide in the model settings empty state, image-generation help on the tools page, ACP setup guide on the agents page, skills-market "details") temporarily open `APP_DOCS_URL` (`${APP_REPO_URL}#readme`, in `common/config/constants.ts`) until the app has its own docs; give each a real page later. Still hidden: the "Open a PR on AionHub" hint in the agent hub modal (its text names AionHub and the listed agents come from the vendored upstream hub, so this repo has no equivalent; its i18n keys are unused).
 - Keep: OfficeCLI links (`iOfficeAI/OfficeCLI` is a third-party tool the app uses).
 
 Repo infrastructure:

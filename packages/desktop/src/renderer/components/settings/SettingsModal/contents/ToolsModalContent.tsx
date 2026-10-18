@@ -9,7 +9,9 @@ import { removeImageGenerationEnvKeys, resolveImageGenerationMcpEnv } from '@/co
 import { mcpService } from '@/common/adapter/ipcBridge';
 import { type IMcpServer, BUILTIN_IMAGE_GEN_ID, BUILTIN_IMAGE_GEN_NAME } from '@/common/config/storage';
 import { isImageGenSupported } from '@/common/utils/imageModelAllowlist';
+import { APP_DOCS_URL } from '@/common/config/constants';
 import { Divider, Form, Tooltip, Message, Modal, Switch } from '@arco-design/web-react';
+import { Help } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useConfigModelListWithImage from '@/renderer/hooks/agent/useConfigModelListWithImage';
@@ -580,6 +582,32 @@ const ToolsModalContent: React.FC = () => {
                     ) : (
                       t('settings.goToModelSettings')
                     )}
+                    <Tooltip
+                      content={
+                        <div>
+                          {t('settings.needHelpTooltip')}
+                          <a
+                            href={APP_DOCS_URL}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ms-4px'
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {t('settings.configGuide')}
+                          </a>
+                        </div>
+                      }
+                    >
+                      <a
+                        href={APP_DOCS_URL}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='ms-8px text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] cursor-pointer'
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Help theme='outline' size='14' />
+                      </a>
+                    </Tooltip>
                   </div>
                 )}
               </Form.Item>

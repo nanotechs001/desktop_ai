@@ -6,6 +6,8 @@
 
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
+import { APP_DOCS_URL } from '@/common/config/constants';
+import { openExternalUrl } from '@/renderer/utils/platform';
 import { Message, Switch, Tooltip } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +51,14 @@ const SkillsMarketBanner: React.FC = () => {
     [loading]
   );
 
+  const handleOpenDetails = useCallback(async () => {
+    try {
+      await openExternalUrl(APP_DOCS_URL);
+    } catch (error) {
+      console.error('Failed to open Skills Market URL:', error);
+    }
+  }, []);
+
   const [hovered, setHovered] = useState(false);
 
   if (!initialized) return null;
@@ -73,7 +83,13 @@ const SkillsMarketBanner: React.FC = () => {
           </div>
           {hovered && (
             <div className='text-12px text-[var(--color-text-3)] mt-2px leading-tight animate-fade-in'>
-              {t('conversation.welcome.skillsMarketDesc')}
+              {t('conversation.welcome.skillsMarketDesc')}{' '}
+              <span
+                className='text-brand hover:text-brand-hover font-semibold cursor-pointer hover:underline transition-colors'
+                onClick={handleOpenDetails}
+              >
+                {t('conversation.welcome.skillsMarketDetails')}
+              </span>
             </div>
           )}
         </div>
