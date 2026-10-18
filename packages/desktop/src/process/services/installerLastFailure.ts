@@ -18,7 +18,8 @@ type ConsumeOptions = {
 const isString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 
 export function getInstallerLastFailureMarkerPath(appDataDir: string): string {
-  return path.join(appDataDir, 'AionUi', INSTALLER_LAST_FAILURE_FILE_NAME);
+  // Must match PRODUCTION_DATA_DIR_NAME (process/utils/configureChromium.ts) and the installer (installer-process-control.nsh).
+  return path.join(appDataDir, 'Pixebot Browser', INSTALLER_LAST_FAILURE_FILE_NAME);
 }
 
 export function parseInstallerLastFailureMarker(raw: unknown): InstallerLastFailureMarker | null {

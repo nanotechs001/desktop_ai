@@ -40,9 +40,9 @@ if (!app.isPackaged && !e2eUserDataDir) {
   app.setPath('userData', path.join(appSupportDir, devAppName));
 }
 
-// Rebranded to Pixebot Browser, but the installed app keeps its original data folder so existing
-// chats, VA Bots and settings carry over (Electron would otherwise derive it from the new product name).
-const PRODUCTION_DATA_DIR_NAME = 'AionUi';
+// The installed app uses its own data folder (%APPDATA%\Pixebot Browser on Windows), separate from a stock
+// AionUi install whose backend may run different database migrations. Keep in sync with installerLastFailure.ts.
+const PRODUCTION_DATA_DIR_NAME = 'Pixebot Browser';
 if (app.isPackaged && !e2eUserDataDir) {
   app.setPath('userData', path.join(app.getPath('appData'), PRODUCTION_DATA_DIR_NAME));
 }

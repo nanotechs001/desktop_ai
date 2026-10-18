@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe('installerLastFailure service', () => {
-  it('consumes a valid installer-last-failure marker once from the AppData AionUi directory', async () => {
+  it('consumes a valid installer-last-failure marker once from the AppData Pixebot Browser directory', async () => {
     const { consumeInstallerLastFailure, getInstallerLastFailureMarkerPath } =
       await import('@/process/services/installerLastFailure');
     const appDataDir = makeAppDataDir();
