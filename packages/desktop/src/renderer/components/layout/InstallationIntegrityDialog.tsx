@@ -2,8 +2,9 @@ import { Button, Message, Modal, Space, Typography } from '@arco-design/web-reac
 import type { TFunction } from 'i18next';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { APP_REPO_URL } from '@/common/config/constants';
 
-const AIONUI_DOWNLOAD_URL = 'https://www.aionui.com/';
+const APP_DOWNLOAD_URL = `${APP_REPO_URL}/releases/latest`;
 
 type InstallationIntegrityDialogKind =
   | 'incomplete_installation'
@@ -18,7 +19,7 @@ type InstallationIntegrityDialogKind =
   | 'startup_failed';
 
 export function openDownloadLatest(): void {
-  window.open(AIONUI_DOWNLOAD_URL, '_blank', 'noopener,noreferrer');
+  window.open(APP_DOWNLOAD_URL, '_blank', 'noopener,noreferrer');
 }
 
 /**

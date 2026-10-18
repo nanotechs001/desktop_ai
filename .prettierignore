@@ -1,3 +1,6 @@
 mobile/
 # Backend sources (git subtree of AionCore): keep upstream formatting
 core/
+
+# Vendored hub extensions (byte-exact, see resources/hub-vendor/hub-vendor.lock.json)
+resources/hub-vendor/

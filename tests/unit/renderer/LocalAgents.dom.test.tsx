@@ -346,7 +346,7 @@ describe('LocalAgents', () => {
     expect(screen.queryByText('settings.agentManagement.discoverMoreAgents')).toBeNull();
   });
 
-  it('renders the setup-guide action for official agents diagnostics', () => {
+  it('does not link to an external setup guide (the upstream wiki has no equivalent here)', () => {
     useManagedAgents.mockReturnValue({
       agents: makeAgents(),
       revalidate: vi.fn(),
@@ -355,9 +355,8 @@ describe('LocalAgents', () => {
 
     render(<LocalAgents />);
 
-    fireEvent.click(screen.getByText('settings.agentManagement.localAgentsSetupLink'));
-
-    expect(openExternalUrl).toHaveBeenCalledWith('https://github.com/iOfficeAI/AionUi/wiki/ACP-Setup');
+    expect(screen.queryByText('settings.agentManagement.localAgentsSetupLink')).toBeNull();
+    expect(screen.getByText('settings.agentManagement.localAgentsDescription')).toBeTruthy();
   });
 
   it('binds assistants to managed agents by agent_id instead of runtime backend', () => {

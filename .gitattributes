@@ -23,3 +23,6 @@
 *.woff binary
 *.woff2 binary
 *.ttf binary
+
+# Vendored upstream hub extensions: keep byte-exact (checked against hub-vendor.lock.json)
+resources/hub-vendor/** -text

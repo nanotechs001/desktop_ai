@@ -104,15 +104,24 @@ Functional (do first; these would talk to upstream):
 - [x] `packages/desktop/electron-builder.yml` `publish` → `nanotechs001/desktop_ai` (produces `resources/app-update.yml`; the runtime feed is set in code).
 - [x] `useUpdateNotificationController.ts` releases URL → `${APP_REPO_URL}/releases`.
 - [ ] Backend download (`packages/shared-scripts/src/prepare-aioncore.js`, `scripts/prepareAioncore.js`) — replaced by the step above; keep only as an optional fallback or remove.
+- [x] Model API attribution headers (done 2026-10-18): `common/api/ClientFactory.ts` sends `HTTP-Referer: APP_REPO_URL` and `X-Title: APP_PRODUCT_NAME` (OpenRouter app attribution) instead of `aionui.com` / `AionUi`.
+- [x] Hub extensions at build time (done 2026-10-18): `scripts/prepareHubResources.js` copies a pinned copy from `resources/hub-vendor/` (AionHub `dist-latest` @ `f9570c4`, verified against `hub-vendor.lock.json`) into `resources/hub/`; no network request. `AIONUI_HUB_DOWNLOAD=1` (with optional `AIONUI_HUB_TAG`) restores the upstream download; `AIONUI_HUB_SKIP=1` still skips. Refresh steps: `resources/hub-vendor/README.md`.
+  - What they are: seven `aionext-*` zips (Auggie, Claude Code, CodeBuddy, Codex, Goose, OpenCode, Qwen Code), each an `aion-extension.json` registering one ACP adapter plus a `scripts/install.ts` that `bun install`s that agent's npm packages. Runtime finding: nothing in this app reads the bundled `hub/` folder except the startup-failure diagnostics (`missingHubDir` in `process/startup/backendStartupFailure.ts`). The backend's hub (`/api/hub/*`, `HubIndexManager`) reads `index.json` from the user-data extensions folder, and its parser expects `extensions` as a list, while this `index.json` has a map, so it would not parse it anyway. Likely dead weight; kept to avoid removing functionality.
+- [ ] Skills market (`core/crates/aionui-extension/src/constants.rs` `SKILLS_MARKET_PATH = https://github.com/AionUI/aionui-skills`): left as is. It is only an identifier: the home-page toggle stores it as a custom skill source, and skill scanning skips it because it is not a folder; nothing fetches it. Changing the string would leave the old entry orphaned for anyone who already turned it on (disable matches the new string only). If the toggle should go, hide `SkillsMarketBanner` instead.
+- [ ] Backend version check (`core/crates/aionui-system/src/version.rs` `DEFAULT_REPO = iOfficeAI/AionUi`, used when a request names no repo). The desktop updater does not call it; change it in `core/` when convenient.
 
 In-app links (repoint to the own repo, or hide when there is no equivalent):
 
-- [x] About page (done 2026-10-18). Still open: home quick-action GitHub link, LLM config and ACP setup wiki links, tools page wiki links, skills-market banner discussions, AionHub link, DingTalk docs link.
+- [x] About page (done 2026-10-18).
+- [x] Rest (done 2026-10-18): home quick-action GitHub button → `APP_REPO_URL`; "download latest" in `InstallationIntegrityDialog` and the (discontinued-build only) `UpdateMigrationDialog` → `${APP_REPO_URL}/releases/latest`; DingTalk link (its text says "DingTalk Open Platform") → `https://open-dev.dingtalk.com/`. Hidden because there is no equivalent: LLM config wiki sentence (model settings empty state), image-generation help icon (tools page), ACP setup guide link (agents page), skills-market "details" link, "Open a PR on AionHub" hint. Their i18n keys are left in the locales, unused.
 - Keep: OfficeCLI links (`iOfficeAI/OfficeCLI` is a third-party tool the app uses).
 
 Repo infrastructure:
 
-- [ ] `.github/ISSUE_TEMPLATE/config.yml`, `.github/workflows/project-automation.yml` and `issue-triage.yml` (upstream org/project specific), `homebrew/aionui.rb.example`, `scripts/install-ubuntu.sh`, `scripts/install-web.sh`, `.claude/skills/bump-version/SKILL.md`.
+- [ ] `.github/ISSUE_TEMPLATE/config.yml`, `.github/workflows/project-automation.yml` and `issue-triage.yml` (upstream org/project specific), `pr-checks.yml` (`iOfficeAI/AionUi` repo check), `homebrew/aionui.rb.example`, `.claude/skills/bump-version/SKILL.md`.
+- [x] `scripts/install-ubuntu.sh`, `scripts/install-web.sh` (2026-10-18): URLs now point at `nanotechs001/desktop_ai`, and the header marks them UNSUPPORTED: asset names and install paths are still AionUi's and no matching release assets exist yet.
+- [x] Root `package.json` author → `nanotechs001` / `nanotechs001@users.noreply.github.com` (placeholder contact; electron-builder uses it as the Linux package maintainer and Windows company name — replace with a real address if wanted). `"name": "AionUi"` kept: Electron derives `app.getName()` from it (no `productName` in the root package.json), which feeds the dev data folder, single-instance lock and macOS safe-storage key, so renaming it could orphan existing data.
+- Kept on purpose: `iOfficeAI/OfficeCli` links and installer URLs (third-party tool the Office agents need); `core/Cargo.toml` git dependency on `iOfficeAI/aionrs` (build-time source for the agent crates; vendor or fork it to cut that tie); `core/scripts/just/update-aionrs.*`; `copyright: Copyright © 2024 AionUi` and the Apache license headers (attribution required by the license); upstream issue numbers in code comments and test fixtures.
 
 ## Decisions needed
 

@@ -1,22 +1,32 @@
 /**
  * prepareHubResources.js
  *
- * Downloads the AionHub index.json and all extension zip packages
- * into resources/hub/ so they are bundled with the app as local fallback.
+ * Fills resources/hub/ with the hub index.json and the extension zip packages
+ * so they are bundled with the app as a local fallback.
+ *
+ * By default the files come from the pinned copy vendored in
+ * resources/hub-vendor/ (checked against hub-vendor.lock.json), so a build
+ * makes no network request. Set AIONUI_HUB_DOWNLOAD=1 to download them from
+ * the upstream AionHub repository instead (the previous behaviour); use that to
+ * refresh the vendored copy (see resources/hub-vendor/README.md).
  *
  * Called during the build pipeline before electron-builder runs.
  *
  * Environment variables:
- *   AIONUI_HUB_TAG    - Git tag to fetch from (default: 'dist-latest')
- *   AIONUI_HUB_SKIP   - Set to '1' to skip hub resource preparation
+ *   AIONUI_HUB_SKIP      - Set to '1' to skip hub resource preparation
+ *   AIONUI_HUB_DOWNLOAD  - Set to '1' to download from upstream instead of using the vendored copy
+ *   AIONUI_HUB_TAG       - Git tag or commit to download from (default: 'dist-latest'; download mode only)
  */
 
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const crypto = require('crypto');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const HUB_DIR = path.join(PROJECT_ROOT, 'resources', 'hub');
+const VENDOR_DIR = path.join(PROJECT_ROOT, 'resources', 'hub-vendor');
+const VENDOR_LOCK = path.join(VENDOR_DIR, 'hub-vendor.lock.json');
 
 const DEFAULT_TAG = 'dist-latest';
 const BASE_URLS = [
@@ -89,6 +99,62 @@ function downloadUrl(url, destPath) {
   });
 }
 
+function sha256Integrity(filePath) {
+  return 'sha256-' + crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+// ---------------------------------------------------------------------------
+// Vendored copy (default)
+// ---------------------------------------------------------------------------
+
+/**
+ * Copy the pinned files from resources/hub-vendor/ into resources/hub/,
+ * verifying each against hub-vendor.lock.json. Fails the build on a missing
+ * or altered file rather than bundling something unexpected.
+ */
+function copyVendoredHubResources() {
+  if (!fs.existsSync(VENDOR_LOCK)) {
+    throw new Error(`Vendored hub lock file not found: ${VENDOR_LOCK} (set AIONUI_HUB_DOWNLOAD=1 to download instead)`);
+  }
+  const lock = JSON.parse(fs.readFileSync(VENDOR_LOCK, 'utf-8'));
+  const files = Object.entries(lock.files || {});
+  console.log(`[hub] Using vendored hub resources (${lock.source} @ ${lock.commit}, vendored ${lock.vendoredAt})`);
+
+  if (fs.existsSync(HUB_DIR)) {
+    fs.rmSync(HUB_DIR, { recursive: true, force: true });
+  }
+  ensureDir(HUB_DIR);
+
+  const results = [];
+  for (const [file, integrity] of files) {
+    const src = path.join(VENDOR_DIR, file);
+    if (!fs.existsSync(src)) {
+      throw new Error(`Vendored hub file missing: ${src}`);
+    }
+    const actual = sha256Integrity(src);
+    if (actual !== integrity) {
+      throw new Error(`Vendored hub file ${file} does not match hub-vendor.lock.json (${actual} != ${integrity})`);
+    }
+    fs.copyFileSync(src, path.join(HUB_DIR, file));
+    if (file.endsWith('.zip')) {
+      results.push({ name: path.basename(file, '.zip'), file, size: fs.statSync(src).size, integrity });
+    }
+  }
+
+  const manifest = {
+    source: lock.source,
+    tag: lock.tag,
+    commit: lock.commit,
+    vendoredAt: lock.vendoredAt,
+    generatedAt: new Date().toISOString(),
+    extensions: results,
+  };
+  fs.writeFileSync(path.join(HUB_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+
+  console.log(`[hub] Done: ${results.length} vendored extensions copied to resources/hub/`);
+  return { skipped: false, vendored: true, count: results.length, total: results.length };
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -99,8 +165,12 @@ async function prepareHubResources() {
     return { skipped: true };
   }
 
+  if (process.env.AIONUI_HUB_DOWNLOAD !== '1') {
+    return copyVendoredHubResources();
+  }
+
   const tag = process.env.AIONUI_HUB_TAG || DEFAULT_TAG;
-  console.log(`[hub] Preparing hub resources from tag: ${tag}`);
+  console.log(`[hub] Downloading hub resources from upstream tag: ${tag} (AIONUI_HUB_DOWNLOAD=1)`);
 
   // Clean and create target directory
   if (fs.existsSync(HUB_DIR)) {

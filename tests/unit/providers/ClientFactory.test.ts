@@ -162,8 +162,8 @@ describe('ClientFactory', () => {
       const calls = (OpenAIRotatingClient as any).mock.calls;
       const config = calls[0][1];
       expect(config.defaultHeaders).toEqual({
-        'HTTP-Referer': 'https://aionui.com',
-        'X-Title': 'AionUi',
+        'HTTP-Referer': 'https://github.com/nanotechs001/desktop_ai',
+        'X-Title': 'Pixebot Browser',
       });
     });
 

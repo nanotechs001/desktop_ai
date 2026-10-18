@@ -5,8 +5,8 @@
   "keywords": [],
   "license": "Apache-2.0",
   "author": {
-    "name": "AionUi",
-    "email": "service@aionui.com"
+    "name": "nanotechs001",
+    "email": "nanotechs001@users.noreply.github.com"
   },
   "workspaces": [
     "packages/*"

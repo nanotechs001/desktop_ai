@@ -5,6 +5,7 @@
  */
 
 import { webui } from '@/common/adapter/ipcBridge';
+import { APP_REPO_URL } from '@/common/config/constants';
 import { Earth } from '@icon-park/react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,7 +114,7 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({ onOpenLink, ina
           style={quickActionStyle(hoveredQuickAction === 'repo')}
           onMouseEnter={() => setHoveredQuickAction('repo')}
           onMouseLeave={() => setHoveredQuickAction(null)}
-          onClick={() => onOpenLink('https://github.com/iOfficeAI/AionUi')}
+          onClick={() => onOpenLink(APP_REPO_URL)}
         >
           <svg
             className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[#FE9900] transition-colors duration-300'

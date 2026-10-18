@@ -65,7 +65,8 @@ interface DingTalkConfigFormProps {
   onStatusChange: (status: IChannelPluginStatus | null) => void;
 }
 
-const DINGTALK_DEV_DOCS_URL = 'https://github.com/iOfficeAI/AionUi/wiki/DingTalk-Bot-Setup-Guide';
+// The link text reads "DingTalk Open Platform", so open DingTalk's own developer console.
+const DINGTALK_DEV_DOCS_URL = 'https://open-dev.dingtalk.com/';
 
 const DingTalkConfigForm: React.FC<DingTalkConfigFormProps> = ({ pluginStatus, modelSelection, onStatusChange }) => {
   const { t, i18n } = useTranslation();

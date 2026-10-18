@@ -72,11 +72,11 @@ describe('UpdateMigrationDialog', () => {
     expect(screen.getByText('update.migration.letter.introBold')).toBeTruthy();
   });
 
-  it('opens the official website when the primary button is clicked', async () => {
+  it('opens the app download page when the primary button is clicked', async () => {
     render(<UpdateMigrationDialog />);
     openDialog();
     await waitFor(() => expect(screen.getByText('update.migration.letter.downloadNew')).toBeTruthy());
     fireEvent.click(screen.getByText('update.migration.letter.downloadNew'));
-    expect(mocks.openExternalUrl).toHaveBeenCalledWith('https://www.aionui.com/');
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith('https://github.com/nanotechs001/desktop_ai/releases/latest');
   });
 });
