@@ -12,16 +12,20 @@ A desktop AI workspace with a built-in browser. Chat with AI agents, let them br
 
 ## Getting started (development)
 
-Requires [Bun](https://bun.sh) and Node.js 22+.
+Requires [Bun](https://bun.sh), Node.js 22+, and for the backend [Rust](https://rustup.rs) (on Windows also the Visual Studio C++ build tools).
+
+The backend (AionCore) lives in `core/`. Build it once, then start the app — it picks up `core/target/release/aioncore` automatically:
 
 ```bash
 bun install
-node scripts/prepareAioncore.js   # downloads the pinned backend into resources/bundled-aioncore/
+bun run core:build
+bun run start
 ```
 
-Run the app (Windows example):
+Without Rust, download the pinned stock backend instead and point the app at it:
 
 ```bash
+node scripts/prepareAioncore.js
 AIONUI_BACKEND_BIN="resources/bundled-aioncore/win32-x64/aioncore.exe" bun run start
 ```
 
@@ -33,9 +37,11 @@ bun run lint
 bun run test
 ```
 
+Backend updates from upstream AionCore: `git subtree pull --prefix=core https://github.com/iOfficeAI/AionCore main --squash`.
+
 ## Robot art
 
-Animation frames live in `assets/ai-robot-concepts/animation-strips-v1/frames/<state>/frame-01..08.png`. After adding or changing frames, rebuild the sprite strips and app icons:
+Animation frames live in `assets/ai-robot-concepts/animation-strips-v1/frames-30fps/<state>/` (see `animation-30fps-manifest.json`); brand images in `assets/branding/`. After changing them, rebuild the sprite strips and app icons:
 
 ```bash
 node tools/build-robot-sprites.cjs

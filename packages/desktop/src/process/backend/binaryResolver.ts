@@ -3,8 +3,9 @@
  *
  * Search order:
  *  1. AIONUI_BACKEND_BIN env override (path, resolved to absolute)
- *  2. Bundled with app (production)
- *  3. System PATH
+ *  2. The repo's own backend build, core/target/release (development: `bun run core:build`)
+ *  3. Bundled with app (production)
+ *  4. System PATH
  */
 
 import { existsSync, readdirSync } from 'node:fs';
@@ -80,6 +81,9 @@ export function resolveBinaryPath(): string {
   const override = envOverridePath(diagnostics);
   if (override) return override;
 
+  const local = localCoreBuildPath(binaryName);
+  if (local) return local;
+
   const bundled = bundledPath(runtimeKey, binaryName, diagnostics);
   if (bundled) return bundled;
 
@@ -114,6 +118,15 @@ function envOverridePath(diagnostics: BackendBinaryResolveDiagnostics): string |
     `${BIN_ENV_VAR} is set to "${raw}" but no file exists at "${absolute}".`,
     diagnostics
   );
+}
+
+/**
+ * The backend source lives in this repo (core/); a release build of it wins over the downloaded one. Relative to
+ * the working directory, so only a dev run from the repo root finds it (never an installed app).
+ */
+function localCoreBuildPath(binaryName: string): string | null {
+  const candidate = resolve('core', 'target', 'release', binaryName);
+  return existsSync(candidate) ? candidate : null;
 }
 
 /**

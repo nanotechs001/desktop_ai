@@ -237,3 +237,6 @@ graphify-out/
 .analysis/
 temp/
 .playwright-mcp/
+
+# Backend (core/) build output
+core/target/

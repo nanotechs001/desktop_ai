@@ -55,6 +55,15 @@ describe('resolveBinaryPath', () => {
     restoreBackendBin();
   });
 
+  it("prefers the repo's own core/ release build over the bundled binary", () => {
+    const binaryName = process.platform === 'win32' ? 'aioncore.exe' : 'aioncore';
+    const local = resolve('core', 'target', 'release', binaryName);
+    setResourcesPath('/app/resources');
+    vi.mocked(existsSync).mockImplementation((p) => p === local);
+
+    expect(resolveBinaryPath()).toBe(local);
+  });
+
   it('returns the AIONUI_BACKEND_BIN override when the file exists', () => {
     const overrideInput = '/custom/aioncore';
     // Resolve mirrors the implementation so the expectation holds on Windows too.
