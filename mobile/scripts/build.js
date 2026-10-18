@@ -88,8 +88,9 @@ console.log(`\nRunning: ${easCommand}\n`);
 const appleEnv =
   platform === 'ios'
     ? {
-        EXPO_APPLE_TEAM_ID: process.env.EXPO_APPLE_TEAM_ID || 'M4AG47ZV62',
-        EXPO_APPLE_ID: process.env.EXPO_APPLE_ID || 'liangzhewei@gmail.com',
+        // The project's own Apple Developer team and account (no defaults: set them in the environment).
+        ...(process.env.EXPO_APPLE_TEAM_ID ? { EXPO_APPLE_TEAM_ID: process.env.EXPO_APPLE_TEAM_ID } : {}),
+        ...(process.env.EXPO_APPLE_ID ? { EXPO_APPLE_ID: process.env.EXPO_APPLE_ID } : {}),
         ...(applePassword ? { EXPO_APPLE_PASSWORD: applePassword } : {}),
       }
     : {};
@@ -123,7 +124,11 @@ if (platform === 'ios' && isLocal && (autoSubmit || directSubmit)) {
 
   if (directSubmit) {
     // Upload directly to App Store Connect via xcrun altool (bypasses EAS)
-    const appleId = process.env.APPLE_ID || 'liangzhewei@gmail.com';
+    const appleId = process.env.APPLE_ID;
+    if (!appleId) {
+      console.error('\nSet APPLE_ID (the Apple account that owns the app in App Store Connect) for a direct upload.');
+      process.exit(1);
+    }
     const submitCommand = `xcrun altool --upload-app -f "${outputFile}" -t ${platform} -u "${appleId}" -p "@keychain:AC_PASSWORD"`;
     console.log(`\nUploading directly to TestFlight: xcrun altool --upload-app\n`);
     try {
@@ -135,7 +140,7 @@ if (platform === 'ios' && isLocal && (autoSubmit || directSubmit)) {
         '  Make sure your App-Specific Password is saved in Keychain as "AC_PASSWORD".',
       );
       console.error(
-        '  To save it: security add-generic-password -a "liangzhewei@gmail.com" -s "AC_PASSWORD" -w "<your-app-specific-password>" -U',
+        '  To save it: security add-generic-password -a "$APPLE_ID" -s "AC_PASSWORD" -w "<your-app-specific-password>" -U',
       );
       process.exit(1);
     }
