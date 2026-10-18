@@ -1701,6 +1701,8 @@ export const agentWidget = {
     'agent-widget:report-state'
   ),
   dragStart: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-start'),
+  /** The pointer moved during a drag (sent once per frame): the robot follows the cursor now. */
+  dragMove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-move'),
   dragEnd: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-end'),
   setIgnoreMouse: bridge.buildProvider<void, AgentWidgetTarget & { ignore: boolean }>('agent-widget:set-ignore-mouse'),
   /** Return the chat to the main window and bring that window forward on the conversation. */

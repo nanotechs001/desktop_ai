@@ -251,7 +251,12 @@ const AgentWidgetPage: React.FC = () => {
         }}
         onPointerMove={(e) => {
           const press = pressRef.current;
-          if (!press || press.dragging) return;
+          if (!press) return;
+          // While carried, every pointer move (one per frame) moves the robot, so its path tracks the mouse.
+          if (press.dragging) {
+            void ipcBridge.agentWidget.dragMove.invoke(target).catch(() => {});
+            return;
+          }
           const travel =
             Math.hypot(e.screenX - press.startX, e.screenY - press.startY) * (window.devicePixelRatio || 1);
           if (travel <= DRAG_THRESHOLD_PHYSICAL_PX) return;

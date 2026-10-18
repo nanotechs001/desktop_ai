@@ -47,7 +47,12 @@ export type AgentWidgetHost = {
 const BASE_BOT_SIZE = 88;
 const POPUP_SIZE = { width: 380, height: 540 };
 const DRAG_TICK_MS = 16;
-// Same safety net as the desktop pet: a lost pointerup must never leave the robot glued to the cursor.
+// Bounds that differ by at most this much after a move are DIP rounding, not a display rescale.
+const DPI_ROUNDING_TOLERANCE_PX = 1;
+// The fallback drag timer only moves the robot when the renderer's pointer moves have gone quiet this long.
+const DRAG_POINTER_IDLE_MS = 50;
+// Same safety net as the desktop pet: a lost pointerup must never leave the robot glued to the cursor
+// (counted from the last pointer move, so a long, steady drag is not cut short).
 const DRAG_WATCHDOG_MS = 8000;
 const GLIDE_TICK_MS = 50;
 const GLIDE_PX_PER_TICK = 2;
@@ -104,6 +109,8 @@ type WidgetEntry = {
   landTimer: ReturnType<typeof setInterval> | null;
   dragTimer: ReturnType<typeof setInterval> | null;
   dragWatchdog: ReturnType<typeof setTimeout> | null;
+  /** When the renderer last reported a pointer move during the current drag (ms epoch; 0 = none yet). */
+  lastDragMoveAt: number;
   glideTimer: ReturnType<typeof setInterval> | null;
   /** Pending start of a glide after the robot turned to face its target. */
   turnTimer: ReturnType<typeof setTimeout> | null;
@@ -337,17 +344,41 @@ export class AgentWidgetManager {
     entry.dragging = true;
     entry.dragPhase = 'dragging';
     this.place(entry);
+    entry.lastDragMoveAt = 0;
+    // Fallback only: the robot normally follows the renderer's pointer moves (dragMove), which arrive once per
+    // frame. Windows timers fire at ~15.6 ms granularity, so a timer-driven path stutters (16 / 31 ms steps).
     entry.dragTimer = setInterval(() => {
       if (entry.win.isDestroyed()) return this.dragEnd(conversationId);
-      const point = screen.getCursorScreenPoint();
-      // Following the cursor's display lets the robot be dragged across monitors.
-      const display = screen.getDisplayNearestPoint(point);
-      entry.displayId = display.id;
-      const pos = carriedPosition(point, entry.grab, display.workArea, this.botSize());
-      entry.botX = pos.x;
-      entry.airY = pos.y;
-      this.place(entry);
+      if (Date.now() - entry.lastDragMoveAt < DRAG_POINTER_IDLE_MS) return;
+      this.followCursor(entry);
     }, DRAG_TICK_MS);
+    this.armDragWatchdog(entry, conversationId);
+  }
+
+  /** The pointer moved during a drag: follow it now, in step with the mouse, and keep the drag alive. */
+  dragMove(conversationId: string): void {
+    const entry = this.entries.get(conversationId);
+    if (!entry || !entry.dragging || entry.win.isDestroyed()) return;
+    entry.lastDragMoveAt = Date.now();
+    this.followCursor(entry);
+    this.armDragWatchdog(entry, conversationId);
+  }
+
+  private followCursor(entry: WidgetEntry): void {
+    const point = screen.getCursorScreenPoint();
+    // Following the cursor's display lets the robot be dragged across monitors.
+    const display = screen.getDisplayNearestPoint(point);
+    entry.displayId = display.id;
+    const pos = carriedPosition(point, entry.grab, display.workArea, this.botSize());
+    if (pos.x === entry.botX && pos.y === entry.airY) return;
+    entry.botX = pos.x;
+    entry.airY = pos.y;
+    this.place(entry);
+  }
+
+  /** A drag whose release never arrives (e.g. the pointer-up was lost) ends after a quiet spell. */
+  private armDragWatchdog(entry: WidgetEntry, conversationId: string): void {
+    if (entry.dragWatchdog) clearTimeout(entry.dragWatchdog);
     entry.dragWatchdog = setTimeout(() => this.dragEnd(conversationId), DRAG_WATCHDOG_MS);
   }
 
@@ -527,6 +558,7 @@ export class AgentWidgetManager {
       landTimer: null,
       dragTimer: null,
       dragWatchdog: null,
+      lastDragMoveAt: 0,
       glideTimer: null,
       turnTimer: null,
       facing: 'right',
@@ -724,14 +756,17 @@ export class AgentWidgetManager {
    * Moving onto a display with a different scale factor (e.g. a 125% laptop next to a 100% monitor) makes Windows
    * rescale the window. Put the exact bounds back, or the robot's box grows with every crossing and sinks below
    * the taskbar. Once the window is on that display, the second setBounds lands in its scale.
+   * A 1px difference is only DIP↔pixel rounding at fractional scaling: correcting it would move the window twice per
+   * step and make a drag jitter.
    */
   private restoreAfterDpiChange(win: BrowserWindow, bounds: Rect): void {
     const actual = win.getBounds();
+    const off = (a: number, b: number) => Math.abs(a - b) > DPI_ROUNDING_TOLERANCE_PX;
     if (
-      actual.x !== bounds.x ||
-      actual.y !== bounds.y ||
-      actual.width !== bounds.width ||
-      actual.height !== bounds.height
+      off(actual.x, bounds.x) ||
+      off(actual.y, bounds.y) ||
+      off(actual.width, bounds.width) ||
+      off(actual.height, bounds.height)
     ) {
       win.setBounds(bounds, false);
     }

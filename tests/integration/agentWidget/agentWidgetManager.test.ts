@@ -129,6 +129,7 @@ vi.mock('@/common', () => {
     'takeDraft',
     'reportState',
     'dragStart',
+    'dragMove',
     'dragEnd',
     'setIgnoreMouse',
     'openInMain',
@@ -805,6 +806,44 @@ describe('dragging and drop-landing', () => {
     vi.advanceTimersByTime(5_000);
     expect(win.bounds.x).toBe(x);
     expect(lastLayout(A)?.moving).toBe(false);
+  });
+
+  it('follows each pointer move at once, without waiting for a timer tick', async () => {
+    const { manager, win } = await liveRobot();
+    pick(manager, win);
+    h.cursor = { x: 800, y: 500 };
+    manager.dragMove(A);
+    expect(win.bounds.x).toBe(760);
+    expect(robotTop(win)).toBe(470);
+    h.cursor = { x: 803, y: 502 };
+    manager.dragMove(A);
+    expect(win.bounds.x).toBe(763);
+    expect(robotTop(win)).toBe(472);
+  });
+
+  it('the fallback timer stays out of the way while pointer moves keep arriving', async () => {
+    const { manager, win } = await liveRobot();
+    pick(manager, win);
+    h.cursor = { x: 800, y: 500 };
+    manager.dragMove(A);
+    h.cursor = { x: 900, y: 500 }; // no pointer move reported for this position yet
+    vi.advanceTimersByTime(20);
+    expect(win.bounds.x).toBe(760);
+    vi.advanceTimersByTime(60); // pointer moves went quiet: the timer catches up
+    expect(win.bounds.x).toBe(860);
+  });
+
+  it('pointer moves keep a long drag alive past the watchdog', async () => {
+    const { manager, win } = await liveRobot();
+    pick(manager, win);
+    for (let i = 0; i < 12; i++) {
+      h.cursor = { x: 600 + i, y: 400 };
+      manager.dragMove(A);
+      vi.advanceTimersByTime(1_000);
+    }
+    expect(lastDragPhase(A)).toBe('dragging');
+    manager.dragEnd(A);
+    expect(lastDragPhase(A)).toBe('landing');
   });
 
   it('14. a carried robot never goes into the taskbar', async () => {

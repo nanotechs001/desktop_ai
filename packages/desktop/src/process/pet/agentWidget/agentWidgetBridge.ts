@@ -69,6 +69,7 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
     manager.reportState(conversation_id, state, transitioning);
   });
   w.dragStart.provider(async (p) => manager.dragStart(parse(target, p, 'dragStart').conversation_id));
+  w.dragMove.provider(async (p) => manager.dragMove(parse(target, p, 'dragMove').conversation_id));
   w.dragEnd.provider(async (p) => manager.dragEnd(parse(target, p, 'dragEnd').conversation_id));
   w.setIgnoreMouse.provider(async (p) => {
     const { conversation_id, ignore } = parse(schemas.setIgnoreMouse, p, 'setIgnoreMouse');
