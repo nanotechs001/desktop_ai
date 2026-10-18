@@ -7,7 +7,7 @@
 import React, { useCallback, useState } from 'react';
 import classNames from 'classnames';
 import { Button, Spin, Tooltip } from '@arco-design/web-react';
-import { Close, History, Left, Minus, PreviewCloseOne, PreviewOpen } from '@icon-park/react';
+import { Close, History, Left, Minus, PreviewCloseOne, Tv } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
@@ -72,7 +72,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
           </div>
         </div>
         {agentId && action(historyLabel, <History theme='outline' size='14' />, () => setHistoryOpen(true))}
-        {action(t('pet.widget.returnToMain'), <PreviewOpen theme='outline' size='14' />, props.onReturnToMain)}
+        {action(t('pet.widget.returnToMain'), <Tv theme='outline' size='14' />, props.onReturnToMain)}
         {action(t('pet.widget.hideWidget'), <PreviewCloseOne theme='outline' size='14' />, props.onHideWidget)}
         {action(t('pet.widget.minimize'), <Minus theme='outline' size='14' />, props.onMinimize)}
         {action(t('pet.widget.closePopup'), <Close theme='outline' size='14' />, props.onClose)}
