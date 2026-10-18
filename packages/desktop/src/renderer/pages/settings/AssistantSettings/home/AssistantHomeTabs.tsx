@@ -111,7 +111,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
             title={t('settings.assistants', { defaultValue: 'Agents' })}
             description={t('settings.assistantHomeLeadShort', {
               defaultValue:
-                'Ready-to-work AI experts, preloaded with skills. Enable one and it shows up wherever you pick an Agent.',
+                'Dedicated work agents that manage the browser and learn over time.',
             })}
             actions={
               <>

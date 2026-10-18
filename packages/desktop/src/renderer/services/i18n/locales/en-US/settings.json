@@ -172,7 +172,7 @@
   "assistantTabMine": "My VA Bots",
   "assistantTabOfficial": "Official",
   "assistantHomeLead": "Agents are ready-to-work AI experts, preloaded with skills and tools. Here are your local CLIs, the Agents you tailor yourself, and a set of official experts. Once enabled, they show up in your chats, teams, and scheduled tasks — ready when you need them.",
-  "assistantHomeLeadShort": "Ready-to-work AI experts, preloaded with skills and tools. Enable them to use in chats and scheduled tasks.",
+  "assistantHomeLeadShort": "Dedicated work agents that manage the browser and learn over time.",
   "assistantReorderHintShort": "Drag to reorder",
   "assistantReorderSearchDisabled": "Clear search to reorder.",
   "myAssistantsHintShort": "Agents auto-generated from your local CLIs, plus ones you created or duplicated from official.",

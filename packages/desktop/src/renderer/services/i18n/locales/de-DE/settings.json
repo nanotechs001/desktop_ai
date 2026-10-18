@@ -172,7 +172,7 @@
   "assistantTabMine": "Meine VA Bots",
   "assistantTabOfficial": "Offiziell",
   "assistantHomeLead": "Agents sind einsatzbereite KI-Experten, vorab ausgestattet mit Fähigkeiten und Werkzeugen. Hier findest du deine lokalen CLIs, die Agents, die du selbst anpasst, und eine Reihe offizieller Experten. Einmal aktiviert, erscheinen sie in deinen Chats, Teams und geplanten Aufgaben — bereit, wenn du sie brauchst.",
-  "assistantHomeLeadShort": "Einsatzbereite KI-Experten mit vorkonfigurierten Fähigkeiten und Werkzeugen. Nach dem Aktivieren kannst du sie in Chats und geplanten Aufgaben verwenden.",
+  "assistantHomeLeadShort": "Eigene Arbeits-Agenten, die den Browser steuern und mit der Zeit dazulernen.",
   "assistantRuntimeLabel": "Agent:",
   "assistantGoChat": "Chat",
   "assistantReorderHint": "Zum Umsortieren ziehen — das bestimmt die Anzeigereihenfolge überall dort, wo du einen Agent auswählst (Startseite, geplante Aufgaben…).",

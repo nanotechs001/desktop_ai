@@ -172,7 +172,7 @@
   "assistantTabMine": "マイ VA Bots",
   "assistantTabOfficial": "公式",
   "assistantHomeLead": "エージェントは、スキルとツールがあらかじめ組み込まれた、すぐに働けるAIエキスパートです。ここには、あなたのローカルCLI、自分で調整したエージェント、そして公式エキスパート一式があります。有効にすると、対話、チーム、定時タスクに現れ、必要なときにいつでも待機します。",
-  "assistantHomeLeadShort": "スキルとツールが設定済みで、すぐに使える AI エキスパート。有効にすると、チャットや定期タスクで利用できます。",
+  "assistantHomeLeadShort": "ブラウザを操作し、使うほど学習していく専用のワークエージェント。",
   "assistantRuntimeLabel": "Agent:",
   "assistantGoChat": "チャット",
   "assistantReorderHint": "ドラッグして並べ替えできます。この順序が、エージェントを選ぶ場所（ホーム、定時タスクなど）での表示順を決めます。",

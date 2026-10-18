@@ -172,7 +172,7 @@
   "assistantTabMine": "我的 VA Bots",
   "assistantTabOfficial": "官方 Agent",
   "assistantHomeLead": "Agent 是配好技能和工具、能直接上工的 AI 專家。這裡有你本機的 CLI、你親手調教的 Agent，還有一批官方專家。啟用後，它們就會出現在你的對話、開團和定時任務裡，隨時待命。",
-  "assistantHomeLeadShort": "配好技能和工具、能直接上場的 AI 專家。啟用後即可用於對話和定時任務。",
+  "assistantHomeLeadShort": "專屬工作智慧體，負責操作瀏覽器，並隨時間持續學習。",
   "assistantRuntimeLabel": "Agent:",
   "assistantGoChat": "去對話",
   "assistantReorderHint": "拖曳可調整順序，它決定你挑選 Agent 時（首頁、定時任務等）清單裡的顯示先後。",

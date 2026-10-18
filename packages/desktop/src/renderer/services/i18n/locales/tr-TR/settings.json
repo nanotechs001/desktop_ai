@@ -172,7 +172,7 @@
   "assistantTabMine": "VA Bot’larım",
   "assistantTabOfficial": "Resmi",
   "assistantHomeLead": "Agent'lar, becerileri ve araçları önceden yüklenmiş, çalışmaya hazır yapay zeka uzmanlarıdır. Burada yerel CLI araçlarınız, kendinize göre uyarladığınız Agent'lar ve bir dizi resmi uzman bulunur. Etkinleştirildiğinde sohbetlerinizde, ekiplerinizde ve zamanlanmış görevlerinizde görünür ve ihtiyaç duyduğunuzda hazır olurlar.",
-  "assistantHomeLeadShort": "Beceri ve araçlarla önceden yapılandırılmış, hemen kullanıma hazır yapay zekâ uzmanları. Etkinleştirdikten sonra sohbetlerde ve zamanlanmış görevlerde kullanabilirsiniz.",
+  "assistantHomeLeadShort": "Tarayıcıyı yöneten ve zamanla öğrenen özel iş ajanları.",
   "assistantRuntimeLabel": "Agent:",
   "assistantGoChat": "Sohbet",
   "assistantReorderHint": "Sıralamak için sürükleyin — bu, bir Agent seçtiğiniz her yerde (ana ekran, zamanlanmış görevler…) görüntülenme sırasını belirler.",

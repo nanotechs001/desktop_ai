@@ -172,7 +172,7 @@
   "assistantTabMine": "내 VA Bots",
   "assistantTabOfficial": "공식",
   "assistantHomeLead": "에이전트는 스킬과 도구가 미리 탑재되어 바로 일할 수 있는 AI 전문가입니다. 여기에는 로컬 CLI, 직접 다듬은 에이전트, 그리고 공식 전문가 모음이 있습니다. 활성화하면 대화, 팀, 예약 작업에 나타나 필요할 때 언제든 대기합니다.",
-  "assistantHomeLeadShort": "스킬과 도구가 준비되어 바로 사용할 수 있는 AI 전문가. 활성화하면 채팅과 예약 작업에서 사용할 수 있습니다.",
+  "assistantHomeLeadShort": "브라우저를 관리하고 시간이 지날수록 학습하는 전담 업무 에이전트입니다.",
   "assistantRuntimeLabel": "Agent:",
   "assistantGoChat": "채팅",
   "assistantReorderHint": "드래그하여 순서를 바꿀 수 있습니다. 이 순서는 에이전트를 선택하는 모든 곳(홈, 예약 작업 등)에서의 표시 순서를 결정합니다.",
