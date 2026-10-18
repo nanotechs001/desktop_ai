@@ -573,6 +573,7 @@ JSON
 ```
 
 The `schedule` field is a tagged object, not a flat string:
+
 - `{ "kind": "cron", "expr": "<cron-expr>", "tz": "<IANA-tz>" }` — recurring cron schedule
 - `{ "kind": "every", "every_ms": <milliseconds> }` — fixed interval
 - `{ "kind": "at", "at_ms": <epoch-ms> }` — one-shot at a specific time

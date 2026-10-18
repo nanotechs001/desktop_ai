@@ -16,7 +16,7 @@ Project-specific rules and conventions for AI assistants and contributors.
 Absolutely forbidden: inferring, guessing, or "reasoning about likely behavior" of any agent CLI
 (claude, codex, gemini, opencode, hermes, aionrs, …) — its wire protocol, message shapes, field
 semantics, timing, defaults, or capabilities — from a CLI's name, a plausible mental model, prior
-training knowledge, or how you *think* it probably works. Every claim about an agent CLI's behavior
+training knowledge, or how you _think_ it probably works. Every claim about an agent CLI's behavior
 MUST be backed by one of these approved sources, cited explicitly by path:
 
 1. **Captured real data** — actual sampled wire traffic under
@@ -43,12 +43,13 @@ convenience and applies to every statement, plan, commit message, and design doc
 
 ### Do NOT state a claim as fact until you have verified it in the code yourself
 
-This rule exists because of a repeated, costly failure mode: forming a confident conclusion from a *proxy* for the truth instead of the truth itself, then reporting it to the user as fact. Concrete instances that must never recur:
+This rule exists because of a repeated, costly failure mode: forming a confident conclusion from a _proxy_ for the truth instead of the truth itself, then reporting it to the user as fact. Concrete instances that must never recur:
 
 - **Trusting a sub-agent's conclusion without checking its evidence.** A spawned agent reported "the frontend has NO question renderer; the break is in the frontend." That was false — the frontend renders whatever `options[]` the backend sends; the real bug was the backend hard-coding `[Allow, Reject]` options for an AskUserQuestion. The conclusion was relayed to the user verbatim. **A sub-agent's report is a lead, not a fact. Before you repeat any load-bearing claim from an agent, open the cited file:line and confirm it says what the agent said.**
 - **Declaring equivalence/correctness from a thin test.** A frame-by-frame A/B was run with one trivial prompt ("Reply PONG") that only exercised `start/text/finish`, then "core turn flow is equivalent" was declared. The prompt never triggered tool-output streaming, subagents, plans, permissions, AskUserQuestion, or mode-switch — where all the real divergences were. **A green result on inputs that don't exercise the behavior is not evidence about that behavior. Before claiming a class of behavior works, confirm your test actually produces that class of event.**
 
 Enforced behaviors:
+
 1. **Cite from primary source.** Any claim about what code does must be backed by a file you (this agent) have read this session — not a sub-agent's summary, not memory, not inference from names. Sub-agent findings must be spot-checked against the code before being surfaced.
 2. **Verify the negative before asserting absence.** Never say "X has no Y / feature Z doesn't exist / the frontend can't do this" until you have grepped for it AND read the relevant handler. Absence is a strong claim; a single missed file falsifies it (e.g. `sideQuestion.ts`, `MessageAcpPermission` rendering dynamic `options[]`).
 3. **Match the test to the claim.** When verifying behavior, the test input must exercise the exact events/paths the claim covers. Trivial/happy-path inputs prove only the trivial path. When you cannot exercise a path, say so explicitly rather than implying it passed.
@@ -64,6 +65,7 @@ When planning or changing a critical path or hard-to-observe flow, evaluate whet
 Add structured logs only when they help make production behavior diagnosable or provide extra development detail. Production normally runs at `info`, while development runs at `debug`; therefore, information needed to troubleshoot production issues must be available at `info`, `warn`, or `error`, not only `debug`.
 
 Use log levels as follows:
+
 - `debug` for high-frequency or detailed development-only flow details and state transitions
 - `info` for low-volume production-diagnostic lifecycle boundaries, important state changes, and non-sensitive correlation context
 - `warn` for malformed or unexpected data that is safely handled
@@ -88,6 +90,7 @@ Cargo workspace organized in four layers: Foundation → Capability → Domain �
 ### Domain Crate Structure
 
 Every domain crate must follow:
+
 - `lib.rs` — module exports only, no business logic
 - `routes.rs` — export `domain_routes(state) -> Router`, handlers do request/response transformation only
 - `service.rs` — sole location for business logic, must not import axum
@@ -187,6 +190,7 @@ Supports the same arguments as `git push` (e.g. `just push -u origin feat/branch
 **Happy Path (Critical Paths)**
 
 Every new or modified feature must have integration tests covering its normal flow. Critical paths that always require test coverage:
+
 - Authentication flow (login, token refresh, permission checks)
 - Message sending and retrieval
 - Agent session creation and interaction
@@ -196,6 +200,7 @@ Every new or modified feature must have integration tests covering its normal fl
 **Bad Path (Error Paths)**
 
 New endpoints or business logic must include tests for these scenarios:
+
 - Invalid input (missing fields, wrong types, oversized content)
 - Resource not found (404)
 - Insufficient permissions (unauthenticated, accessing another user's resources)
@@ -206,6 +211,7 @@ Bad path tests must assert specific error codes or error messages — asserting 
 **Security Tests**
 
 Endpoints involving authentication, authorization, or data isolation must include security tests:
+
 - Unauthenticated requests are rejected (401)
 - Cross-user data isolation (user A cannot access user B's resources)
 - State-changing requests are rejected when CSRF token is missing or invalid
@@ -214,6 +220,7 @@ Endpoints involving authentication, authorization, or data isolation must includ
 **WebSocket Event Tests**
 
 New WebSocket events must verify:
+
 - The event is emitted after the correct business operation
 - Event payload conforms to `WebSocketMessage<T>` structure
 - Events are only delivered to authorized subscribers (no leakage to unrelated users)
@@ -229,17 +236,20 @@ When a test fails, do NOT modify the test to make it pass. First determine:
 3. **Uncertain** → stop, trace back the change, clarify before proceeding
 
 Prohibited:
+
 - ❌ Deleting failing tests to "fix" the problem
 - ❌ Weakening specific assertions to vague ones (e.g., `assert_eq!(status, 201)` → `assert!(status.is_success())`)
 
 ## Verification Strategy
 
 > ⚠️ **When to run what:**
+>
 > - During development: only test the crate you're working on → `cargo test -p aionui-<crate>`
 > - After implementation complete: full verification → `cargo test --workspace`
 > - Do NOT run `cargo test --workspace` at the start of a task.
 >
 > ⚠️ **Performance:**
+>
 > - `cargo clippy --workspace` takes several minutes — use `run_in_background: true`.
 > - `cargo test --workspace` takes 10+ minutes. MUST use `run_in_background: true` when calling via Bash tool, otherwise it will timeout.
 > - `cargo clippy -p aionui-<crate>` and `cargo test -p aionui-<crate>` typically complete in under 1 minute.

@@ -1,15 +1,15 @@
-name: "🔨 Manual Build"
+name: '🔨 Manual Build'
 
 on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Branch, tag, or commit to build from"
+        description: 'Branch, tag, or commit to build from'
         required: true
-        default: "main"
+        default: 'main'
         type: string
       platform:
-        description: "Platform to build"
+        description: 'Platform to build'
         required: true
         type: choice
         options:
@@ -20,7 +20,7 @@ on:
           - linux-x64
           - linux-arm64
           - all
-        default: "macos-arm64"
+        default: 'macos-arm64'
 
 permissions:
   contents: read
@@ -28,12 +28,12 @@ permissions:
 env:
   BINARY_NAME: aioncore
   CARGO_TERM_COLOR: always
-  CARGO_HTTP_TIMEOUT: "600"
-  CARGO_NET_RETRY: "10"
+  CARGO_HTTP_TIMEOUT: '600'
+  CARGO_NET_RETRY: '10'
   # cross commit used by the v0.1.39/v0.1.40 Linux ARM64 release builds.
-  CROSS_GIT_REV: "29d00c7803f221f1b3f35e561b03792368fb8339"
-  LINUX_X64_GLIBC_MAX: "GLIBC_2.34"
-  LINUX_ARM64_GLIBC_MAX: "GLIBC_2.30"
+  CROSS_GIT_REV: '29d00c7803f221f1b3f35e561b03792368fb8339'
+  LINUX_X64_GLIBC_MAX: 'GLIBC_2.34'
+  LINUX_ARM64_GLIBC_MAX: 'GLIBC_2.30'
 
 jobs:
   prepare-matrix:
@@ -99,7 +99,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.95.0"
+          toolchain: '1.95.0'
           targets: ${{ matrix.target }}
 
       - name: Fix MSVC linker (remove Git's link.exe)

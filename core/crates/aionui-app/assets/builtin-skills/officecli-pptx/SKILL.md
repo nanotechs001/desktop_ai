@@ -5,17 +5,17 @@ description: "Use this skill any time a .pptx file is involved -- as input, outp
 
 > **⚠️ Platform note — read before running any command.** The shell snippets in this skill are written for **macOS / Linux** (bash/zsh). Always check which OS you are on first. On **Windows** do **not** run them verbatim — the underlying tool/CLI commands are usually cross-platform, but the surrounding shell syntax is not. Translate it to PowerShell before running:
 >
-> | bash (macOS / Linux) | PowerShell (Windows) |
-> | --- | --- |
-> | `a && b` | run as two steps, or `a; if ($?) { b }` |
-> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool |
-> | `VAR=$(cmd)` … `$VAR` | `$VAR = cmd` … `$VAR` |
-> | `cmd > /dev/null` | `cmd > $null` |
-> | `… \| grep PAT` | `… \| Select-String PAT` |
-> | `… \| jq …` | `… \| ConvertFrom-Json`, then read the fields |
-> | `python3 x.py` | `python x.py` (or `py x.py`) |
-> | `~/dir`, `/tmp` | `$env:USERPROFILE\dir`, `$env:TEMP` |
-> | `cp` / `mkdir -p` / `rm -rf` | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
+> | bash (macOS / Linux)              | PowerShell (Windows)                                                                |
+> | --------------------------------- | ----------------------------------------------------------------------------------- |
+> | `a && b`                          | run as two steps, or `a; if ($?) { b }`                                             |
+> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool                 |
+> | `VAR=$(cmd)` … `$VAR`             | `$VAR = cmd` … `$VAR`                                                               |
+> | `cmd > /dev/null`                 | `cmd > $null`                                                                       |
+> | `… \| grep PAT`                   | `… \| Select-String PAT`                                                            |
+> | `… \| jq …`                       | `… \| ConvertFrom-Json`, then read the fields                                       |
+> | `python3 x.py`                    | `python x.py` (or `py x.py`)                                                        |
+> | `~/dir`, `/tmp`                   | `$env:USERPROFILE\dir`, `$env:TEMP`                                                 |
+> | `cp` / `mkdir -p` / `rm -rf`      | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
 >
 > If a command has no obvious Windows equivalent, prefer the built-in file/HTTP tools over raw shell.
 
@@ -65,18 +65,18 @@ These are the deliverable standards every deck MUST meet. Violating any one = no
 
 **Explicit type hierarchy — do NOT rely on theme defaults.** Theme defaults drift between masters. Set sizes explicitly on every text shape.
 
-| Element | Minimum | Typical | Min shape height |
-|---|---|---|---|
-| Slide title | **≥ 36pt** bold | 36–44pt | ≥ 2cm |
-| Section / subtitle | ≥ 20pt | 20–24pt | ≥ 1.2cm |
-| Body text | **≥ 18pt** | 18–22pt | ≥ 1cm |
-| Caption / axis label | ≥ 10pt muted | 10–12pt | ≥ 0.6cm |
+| Element              | Minimum         | Typical | Min shape height |
+| -------------------- | --------------- | ------- | ---------------- |
+| Slide title          | **≥ 36pt** bold | 36–44pt | ≥ 2cm            |
+| Section / subtitle   | ≥ 20pt          | 20–24pt | ≥ 1.2cm          |
+| Body text            | **≥ 18pt**      | 18–22pt | ≥ 1cm            |
+| Caption / axis label | ≥ 10pt muted    | 10–12pt | ≥ 0.6cm          |
 
 Rule of thumb: **min shape height ≈ font_pt × 0.05cm**. An 18pt sublabel in a 0.8cm-tall box will overflow — `view annotated` catches this.
 
 Title must be **≥ 2× body size** (36pt over 20pt works; 28pt over 20pt looks timid). Four legit exceptions to body ≥ 18pt: chart axis labels, legends, footer / page number, and ≤ 5-word KPI sublabels (e.g. "Active users"). Descriptive sentences must be ≥ 18pt. Left-align body; center only titles and hero numbers. If "the cards won't fit", drop cards instead of shrinking font.
 
-**Two fonts max, one palette.** One heading font + one body font (e.g. Georgia + Calibri) — a third *display* face is fine only for big numerals or the cover title, as long as that heading+body pair stays intact. One dominant brand color (60–70% weight) + one supporting + one accent. Never mix 4+ colors in body content. **The palettes and font pairings in Design Principles are a floor, not a menu:** if the user gave brand colors/fonts or an existing template, match those first; otherwise the named sets are calibrated seeds — blend or diverge freely, as long as the result isn't *worse* than them and still clears the contrast floor.
+**Two fonts max, one palette.** One heading font + one body font (e.g. Georgia + Calibri) — a third _display_ face is fine only for big numerals or the cover title, as long as that heading+body pair stays intact. One dominant brand color (60–70% weight) + one supporting + one accent. Never mix 4+ colors in body content. **The palettes and font pairings in Design Principles are a floor, not a menu:** if the user gave brand colors/fonts or an existing template, match those first; otherwise the named sets are calibrated seeds — blend or diverge freely, as long as the result isn't _worse_ than them and still clears the contrast floor.
 
 **Every slide carries a non-text visual — one that informs.** Shape, chart, icon, gradient band that carries meaning, not decoration. A bullet-only deck is interchangeable with a Word doc. Exceptions: literal quote slides, code blocks, a single summary-table slide.
 
@@ -95,7 +95,7 @@ Before declaring done, the per-slide render (see QA) MUST satisfy:
 - **No placeholder tokens rendered as content.** `{{name}}`, `$fy$24`, `<TODO>`, `lorem`, `xxxx`, empty `()`/`[]` in chart titles never appear.
 - **No overflow off-edge, no clipped text in shapes.** `view issues` flags both (`shape_off_slide` + a text-fit hint). To fix a clip: grow the box or shorten the value — never trim content to fit.
 - **Cover carries its orienting elements.** Title + subtitle + presenter/client + date + a brand band or key-takeaway strap — a title-only cover reads as a stub. Generous whitespace around them is still right; rich ≠ crowded.
-- **Contrast.** `view issues` auto-flags the common case — opaque dark text on a shape's own dark fill (`low_contrast`). It can't see the rest: icon / chart-series fills, scheme/inherited colors, or text over a *separate* background shape. So on any fill with brightness < 30% (`1E2761`, `36454F`, deep forest / berry / cherry), still confirm every body run, card body, chart series, and icon is `FFFFFF` or brightness > 80% — mid-gray (`6B7B8D` ≈ 44%) reads on a laptop and vanishes on projection. Spot-check via `view html` after the dark-fill pass.
+- **Contrast.** `view issues` auto-flags the common case — opaque dark text on a shape's own dark fill (`low_contrast`). It can't see the rest: icon / chart-series fills, scheme/inherited colors, or text over a _separate_ background shape. So on any fill with brightness < 30% (`1E2761`, `36454F`, deep forest / berry / cherry), still confirm every body run, card body, chart series, and icon is `FFFFFF` or brightness > 80% — mid-gray (`6B7B8D` ≈ 44%) reads on a laptop and vanishes on projection. Spot-check via `view html` after the dark-fill pass.
 
 If any fails, STOP and fix before declaring done.
 
@@ -117,16 +117,16 @@ Standard widescreen is **33.87 × 19.05cm**. Treat it as a 12-column grid intern
 
 Pair by document register, not by novelty. "Best For" is a prompt, not a decree; a pairing outside this table is fine if it fits — these 8 are seeds, not the set.
 
-| Header | Body | Best For |
-|---|---|---|
-| Georgia | Calibri | Formal business, finance, executive reports |
-| Arial Black | Arial | Bold marketing, product launches |
-| Calibri | Calibri Light | Clean corporate, minimal design |
-| Cambria | Calibri | Traditional professional, legal, academic |
-| Trebuchet MS | Calibri | Friendly tech, startups, SaaS |
-| Impact | Arial | Bold headlines, event decks, keynotes |
-| Palatino | Garamond | Elegant editorial, luxury, nonprofit |
-| Consolas | Calibri | Developer tools, technical / engineering |
+| Header       | Body          | Best For                                    |
+| ------------ | ------------- | ------------------------------------------- |
+| Georgia      | Calibri       | Formal business, finance, executive reports |
+| Arial Black  | Arial         | Bold marketing, product launches            |
+| Calibri      | Calibri Light | Clean corporate, minimal design             |
+| Cambria      | Calibri       | Traditional professional, legal, academic   |
+| Trebuchet MS | Calibri       | Friendly tech, startups, SaaS               |
+| Impact       | Arial         | Bold headlines, event decks, keynotes       |
+| Palatino     | Garamond      | Elegant editorial, luxury, nonprofit        |
+| Consolas     | Calibri       | Developer tools, technical / engineering    |
 
 Set both fonts explicitly on every shape (`--prop font=Georgia` on titles, `--prop font=Calibri` on body), not via theme inheritance.
 
@@ -134,18 +134,18 @@ Set both fonts explicitly on every shape (`--prop font=Georgia` on titles, `--pr
 
 The columns: **Primary** (dominant — 60–70% of weight, the color you see first), **Secondary** (supporting tone), **Accent** (sparing, one-hit emphasis), **Text** (body on light fills), **Muted** (captions / axis labels / footer).
 
-| Theme | Primary | Secondary | Accent | Text | Muted |
-|---|---|---|---|---|---|
-| Coral Energy | `F96167` | `F9E795` | `2F3C7E` | `333333` | `8B7E6A` |
-| Midnight Executive | `1E2761` | `CADCFC` | `FFFFFF` | `333333` | `8899BB` |
-| Forest & Moss | `2C5F2D` | `97BC62` | `F5F5F5` | `2D2D2D` | `6B8E6B` |
-| Charcoal Minimal | `36454F` | `F2F2F2` | `212121` | `333333` | `7A8A94` |
-| Warm Terracotta | `B85042` | `E7E8D1` | `A7BEAE` | `3D2B2B` | `8C7B75` |
-| Berry & Cream | `6D2E46` | `A26769` | `ECE2D0` | `3D2233` | `8C6B7A` |
-| Ocean Gradient | `065A82` | `1C7293` | `21295C` | `2B3A4E` | `6B8FAA` |
-| Teal Trust | `028090` | `00A896` | `02C39A` | `2D3B3B` | `5E8C8C` |
-| Sage Calm | `84B59F` | `69A297` | `50808E` | `2D3D35` | `7A9488` |
-| Cherry Bold | `990011` | `FCF6F5` | `2F3C7E` | `333333` | `8B6B6B` |
+| Theme              | Primary  | Secondary | Accent   | Text     | Muted    |
+| ------------------ | -------- | --------- | -------- | -------- | -------- |
+| Coral Energy       | `F96167` | `F9E795`  | `2F3C7E` | `333333` | `8B7E6A` |
+| Midnight Executive | `1E2761` | `CADCFC`  | `FFFFFF` | `333333` | `8899BB` |
+| Forest & Moss      | `2C5F2D` | `97BC62`  | `F5F5F5` | `2D2D2D` | `6B8E6B` |
+| Charcoal Minimal   | `36454F` | `F2F2F2`  | `212121` | `333333` | `7A8A94` |
+| Warm Terracotta    | `B85042` | `E7E8D1`  | `A7BEAE` | `3D2B2B` | `8C7B75` |
+| Berry & Cream      | `6D2E46` | `A26769`  | `ECE2D0` | `3D2233` | `8C6B7A` |
+| Ocean Gradient     | `065A82` | `1C7293`  | `21295C` | `2B3A4E` | `6B8FAA` |
+| Teal Trust         | `028090` | `00A896`  | `02C39A` | `2D3B3B` | `5E8C8C` |
+| Sage Calm          | `84B59F` | `69A297`  | `50808E` | `2D3D35` | `7A9488` |
+| Cherry Bold        | `990011` | `FCF6F5`  | `2F3C7E` | `333333` | `8B6B6B` |
 
 Pick by topic, not by default — finance reads Midnight Executive, a product launch reads Coral Energy, safety / LOTO reads Cherry Bold. If the closest named theme is not quite right, blend (e.g. Forest primary + gold `D4A843` accent). Use **Text** on light fills, **Muted** for captions / axis / footer, `FFFFFF` or Secondary for body on dark fills.
 
@@ -155,14 +155,14 @@ On dark backgrounds, text and chart series follow the Hard rules contrast floor 
 
 Wrong chart type kills the 3-second test:
 
-| Data shape | Use | Avoid |
-|---|---|---|
-| Category comparison (A vs B vs C) | `column` (vertical) / `bar` (≥ 6 categories, horizontal) | pie (slices merge), line (no time axis) |
-| Time series, 1–3 series | `line` | area (occlusion), bar (implies discrete) |
-| Part-of-whole, 2–5 slices | `pie` / `doughnut` | pie with 8+ slices (unreadable) |
-| Correlation / distribution | `scatter` | line (implies ordering) |
-| Multiple categories × metrics, dense | stacked `column` or heatmap | one chart per metric — consolidate |
-| KPI snapshot (single big number) | **Large-text shape** (60–72pt + ≤ 5-word sublabel), NOT a chart | gauge chart, tiny bar |
+| Data shape                           | Use                                                             | Avoid                                    |
+| ------------------------------------ | --------------------------------------------------------------- | ---------------------------------------- |
+| Category comparison (A vs B vs C)    | `column` (vertical) / `bar` (≥ 6 categories, horizontal)        | pie (slices merge), line (no time axis)  |
+| Time series, 1–3 series              | `line`                                                          | area (occlusion), bar (implies discrete) |
+| Part-of-whole, 2–5 slices            | `pie` / `doughnut`                                              | pie with 8+ slices (unreadable)          |
+| Correlation / distribution           | `scatter`                                                       | line (implies ordering)                  |
+| Multiple categories × metrics, dense | stacked `column` or heatmap                                     | one chart per metric — consolidate       |
+| KPI snapshot (single big number)     | **Large-text shape** (60–72pt + ≤ 5-word sublabel), NOT a chart | gauge chart, tiny bar                    |
 
 Rule of thumb: if > 3 series and > 8 categories, split into two charts or switch to a table.
 
@@ -171,7 +171,7 @@ Rule of thumb: if > 3 series and > 8 categories, split into two charts or switch
 Use as much or as little as the brand and content call for — a formal finance deck trends to near-zero, a product launch can be more expressive. Animation is a tool, not décor. Three floors keep it from hurting the deck (none caps how much you use):
 
 - **Purposeful** — each one reveals or emphasizes (progressive bullet reveal, a build-up chart), never decorates. If it doesn't aid comprehension, cut it.
-- **Degrades gracefully** — pptx animation renders inconsistently across viewers (Keynote / Slides / web / mobile) and may not play at all, so every slide must read correctly as a *static* frame. Never hide essential content behind a reveal.
+- **Degrades gracefully** — pptx animation renders inconsistently across viewers (Keynote / Slides / web / mobile) and may not play at all, so every slide must read correctly as a _static_ frame. Never hide essential content behind a reveal.
 - **Verify live** — animation is runtime-only; `view html` and screenshots can't see it, so confirm in a real presentation viewer before shipping.
 
 Taste steer (not a ban): `fade` / `appear` / a single `zoom-entrance` with snappy durations (~hundreds of ms) fit most decks; `bounce` / `swivel` / `spin` / `fly-from-edge` / dense multi-object choreography usually read amateur — reach for them only when the brand is deliberately playful.
@@ -180,15 +180,16 @@ Taste steer (not a ban): `fade` / `appear` / a single `zoom-entrance` with snapp
 
 Vary layout across slides — repeating the same pattern makes every slide feel identical. These are common building blocks, not the full set — pick one per slide, or build a layout outside the table when the content calls for it:
 
-| Pattern | When to use | Key measurement |
-|---|---|---|
-| **Two-column** (text left, visual right) | Concept + evidence; feature + screenshot | Each col ≈ 14-15cm; gap 1cm |
-| **Icon rows** (icon in filled circle + bold header + description) | Feature lists, benefits, team roles | Icon circle 1.5-2cm; 3-4 rows max |
-| **2×2 or 2×3 grid** (card tiles) | Quadrant analysis, SWOT, option comparison | Gap ≥ 0.76cm; consistent card height |
-| **Half-bleed image** (full left or right half, content overlay on other side) | Hero moments, case study openers | Image 16-17cm wide; content column ≥ 14cm |
-| **Large stat callout** (60-72pt number + ≤5-word sublabel below) | Single KPI, milestone, market size | Use shape, NOT a chart; sublabel 14-16pt muted |
+| Pattern                                                                       | When to use                                | Key measurement                                |
+| ----------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------- |
+| **Two-column** (text left, visual right)                                      | Concept + evidence; feature + screenshot   | Each col ≈ 14-15cm; gap 1cm                    |
+| **Icon rows** (icon in filled circle + bold header + description)             | Feature lists, benefits, team roles        | Icon circle 1.5-2cm; 3-4 rows max              |
+| **2×2 or 2×3 grid** (card tiles)                                              | Quadrant analysis, SWOT, option comparison | Gap ≥ 0.76cm; consistent card height           |
+| **Half-bleed image** (full left or right half, content overlay on other side) | Hero moments, case study openers           | Image 16-17cm wide; content column ≥ 14cm      |
+| **Large stat callout** (60-72pt number + ≤5-word sublabel below)              | Single KPI, milestone, market size         | Use shape, NOT a chart; sublabel 14-16pt muted |
 
 **Data display quick rules:**
+
 - Comparison columns (before/after, A vs B) beat a table for 2-3 options.
 - Timelines and process flows: numbered step shapes + connectors, not a bullet list.
 
@@ -295,6 +296,7 @@ officecli view "$FILE" svg --start 3 --end 3   # single slide SVG (charts + grad
 ```
 
 **Reading the output — an expected non-defect:**
+
 - **`layout=blank` has no title placeholder.** Titles are plain `shape` elements, so `view outline` reporting `(untitled)` is **expected**, not a defect. Use `layout=title` + `placeholder[title]` only when screen-reader outline compatibility matters.
 
 ## Creating & Editing
@@ -325,7 +327,7 @@ Positioning is explicit — no layout engine, you own the grid math. `--prop pre
 
 ### Text inside shapes (paragraphs, runs, styling)
 
-A shape has paragraphs (`paragraph[K]`) and runs (`run[K]`). For one-line text, `--prop text=` on the shape is enough; a `\n` in the text makes a paragraph break, `\t` a tab (see Shell & Execution Discipline; double `\\n` for a literal). `add --type paragraph` takes the same style props as a shape (text, align, bold, italic, size, color, font). For mixed styling *within* a line, append a styled run:
+A shape has paragraphs (`paragraph[K]`) and runs (`run[K]`). For one-line text, `--prop text=` on the shape is enough; a `\n` in the text makes a paragraph break, `\t` a tab (see Shell & Execution Discipline; double `\\n` for a literal). `add --type paragraph` takes the same style props as a shape (text, align, bold, italic, size, color, font). For mixed styling _within_ a line, append a styled run:
 
 ```bash
 officecli add "$FILE" "/slide[2]/shape[@name=Card1]/paragraph[1]" --type run \
@@ -534,7 +536,7 @@ Gates 1–2b are text/schema-level (cannot see a rendered slide); Gate 3 is the 
 Each gate is **run a command, judge its output** — the officecli commands are identical on every OS (macOS / Linux / Windows), so no shell scripting is needed; the judging is yours.
 
 - **Gate 1 — schema.** `officecli validate "<file>"`. Any schema error → REJECT and fix.
-- **Gate 2 — overflow / format / structure.** `officecli view "<file>" issues`. If it lists *any* issue (lines tagged `[O1]`, `[C1]`, `[S1]`, …) → REJECT, fix, re-run until clean.
+- **Gate 2 — overflow / format / structure.** `officecli view "<file>" issues`. If it lists _any_ issue (lines tagged `[O1]`, `[C1]`, `[S1]`, …) → REJECT, fix, re-run until clean.
 - **Gate 2b — leftover placeholders.** `officecli view "<file>" text`, then scan the output for `xxxx`, `lorem` / `ipsum`, `<TODO>`, `placeholder`, "this slide layout", or empty `()` / `[]`. Any hit → REJECT.
 
 ### Gate 3 — Visual audit (MANDATORY)
@@ -543,7 +545,7 @@ Pick **one** path:
 
 **Screenshot (default)** — needs image-Read + a headless browser. Screenshot each slide in turn — `officecli view "<file>" screenshot --page 1 -o slide1.png`, then `--page 2`, … — until the page index runs past the deck (one screenshot = one slide). If it errors on page 1, there's no headless backend → use the fallback below.
 
-**Judge every PNG against the checklist, adversarially** — "assume problems exist; finding none means you didn't look hard enough." Report one `slide N: <issue>` line per problem, or `PASS`. This step is required however you run it. **If** your harness can spawn a subagent, delegate the judging to a *fresh, independent* one — the agent that built the deck is biased toward "looks fine", a separate pair of eyes is more critical — handing it the screenshots + this checklist and the same adversarial framing. No subagent? Do exactly the same yourself.
+**Judge every PNG against the checklist, adversarially** — "assume problems exist; finding none means you didn't look hard enough." Report one `slide N: <issue>` line per problem, or `PASS`. This step is required however you run it. **If** your harness can spawn a subagent, delegate the judging to a _fresh, independent_ one — the agent that built the deck is biased toward "looks fine", a separate pair of eyes is more critical — handing it the screenshots + this checklist and the same adversarial framing. No subagent? Do exactly the same yourself.
 
 **Fallback — HTML-text** (no image-Read or no browser): read `view "$FILE" html` as text. DOM cannot prove **dark-on-dark / fine overlap / arrowheads / gap-margin metrics / column alignment** — flag these as "not visually verified" rather than PASS.
 
@@ -572,11 +574,11 @@ REJECT with `slide N: <issue>` lines, else "Gate 3 PASS" (HTML-text fallback add
 
 Sanity-check cheatsheet — what breaks on the first try. Design + shell traps.
 
-| Pitfall | Correct approach |
-|---|---|
-| Unquoted `[N]` in zsh/bash | Always quote paths: `"/slide[1]"`. zsh globs unquoted `[1]` → `no matches found` — #1 first-use stumble |
-| `--name "foo"` | All attributes go through `--prop`: `--prop name="foo"` |
-| `/shape[myname]` (bare name in brackets) | Use `@name=` selector: `/shape[@name=myname]` or `/shape[@id=10007]` |
-| Paths 1-based vs `--index` 0-based | `/slide[1]` = first slide; `--index 0` = first position |
-| `$` in `--prop text=` | Single-quote: `--prop text='$15M'`. Double-quoted `"$15M"` gets shell-expanded to `M` |
-| `\n` / `\t` in `--prop text=` | Interpreted by the CLI: `\n` = paragraph break, `\t` = tab. Double `\\n` for a literal |
+| Pitfall                                  | Correct approach                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Unquoted `[N]` in zsh/bash               | Always quote paths: `"/slide[1]"`. zsh globs unquoted `[1]` → `no matches found` — #1 first-use stumble |
+| `--name "foo"`                           | All attributes go through `--prop`: `--prop name="foo"`                                                 |
+| `/shape[myname]` (bare name in brackets) | Use `@name=` selector: `/shape[@name=myname]` or `/shape[@id=10007]`                                    |
+| Paths 1-based vs `--index` 0-based       | `/slide[1]` = first slide; `--index 0` = first position                                                 |
+| `$` in `--prop text=`                    | Single-quote: `--prop text='$15M'`. Double-quoted `"$15M"` gets shell-expanded to `M`                   |
+| `\n` / `\t` in `--prop text=`            | Interpreted by the CLI: `\n` = paragraph break, `\t` = tab. Double `\\n` for a literal                  |

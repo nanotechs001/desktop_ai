@@ -44,11 +44,11 @@ Update payload uses the same fields and also requires:
 The `message` must tell the AI exactly what to do when the task fires. It should
 not merely restate the user's scheduling request.
 
-| User says                         | Bad message              | Good message                                                                                 |
-| --------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------- |
-| "Send me hello every day at 10am" | Send me hello            | Reply with exactly: Hello!                                                                   |
-| "Remind me to drink water daily"  | Remind me to drink water | Reply with a friendly reminder to drink water.                                               |
-| "Summarize AI news every Monday"  | Summarize AI news        | Search for the latest AI news from this week and produce a concise bullet-point summary.     |
+| User says                         | Bad message              | Good message                                                                             |
+| --------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
+| "Send me hello every day at 10am" | Send me hello            | Reply with exactly: Hello!                                                               |
+| "Remind me to drink water daily"  | Remind me to drink water | Reply with a friendly reminder to drink water.                                           |
+| "Summarize AI news every Monday"  | Summarize AI news        | Search for the latest AI news from this week and produce a concise bullet-point summary. |
 
 ## Examples
 

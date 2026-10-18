@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none">
+  <title>Halo Orb toolbar icon</title>
+  <defs>
+    <mask id="visor-eye-cutouts" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="white" />
+      <path
+        d="M6.55 11.42c1-1.25 2.5-1.25 3.5 0M13.95 11.42c1-1.25 2.5-1.25 3.5 0"
+        fill="none"
+        stroke="black"
+        stroke-width="1.45"
+        stroke-linecap="round"
+      />
+    </mask>
+  </defs>
+  <g
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <!-- Rear half of the orbit ring. -->
+    <path d="M.15 13.58c.48-1.27 1.23-2.27 2.28-3.08" />
+    <path d="M21.57 10.5c1.05.81 1.8 1.81 2.28 3.08" />
+
+    <!-- The robot's helmet shell. -->
+    <circle cx="12" cy="11.25" r="9.35" />
+  </g>
+
+  <!-- A strong dark visor makes the character read as a robot at 16 px. -->
+  <rect
+    x="4"
+    y="6.25"
+    width="16"
+    height="9.5"
+    rx="4.55"
+    fill="currentColor"
+    mask="url(#visor-eye-cutouts)"
+  />
+
+  <g
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <!-- Front half of the orbit ring and its signature bead. -->
+    <path d="M.15 13.58c1.12 2.65 5.93 4.52 11.85 4.52 4.86 0 9.12-1.24 10.95-3.2" />
+    <circle cx="22.95" cy="14.46" r="1.12" fill="currentColor" stroke="none" />
+  </g>
+</svg>

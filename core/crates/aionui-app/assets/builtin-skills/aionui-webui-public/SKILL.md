@@ -6,17 +6,17 @@ description: >-
 
 > **⚠️ Platform note — read before running any command.** The shell snippets in this skill are written for **macOS / Linux** (bash/zsh). Always check which OS you are on first. On **Windows** do **not** run them verbatim — the underlying tool/CLI commands are usually cross-platform, but the surrounding shell syntax is not. Translate it to PowerShell before running:
 >
-> | bash (macOS / Linux) | PowerShell (Windows) |
-> | --- | --- |
-> | `a && b` | run as two steps, or `a; if ($?) { b }` |
-> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool |
-> | `VAR=$(cmd)` … `$VAR` | `$VAR = cmd` … `$VAR` |
-> | `cmd > /dev/null` | `cmd > $null` |
-> | `… \| grep PAT` | `… \| Select-String PAT` |
-> | `… \| jq …` | `… \| ConvertFrom-Json`, then read the fields |
-> | `python3 x.py` | `python x.py` (or `py x.py`) |
-> | `~/dir`, `/tmp` | `$env:USERPROFILE\dir`, `$env:TEMP` |
-> | `cp` / `mkdir -p` / `rm -rf` | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
+> | bash (macOS / Linux)              | PowerShell (Windows)                                                                |
+> | --------------------------------- | ----------------------------------------------------------------------------------- |
+> | `a && b`                          | run as two steps, or `a; if ($?) { b }`                                             |
+> | `cat <<'EOF' \| tool …` (heredoc) | write the text to a temp file, then pipe/pass that file to the tool                 |
+> | `VAR=$(cmd)` … `$VAR`             | `$VAR = cmd` … `$VAR`                                                               |
+> | `cmd > /dev/null`                 | `cmd > $null`                                                                       |
+> | `… \| grep PAT`                   | `… \| Select-String PAT`                                                            |
+> | `… \| jq …`                       | `… \| ConvertFrom-Json`, then read the fields                                       |
+> | `python3 x.py`                    | `python x.py` (or `py x.py`)                                                        |
+> | `~/dir`, `/tmp`                   | `$env:USERPROFILE\dir`, `$env:TEMP`                                                 |
+> | `cp` / `mkdir -p` / `rm -rf`      | `Copy-Item` / `New-Item -ItemType Directory -Force` / `Remove-Item -Recurse -Force` |
 >
 > If a command has no obvious Windows equivalent, prefer the built-in file/HTTP tools over raw shell.
 
@@ -26,7 +26,7 @@ You help a user turn their local AionUi WebUI (LAN-only at best) into a public i
 
 ## Core facts (verified, do not re-derive)
 
-- AionUi WebUI is a local HTTP server on port 25808 (the aioncore default; override with the `--port` CLI flag — so don't hardcode it, confirm with the curl probe below). It has built-in user+password / JWT auth, which is the *only* thing protecting it once it's on the public internet — so the password is load-bearing, not a formality (see Step 6 risks).
+- AionUi WebUI is a local HTTP server on port 25808 (the aioncore default; override with the `--port` CLI flag — so don't hardcode it, confirm with the curl probe below). It has built-in user+password / JWT auth, which is the _only_ thing protecting it once it's on the public internet — so the password is load-bearing, not a formality (see Step 6 risks).
 - There is NO HTTP/CLI way to start the desktop WebUI. Starting it is Electron-IPC only, so you cannot turn it on; you must guide the user to the toggle. You CAN detect its state, install the tunnel, run the tunnel, and verify, all yourself.
 - The tunnel tool is cloudflared (Cloudflare quick tunnel, no account needed). It must be forced to --protocol http2 (see Gotcha).
 - Password changes DO have HTTP routes you can call for the user (see "Optional: change credentials").
@@ -84,6 +84,7 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:25808
 (Use the path to the binary you installed, e.g. `~/.aionui/tools/cloudflared`.)
 
 Watch its output for two things:
+
 1. The public URL line: `https://<random-words>.trycloudflare.com`
 2. A line `Registered tunnel connection ... protocol=http2`. This means it actually connected.
 
@@ -125,7 +126,7 @@ their language. Don't bury these or save them for after something breaks.
   generate a fresh one.
 - Keep it running. The tunnel is a process on this machine; if you close it (or
   the computer sleeps / shuts down), the public URL stops working.
-- This is a Cloudflare *quick tunnel* — meant for quick sharing and testing, not
+- This is a Cloudflare _quick tunnel_ — meant for quick sharing and testing, not
   a production hosting setup. It can be rate-limited or dropped; don't rely on it
   for anything long-lived or critical.
 
@@ -133,7 +134,7 @@ their language. Don't bury these or save them for after something breaks.
 
 - Anyone who has the URL can reach the login page from anywhere — the password is
   the only protection. Use a strong, unique one (offered in Step 6).
-- A random URL is *obscurity, not security*. It can leak through browser history,
+- A random URL is _obscurity, not security_. It can leak through browser history,
   chat logs, link previews, or the `Referer` header — treat it as discoverable,
   not secret.
 - Your traffic passes through Cloudflare's edge, where TLS is terminated. That's
@@ -162,7 +163,7 @@ curl -s -X POST http://127.0.0.1:25808/api/webui/change-username -H "Content-Typ
 
 ### Optional - a permanent / fixed address (mention only, do not push)
 
-Only bring this up after the user has experienced the free public access and asks for a URL that does not change. A fixed address requires a Cloudflare account + your own domain wired to a cloudflared named tunnel (more setup, and a custom domain is paid). The free *.trycloudflare.com URL is always random/ephemeral. Recommend the named-tunnel path as an option, but do not set it up unless they explicitly want it.
+Only bring this up after the user has experienced the free public access and asks for a URL that does not change. A fixed address requires a Cloudflare account + your own domain wired to a cloudflared named tunnel (more setup, and a custom domain is paid). The free \*.trycloudflare.com URL is always random/ephemeral. Recommend the named-tunnel path as an option, but do not set it up unless they explicitly want it.
 
 ## Style
 

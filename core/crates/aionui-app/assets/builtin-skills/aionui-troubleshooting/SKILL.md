@@ -222,18 +222,18 @@ Constraints:
 
 ## Data Source Map
 
-| Concern | Command |
-| --- | --- |
-| Backend alive / version | `diagnose health` |
-| Cross-domain snapshot | `diagnose overview` |
-| Conversation runtime | `diagnose conversations get` |
-| Conversation messages | `diagnose conversations messages` |
-| Provider health | `diagnose providers summary` |
-| Scheduled jobs | `diagnose cron summary` |
-| MCP servers | `diagnose mcp summary` |
-| Teams and member state | `diagnose teams summary` |
-| Logs | `diagnose logs tail` |
-| Uncovered read-only API | `diagnose http get` |
+| Concern                 | Command                           |
+| ----------------------- | --------------------------------- |
+| Backend alive / version | `diagnose health`                 |
+| Cross-domain snapshot   | `diagnose overview`               |
+| Conversation runtime    | `diagnose conversations get`      |
+| Conversation messages   | `diagnose conversations messages` |
+| Provider health         | `diagnose providers summary`      |
+| Scheduled jobs          | `diagnose cron summary`           |
+| MCP servers             | `diagnose mcp summary`            |
+| Teams and member state  | `diagnose teams summary`          |
+| Logs                    | `diagnose logs tail`              |
+| Uncovered read-only API | `diagnose http get`               |
 
 ## Safety Notes
 

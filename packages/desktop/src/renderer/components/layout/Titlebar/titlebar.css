@@ -332,14 +332,3 @@
   background-color: #c10f1f;
   color: #fff;
 }
-
-/* Brand mark at the start of the top-right navigation. */
-.app-titlebar__logo {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-  flex-shrink: 0;
-  margin-right: 4px;
-  -webkit-app-region: no-drag;
-  user-select: none;
-}
