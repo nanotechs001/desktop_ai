@@ -85,7 +85,7 @@
       "outsideSandbox": "Este arquivo está fora da sandbox atual do projeto."
     },
     "serverInstall": {
-      "hint": "O AionUi está sendo executado em um servidor. O componente de pré-visualização precisa ser instalado nesse servidor. Execute o comando abaixo no servidor e tente novamente:",
+      "hint": "O Pixebot Browser está sendo executado em um servidor. O componente de pré-visualização precisa ser instalado nesse servidor. Execute o comando abaixo no servidor e tente novamente:",
       "icuNote": "Se ainda não iniciar, instale a biblioteca ICU no servidor (Debian/Ubuntu: apt-get install -y libicu-dev)."
     }
   },
@@ -270,7 +270,8 @@
       "personal": "Pessoal",
       "newTabIn": "Nova aba em…",
       "unavailable": "Não foi possível abrir o perfil do navegador deste Agente.",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "temporary": "Temporário (este chat)"
     },
     "cookieImport": {
       "more": "Mais",
@@ -301,5 +302,7 @@
         "list_failed": "Não foi possível procurar navegadores neste Mac."
       }
     }
-  }
+  },
+  "showChat": "Mostrar chat",
+  "hideChat": "Ocultar chat"
 }

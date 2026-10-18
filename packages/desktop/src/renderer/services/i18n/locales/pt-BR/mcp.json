@@ -72,7 +72,7 @@
     "high": "Alta",
     "urgent": "Urgente"
   },
-  "browserAlwaysOn": "Sempre ativo: os agentes usam o painel de navegador do AionUi",
+  "browserAlwaysOn": "Sempre ativo: os agentes usam o painel de navegador do Pixebot Browser",
   "artifactsAlwaysOn": "Sempre ativo: os agentes o usam para mostrar páginas e documentos",
   "notesAlwaysOn": "Sempre ativo: os agentes salvam lições no caderno"
 }

@@ -8,7 +8,8 @@ import type { AssistantListItem } from '../types';
 import AssistantAvatar from '../AssistantAvatar';
 import RuntimeBadge from './RuntimeBadge';
 import { Button, Dropdown, Menu, Switch, Tooltip } from '@arco-design/web-react';
-import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
+import { isUndeletableAgent, isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { Attention, MoreOne } from '@icon-park/react';
 import React from 'react';
@@ -135,6 +136,13 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
               {t('settings.assistantGoChat', { defaultValue: 'Chat' })}
             </Button>
           ) : null}
+          {isVaBotAgent(assistant, defaultAgentId) && (
+            <AgentHistoryButton
+              agentId={assistant.id}
+              agentName={assistant.name_i18n?.[localeKey] || assistant.name}
+              className='!flex !h-32px !w-36px !items-center !justify-center !rounded-9px !p-0 !text-t-tertiary hover:!bg-fill-2 hover:!text-t-primary'
+            />
+          )}
           <Dropdown droplist={actionMenu} trigger='click' position='br' getPopupContainer={() => document.body}>
             <Button
               type='text'

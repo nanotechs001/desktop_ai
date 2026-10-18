@@ -5,7 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { IConversationMcpStatus, IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
+import type { TChatConversation } from '@/common/config/storage';
 import { uuid } from '@/common/utils';
 import addChatIcon from '@/renderer/assets/icons/add-chat.svg';
 import { CronJobManager } from '@/renderer/pages/cron';
@@ -16,12 +16,20 @@ import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistan
 import { iconColors } from '@/renderer/styles/colors';
 import { Button, Dropdown, Menu, Message, Tooltip, Typography } from '@arco-design/web-react';
 import { History } from '@icon-park/react';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { emitter } from '../../../utils/emitter';
-import AcpChat from '../platforms/acp/AcpChat';
+import { useChatLocation } from '@/renderer/pages/agentWidget/chatLocation';
+import { useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
+import WidgetChatPlaceholder, { ShowAgentWidgetButton } from '@/renderer/pages/agentWidget/WidgetChatPlaceholder';
+import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
+import {
+  renderAcpConversationChat,
+  renderAionrsConversationChat,
+  useAionrsConversationModel,
+} from './ConversationChatBody';
 import ChatLayout from './ChatLayout';
 import ChatSlider from './ChatSlider.tsx';
 import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
@@ -29,15 +37,13 @@ import AcpRuntimeRestartButton from '@/renderer/components/agent/AcpRuntimeResta
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import GoogleModelSelector from '../platforms/gemini/GoogleModelSelector';
-import AionrsChat from '../platforms/aionrs/AionrsChat';
 import AionrsModelSelector from '../platforms/aionrs/AionrsModelSelector';
-import { useAionrsModelSelection } from '../platforms/aionrs/useAionrsModelSelection';
-import { useConversationRuntimeView } from '../runtime/useConversationRuntimeView';
 import { isLegacyReadOnlyConversationType } from '../utils/conversationRuntime';
 import { resolveConversationBackend } from '../utils/conversationAssistantIdentity';
-import LegacyReadOnlyConversation from '../platforms/legacy/LegacyReadOnlyConversation';
-import SingleChatEmptyState from './SingleChatEmptyState';
 import { useActiveLease } from '../hooks/useActiveLease';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
+import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 // import SkillRuleGenerator from './components/SkillRuleGenerator'; // Temporarily hidden
 
 const configErrorMessageKey = (error: unknown) => {
@@ -150,28 +156,9 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
   conversation,
   sliderTitle,
 }) => {
-  const runtimeView = useConversationRuntimeView(conversation.id);
-  const onSelectModel = useCallback(
-    async (_provider: IProvider, modelName: string) => {
-      const selected = { ..._provider, use_model: modelName } as TProviderWithModel;
-      // Kill running agent on model switch — will be rebuilt with new model on next message
-      if (runtimeView.activeTurnId) {
-        const result = await ipcBridge.conversation.stop.invoke({
-          conversation_id: conversation.id,
-          turn_id: runtimeView.activeTurnId,
-        });
-        runtimeView.markStopAcknowledged(runtimeView.activeTurnId, result.runtime);
-      }
-      const ok = await ipcBridge.conversation.update.invoke({ id: conversation.id, updates: { model: selected } });
-      return Boolean(ok);
-    },
-    [conversation.id, runtimeView]
-  );
-
-  const modelSelection = useAionrsModelSelection({
-    initialModel: conversation.model,
-    onSelectModel,
-  });
+  const modelSelection = useAionrsConversationModel(conversation);
+  const chatLocation = useChatLocation(conversation.id);
+  const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
   // Project conversations get the Layout-level Explorer column (stage3 FULL);
   // ChatLayout's own right sider is only for no-project (legacy tree), so it does
   // not double up or reserve an empty column.
@@ -209,6 +196,12 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
     headerExtra: (
       <div className='flex items-center gap-8px'>
         <CronJobManager conversation_id={conversation.id} cron_job_id={cronJobId} />
+        {conversation.assistant && isVaBotAgent(conversation.assistant, storedDefaultAgentId) && (
+          <>
+            <AgentHistoryButton agentId={conversation.assistant.id} agentName={conversation.assistant.name} />
+            <ShowAgentWidgetButton conversationId={conversation.id} agentId={conversation.assistant?.id} />
+          </>
+        )}
         {!isMobile && (
           <AionrsModelSelector
             selection={modelSelection}
@@ -235,25 +228,13 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
     presetAssistant: presetAssistantInfo ? { ...presetAssistantInfo, id: aionrsAssistantId } : undefined,
   };
 
-  const emptySlot = <SingleChatEmptyState conversation_id={conversation.id} />;
-
   return (
     <ChatLayout {...chatLayoutProps} conversation_id={conversation.id}>
-      <AionrsChat
-        conversation_id={conversation.id}
-        workspace={conversation.extra.workspace}
-        emptySlot={emptySlot}
-        modelSelection={modelSelection}
-        session_mode={conversation.extra?.session_mode}
-        cron_job_id={cronJobId}
-        loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
-        loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
-        loadedMcpStatuses={
-          (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
-        }
-        assistantId={aionrsAssistantId}
-        forkCapability={conversation.fork_capability}
-      />
+      {chatLocation === 'widget' ? (
+        <WidgetChatPlaceholder conversationId={conversation.id} />
+      ) : (
+        renderAionrsConversationChat({ conversation, modelSelection, assistantId: aionrsAssistantId })
+      )}
     </ChatLayout>
   );
 };
@@ -271,6 +252,14 @@ const ChatConversation: React.FC<{
     [conversation?.id]
   );
   useActiveLease({ type: 'conversation', id: conversation?.id });
+  // VA Bot conversations switch the page to the browser-on-top / chat-underneath layout.
+  const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
+  const { setVaBotMode, isVaChatCollapsed } = usePreviewContext();
+  const isVaBot = isVaBotAgent(conversation?.assistant, storedDefaultAgentId);
+  useEffect(() => {
+    setVaBotMode(isVaBot);
+    return () => setVaBotMode(false);
+  }, [isVaBot, setVaBotMode]);
   const workspaceEnabled = Boolean(conversation?.extra?.workspace) && !conversation?.project_id;
   const cronJobId = resolveCronJobId(conversation?.extra);
   const layout = useLayoutContext();
@@ -287,51 +276,24 @@ const ChatConversation: React.FC<{
   const acpAssistantId = presetAssistantInfo?.assistantId;
   const resolvedConversationBackend = resolveConversationBackend(conversation, presetAssistantInfo?.backend);
 
+  const chatLocation = useChatLocation(conversation?.id);
+  // Watching this VA Bot's chat here: its taskbar robot steps away until the chat closes or the user moves on.
+  useSuspendAgentWidget(isVaBot ? conversation?.id : undefined, !isVaChatCollapsed && chatLocation === 'main');
   const conversationNode = useMemo(() => {
     if (!conversation || isAionrsConversation) return null;
-    // Greeting shown while the conversation has no messages yet (freshly created
-    // or cloned window). Each *Chat forwards it to MessageList's empty slot.
-    const emptySlot = <SingleChatEmptyState conversation_id={conversation.id} />;
-    if (isLegacyReadOnlyConversation) {
-      return <LegacyReadOnlyConversation key={conversation.id} conversation={conversation} emptySlot={emptySlot} />;
-    }
-    switch (conversation.type) {
-      case 'acp':
-      // Antigravity reports its own conversation type but renders through the
-      // ACP chat surface: same extra payload, same event stream, same send box.
-      // Without this case it falls to `default: null` — the chat area renders
-      // empty, no send box mounts, and the queued initial message in
-      // `acp_initial_message_<id>` is never delivered, so the turn never starts.
-      case 'antigravity':
-        return (
-          <AcpChat
-            key={conversation.id}
-            conversation_id={conversation.id}
-            workspace={conversation.extra?.workspace}
-            backend={resolvedConversationBackend || 'claude'}
-            session_mode={conversation.extra?.session_mode}
-            cron_job_id={cronJobId}
-            hideSendBox={resolvedHideSendBox}
-            emptySlot={emptySlot}
-            loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
-            loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
-            loadedMcpStatuses={
-              (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
-            }
-            assistantId={acpAssistantId}
-            forkCapability={conversation.fork_capability}
-            promptCapability={conversation.prompt_capability}
-          ></AcpChat>
-        );
-      default:
-        return null;
-    }
+    // The floating widget owns this chat right now; the browser/preview pane stays here.
+    if (chatLocation === 'widget') return <WidgetChatPlaceholder conversationId={conversation.id} />;
+    return renderAcpConversationChat({
+      conversation,
+      backend: resolvedConversationBackend,
+      assistantId: acpAssistantId,
+      hideSendBox: resolvedHideSendBox,
+    });
   }, [
     conversation,
     isAionrsConversation,
-    isLegacyReadOnlyConversation,
+    chatLocation,
     resolvedConversationBackend,
-    cronJobId,
     resolvedHideSendBox,
     acpAssistantId,
   ]);
@@ -392,6 +354,12 @@ const ChatConversation: React.FC<{
         <div className='shrink-0'>
           <CronJobManager conversation_id={conversation.id} cron_job_id={cronJobId} />
         </div>
+      )}
+      {conversation?.assistant && isVaBot && (
+        <AgentHistoryButton agentId={conversation.assistant.id} agentName={conversation.assistant.name} />
+      )}
+      {conversation && isVaBot && !isLegacyReadOnlyConversation && (
+        <ShowAgentWidgetButton conversationId={conversation.id} agentId={conversation.assistant?.id} />
       )}
       {modelSelector && <div className='shrink-0'>{modelSelector}</div>}
       {conversation && conversation.type === 'acp' && !isMobile && !isLegacyReadOnlyConversation && (

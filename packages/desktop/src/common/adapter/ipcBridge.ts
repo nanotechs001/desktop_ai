@@ -110,6 +110,14 @@ import type {
 import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
 import type { Theme } from '@/common/theme/types';
 import type { AttachFolderRequest, ProjectDetailDto, ProjectEntryDto } from '@/common/types/project';
+import type {
+  AgentAnimationState,
+  AgentChatLocation,
+  AgentWidgetLayout,
+  AgentWidgetLifecycleAnimation,
+  AgentWidgetSettings,
+  AgentWidgetSnapshot,
+} from '@/common/types/agent/agentWidget';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import {
@@ -1659,6 +1667,68 @@ export const systemSettings = {
   ensureManagedAcpTool: httpPost<{ ready: boolean }, { scope: IRuntimeStatusScope; tool_id: string }>(
     '/api/system/ensure-managed-acp-tool'
   ),
+};
+
+// ---------------------------------------------------------------------------
+// Floating agent widget — stays IPC (Electron-native windows). Events carry
+// ids, flags and layout numbers only; the one free-text field (a send-box
+// draft) is never put in an event — it moves only as the handoffDraft request
+// and the takeDraft reply, the same transport as every other provider call.
+// ---------------------------------------------------------------------------
+
+type AgentWidgetTarget = { conversation_id: string };
+
+export const agentWidget = {
+  getSettings: bridge.buildProvider<AgentWidgetSettings, void>('agent-widget:get-settings'),
+  setSettings: bridge.buildProvider<AgentWidgetSettings, Partial<AgentWidgetSettings>>('agent-widget:set-settings'),
+  /** Create (or re-show) the widget for a ready conversation. `force` ignores autoLaunch (explicit user action). */
+  ensure: bridge.buildProvider<boolean, AgentWidgetTarget & { force?: boolean; agent_id?: string }>(
+    'agent-widget:ensure'
+  ),
+  /** Remove the desktop widget; the agent keeps running. */
+  hide: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:hide'),
+  /** Conversation deleted/archived: destroy the window and forget its saved state. */
+  remove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:remove'),
+  getSnapshot: bridge.buildProvider<AgentWidgetSnapshot | null, AgentWidgetTarget>('agent-widget:get-snapshot'),
+  setExpanded: bridge.buildProvider<void, AgentWidgetTarget & { expanded: boolean }>('agent-widget:set-expanded'),
+  setChatLocation: bridge.buildProvider<void, AgentWidgetTarget & { location: AgentChatLocation }>(
+    'agent-widget:set-chat-location'
+  ),
+  getChatLocations: bridge.buildProvider<Record<string, AgentChatLocation>, void>('agent-widget:get-chat-locations'),
+  handoffDraft: bridge.buildProvider<void, AgentWidgetTarget & { text: string }>('agent-widget:handoff-draft'),
+  takeDraft: bridge.buildProvider<string, AgentWidgetTarget>('agent-widget:take-draft'),
+  reportState: bridge.buildProvider<void, AgentWidgetTarget & { state: AgentAnimationState; transitioning?: boolean }>(
+    'agent-widget:report-state'
+  ),
+  dragStart: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-start'),
+  dragEnd: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:drag-end'),
+  setIgnoreMouse: bridge.buildProvider<void, AgentWidgetTarget & { ignore: boolean }>('agent-widget:set-ignore-mouse'),
+  /** Return the chat to the main window and bring that window forward on the conversation. */
+  openInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:open-in-main'),
+  /** The widget renderer has its first frames decoded: show the window and play `appearing`. */
+  rendererReady: bridge.buildProvider<void, AgentWidgetTarget & { agent_id?: string; modified_at?: number }>(
+    'agent-widget:renderer-ready'
+  ),
+  /** The robot switches to another conversation of the same VA Bot (picked from its chat history). */
+  showConversation: bridge.buildProvider<void, AgentWidgetTarget & { to: string }>('agent-widget:show-conversation'),
+  /** Main -> widget: this robot now stands for conversation `to` (one robot per VA Bot). */
+  retargeted: bridge.buildEmitter<AgentWidgetTarget & { to: string }>('agent-widget:retargeted'),
+  /** A lifecycle animation the main process asked for has finished playing. */
+  animationDone: bridge.buildProvider<void, AgentWidgetTarget & { animation: AgentWidgetLifecycleAnimation }>(
+    'agent-widget:animation-done'
+  ),
+  /** Main window: the user is watching this VA Bot's chat there, so its robot steps away (false: it comes back). */
+  setSuspended: bridge.buildProvider<void, AgentWidgetTarget & { suspended: boolean }>('agent-widget:set-suspended'),
+  /** Main → widget: play a lifecycle animation (the window shows before `appearing`, hides after `disappearing`). */
+  lifecycle: bridge.buildEmitter<AgentWidgetTarget & { animation: AgentWidgetLifecycleAnimation }>(
+    'agent-widget:lifecycle'
+  ),
+  layoutChanged: bridge.buildEmitter<AgentWidgetLayout>('agent-widget:layout-changed'),
+  chatLocationChanged: bridge.buildEmitter<AgentWidgetTarget & { location: AgentChatLocation }>(
+    'agent-widget:chat-location-changed'
+  ),
+  draftReady: bridge.buildEmitter<AgentWidgetTarget & { to: AgentChatLocation }>('agent-widget:draft-ready'),
+  settingsChanged: bridge.buildEmitter<AgentWidgetSettings>('agent-widget:settings-changed'),
 };
 
 // ---------------------------------------------------------------------------

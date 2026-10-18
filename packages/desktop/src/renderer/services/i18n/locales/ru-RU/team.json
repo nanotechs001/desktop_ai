@@ -43,7 +43,7 @@
     "subAgentsPlaceholder": "Выбрать агентов команды",
     "confirm": "Confirm Create",
     "noSupportedAgents": "Нет доступных поддерживаемых агентов",
-    "supportedAgentsHint": "Сейчас поддерживаются агенты Claude и Aion CLI. Другие агенты появятся позже.",
+    "supportedAgentsHint": "Сейчас поддерживаются агенты Claude и Pixebot CLI. Другие агенты появятся позже.",
     "leaderDesc": "Понимает ваши цели и координирует агентов для выполнения задач",
     "searchPlaceholder": "Search",
     "noSearchResults": "Ничего не найдено",

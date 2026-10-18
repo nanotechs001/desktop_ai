@@ -57,7 +57,7 @@
     "initializingTooltip": "L'agent est en cours d'initialisation. Reconnectez-le lorsqu'il sera prêt",
     "processingTooltip": "Attendez la fin de la réponse en cours avant de reconnecter"
   },
-  "claudeLauncherSkipped": "Vous avez défini votre propre commande Claude, AionUi n'a donc pas ajouté ses protections de navigateur.",
+  "claudeLauncherSkipped": "Vous avez défini votre propre commande Claude, Pixebot Browser n'a donc pas ajouté ses protections de navigateur.",
   "engine": {
     "default": "Par défaut",
     "setDefault": "Définir par défaut",
@@ -69,7 +69,7 @@
     "label": "Moteur"
   },
   "cannotDeleteDefault": "L'agent par défaut ne peut pas être supprimé.",
-  "ruleMarkersBroken": "Corrigez les marqueurs de bloc AionUi dans les instructions de cet agent.",
+  "ruleMarkersBroken": "Corrigez les marqueurs de bloc Pixebot Browser dans les instructions de cet agent.",
   "ruleTooLong": "Ces instructions sont trop longues",
   "notebook": {
     "title": "Carnet",

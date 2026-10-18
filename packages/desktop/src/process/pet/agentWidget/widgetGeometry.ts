@@ -1,0 +1,174 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
+ * Pure placement math for floating agent widgets. No Electron imports, so it
+ * is unit-testable with plain display fixtures. All values are DIP (Electron's
+ * `screen` API already folds in display scaling).
+ */
+
+export type Rect = { x: number; y: number; width: number; height: number };
+
+export type DisplayLike = { id: number; bounds: Rect; workArea: Rect };
+
+export type TaskbarEdge = 'bottom' | 'top' | 'left' | 'right' | 'none';
+
+/** The horizontal line a robot walks along: `y` is the robot's top, x spans its left edge. */
+export type WalkTrack = {
+  edge: TaskbarEdge;
+  minX: number;
+  maxX: number;
+  y: number;
+  workArea: Rect;
+};
+
+export type WidgetPlacement = {
+  bounds: Rect;
+  popupSide: 'left' | 'right';
+  popupVertical: 'above' | 'below';
+  /** Robot's x offset inside `bounds`. */
+  botOffsetX: number;
+};
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), Math.max(lo, hi));
+
+/** Which screen edge the OS taskbar occupies, inferred from the gap between bounds and work area. */
+export function getTaskbarEdge(display: DisplayLike): TaskbarEdge {
+  const { bounds: b, workArea: w } = display;
+  if (w.y + w.height < b.y + b.height) return 'bottom';
+  if (w.y > b.y) return 'top';
+  if (w.x > b.x) return 'left';
+  if (w.x + w.width < b.x + b.width) return 'right';
+  return 'none';
+}
+
+/**
+ * The robot stands on the work area's bottom edge — which is exactly the
+ * taskbar's top border when the taskbar is at the bottom. A top taskbar makes
+ * the robot hang just below it; side or auto-hidden taskbars fall back to the
+ * bottom of the work area so the walking path stays horizontal.
+ */
+export function getWalkTrack(display: DisplayLike, botSize: number): WalkTrack {
+  const w = display.workArea;
+  const edge = getTaskbarEdge(display);
+  return {
+    edge,
+    minX: w.x,
+    maxX: w.x + w.width - botSize,
+    y: edge === 'top' ? w.y : w.y + w.height - botSize,
+    workArea: w,
+  };
+}
+
+export function xFromRatio(track: WalkTrack, ratio: number | undefined): number {
+  const r = ratio === undefined || !Number.isFinite(ratio) ? 0.85 : clamp(ratio, 0, 1);
+  return Math.round(track.minX + r * (track.maxX - track.minX));
+}
+
+export function ratioFromX(track: WalkTrack, x: number): number {
+  const span = track.maxX - track.minX;
+  return span > 0 ? clamp((x - track.minX) / span, 0, 1) : 0;
+}
+
+/**
+ * Window bounds for a widget. Collapsed: the robot box plus `headroom` transparent px above it for hops; the
+ * robot's bottom (its taskbar contact point) is at the same y either way.
+ * Expanded: the popup sits above (or below, for a top taskbar) the robot and
+ * extends right when it fits, otherwise left, always clamped to the work area.
+ */
+export function computePlacement(
+  track: WalkTrack,
+  botX: number,
+  botSize: number,
+  expanded: boolean,
+  popup: { width: number; height: number },
+  headroom = 0
+): WidgetPlacement {
+  const x = clamp(botX, track.minX, track.maxX);
+  const popupVertical = track.edge === 'top' ? 'below' : 'above';
+  if (!expanded) {
+    return {
+      bounds: { x, y: track.y - headroom, width: botSize, height: botSize + headroom },
+      popupSide: 'right',
+      popupVertical,
+      botOffsetX: 0,
+    };
+  }
+
+  const wa = track.workArea;
+  const width = Math.min(Math.max(popup.width, botSize), wa.width);
+  const height = Math.min(popup.height + botSize, wa.height);
+  const right = wa.x + wa.width;
+  const popupSide = x + width <= right ? 'right' : 'left';
+  const wx = clamp(popupSide === 'right' ? x : x + botSize - width, wa.x, right - width);
+  const wy = popupVertical === 'below' ? track.y : track.y + botSize - height;
+  return { bounds: { x: wx, y: wy, width, height }, popupSide, popupVertical, botOffsetX: x - wx };
+}
+
+/**
+ * Nearest x to `desired` that keeps one robot-width-plus-gap away from every
+ * other robot on the same track. When the track is full, robots group
+ * compactly (overlapping by half) instead of stacking exactly on top.
+ */
+export function resolveSlot(desired: number, others: number[], track: WalkTrack, botSize: number): number {
+  const minDist = Math.round(botSize * 1.25);
+  const x0 = clamp(desired, track.minX, track.maxX);
+  const free = (x: number) => others.every((o) => Math.abs(o - x) >= minDist);
+  if (free(x0)) return x0;
+
+  const candidates = others
+    .flatMap((o) => [o - minDist, o + minDist])
+    .filter((c) => c >= track.minX && c <= track.maxX && free(c))
+    .toSorted((a, b) => Math.abs(a - x0) - Math.abs(b - x0));
+  if (candidates.length > 0) return candidates[0];
+
+  // ponytail: crowded track → offset by half a robot; add an overflow drawer if dozens of agents become common.
+  const compact = Math.round(botSize / 2);
+  const nearest = others.reduce((best, o) => (Math.abs(o - x0) < Math.abs(best - x0) ? o : best), others[0]);
+  const shifted = nearest + compact <= track.maxX ? nearest + compact : nearest - compact;
+  return clamp(shifted, track.minX, track.maxX);
+}
+
+/** Where the robot stands to be right under the mouse: its centre at the cursor's x, kept on the track. */
+export function followTarget(cursorX: number, track: WalkTrack, botSize: number): number {
+  return clamp(Math.round(cursorX - botSize / 2), track.minX, track.maxX);
+}
+
+/**
+ * The next stop of an idle stroll toward `target`: a short stretch (40–160 px, by `random`), never past the
+ * target and never off the track. Many short strolls at random intervals get the robot to the mouse slowly.
+ */
+export function stepToward(x: number, target: number, track: WalkTrack, random: () => number = Math.random): number {
+  const delta = target - x;
+  const distance = Math.min(Math.abs(delta), 40 + Math.round(random() * 120));
+  return clamp(x + Math.sign(delta) * distance, track.minX, track.maxX);
+}
+
+/**
+ * Where a carried robot's box goes: the cursor minus the grab offset (so it never snaps its centre to the pointer),
+ * kept inside the work area of the display under the cursor — never over the taskbar.
+ */
+export function carriedPosition(
+  cursor: { x: number; y: number },
+  grab: { x: number; y: number },
+  workArea: Rect,
+  botSize: number
+): { x: number; y: number } {
+  return {
+    x: clamp(cursor.x - grab.x, workArea.x, workArea.x + workArea.width - botSize),
+    y: clamp(cursor.y - grab.y, workArea.y, workArea.y + workArea.height - botSize),
+  };
+}
+
+/**
+ * The robot's top while it falls from `fromY` back onto the walk track at `toY`: accelerating like a drop and
+ * reaching the track exactly at `impactMs` (in step with drop-landing's impact frame), then resting there.
+ */
+export function landingY(fromY: number, toY: number, elapsedMs: number, impactMs: number): number {
+  if (impactMs <= 0 || elapsedMs >= impactMs) return toY;
+  const t = Math.max(0, elapsedMs) / impactMs;
+  return Math.round(fromY + (toY - fromY) * t * t);
+}

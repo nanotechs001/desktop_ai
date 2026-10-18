@@ -18,12 +18,17 @@ import { AGENT_ID_RE } from '@process/artifacts/notes';
 const PERSIST_PREFIX = 'persist:';
 const AGENT_PARTITION_PREFIX = `${PERSIST_PREFIX}aionui-agent-`;
 const PARTITION_HASH_CHARS = 32;
+/** No `persist:` prefix: Electron keeps these sessions in memory only, never on disk. */
+const TEMPORARY_PARTITION_PREFIX = 'aionui-temp-';
+const CONVERSATION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PARTITIONS_DIR = 'Partitions';
 
 export const PERSONAL_PROFILE: BrowserTabProfile = { kind: 'personal' };
 
 /** Which Agent each partition computed in this process belongs to; never stored. */
 const agentIdByPartition = new Map<string, string>();
+/** Which regular chat each temporary partition belongs to; never stored. */
+const conversationIdByTemporaryPartition = new Map<string, string>();
 /** The partition of every browser session that was set up (see ensureBrowserSession). */
 const partitionBySession = new Map<Electron.Session, string>();
 /** Partitions whose Agent's browser data was deleted in this run: never a browser profile again. */
@@ -42,14 +47,35 @@ export function agentPartition(agentId: string): string {
   return partition;
 }
 
-/** The Electron partition a profile's tabs use. Throws for a malformed Agent id. */
+/**
+ * The in-memory partition of a regular chat's temporary browser: `aionui-temp-` plus a hash of the chat id.
+ * Throws for an id that is not a conversation id.
+ */
+export function temporaryPartition(conversationId: string): string {
+  if (!CONVERSATION_ID_RE.test(conversationId)) throw new Error('Invalid conversation id');
+  const hash = createHash('sha256').update(conversationId).digest('hex').slice(0, PARTITION_HASH_CHARS);
+  const partition = `${TEMPORARY_PARTITION_PREFIX}${hash}`;
+  conversationIdByTemporaryPartition.set(partition, conversationId);
+  return partition;
+}
+
+/** True for a regular chat's temporary (in-memory) partition. */
+export const isTemporaryPartition = (partition: string): boolean => conversationIdByTemporaryPartition.has(partition);
+
+/** The Electron partition a profile's tabs use. Throws for a malformed Agent or conversation id. */
 export const partitionOfProfile = (profile: BrowserTabProfile): string =>
-  profile.kind === 'personal' ? BROWSER_SESSION_PARTITION : agentPartition(profile.agentId);
+  profile.kind === 'personal'
+    ? BROWSER_SESSION_PARTITION
+    : profile.kind === 'temporary'
+      ? temporaryPartition(profile.conversationId)
+      : agentPartition(profile.agentId);
 
 /** The profile behind a partition: Personal, an Agent this process computed the partition for, or null. */
 export function profileOfPartition(partition: string): BrowserTabProfile | null {
   if (partition === BROWSER_SESSION_PARTITION) return PERSONAL_PROFILE;
   if (deletedPartitions.has(partition)) return null;
+  const conversationId = conversationIdByTemporaryPartition.get(partition);
+  if (conversationId !== undefined) return { kind: 'temporary', conversationId };
   const agentId = agentIdByPartition.get(partition);
   return agentId === undefined ? null : { kind: 'agent', agentId };
 }
@@ -57,8 +83,11 @@ export function profileOfPartition(partition: string): BrowserTabProfile | null 
 /** A profile from untrusted input (the renderer), with a valid Agent id; null otherwise. */
 export function parseBrowserTabProfile(value: unknown): BrowserTabProfile | null {
   if (typeof value !== 'object' || value === null) return null;
-  const { kind, agentId } = value as { kind?: unknown; agentId?: unknown };
+  const { kind, agentId, conversationId } = value as { kind?: unknown; agentId?: unknown; conversationId?: unknown };
   if (kind === 'personal') return PERSONAL_PROFILE;
+  if (kind === 'temporary' && typeof conversationId === 'string' && CONVERSATION_ID_RE.test(conversationId)) {
+    return { kind, conversationId };
+  }
   if (kind === 'agent' && typeof agentId === 'string' && AGENT_ID_RE.test(agentId)) return { kind, agentId };
   return null;
 }

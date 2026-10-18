@@ -15,7 +15,16 @@ import type { BrowserTabProfile } from '@/common/types/browser';
 const ASSISTANTS_KEY = 'assistants.list';
 
 /** Partitions main already set up, by Agent id; a partition is fixed for an Agent, so it never goes stale. */
-const agentPartitions = new Map<string, string>();
+/** Partitions main has set up, keyed by {@link profileKeyOf}. */
+const profilePartitions = new Map<string, string>();
+
+/** A stable key per browser profile: Personal, one Agent's, or one regular chat's temporary session. */
+export const profileKeyOf = (profile: BrowserTabProfile | undefined): string =>
+  profile?.kind === 'agent'
+    ? `agent:${profile.agentId}`
+    : profile?.kind === 'temporary'
+      ? `temporary:${profile.conversationId}`
+      : 'personal';
 
 /**
  * The Agents that have a browser profile: the ones the user made (built-ins have none). Loads the list only when
@@ -35,36 +44,40 @@ export type ProfilePartition = { partition: string | null; error: string | null;
  * webview's partition can't change after it attaches, so the caller mounts the webview only once it is known.
  */
 export function useProfilePartition(profile: BrowserTabProfile | undefined): ProfilePartition {
-  const agentId = profile?.kind === 'agent' ? profile.agentId : null;
+  // Personal is always ready; an Agent's or a temporary chat session is set up by main on first use.
+  const key = profileKeyOf(profile);
+  const remote = profile && profile.kind !== 'personal' ? profile : null;
   const [, refresh] = useReducer((count: number) => count + 1, 0);
-  const [failure, setFailure] = useState<{ agentId: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (agentId === null || agentPartitions.has(agentId)) return;
+    if (remote === null || profilePartitions.has(key)) return;
     let live = true;
     ipcBridge.browser.profilePartition
-      .invoke({ kind: 'agent', agentId })
+      .invoke(remote)
       .then((reply) => {
         if (!reply.success || !reply.data) throw new Error(reply.msg ?? 'no partition');
-        agentPartitions.set(agentId, reply.data);
+        profilePartitions.set(key, reply.data);
         if (live) refresh();
       })
       .catch((error: unknown) => {
-        console.warn('[BrowserProfiles] could not set up the Agent browser profile:', error);
-        if (live) setFailure({ agentId, message: error instanceof Error ? error.message : String(error) });
+        console.warn('[BrowserProfiles] could not set up the browser profile:', error);
+        if (live) setFailure({ key, message: error instanceof Error ? error.message : String(error) });
       });
     return () => {
       live = false;
     };
-  }, [agentId, attempt]);
+    // `remote` is fully described by `key`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, attempt]);
 
   const retry = useCallback(() => {
     setFailure(null);
     setAttempt((count) => count + 1);
   }, []);
 
-  if (agentId === null) return { partition: BROWSER_SESSION_PARTITION, error: null, retry };
-  const error = failure?.agentId === agentId ? failure.message : null;
-  return { partition: agentPartitions.get(agentId) ?? null, error, retry };
+  if (remote === null) return { partition: BROWSER_SESSION_PARTITION, error: null, retry };
+  const error = failure?.key === key ? failure.message : null;
+  return { partition: profilePartitions.get(key) ?? null, error, retry };
 }

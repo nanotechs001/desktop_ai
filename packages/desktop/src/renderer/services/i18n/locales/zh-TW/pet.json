@@ -13,5 +13,48 @@
   "resetPosition": "重設位置",
   "hide": "隱藏",
   "showHide": "顯示/隱藏",
-  "desktopOnly": "桌面寵物僅在桌面應用中可用，無法在 WebUI 瀏覽器模式下使用。"
+  "desktopOnly": "桌面寵物僅在桌面應用中可用，無法在 WebUI 瀏覽器模式下使用。",
+  "widget": {
+    "chatInWidget": "此對話已在懸浮小助手中開啟。",
+    "returnChatHere": "將對話移回此處",
+    "showWidget": "以懸浮小助手顯示",
+    "openChat": "開啟與 {{name}} 的對話",
+    "untitledAgent": "助手",
+    "minimize": "最小化",
+    "closePopup": "關閉對話",
+    "returnToMain": "在主視窗中開啟",
+    "hideWidget": "隱藏小助手",
+    "state": {
+      "idle": "就緒",
+      "listening": "正在聆聽…",
+      "thinking": "思考中…",
+      "talking": "回覆中…",
+      "searching": "瀏覽中…",
+      "working": "工作中…",
+      "sleeping": "休眠中",
+      "error": "發生問題",
+      "offline": "離線",
+      "notification": "新回覆"
+    },
+    "settings": {
+      "title": "懸浮智能體小助手",
+      "enabled": "啟用懸浮智能體小助手",
+      "enabledDesc": "每個智能體都會有一個停在工作列上的桌面機器人，點擊即可開啟對話。",
+      "autoLaunch": "為新智能體自動啟動小助手",
+      "movement": "自主移動",
+      "movementFrequency": "移動頻率",
+      "frequency": {
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      },
+      "scale": "小助手大小",
+      "alwaysOnTop": "永遠置頂",
+      "reduceMotion": "減少動態效果",
+      "reduceMotionDesc": "保持靜止姿態並停止閒置走動。",
+      "muteVoice": "靜音語音",
+      "muteVoiceDesc": "不朗讀回覆。",
+      "returnChats": "將所有對話移回主視窗"
+    }
+  }
 }

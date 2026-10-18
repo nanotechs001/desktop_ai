@@ -57,7 +57,7 @@
     "initializingTooltip": "代理正在初始化，请稍后再重连",
     "processingTooltip": "请等当前回复结束后再重连"
   },
-  "claudeLauncherSkipped": "你已设置了自己的 Claude 命令，因此 AionUi 未添加浏览器保护措施。",
+  "claudeLauncherSkipped": "你已设置了自己的 Claude 命令，因此 Pixebot Browser 未添加浏览器保护措施。",
   "engine": {
     "default": "默认",
     "setDefault": "设为默认",
@@ -69,7 +69,7 @@
     "label": "引擎"
   },
   "cannotDeleteDefault": "默认 Agent 无法删除。",
-  "ruleMarkersBroken": "请修正此 Agent 指令中的 AionUi 区块标记。",
+  "ruleMarkersBroken": "请修正此 Agent 指令中的 Pixebot Browser 区块标记。",
   "ruleTooLong": "这些指令太长了",
   "notebook": {
     "title": "笔记本",

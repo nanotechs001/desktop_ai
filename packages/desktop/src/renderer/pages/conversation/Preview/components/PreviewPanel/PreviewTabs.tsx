@@ -5,7 +5,7 @@
  */
 
 import { iconColors } from '@/renderer/styles/colors';
-import { Close, Plus } from '@icon-park/react';
+import { Close, Comments, Plus } from '@icon-park/react';
 import { Tag } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
@@ -162,6 +162,11 @@ interface PreviewTabsProps {
    * Drives the maximize button's icon and tooltip.
    */
   isMaximized?: boolean;
+  /**
+   * VA Bot layout: the button toggles the chat under the browser instead of maximizing.
+   * `isMaximized` then means "chat collapsed".
+   */
+  chatToggle?: boolean;
 
   /**
    * 切换最大化回调；仅桌面端提供（移动端预览本就覆盖全屏，最大化无意义）。
@@ -207,6 +212,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   onNewBrowserTab,
   newTabMenu,
   isMaximized,
+  chatToggle,
   onToggleMaximize,
 }) => {
   const { t } = useTranslation();
@@ -340,9 +346,25 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
               <div
                 className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-bg-3 transition-colors'
                 onClick={onToggleMaximize}
-                title={isMaximized ? t('preview.restorePanel') : t('preview.maximizePanel')}
+                title={
+                  chatToggle
+                    ? isMaximized
+                      ? t('preview.showChat')
+                      : t('preview.hideChat')
+                    : isMaximized
+                      ? t('preview.restorePanel')
+                      : t('preview.maximizePanel')
+                }
+                role='button'
+                aria-pressed={chatToggle ? !isMaximized : isMaximized}
               >
-                {isMaximized ? (
+                {chatToggle ? (
+                  <Comments
+                    theme={isMaximized ? 'outline' : 'filled'}
+                    size='14'
+                    fill={isMaximized ? iconColors.secondary : iconColors.primary}
+                  />
+                ) : isMaximized ? (
                   <IconFullscreenExit style={{ fontSize: 14, color: iconColors.secondary }} />
                 ) : (
                   <IconFullscreen style={{ fontSize: 14, color: iconColors.secondary }} />

@@ -57,7 +57,7 @@
     "initializingTooltip": "Агент ініціалізується. Перепідключіться, коли він буде готовий",
     "processingTooltip": "Дочекайтеся завершення поточної відповіді перед перепідключенням"
   },
-  "claudeLauncherSkipped": "Ви задали власну команду Claude, тому AionUi не додав захист браузера.",
+  "claudeLauncherSkipped": "Ви задали власну команду Claude, тому Pixebot Browser не додав захист браузера.",
   "engine": {
     "default": "За замовчуванням",
     "setDefault": "Зробити типовим",
@@ -71,7 +71,7 @@
     "label": "Рушій"
   },
   "cannotDeleteDefault": "Типового агента не можна видалити.",
-  "ruleMarkersBroken": "Виправте маркери блоку AionUi в інструкціях цього агента.",
+  "ruleMarkersBroken": "Виправте маркери блоку Pixebot Browser в інструкціях цього агента.",
   "ruleTooLong": "Ці інструкції задовгі",
   "notebook": {
     "title": "Блокнот",

@@ -57,7 +57,7 @@
     "initializingTooltip": "Aracı başlatılıyor. Hazır olduğunda yeniden bağlanın",
     "processingTooltip": "Yeniden bağlanmadan önce mevcut yanıtın bitmesini bekleyin"
   },
-  "claudeLauncherSkipped": "Kendi Claude komutunuzu ayarladığınız için AionUi tarayıcı korumalarını eklemedi.",
+  "claudeLauncherSkipped": "Kendi Claude komutunuzu ayarladığınız için Pixebot Browser tarayıcı korumalarını eklemedi.",
   "engine": {
     "default": "Varsayılan",
     "setDefault": "Varsayılan yap",
@@ -69,7 +69,7 @@
     "label": "Motor"
   },
   "cannotDeleteDefault": "Varsayılan Agent silinemez.",
-  "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki AionUi blok işaretlerini düzeltin.",
+  "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki Pixebot Browser blok işaretlerini düzeltin.",
   "ruleTooLong": "Bu talimatlar çok uzun",
   "notebook": {
     "title": "Not defteri",

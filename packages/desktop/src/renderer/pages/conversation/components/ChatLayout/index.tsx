@@ -3,6 +3,7 @@ import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssist
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
+import { useVerticalSplit } from '@/renderer/pages/conversation/hooks/useVerticalSplit';
 import ChatTitleEditor from '@/renderer/pages/conversation/components/ChatTitleEditor';
 import MobileWorkspaceOverlay from './MobileWorkspaceOverlay';
 import WorkspacePanelHeader from './WorkspacePanelHeader';
@@ -71,7 +72,7 @@ const ChatLayout: React.FC<{
   const isMobile = Boolean(layout?.isMobile);
 
   // Preview panel state
-  const { isOpen: isPreviewOpenRaw, isMaximized } = usePreviewContext();
+  const { isOpen: isPreviewOpenRaw, isMaximized, isVaBotMode, isVaChatCollapsed, toggleVaChat } = usePreviewContext();
   // Only hoist to the Layout host on desktop. On mobile (narrow width < 768) the
   // host is not rendered (`previewRegionActive` in Layout.tsx is gated on
   // `!isMobile`), so hoisting there would leave the preview with no renderer at
@@ -90,7 +91,10 @@ const ChatLayout: React.FC<{
   // the right workspace sider stays unchanged. Project conversations hoist the
   // preview to the Layout host (previewHosted) and handle maximizing there —
   // isPreviewOpen already excludes that case here.
-  const previewMaximized = isDesktop && isPreviewOpen && isMaximized;
+  // VA Bot conversations: browser on top, [chat | files] underneath. Regular chats keep
+  // the side-by-side [chat | preview] split with the files sider on the right.
+  const vaLayout = isDesktop && isPreviewOpen && isVaBotMode;
+  const previewMaximized = isDesktop && isPreviewOpen && (isVaBotMode ? isVaChatCollapsed : isMaximized);
 
   // --- Hook A: workspace collapse ---
   const { rightSiderCollapsed, setRightSiderCollapsed } = useWorkspaceCollapse({
@@ -147,6 +151,15 @@ const ChatLayout: React.FC<{
     minWidth: dynamicChatMinRatio,
     maxWidth: dynamicChatMaxRatio,
     storageKey: 'chat-preview-split-ratio',
+  });
+  // VA Bot: preview on top, chat underneath; shares its height with the project layout.
+  const verticalSplit = useVerticalSplit({
+    storageKey: 'chat-pane-height-px',
+    defaultHeight: 360,
+    // Dragging the divider to the bottom hides the chat (same as the chat button).
+    onCollapse: () => {
+      if (!isVaChatCollapsed) toggleVaChat();
+    },
   });
 
   // Full metrics with real chatSplitRatio
@@ -230,6 +243,42 @@ const ChatLayout: React.FC<{
     </>
   );
 
+  const workspaceSider =
+    workspaceEnabled && !layout?.isMobile ? (
+      <div
+        className={classNames('!bg-1 relative chat-layout-right-sider layout-sider')}
+        style={{
+          flexGrow: 0,
+          flexShrink: 0,
+          flexBasis: rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`,
+          width: rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`,
+          minWidth: rightSiderCollapsed ? '0px' : `${MIN_WORKSPACE_PANEL_PX}px`,
+          overflow: 'hidden',
+          borderLeft: rightSiderCollapsed ? 'none' : '1px solid var(--bg-3)',
+        }}
+      >
+        {isDesktop &&
+          !rightSiderCollapsed &&
+          createWorkspaceDragHandle({
+            className: 'absolute start-0 top-0 bottom-0',
+            style: {},
+            reverse: true,
+          })}
+        <WorkspacePanelHeader
+          collapsed={rightSiderCollapsed}
+          onToggle={() => dispatchWorkspaceToggleEvent()}
+          togglePlacement={layout?.isMobile ? 'left' : 'right'}
+          workspacePath={workspacePath}
+          isTemporaryWorkspace={isTemporaryWorkspace}
+        >
+          {props.siderTitle}
+        </WorkspacePanelHeader>
+        <ArcoLayout.Content style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>
+          {props.sider}
+        </ArcoLayout.Content>
+      </div>
+    ) : null;
+
   return (
     <ArcoLayout
       className='size-full color-black '
@@ -248,14 +297,20 @@ const ChatLayout: React.FC<{
           }}
         >
           <div className='shrink-0 !bg-1'>{headerBlock}</div>
-          <div className='flex flex-1 min-h-0 relative'>
+          {/* Desktop with preview open: column-reverse puts the preview on top and the
+              chat (first in the DOM, so it never remounts) underneath. */}
+          <div
+            ref={verticalSplit.containerRef}
+            className={classNames('flex flex-1 min-h-0 relative', vaLayout && 'flex-col-reverse')}
+          >
             {/* Chat area - always mounted, never unmounted on preview toggle */}
             <div
-              className='flex flex-col relative'
+              className='flex flex-row relative'
               style={{
                 flexGrow: isPreviewOpen && isDesktop ? 0 : 1,
                 flexShrink: 0,
-                flexBasis: isPreviewOpen && isDesktop ? `${chatFlex}%` : 0,
+                flexBasis: vaLayout ? `${verticalSplit.height}px` : isPreviewOpen && isDesktop ? `${chatFlex}%` : 0,
+                minHeight: 0,
                 // 最大化时（桌面）隐藏聊天区，预览铺满；移动端预览打开即覆盖聊天区。
                 // Hidden when maximized (desktop) so the preview fills; on mobile an
                 // open preview already covers the chat.
@@ -266,10 +321,13 @@ const ChatLayout: React.FC<{
                 if (window.innerWidth < 768 && !rightSiderCollapsed) setRightSiderCollapsed(true);
               }}
             >
-              <ArcoLayout.Content className='flex flex-col flex-1 bg-1 overflow-hidden'>
+              <ArcoLayout.Content className='flex flex-col flex-1 min-w-0 bg-1 overflow-hidden' data-chat-pane>
                 {props.children}
               </ArcoLayout.Content>
+              {/* VA Bot: the files/workspace pane sits beside the chat in the bottom row. */}
+              {vaLayout && workspaceSider}
             </div>
+            {vaLayout && !previewMaximized && verticalSplit.renderHandle()}
             {/* Preview panel - conditionally rendered */}
             {isPreviewOpen && (
               <div
@@ -286,10 +344,15 @@ const ChatLayout: React.FC<{
                   flexGrow: 1,
                   flexShrink: 1,
                   flexBasis: 0,
-                  // 桌面端只用左边框分界；移动端覆盖层保留完整描边
-                  // Desktop: left divider only. Mobile overlay keeps a full border.
-                  ...(isDesktop ? { borderLeft: '1px solid var(--bg-3)' } : { border: '1px solid var(--bg-3)' }),
-                  minWidth: isDesktop ? '260px' : 0,
+                  // VA Bot: bottom divider above the chat. Regular desktop: left divider beside
+                  // the chat. Mobile overlay keeps a full border.
+                  ...(vaLayout
+                    ? { borderBottom: '1px solid var(--bg-3)' }
+                    : isDesktop
+                      ? { borderLeft: '1px solid var(--bg-3)' }
+                      : { border: '1px solid var(--bg-3)' }),
+                  minHeight: 0,
+                  minWidth: isDesktop && !vaLayout ? '260px' : 0,
                   maxWidth: isMobile ? 'calc(100% - 16px)' : undefined,
                   width: isMobile ? 'calc(100% - 16px)' : undefined,
                   boxSizing: 'border-box',
@@ -299,6 +362,7 @@ const ChatLayout: React.FC<{
                     While maximized the chat is hidden, so the resize handle has
                     nothing to drag against — hide it. */}
                 {isDesktop &&
+                  !vaLayout &&
                   !previewMaximized &&
                   createPreviewDragHandle({
                     className: 'absolute top-0 bottom-0 z-30',
@@ -314,37 +378,8 @@ const ChatLayout: React.FC<{
             )}
           </div>
         </div>
-        {workspaceEnabled && !layout?.isMobile && (
-          <div
-            className={classNames('!bg-1 relative chat-layout-right-sider layout-sider')}
-            style={{
-              flexGrow: 0,
-              flexShrink: 0,
-              flexBasis: rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`,
-              width: rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`,
-              minWidth: rightSiderCollapsed ? '0px' : `${MIN_WORKSPACE_PANEL_PX}px`,
-              overflow: 'hidden',
-              borderLeft: rightSiderCollapsed ? 'none' : '1px solid var(--bg-3)',
-            }}
-          >
-            {isDesktop &&
-              !rightSiderCollapsed &&
-              createWorkspaceDragHandle({ className: 'absolute start-0 top-0 bottom-0', style: {}, reverse: true })}
-            <WorkspacePanelHeader
-              collapsed={rightSiderCollapsed}
-              onToggle={() => dispatchWorkspaceToggleEvent()}
-              togglePlacement={layout?.isMobile ? 'left' : 'right'}
-              workspacePath={workspacePath}
-              isTemporaryWorkspace={isTemporaryWorkspace}
-            >
-              {props.siderTitle}
-            </WorkspacePanelHeader>
-            <ArcoLayout.Content style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>
-              {props.sider}
-            </ArcoLayout.Content>
-          </div>
-        )}
-
+        {/* Regular chats: files/workspace sider on the right. */}
+        {!vaLayout && workspaceSider}
         {/* Mobile workspace overlay: backdrop + fixed panel + floating collapse handle */}
         {workspaceEnabled && layout?.isMobile && (
           <MobileWorkspaceOverlay

@@ -1,0 +1,139 @@
+{
+  "version": 2,
+  "fps": 30,
+  "interpolation": "bidirectional Farneback optical flow on premultiplied RGBA",
+  "states": {
+    "idle": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 140,
+      "sourceKeyframes": 8,
+      "frameCount": 34,
+      "sourceDurationMs": 1120,
+      "outputDurationMs": 1133.333,
+      "framePattern": "frames-30fps/idle/frame-%03d.png",
+      "preview": "previews-30fps/idle.webp"
+    },
+    "thinking": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 140,
+      "sourceKeyframes": 8,
+      "frameCount": 34,
+      "sourceDurationMs": 1120,
+      "outputDurationMs": 1133.333,
+      "framePattern": "frames-30fps/thinking/frame-%03d.png",
+      "preview": "previews-30fps/thinking.webp"
+    },
+    "talking": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 90,
+      "sourceKeyframes": 8,
+      "frameCount": 22,
+      "sourceDurationMs": 720,
+      "outputDurationMs": 733.333,
+      "framePattern": "frames-30fps/talking/frame-%03d.png",
+      "preview": "previews-30fps/talking.webp"
+    },
+    "sleeping": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 180,
+      "sourceKeyframes": 8,
+      "frameCount": 44,
+      "sourceDurationMs": 1440,
+      "outputDurationMs": 1466.667,
+      "framePattern": "frames-30fps/sleeping/frame-%03d.png",
+      "preview": "previews-30fps/sleeping.webp"
+    },
+    "searching": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 110,
+      "sourceKeyframes": 8,
+      "frameCount": 27,
+      "sourceDurationMs": 880,
+      "outputDurationMs": 900.0,
+      "framePattern": "frames-30fps/searching/frame-%03d.png",
+      "preview": "previews-30fps/searching.webp"
+    },
+    "working": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 100,
+      "sourceKeyframes": 8,
+      "frameCount": 24,
+      "sourceDurationMs": 800,
+      "outputDurationMs": 800.0,
+      "framePattern": "frames-30fps/working/frame-%03d.png",
+      "preview": "previews-30fps/working.webp"
+    },
+    "turn-to-user": {
+      "fps": 30,
+      "loop": false,
+      "keyframeDurationMs": 90,
+      "sourceKeyframes": 8,
+      "frameCount": 22,
+      "sourceDurationMs": 720,
+      "outputDurationMs": 733.333,
+      "framePattern": "frames-30fps/turn-to-user/frame-%03d.png",
+      "preview": "previews-30fps/turn-to-user.webp"
+    },
+    "facing-user": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 140,
+      "sourceKeyframes": 8,
+      "frameCount": 34,
+      "sourceDurationMs": 1120,
+      "outputDurationMs": 1133.333,
+      "framePattern": "frames-30fps/facing-user/frame-%03d.png",
+      "preview": "previews-30fps/facing-user.webp"
+    },
+    "dragging": {
+      "fps": 30,
+      "loop": true,
+      "keyframeDurationMs": 120,
+      "sourceKeyframes": 8,
+      "frameCount": 29,
+      "sourceDurationMs": 960,
+      "outputDurationMs": 966.667,
+      "framePattern": "frames-30fps/dragging/frame-%03d.png",
+      "preview": "previews-30fps/dragging.webp"
+    },
+    "drop-landing": {
+      "fps": 30,
+      "loop": false,
+      "keyframeDurationMs": 90,
+      "sourceKeyframes": 8,
+      "frameCount": 22,
+      "sourceDurationMs": 720,
+      "outputDurationMs": 733.333,
+      "framePattern": "frames-30fps/drop-landing/frame-%03d.png",
+      "preview": "previews-30fps/drop-landing.webp"
+    },
+    "appearing": {
+      "fps": 30,
+      "loop": false,
+      "keyframeDurationMs": 85,
+      "sourceKeyframes": 8,
+      "frameCount": 21,
+      "sourceDurationMs": 680,
+      "outputDurationMs": 700.0,
+      "framePattern": "frames-30fps/appearing/frame-%03d.png",
+      "preview": "previews-30fps/appearing.webp"
+    },
+    "disappearing": {
+      "fps": 30,
+      "loop": false,
+      "keyframeDurationMs": 85,
+      "sourceKeyframes": 8,
+      "frameCount": 21,
+      "sourceDurationMs": 680,
+      "outputDurationMs": 700.0,
+      "framePattern": "frames-30fps/disappearing/frame-%03d.png",
+      "preview": "previews-30fps/disappearing.webp"
+    }
+  }
+}

@@ -12,10 +12,10 @@
     "clearWorkspace": "Retirer le dossier",
     "openFolder": "Ouvrir un dossier",
     "none": "Aucun",
-    "quickActionsTitle": "Que peut faire AionUi ?",
+    "quickActionsTitle": "Que peut faire Pixebot Browser ?",
     "quickActionFeedback": "Des retours ou suggestions ?",
     "quickActionStar": "Vous aimez ? Donnez-nous une étoile !",
-    "skillsMarket": "Marché de compétences AionUi",
+    "skillsMarket": "Marché de compétences Pixebot Browser",
     "skillsMarketDesc": "Recherchez et activez des compétences communautaires à la demande. Configurez une fois, disponible pour tous les agents.",
     "skillsMarketDetails": "Voir plus >>"
   },
@@ -91,7 +91,9 @@
     "archiveProject": "Archive project",
     "archiveProjectTitle": "Archive project",
     "archiveProjectConfirm": "Archive project \"{{name}}\"? Its {{count}} conversation(s) will be archived too. You can restore or delete them from Archived in Settings.",
-    "archiving": "Archiving..."
+    "archiving": "Archiving...",
+    "chatHistory": "Historique des conversations",
+    "botChatHistory": "Historique des conversations de {{name}}"
   },
   "historySearch": {
     "tooltip": "Rechercher des messages",
@@ -321,7 +323,7 @@
       },
       "MCP_HTTP_RESPONSE_READ_FAILED": {
         "title": "Échec de la lecture de la réponse de l'agent de l'équipe",
-        "body": "AionUi n'a pas pu lire la réponse de l'agent de l'équipe locale. Réessayez une fois et si cela continue, redémarrez l'application."
+        "body": "Pixebot Browser n'a pas pu lire la réponse de l'agent de l'équipe locale. Réessayez une fois et si cela continue, redémarrez l'application."
       },
       "MCP_TOOL_REMOTE_ERROR": {
         "title": "L'agent de l'équipe locale a rejeté la demande",
@@ -329,11 +331,11 @@
       },
       "MCP_TOOL_RESPONSE_UNEXPECTED": {
         "title": "L'agent de l'équipe a renvoyé une réponse inattendue",
-        "body": "AionUi a reçu une réponse inattendue de la part de l'agent de l'équipe locale. Réessayez une fois et signalez-le si le problème persiste."
+        "body": "Pixebot Browser a reçu une réponse inattendue de la part de l'agent de l'équipe locale. Réessayez une fois et signalez-le si le problème persiste."
       },
       "MCP_TCP_READ_FAILED": {
         "title": "Échec de la lecture de l'agent de l'équipe locale",
-        "body": "AionUi n'a pas pu lire la réponse TCP de l'agent de l'équipe locale. Réessayez une fois et redémarrez l'application si elle continue d'échouer."
+        "body": "Pixebot Browser n'a pas pu lire la réponse TCP de l'agent de l'équipe locale. Réessayez une fois et redémarrez l'application si elle continue d'échouer."
       },
       "TEAM_SERVICE_UNAVAILABLE": {
         "title": "Le service d'équipe n'est pas encore prêt",
@@ -621,13 +623,13 @@
         "body": "{{count}} étape(s) ont échoué et n'ont PAS pris effet. agy termine malgré tout ces tours comme réussis : vérifiez le résultat réel plutôt que la réponse."
       },
       "CLI_VERSION_OLDER": {
-        "body": "Le {{cli}} installé est antérieur à la version validée par AionUi ; certaines fonctionnalités peuvent manquer. Envisagez de mettre à jour {{cli}}. (installé : {{reported}} / vérifié par AionUi : {{verified}})"
+        "body": "Le {{cli}} installé est antérieur à la version validée par Pixebot Browser ; certaines fonctionnalités peuvent manquer. Envisagez de mettre à jour {{cli}}. (installé : {{reported}} / vérifié par Pixebot Browser : {{verified}})"
       },
       "CLI_VERSION_NEWER": {
-        "body": "Le {{cli}} installé est postérieur à la version validée par AionUi. Cela devrait fonctionner ; signalez tout comportement anormal. (installé : {{reported}} / vérifié par AionUi : {{verified}})"
+        "body": "Le {{cli}} installé est postérieur à la version validée par Pixebot Browser. Cela devrait fonctionner ; signalez tout comportement anormal. (installé : {{reported}} / vérifié par Pixebot Browser : {{verified}})"
       },
       "CODEX_RETRYING": {
-        "body": "{{detail}} (tentative {{attempts}}, {{elapsed}} écoulées — le fournisseur de l'agent coupe la connexion à répétition ; AionUi patiente.)"
+        "body": "{{detail}} (tentative {{attempts}}, {{elapsed}} écoulées — le fournisseur de l'agent coupe la connexion à répétition ; Pixebot Browser patiente.)"
       }
     }
   },
@@ -707,7 +709,7 @@
         "conflicted": "!",
         "unknown": "?"
       },
-      "conflictedHint": "Résolvez d'abord ce conflit en dehors d'AionUi",
+      "conflictedHint": "Résolvez d'abord ce conflit en dehors d'Pixebot Browser",
       "opaqueHint": "Cet état provient d'un backend plus récent — affiché en lecture seule",
       "degraded": "L'actualisation est ralentie car l'index git ne peut pas être écrit",
       "truncated": "Trop de modifications — seule la première partie est affichée",
@@ -726,7 +728,7 @@
         "discard": "Abandonner les modifications",
         "stageAll": "Tout indexer",
         "unstageAll": "Tout désindexer",
-        "blockedHint": "Résolvez le conflit en dehors d'AionUi avant d'indexer ou d'abandonner",
+        "blockedHint": "Résolvez le conflit en dehors d'Pixebot Browser avant d'indexer ou d'abandonner",
         "confirmDiscardTitle": "Abandonner les modifications ?",
         "confirmDiscardTracked": "Les modifications de {{count}} fichiers seront perdues. Cette action est irréversible.",
         "confirmDiscardUntracked": "{{count}} nouveaux fichiers seront déplacés vers la corbeille.",

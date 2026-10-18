@@ -26,6 +26,7 @@ import useSWR from 'swr';
 import { useSettingsViewMode } from '../../settingsViewContext';
 import BrowserNotificationGrant from './BrowserNotificationGrant';
 import DevSettings from './DevSettings';
+import AgentWidgetSection from './AgentWidgetSection';
 import BrowserDataSection from './BrowserDataSection';
 import DirInputItem from './DirInputItem';
 import PreferenceRow from './PreferenceRow';
@@ -565,6 +566,9 @@ const SystemModalContent: React.FC = () => {
 
           {/* Voice input (speech-to-text) settings */}
           <VoiceInputSection />
+
+          {/* Floating desktop agent widgets */}
+          <AgentWidgetSection />
 
           {/* In-app browser: sign-in state and cache */}
           <BrowserDataSection />

@@ -88,6 +88,12 @@ import {
   showInstallationIntegrityModal,
 } from './components/layout/InstallationIntegrityDialog';
 import { createRuntimeInstallationReconciler } from './services/runtime/runtimeInstallationReconciler';
+import { getWidgetConversationId } from './pages/agentWidget/chatLocation';
+
+// Floating agent widget windows load this same bundle at #/widget/:id. They
+// share the backend session but skip main-window-only startup work and dialogs.
+const isAgentWidgetWindow = getWidgetConversationId() !== null;
+if (isAgentWidgetWindow) document.documentElement.classList.add('agent-widget-window');
 
 // Arco ships several locales that predate its newer components: sections such
 // as Form, ColorPicker and the Calendar month/year formats are missing there.
@@ -242,8 +248,8 @@ const AppProviders: React.FC<PropsWithChildren> = ({ children }) =>
           React.createElement(
             React.Fragment,
             null,
-            React.createElement(RuntimeFailureDialogs, null),
-            React.createElement(GpuAutoDisableNotice, null),
+            isAgentWidgetWindow ? null : React.createElement(RuntimeFailureDialogs, null),
+            isAgentWidgetWindow ? null : React.createElement(GpuAutoDisableNotice, null),
             children
           )
         )
@@ -274,7 +280,7 @@ const Main = () => {
   }, [ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || isAgentWidgetWindow) return;
     void repairAllCronJobTimeZonesOnce();
   }, [ready]);
 
@@ -406,25 +412,32 @@ const BackendStartupFailureDialog: React.FC<{ failure: BackendStartupFailureInfo
   );
 };
 
-void registerPwa();
+if (!isAgentWidgetWindow) void registerPwa();
 
 const root = createRoot(document.getElementById('root')!);
 root.render(
-  <BackendStartupGate
-    renderStarting={() => (
-      <Config>
-        <BackendStartingView />
-      </Config>
-    )}
-    renderFailure={(failure) => (
-      <Config>
-        <BackendStartupFailureDialog failure={failure} />
-      </Config>
-    )}
-    renderApp={() => (
-      <AppProviders>
-        <App />
-      </AppProviders>
-    )}
-  />
+  // A widget shows backend trouble as its "offline" pose, not as a modal on the desktop.
+  isAgentWidgetWindow ? (
+    <AppProviders>
+      <App />
+    </AppProviders>
+  ) : (
+    <BackendStartupGate
+      renderStarting={() => (
+        <Config>
+          <BackendStartingView />
+        </Config>
+      )}
+      renderFailure={(failure) => (
+        <Config>
+          <BackendStartupFailureDialog failure={failure} />
+        </Config>
+      )}
+      renderApp={() => (
+        <AppProviders>
+          <App />
+        </AppProviders>
+      )}
+    />
+  )
 );

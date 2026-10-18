@@ -72,7 +72,7 @@
     "high": "High",
     "urgent": "Urgent"
   },
-  "browserAlwaysOn": "Always on: agents use the AionUi browser pane",
+  "browserAlwaysOn": "Always on: agents use the Pixebot browser pane",
   "artifactsAlwaysOn": "Always on: agents use it to show pages and documents",
   "notesAlwaysOn": "Always on: agents save lessons in their notebook"
 }

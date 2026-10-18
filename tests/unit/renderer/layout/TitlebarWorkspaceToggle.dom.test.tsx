@@ -18,6 +18,7 @@ vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
 vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar/HistoryPanel', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({
   default: () => <div data-testid='window-controls' />,
 }));

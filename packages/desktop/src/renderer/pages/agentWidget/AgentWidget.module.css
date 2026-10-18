@@ -1,0 +1,215 @@
+/* The widget window is transparent; only the robot and the popup paint. */
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+}
+
+.bot {
+  position: absolute;
+  bottom: 0;
+  width: var(--bot-size);
+  height: var(--bot-size);
+  border-radius: 50%;
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+
+.root[data-vertical='below'] .bot {
+  top: 0;
+  bottom: auto;
+}
+
+.bot:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.bot:active {
+  cursor: grabbing;
+}
+
+/* Status pill under the robot while its chat is closed. */
+.marker {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  border: 1px solid var(--bg-3);
+  background: var(--bg-1);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.badge {
+  position: absolute;
+  top: 10%;
+  right: 14%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 2px var(--bg-1);
+  pointer-events: none;
+}
+
+.popup {
+  /* Opens with a short fade + scale from the robot's side, in step with its turn toward the user. */
+  animation: popup-in 180ms ease-out;
+  transform-origin: 50% 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(100% - var(--bot-size) - 10px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--bg-3);
+  border-radius: 16px;
+  background: var(--bg-1);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--text-primary) 18%, transparent);
+  user-select: text;
+}
+
+.root[data-vertical='below'] .popup {
+  top: auto;
+  bottom: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Arrow that visually connects the popup to the robot. */
+.pointer {
+  position: absolute;
+  bottom: -8px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid var(--bg-3);
+  border-bottom: 1px solid var(--bg-3);
+  background: var(--bg-1);
+  transform: rotate(45deg);
+}
+
+.root[data-vertical='below'] .pointer {
+  top: -8px;
+  bottom: auto;
+  transform: rotate(225deg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 10px 14px;
+  border-bottom: 1px solid var(--bg-3);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.dot[data-state='error'] {
+  background: var(--danger);
+}
+
+.dot[data-state='offline'],
+.dot[data-state='sleeping'] {
+  background: var(--bg-5);
+}
+
+.dot[data-state='notification'] {
+  background: var(--warning);
+}
+
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0 0 16px 16px;
+}
+
+.loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes popup-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    animation-duration: 1ms;
+  }
+}
+
+/* `.body` sets display: flex after `.hidden`, so hiding it needs the more specific rule. */
+.body.hidden {
+  display: none;
+}
+
+/* A bot's chat history, over the whole popup (back returns to the chat). */
+.historyOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: var(--bg-1);
+  overflow: hidden;
+}
+
+.historyBody {
+  flex: 1;
+  min-height: 0;
+}

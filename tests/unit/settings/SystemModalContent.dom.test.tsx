@@ -59,6 +59,9 @@ vi.mock('@/common/config/configService', () => ({
   configService: configServiceMock,
 }));
 
+// The floating-widget section has its own tests; keep it out of this one.
+vi.mock('@/renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSettings: () => null }));
+
 vi.mock('@/common', () => ({
   ipcBridge: {
     application: {

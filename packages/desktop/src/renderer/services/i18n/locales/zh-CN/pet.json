@@ -13,5 +13,48 @@
   "resetPosition": "重置位置",
   "hide": "隐藏",
   "showHide": "显示/隐藏",
-  "desktopOnly": "桌面宠物仅在桌面应用中可用，无法在 WebUI 浏览器模式下使用。"
+  "desktopOnly": "桌面宠物仅在桌面应用中可用，无法在 WebUI 浏览器模式下使用。",
+  "widget": {
+    "chatInWidget": "此对话已在悬浮小助手中打开。",
+    "returnChatHere": "将对话移回此处",
+    "showWidget": "以悬浮小助手显示",
+    "openChat": "打开与 {{name}} 的对话",
+    "untitledAgent": "助手",
+    "minimize": "最小化",
+    "closePopup": "关闭对话",
+    "returnToMain": "在主窗口中打开",
+    "hideWidget": "隐藏小助手",
+    "state": {
+      "idle": "就绪",
+      "listening": "正在聆听…",
+      "thinking": "思考中…",
+      "talking": "回复中…",
+      "searching": "浏览中…",
+      "working": "工作中…",
+      "sleeping": "休眠中",
+      "error": "出现问题",
+      "offline": "离线",
+      "notification": "新回复"
+    },
+    "settings": {
+      "title": "悬浮智能体小助手",
+      "enabled": "启用悬浮智能体小助手",
+      "enabledDesc": "每个智能体都会有一个停在任务栏上的桌面机器人，点击即可打开对话。",
+      "autoLaunch": "为新智能体自动启动小助手",
+      "movement": "自主移动",
+      "movementFrequency": "移动频率",
+      "frequency": {
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      },
+      "scale": "小助手大小",
+      "alwaysOnTop": "始终置顶",
+      "reduceMotion": "减少动态效果",
+      "reduceMotionDesc": "保持静止姿态并停止空闲走动。",
+      "muteVoice": "静音语音",
+      "muteVoiceDesc": "不朗读回复。",
+      "returnChats": "将所有对话移回主窗口"
+    }
+  }
 }

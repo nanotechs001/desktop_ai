@@ -72,7 +72,7 @@
     "high": "Hoch",
     "urgent": "Dringend"
   },
-  "browserAlwaysOn": "Immer aktiv: Agenten nutzen den AionUi-Browserbereich",
+  "browserAlwaysOn": "Immer aktiv: Agenten nutzen den Pixebot Browser-Browserbereich",
   "artifactsAlwaysOn": "Immer aktiv: Agenten zeigen damit Seiten und Dokumente an",
   "notesAlwaysOn": "Immer aktiv: Agenten speichern Erkenntnisse in ihrem Notizbuch"
 }

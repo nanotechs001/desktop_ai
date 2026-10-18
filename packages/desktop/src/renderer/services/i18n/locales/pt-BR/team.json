@@ -43,7 +43,7 @@
     "subAgentsPlaceholder": "Selecione os agentes da equipe",
     "confirm": "Confirm Create",
     "noSupportedAgents": "Nenhum agente compatível disponível",
-    "supportedAgentsHint": "Atualmente oferece suporte a agentes Claude e Aion CLI. Mais agentes em breve.",
+    "supportedAgentsHint": "Atualmente oferece suporte a agentes Claude e Pixebot CLI. Mais agentes em breve.",
     "leaderDesc": "Entende seus objetivos e coordena agentes para concluir tarefas",
     "searchPlaceholder": "Search",
     "noSearchResults": "Nenhum resultado encontrado",

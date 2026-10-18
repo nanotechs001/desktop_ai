@@ -9,6 +9,7 @@ import { ipcBridge } from '@/common';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 import HistoryPanel from './HistoryPanel';
+import TitlebarNav from './TitlebarNav';
 import MobileConversationBrand from './MobileConversationBrand';
 import WindowControls from '../WindowControls';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
@@ -55,7 +56,7 @@ const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size =
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const { t } = useTranslation();
-  const appTitle = useMemo(() => 'AionUi', []);
+  const appTitle = useMemo(() => 'Pixebot Browser', []);
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
   const [mobileCenterOffset, setMobileCenterOffset] = useState(0);
@@ -104,7 +105,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // mobile keeps the default weight so icons stay legible at larger sizes.
   const desktopIconStroke = layout?.isMobile ? undefined : 2.5;
   // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
-  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && !(layout?.isMobile && isSettingsRoute);
+  // Desktop has no left icon bar outside Settings (navigation lives top right), so the toggle shows there only.
+  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && (layout?.isMobile ? !isSettingsRoute : isSettingsRoute);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })
@@ -368,6 +370,9 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {layout?.isMobile && <div id='app-titlebar-actions-slot' className='app-titlebar__actions-slot' />}
         {IS_DISCONTINUED_BUILD && <MigrationInviteCapsule />}
+        {!layout?.isMobile && (
+          <TitlebarNav buttonClassName={titlebarButtonClass} iconSize={iconSize} strokeWidth={desktopIconStroke} />
+        )}
         {showWorkspaceButton && (
           <button
             type='button'

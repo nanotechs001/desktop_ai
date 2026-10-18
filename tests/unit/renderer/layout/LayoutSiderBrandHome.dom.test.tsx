@@ -70,6 +70,7 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
   },
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktopMock }));
+vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
@@ -159,27 +160,16 @@ describe('Layout sider brand Home button', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('renders the wordmark as a non-actionable element in a non-settings route', () => {
-    currentPathname = '/guid';
-    renderLayout();
-
-    // No actionable role/label in chat routes.
-    expect(screen.queryByLabelText(BACK_KEY)).toBeNull();
-    const wordmark = screen.getByText('AionUi');
-    fireEvent.click(wordmark);
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
-  it('does not navigate when the wordmark is clicked in a non-settings route', () => {
+  it('has no sider brand on desktop chat routes (the logo lives in the titlebar)', () => {
     currentPathname = '/conversation/xyz';
     renderLayout();
 
-    fireEvent.click(screen.getByText('AionUi'));
-    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(BACK_KEY)).toBeNull();
+    expect(screen.queryByText('Pixebot Browser')).toBeNull();
   });
 
   it('provides common shortcuts with a functional sider toggle', () => {
-    currentPathname = '/conversation/xyz';
+    currentPathname = '/settings/about';
     // The sider now defaults to icon-only; a stored '0' starts it full width.
     localStorage.setItem('sider-collapsed', '0');
     const { container } = renderLayout();
@@ -209,8 +199,8 @@ describe('Layout sider brand Home button', () => {
     sessionStorage.setItem('aion:last-non-settings-path', '/conversation/abc');
     const { container } = renderLayout();
 
-    // The icon is the SVG-wrapping div (bg-black), separate from the wordmark.
-    const icon = container.querySelector('.bg-black') as HTMLElement;
+    // The icon is the brand logo image, separate from the wordmark.
+    const icon = container.querySelector('[data-brand-logo]') as HTMLElement;
     expect(icon).toBeTruthy();
     for (let i = 0; i < 4; i++) fireEvent.click(icon);
     expect(openDevTools).toHaveBeenCalled();

@@ -13,5 +13,48 @@
   "resetPosition": "Position zurücksetzen",
   "hide": "Ausblenden",
   "showHide": "Anzeigen/Ausblenden",
-  "desktopOnly": "Desktop-Begleiter ist nur in der Desktop-Anwendung verfügbar. Er kann nicht im WebUI-Browser-Modus verwendet werden."
+  "desktopOnly": "Desktop-Begleiter ist nur in der Desktop-Anwendung verfügbar. Er kann nicht im WebUI-Browser-Modus verwendet werden.",
+  "widget": {
+    "chatInWidget": "Dieser Chat ist im schwebenden Widget geöffnet.",
+    "returnChatHere": "Chat hierher zurückholen",
+    "showWidget": "Als schwebendes Widget anzeigen",
+    "openChat": "Chat mit {{name}} öffnen",
+    "untitledAgent": "Agent",
+    "minimize": "Minimieren",
+    "closePopup": "Chat schließen",
+    "returnToMain": "Im Hauptfenster öffnen",
+    "hideWidget": "Widget ausblenden",
+    "state": {
+      "idle": "Bereit",
+      "listening": "Hört zu…",
+      "thinking": "Denkt nach…",
+      "talking": "Antwortet…",
+      "searching": "Surft…",
+      "working": "Arbeitet…",
+      "sleeping": "Schläft",
+      "error": "Etwas ist schiefgelaufen",
+      "offline": "Offline",
+      "notification": "Neue Antwort"
+    },
+    "settings": {
+      "title": "Schwebende Agenten-Widgets",
+      "enabled": "Schwebende Agenten-Widgets aktivieren",
+      "enabledDesc": "Jeder Agent erhält einen Desktop-Roboter auf der Taskleiste, der seinen Chat öffnet.",
+      "autoLaunch": "Widget für neue Agenten starten",
+      "movement": "Autonome Bewegung",
+      "movementFrequency": "Bewegungshäufigkeit",
+      "frequency": {
+        "low": "Niedrig",
+        "medium": "Mittel",
+        "high": "Hoch"
+      },
+      "scale": "Widget-Größe",
+      "alwaysOnTop": "Immer im Vordergrund",
+      "reduceMotion": "Bewegung reduzieren",
+      "reduceMotionDesc": "Standbilder statt Animation, kein Herumlaufen im Leerlauf.",
+      "muteVoice": "Stimme stummschalten",
+      "muteVoiceDesc": "Antworten nicht vorlesen.",
+      "returnChats": "Alle Chats ins Hauptfenster zurückholen"
+    }
+  }
 }

@@ -19,6 +19,7 @@ import {
 import { startSpeechStream, type SpeechStreamHandle } from '@/renderer/services/speech/SpeechStreamClient';
 import { rememberStreamUnsupported, shouldTryStreaming } from '@/renderer/services/speech/speechStreamPolicy';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { emitter } from '@/renderer/utils/emitter';
 
 export type SpeechInputAvailability = 'record' | 'file' | 'unsupported';
 export type SpeechInputStatus = 'idle' | 'recording' | 'transcribing' | 'error';
@@ -251,6 +252,13 @@ const mapSpeechInputError = (error: unknown): SpeechInputErrorCode => {
 
 export const useSpeechInput = ({ onLiveTranscript, onTranscript }: UseSpeechInputOptions) => {
   const [status, setStatus] = useState<SpeechInputStatus>('idle');
+  useEffect(() => {
+    if (status !== 'recording') return;
+    emitter.emit('speech.recording', true);
+    return () => {
+      emitter.emit('speech.recording', false);
+    };
+  }, [status]);
   const [errorCode, setErrorCode] = useState<SpeechInputErrorCode | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);

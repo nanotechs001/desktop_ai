@@ -1,0 +1,94 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { z } from 'zod';
+import { ipcBridge } from '@/common';
+import { AGENT_ANIMATION_STATES, CONVERSATION_ID_PATTERN } from '@/common/types/agent/agentWidget';
+import type { AgentWidgetManager } from './agentWidgetManager';
+import { settingsPatchSchema } from './agentWidgetStore';
+
+/**
+ * Every widget→main message is validated here before it reaches the manager:
+ * the bridge is reachable from any renderer (and WebUI sockets), so payloads
+ * are treated as untrusted. Unknown keys are rejected, not ignored.
+ */
+
+const conversationId = z.string().regex(CONVERSATION_ID_PATTERN);
+const target = z.object({ conversation_id: conversationId }).strict();
+const agentId = z.string().min(1).max(256);
+const schemas = {
+  ensure: target.extend({ force: z.boolean().optional(), agent_id: agentId.optional() }).strict(),
+  setExpanded: target.extend({ expanded: z.boolean() }).strict(),
+  setChatLocation: target.extend({ location: z.enum(['main', 'widget']) }).strict(),
+  handoffDraft: target.extend({ text: z.string().max(100_000) }).strict(),
+  reportState: target.extend({ state: z.enum(AGENT_ANIMATION_STATES), transitioning: z.boolean().optional() }).strict(),
+  setIgnoreMouse: target.extend({ ignore: z.boolean() }).strict(),
+  rendererReady: target.extend({ agent_id: agentId.optional(), modified_at: z.number().finite().optional() }).strict(),
+  showConversation: target.extend({ to: conversationId }).strict(),
+  animationDone: target.extend({ animation: z.enum(['appearing', 'disappearing']) }).strict(),
+  setSuspended: target.extend({ suspended: z.boolean() }).strict(),
+};
+
+function parse<T>(schema: z.ZodType<T>, value: unknown, channel: string): T {
+  const result = schema.safeParse(value);
+  if (!result.success) throw new Error(`[AgentWidget] rejected invalid payload on ${channel}`);
+  return result.data;
+}
+
+export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
+  const w = ipcBridge.agentWidget;
+
+  w.getSettings.provider(async () => manager.getSettings());
+  w.setSettings.provider(async (p) => manager.setSettings(parse(settingsPatchSchema, p, 'setSettings')));
+  w.ensure.provider(async (p) => {
+    const { conversation_id, force, agent_id } = parse(schemas.ensure, p, 'ensure');
+    return manager.ensure(conversation_id, force, agent_id);
+  });
+  w.hide.provider(async (p) => manager.hide(parse(target, p, 'hide').conversation_id));
+  w.remove.provider(async (p) => manager.remove(parse(target, p, 'remove').conversation_id));
+  w.getSnapshot.provider(async (p) => manager.getSnapshot(parse(target, p, 'getSnapshot').conversation_id));
+  w.setExpanded.provider(async (p) => {
+    const { conversation_id, expanded } = parse(schemas.setExpanded, p, 'setExpanded');
+    manager.setExpanded(conversation_id, expanded);
+  });
+  w.setChatLocation.provider(async (p) => {
+    const { conversation_id, location } = parse(schemas.setChatLocation, p, 'setChatLocation');
+    manager.setChatLocation(conversation_id, location);
+  });
+  w.getChatLocations.provider(async () => manager.getChatLocations());
+  w.handoffDraft.provider(async (p) => {
+    const { conversation_id, text } = parse(schemas.handoffDraft, p, 'handoffDraft');
+    manager.handoffDraft(conversation_id, text);
+  });
+  w.takeDraft.provider(async (p) => manager.takeDraft(parse(target, p, 'takeDraft').conversation_id));
+  w.reportState.provider(async (p) => {
+    const { conversation_id, state, transitioning } = parse(schemas.reportState, p, 'reportState');
+    manager.reportState(conversation_id, state, transitioning);
+  });
+  w.dragStart.provider(async (p) => manager.dragStart(parse(target, p, 'dragStart').conversation_id));
+  w.dragEnd.provider(async (p) => manager.dragEnd(parse(target, p, 'dragEnd').conversation_id));
+  w.setIgnoreMouse.provider(async (p) => {
+    const { conversation_id, ignore } = parse(schemas.setIgnoreMouse, p, 'setIgnoreMouse');
+    manager.setIgnoreMouse(conversation_id, ignore);
+  });
+  w.openInMain.provider(async (p) => manager.openInMain(parse(target, p, 'openInMain').conversation_id));
+  w.rendererReady.provider(async (p) => {
+    const { conversation_id, agent_id, modified_at } = parse(schemas.rendererReady, p, 'rendererReady');
+    manager.rendererReady(conversation_id, { agent_id, modified_at });
+  });
+  w.showConversation.provider(async (p) => {
+    const { conversation_id, to } = parse(schemas.showConversation, p, 'showConversation');
+    manager.retarget(conversation_id, to);
+  });
+  w.animationDone.provider(async (p) => {
+    const { conversation_id, animation } = parse(schemas.animationDone, p, 'animationDone');
+    manager.animationDone(conversation_id, animation);
+  });
+  w.setSuspended.provider(async (p) => {
+    const { conversation_id, suspended } = parse(schemas.setSuspended, p, 'setSuspended');
+    manager.setSuspended(conversation_id, suspended);
+  });
+}

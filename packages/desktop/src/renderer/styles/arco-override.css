@@ -81,6 +81,14 @@ body[arco-theme='dark'] {
   --aion-overlay-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
+/* Floating agent widget windows (#/widget/:id) are transparent desktop
+   overlays: only the robot and its popup paint. */
+html.agent-widget-window,
+html.agent-widget-window body,
+html.agent-widget-window #root {
+  background: transparent !important;
+}
+
 /* Arco's arco.css puts 'Inter' first in font-family, which causes very thin
    text on systems that have Inter installed. Override to use system fonts. */
 html,

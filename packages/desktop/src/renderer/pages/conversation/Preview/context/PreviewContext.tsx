@@ -155,6 +155,13 @@ export interface PreviewContextValue {
   collapsePreview: () => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
+  /** The open conversation runs on a VA Bot (a user-created Agent): browser on top, chat underneath. */
+  isVaBotMode: boolean;
+  setVaBotMode: (on: boolean) => void;
+  /** VA Bot layout only: the chat under the browser is collapsed (the default). */
+  isVaChatCollapsed: boolean;
+  /** Show/hide the VA Bot chat; showing it focuses its message box. */
+  toggleVaChat: () => void;
   /** Discard this scope's tabs entirely (see closePreview for the difference). */
   clearPreviewForScope: () => void;
   closeTab: (tabId: string) => void;
@@ -575,9 +582,16 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
   }
 };
 
-/** A browser tab's metadata for `profile`; none for Personal, the default, which is not stored. */
+/**
+ * A browser tab's metadata for `profile`; none for Personal, the default, which is not stored. A regular
+ * chat's temporary profile must be kept: dropping it would reopen the tab in the user's Personal session.
+ */
 const profileMetadata = (profile?: BrowserTabProfile): PreviewMetadata | undefined =>
-  profile?.kind === 'agent' ? { profile: { kind: 'agent', agentId: profile.agentId } } : undefined;
+  profile?.kind === 'agent'
+    ? { profile: { kind: 'agent', agentId: profile.agentId } }
+    : profile?.kind === 'temporary'
+      ? { profile: { kind: 'temporary', conversationId: profile.conversationId } }
+      : undefined;
 
 /** True for a browser tab in the given Agent's profile. */
 const isAgentProfileTab = (tab: PreviewTab, agentId: string): boolean =>
@@ -611,6 +625,12 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // `closePreviewIfScopeChanged` (per-project restore, see switchScope below).
   const [isOpen, setIsOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  // VA Bot conversations use a browser-on-top / chat-underneath layout whose chat
+  // starts collapsed and opens from the chat button in the preview tab bar.
+  const [isVaBotMode, setIsVaBotMode] = useState(false);
+  const [isVaChatCollapsed, setIsVaChatCollapsed] = useState(true);
+  const vaChatCollapsedRef = useRef(true);
+  vaChatCollapsedRef.current = isVaChatCollapsed;
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // The preview scope currently loaded into state (project id / workspace / null).
@@ -1111,6 +1131,23 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
    * latter.
    */
   const toggleMaximized = useCallback(() => setIsMaximized((prev) => !prev), []);
+
+  /** Entering a VA Bot conversation starts with its chat collapsed under the browser. */
+  const setVaBotMode = useCallback((on: boolean) => {
+    setIsVaBotMode(on);
+    if (on) setIsVaChatCollapsed(true);
+  }, []);
+
+  const toggleVaChat = useCallback(() => {
+    const collapsed = !vaChatCollapsedRef.current;
+    setIsVaChatCollapsed(collapsed);
+    // Showing the chat puts the cursor straight into its message box (after the pane lays out).
+    if (!collapsed) {
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLTextAreaElement>('[data-chat-pane] textarea')?.focus();
+      });
+    }
+  }, []);
 
   const clearPreviewForScope = useCallback(() => {
     setIsMaximized(false);
@@ -1634,6 +1671,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       closePreview,
       collapsePreview,
       toggleMaximized,
+      isVaBotMode,
+      setVaBotMode,
+      isVaChatCollapsed,
+      toggleVaChat,
       clearPreviewForScope,
       closeTab,
       switchTab: setActiveTabId,
@@ -1667,6 +1708,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     closePreview,
     collapsePreview,
     toggleMaximized,
+    isVaBotMode,
+    setVaBotMode,
+    isVaChatCollapsed,
+    toggleVaChat,
     clearPreviewForScope,
     closeTab,
     setActiveTabId,

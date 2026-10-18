@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 export type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 
@@ -163,6 +163,23 @@ const getDraft = <K extends DraftConversationType>(
     default:
       return undefined;
   }
+};
+
+/**
+ * Remove and return the typed text of a conversation's draft, whatever its
+ * send-box type. Used when the chat moves to another window (floating widget ↔
+ * main window): the text travels, and the source window no longer holds a copy
+ * that would be appended twice on the way back. Attachments stay behind.
+ */
+export const takeSendBoxDraftText = (conversation_id: string): string => {
+  for (const type of ['acp', 'codex', 'aionrs'] as const) {
+    const draft = getDraft(type, conversation_id);
+    if (!draft) continue;
+    setDraft(type, conversation_id, undefined);
+    void mutate([`/send-box/${type}/draft/${conversation_id}`, conversation_id], undefined, { revalidate: false });
+    return draft.content;
+  }
+  return '';
 };
 
 /**

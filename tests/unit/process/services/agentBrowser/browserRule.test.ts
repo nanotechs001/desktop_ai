@@ -77,9 +77,9 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });
 
-  it('tells the agent to save lessons with notes.add and stays within the cap', () => {
+  it('tells the agent to save lessons with notes.add after a task and stays within the cap', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      'Use `notes.add` (the `add` tool of `aionui-notes`) to save a short lesson when you learn how the user likes something done or how a site works.'
+      'When you finish a task, use `notes.add` (the `add` tool of `aionui-notes`) to save one or two short lessons for next time'
     );
     // The notes block brings its own "# Notebook" heading; the rule must not repeat it.
     expect(BROWSER_RULE_TEXT).not.toContain('# Notebook');
@@ -88,7 +88,7 @@ describe('BROWSER_RULE_TEXT', () => {
 
   it('tells the agent to refer to itself as the agent', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      "You are the AionUi agent. Refer to yourself as 'the agent'; do not name your vendor, product or model unless the user asks which model is in use."
+      "You are the Pixebot Browser agent. Refer to yourself as 'the agent'; do not name your vendor, product or model unless the user asks which model is in use."
     );
   });
 

@@ -64,10 +64,10 @@
   "more": "Mehr",
   "refresh": "Aktualisieren",
   "readOnly": "Schreibgeschützt",
-  "tray.showWindow": "AionUi anzeigen",
+  "tray.showWindow": "Pixebot Browser anzeigen",
   "tray.newChat": "Neuer Chat",
   "tray.closeToTray": "In Taskleiste minimieren",
-  "tray.about": "Über AionUi",
+  "tray.about": "Über Pixebot Browser",
   "tray.restart": "App neu starten",
   "tray.quit": "Beenden",
   "tray.runningTasks": "Laufende Aufgaben",
@@ -78,39 +78,39 @@
   "backendStartup": {
     "incompatibleRuntime": {
       "title": "Dieses System wird vom gebündelten Backend nicht unterstützt",
-      "description": "AionUi wurde geöffnet, aber das lokale AionCore-Backend kann auf dieser Linux-Version nicht ausgeführt werden. Bitte upgrade auf eine unterstützte Linux-Distribution und starte AionUi neu.",
+      "description": "Pixebot Browser wurde geöffnet, aber das lokale Pixebot Core-Backend kann auf dieser Linux-Version nicht ausgeführt werden. Bitte upgrade auf eine unterstützte Linux-Distribution und starte Pixebot Browser neu.",
       "requiredVersions": "Erforderliche Runtime-Symbole: {{versions}}"
     },
     "incompleteInstallation": {
-      "title": "AionUi-Installation ist unvollständig",
-      "description": "Diese Installation fehlen erforderliche lokale Ressourcen, daher kann AionCore nicht starten. Bitte lade die neueste Version von AionUi herunter und installiere sie neu. Wenn das Problem nach der Neuinstallation erneut auftritt, überprüfe, ob Sicherheits- oder Antivirus-Software AionCore unter Quarantäne gestellt hat.",
+      "title": "Pixebot Browser-Installation ist unvollständig",
+      "description": "Diese Installation fehlen erforderliche lokale Ressourcen, daher kann Pixebot Core nicht starten. Bitte lade die neueste Version von Pixebot Browser herunter und installiere sie neu. Wenn das Problem nach der Neuinstallation erneut auftritt, überprüfe, ob Sicherheits- oder Antivirus-Software Pixebot Core unter Quarantäne gestellt hat.",
       "downloadLatest": "Neueste Version herunterladen",
       "sendDiagnostics": "Diagnose senden",
       "diagnosticsSent": "Diagnose gesendet",
       "diagnosticsReportSuccess": "Diagnosebericht gesendet",
       "diagnosticsReportFailed": "Fehler beim Senden des Diagnoseberichts",
-      "runtimeComponentDescription": "Diese Installation fehlen erforderliche gebündelte Runtime-Komponenten, daher kann {{resource}} nicht starten. Installiere das neueste AionUi-Paket neu. Wenn es nach der Neuinstallation immer noch auftritt, überprüfe, ob Sicherheits- oder Antivirus-Software AionUi-Komponenten unter Quarantäne gestellt hat."
+      "runtimeComponentDescription": "Diese Installation fehlen erforderliche gebündelte Runtime-Komponenten, daher kann {{resource}} nicht starten. Installiere das neueste Pixebot Browser-Paket neu. Wenn es nach der Neuinstallation immer noch auftritt, überprüfe, ob Sicherheits- oder Antivirus-Software Pixebot Browser-Komponenten unter Quarantäne gestellt hat."
     },
     "packageArchitectureMismatch": {
-      "title": "AionUi-Paket-Architektur-Fehlanpassung",
-      "description": "Dieses AionUi-Paket ist für {{packageArch}}, aber dieser Mac ist {{deviceArch}}. Möglicherweise hast du das falsche Paket heruntergeladen. Bitte lade das {{expectedArch}}-Paket herunter und installiere es."
+      "title": "Pixebot Browser-Paket-Architektur-Fehlanpassung",
+      "description": "Dieses Pixebot Browser-Paket ist für {{packageArch}}, aber dieser Mac ist {{deviceArch}}. Möglicherweise hast du das falsche Paket heruntergeladen. Bitte lade das {{expectedArch}}-Paket herunter und installiere es."
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "AionUi wurde geöffnet, aber AionCore wurde beim Initialisieren der lokalen Daten beendet. Eine Neuinstallation von AionUi behebt dies möglicherweise nicht. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, muss die lokale Datenbank möglicherweise geprüft werden.",
+      "description": "Pixebot Browser wurde geöffnet, aber Pixebot Core wurde beim Initialisieren der lokalen Daten beendet. Eine Neuinstallation von Pixebot Browser behebt dies möglicherweise nicht. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, muss die lokale Datenbank möglicherweise geprüft werden.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
       "diagnosticsReportFailed": "Failed to send diagnostics report"
     },
     "databaseNewerThanApp": {
-      "title": "Neuere AionUi-Version erforderlich",
-      "description": "Ihre lokalen Daten wurden von einer neueren AionUi-Version erstellt und können von dieser Version nicht geöffnet werden. Aktualisieren Sie AionUi auf die neueste Version — Ihre Daten bleiben erhalten, eine Neuinstallation oder ein Zurücksetzen ist nicht nötig.",
-      "descriptionWithVersion": "Ihre lokalen Daten wurden von einer AionUi-Version erstellt, die neuer ist als die aktuell installierte (v{{currentVersion}}), daher kann diese Version sie nicht öffnen. Aktualisieren Sie AionUi auf die neueste Version — Ihre Daten bleiben erhalten, eine Neuinstallation oder ein Zurücksetzen ist nicht nötig."
+      "title": "Neuere Pixebot Browser-Version erforderlich",
+      "description": "Ihre lokalen Daten wurden von einer neueren Pixebot Browser-Version erstellt und können von dieser Version nicht geöffnet werden. Aktualisieren Sie Pixebot Browser auf die neueste Version — Ihre Daten bleiben erhalten, eine Neuinstallation oder ein Zurücksetzen ist nicht nötig.",
+      "descriptionWithVersion": "Ihre lokalen Daten wurden von einer Pixebot Browser-Version erstellt, die neuer ist als die aktuell installierte (v{{currentVersion}}), daher kann diese Version sie nicht öffnen. Aktualisieren Sie Pixebot Browser auf die neueste Version — Ihre Daten bleiben erhalten, eine Neuinstallation oder ein Zurücksetzen ist nicht nötig."
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "AionUi wurde geöffnet, aber AionCore wurde beim Vorbereiten lokaler Startdaten wie Agent- oder Engine-Datensätzen beendet. Eine Neuinstallation von AionUi behebt dies möglicherweise nicht. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, muss die lokale Datenbank möglicherweise geprüft werden.",
+      "description": "Pixebot Browser wurde geöffnet, aber Pixebot Core wurde beim Vorbereiten lokaler Startdaten wie Agent- oder Engine-Datensätzen beendet. Eine Neuinstallation von Pixebot Browser behebt dies möglicherweise nicht. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, muss die lokale Datenbank möglicherweise geprüft werden.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -118,7 +118,7 @@
     },
     "startupDirectory": {
       "title": "Startup directory is unavailable",
-      "description": "AionUi opened, but AionCore could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart AionUi.",
+      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -126,7 +126,7 @@
     },
     "recoverableDatabaseCorruption": {
       "title": "Lokale Daten sind beschädigt",
-      "description": "AionUi hat erkannt, dass die lokale Datenbank beschädigt ist und den Start nicht fortsetzen kann. Nach der Bestätigung wird die alte Datenbank gesichert und eine neue lokale Datenbank erstellt, um den Start fortzusetzen. Frühere Unterhaltungen werden nicht mehr angezeigt, und die alte Datenbank bleibt als Sicherungsdatei erhalten.",
+      "description": "Pixebot Browser hat erkannt, dass die lokale Datenbank beschädigt ist und den Start nicht fortsetzen kann. Nach der Bestätigung wird die alte Datenbank gesichert und eine neue lokale Datenbank erstellt, um den Start fortzusetzen. Frühere Unterhaltungen werden nicht mehr angezeigt, und die alte Datenbank bleibt als Sicherungsdatei erhalten.",
       "confirmRebuild": "Alte DB sichern und neue DB erstellen",
       "sendDiagnostics": "Diagnose senden",
       "diagnosticsHint": "Das Senden der Diagnose ändert die lokale Datenbank nicht.",
@@ -142,8 +142,8 @@
       }
     },
     "transientConcurrentStartup": {
-      "title": "AionUi wird gestartet",
-      "description": "Beim Öffnen dieses Fensters verwendete ein anderer AionUi-Startvorgang noch die lokalen Daten. Das ist vorübergehend und Ihre Daten sind sicher – eine Neuinstallation ist nicht erforderlich. Bitte warten Sie einen Moment und versuchen Sie es erneut oder starten Sie AionUi neu.",
+      "title": "Pixebot Browser wird gestartet",
+      "description": "Beim Öffnen dieses Fensters verwendete ein anderer Pixebot Browser-Startvorgang noch die lokalen Daten. Das ist vorübergehend und Ihre Daten sind sicher – eine Neuinstallation ist nicht erforderlich. Bitte warten Sie einen Moment und versuchen Sie es erneut oder starten Sie Pixebot Browser neu.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -152,11 +152,11 @@
     },
     "pendingSlow": {
       "title": "Wird gestartet",
-      "description": "AionCore wird gestartet, bitte warten. Wenn es nach einer Weile nicht reagiert, können Sie die App beenden und erneut öffnen."
+      "description": "Pixebot Core wird gestartet, bitte warten. Wenn es nach einer Weile nicht reagiert, können Sie die App beenden und erneut öffnen."
     },
     "exited": {
       "title": "Start nicht abgeschlossen",
-      "description": "AionCore konnte den Start nicht abschließen und wurde beendet. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, prüfen Sie, ob das AionCore-Backend installiert ist.",
+      "description": "Pixebot Core konnte den Start nicht abschließen und wurde beendet. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, prüfen Sie, ob das Pixebot Core-Backend installiert ist.",
       "sendDiagnostics": "Diagnose senden",
       "diagnosticsSent": "Diagnose gesendet",
       "diagnosticsReportSuccess": "Diagnose gemeldet",
@@ -164,7 +164,7 @@
     },
     "portReportTimeout": {
       "title": "Zeitüberschreitung beim Start",
-      "description": "AionCore konnte den Start nicht innerhalb der erwarteten Zeit abschließen. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, prüfen Sie, ob das AionCore-Backend installiert ist.",
+      "description": "Pixebot Core konnte den Start nicht innerhalb der erwarteten Zeit abschließen. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, prüfen Sie, ob das Pixebot Core-Backend installiert ist.",
       "sendDiagnostics": "Diagnose senden",
       "diagnosticsSent": "Diagnose gesendet",
       "diagnosticsReportSuccess": "Diagnose gemeldet",
@@ -172,7 +172,7 @@
     },
     "startupFailed": {
       "title": "Start fehlgeschlagen",
-      "description": "AionCore konnte nicht gestartet werden. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, prüfen Sie, ob das AionCore-Backend installiert ist.",
+      "description": "Pixebot Core konnte nicht gestartet werden. Bitte starten Sie die App neu. Wenn dies wiederholt auftritt, prüfen Sie, ob das Pixebot Core-Backend installiert ist.",
       "sendDiagnostics": "Diagnose senden",
       "diagnosticsSent": "Diagnose gesendet",
       "diagnosticsReportSuccess": "Diagnose gemeldet",

@@ -54,7 +54,7 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
 
 const { agentTabProfile, liveAgentProfile, startAgentBrowserServices } =
   await import('@process/services/agentBrowser/services');
-const { agentPartition, deleteAgentBrowserData, rememberBrowserSession } =
+const { agentPartition, deleteAgentBrowserData, rememberBrowserSession, temporaryPartition } =
   await import('@process/services/browserSession/profiles/browserProfiles');
 
 /** Browser sessions as browserSession sets them up: Personal, the shared default Agent profile, and one Agent's. */
@@ -65,6 +65,10 @@ rememberBrowserSession('persist:aionui-browser', personalSession);
 rememberBrowserSession(agentPartition('aion-default-agent'), defaultAgentSession);
 rememberBrowserSession(agentPartition('bare:agent-1'), agentSession);
 const DEFAULT_AGENT_PROFILE = { kind: 'agent', agentId: 'aion-default-agent' } as const;
+/** Regular chats (no user-created Agent) each browse in their own temporary in-memory session. */
+const temporaryProfile = (conversationId: string) => ({ kind: 'temporary', conversationId }) as const;
+const temporarySessionA = { name: 'temporary a' } as unknown as Electron.Session;
+rememberBrowserSession(temporaryPartition('conv-a'), temporarySessionA);
 /** conv-1 belongs to Agent bare:agent-1; any other chat has no Agent (another engine, a built-in). */
 const resolveAgent = vi.fn(async (conversationId: string) =>
   conversationId === 'conv-1'
@@ -195,9 +199,32 @@ describe('agentTabProfile lookups', () => {
     const failing = vi.fn(async () => ({ ok: false, message: "Couldn't look up", transient: true }) as const);
     const noAgent = vi.fn(async () => ({ ok: false, message: 'No Agent for this chat' }) as const);
 
-    expect(await agentTabProfile(failing, 'conv-1')).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: false });
-    expect(await agentTabProfile(noAgent, 'conv-1')).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: true });
+    expect(await agentTabProfile(failing, 'conv-1')).toEqual({ profile: temporaryProfile('conv-1'), final: false });
+    expect(await agentTabProfile(noAgent, 'conv-1')).toEqual({ profile: temporaryProfile('conv-1'), final: true });
     expect(await agentTabProfile(resolveAgent, undefined)).toEqual({ profile: DEFAULT_AGENT_PROFILE, final: true });
+  });
+
+  it('gives a VA Bot chat its Agent profile and every regular chat its own temporary session', async () => {
+    const vaBot = vi.fn(async () => ({ ok: true, agentId: 'bare:agent-1' }) as const);
+    const builtInDefault = vi.fn(async () => ({ ok: true, agentId: 'aion-default-agent' }) as const);
+    const adoptedDefault = vi.fn(async () => ({ ok: true, agentId: 'bare:adopted' }) as const);
+    const isDefaultAgent = vi.fn(async (agentId: string) => agentId === 'bare:adopted');
+
+    expect(await agentTabProfile(vaBot, 'conv-1', isDefaultAgent)).toEqual({
+      profile: { kind: 'agent', agentId: 'bare:agent-1' },
+      final: true,
+    });
+    expect(await agentTabProfile(builtInDefault, 'conv-2', isDefaultAgent)).toEqual({
+      profile: temporaryProfile('conv-2'),
+      final: true,
+    });
+    expect(await agentTabProfile(adoptedDefault, 'conv-3', isDefaultAgent)).toEqual({
+      profile: temporaryProfile('conv-3'),
+      final: true,
+    });
+    // Two regular chats never share a session.
+    expect(temporaryPartition('conv-2')).not.toBe(temporaryPartition('conv-3'));
+    expect(temporaryPartition('conv-2').startsWith('persist:')).toBe(false);
   });
 });
 
@@ -259,7 +286,8 @@ describe('agent browser services: tabs', () => {
     await call('refuseTab', { url: 'https://same.test/', max: 10, conversationId: 'conv-b' });
     expect((await createdB).error?.message).toMatch(/too many tabs/);
 
-    const tab = newTab(9);
+    // conv-a is a regular chat: its tab lives in its own temporary session.
+    const tab = newTab(9, temporarySessionA);
     tab.navigate('https://same.test/');
     expect((await createdA).result).toEqual({ targetId: 'wc-9' });
   });
@@ -283,7 +311,7 @@ describe('agent browser services: tabs', () => {
     expect((await ownership(12))?.owner).toBe('user');
   });
 
-  it('uses the shared default Agent profile, never Personal, when the chat has no Agent or there is no chat', async () => {
+  it('uses a temporary session for a chat without an Agent and the default Agent profile without a chat, never Personal', async () => {
     const relay = await start();
     const other = await connect(relay, 'a', { 'X-Aion-Conversation': 'conv-2' });
     const none = await connect(relay, 'b');
@@ -292,7 +320,7 @@ describe('agent browser services: tabs', () => {
 
     await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(2));
     const profiles = h.ipcBridge.browser.openTabRequested.emit.mock.calls.map(([event]) => event.profile);
-    expect(profiles).toEqual([DEFAULT_AGENT_PROFILE, DEFAULT_AGENT_PROFILE]);
+    expect(profiles).toEqual([temporaryProfile('conv-2'), DEFAULT_AGENT_PROFILE]);
   });
 
   it("fails createTarget at once when the pane can't set the Agent's browser profile up", async () => {

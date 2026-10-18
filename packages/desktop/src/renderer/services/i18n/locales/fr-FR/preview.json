@@ -85,7 +85,7 @@
       "outsideSandbox": "Ce fichier se trouve en dehors du bac à sable du projet actuel."
     },
     "serverInstall": {
-      "hint": "AionUi fonctionne sur un serveur. Installez le composant d'aperçu sur ce serveur, puis réessayez :",
+      "hint": "Pixebot Browser fonctionne sur un serveur. Installez le composant d'aperçu sur ce serveur, puis réessayez :",
       "icuNote": "S'il ne démarre toujours pas, installez la bibliothèque ICU sur le serveur (Debian/Ubuntu : apt-get install -y libicu-dev)."
     }
   },
@@ -270,7 +270,8 @@
       "personal": "Personnel",
       "newTabIn": "Nouvel onglet dans…",
       "unavailable": "Le profil de navigateur de cet Agent n'a pas pu être ouvert.",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "temporary": "Temporaire (cette conversation)"
     },
     "cookieImport": {
       "more": "Plus",
@@ -301,5 +302,7 @@
         "list_failed": "Impossible de rechercher les navigateurs sur ce Mac."
       }
     }
-  }
+  },
+  "showChat": "Afficher la conversation",
+  "hideChat": "Masquer la conversation"
 }

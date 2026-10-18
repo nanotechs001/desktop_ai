@@ -54,8 +54,15 @@ export type BrowserShortcutRequest = {
   action: Extract<BrowserShortcutAction, 'find' | 'focus-address' | 'new-tab' | 'close-tab' | 'escape'>;
 };
 
-/** Which browser profile (Electron session) a tab lives in: the user's own, or one Agent's. */
-export type BrowserTabProfile = { kind: 'personal' } | { kind: 'agent'; agentId: string };
+/**
+ * Which browser profile (Electron session) a tab lives in: the user's own, one Agent's (VA Bot,
+ * persistent), or a regular chat's temporary in-memory session (gone when its tabs close or the
+ * app restarts).
+ */
+export type BrowserTabProfile =
+  | { kind: 'personal' }
+  | { kind: 'agent'; agentId: string }
+  | { kind: 'temporary'; conversationId: string };
 
 /** A Chromium browser on this Mac whose cookies can be imported into a browser profile. */
 export type CookieSourceBrowser = 'chrome' | 'brave' | 'edge' | 'arc' | 'vivaldi';

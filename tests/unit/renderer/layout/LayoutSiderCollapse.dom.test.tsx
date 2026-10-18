@@ -15,9 +15,11 @@ vi.mock('react-i18next', () => ({
 const shortcutMocks = vi.hoisted(() => ({
   params: undefined as undefined | { toggleSider: () => void },
 }));
+// On desktop the sider exists only in Settings (chat routes navigate from the titlebar).
+const route = vi.hoisted(() => ({ pathname: '/settings/about' }));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
-  useLocation: () => ({ pathname: '/guid', search: '', hash: '' }),
+  useLocation: () => ({ pathname: route.pathname, search: '', hash: '' }),
   useNavigationType: () => 'POP',
   Outlet: () => null,
 }));
@@ -45,6 +47,7 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
   },
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
+vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
@@ -83,6 +86,13 @@ describe('Layout sider icon-only mode', () => {
   afterEach(() => {
     localStorage.clear();
     shortcutMocks.params = undefined;
+    route.pathname = '/settings/about';
+  });
+
+  it('renders no left sider on desktop chat routes (navigation lives in the titlebar)', () => {
+    route.pathname = '/guid';
+    const { sider } = renderLayout();
+    expect(sider).toBeNull();
   });
 
   it('starts collapsed to icon-only width on desktop with no stored value', () => {

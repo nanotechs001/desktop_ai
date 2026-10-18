@@ -202,7 +202,7 @@ describe('the UI says Agent, not Assistant', () => {
       </ConfigProvider>
     );
 
-    expect(screen.getByText('Agents')).toBeInTheDocument();
+    expect(screen.getByText('VA Bots')).toBeInTheDocument();
     expect(screen.getByText('Delete Agent')).toBeInTheDocument();
     expect(`${container.textContent}${document.body.textContent}`).not.toMatch(/assistant/i);
   });
@@ -776,7 +776,7 @@ describe('the editor hides the AionUi managed rule blocks', () => {
       await result.current.handleSave();
     });
 
-    expect(message.warning).toHaveBeenCalledWith("Fix the AionUi block markers in this Agent's instructions.");
+    expect(message.warning).toHaveBeenCalledWith("Fix the Pixebot Browser block markers in this Agent's instructions.");
     expect(message.warning).not.toHaveBeenCalledWith(expect.stringContaining('Restart'));
     expect(message.success).toHaveBeenCalled();
   });

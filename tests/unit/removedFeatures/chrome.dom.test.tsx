@@ -28,6 +28,7 @@ vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({
   useChatNavHistory: () => ({ canBack: false, canForward: false, back: vi.fn(), forward: vi.fn() }),
 }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
@@ -86,7 +87,7 @@ describe('Feedback and Butler', () => {
     render(<Titlebar workspaceAvailable />);
 
     expect(screen.queryByRole('button', { name: 'conversation.welcome.quickActionFeedback' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'common.collapse' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'conversation.history.searchChats' })).toBeInTheDocument();
   });
 });
 

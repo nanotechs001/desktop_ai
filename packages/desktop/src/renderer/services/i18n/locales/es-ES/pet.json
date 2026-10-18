@@ -13,5 +13,48 @@
   "resetPosition": "Restablecer posición",
   "hide": "Ocultar",
   "showHide": "Mostrar/Ocultar",
-  "desktopOnly": "La mascota de escritorio solo está disponible en la aplicación de escritorio. No se puede usar en modo navegador WebUI."
+  "desktopOnly": "La mascota de escritorio solo está disponible en la aplicación de escritorio. No se puede usar en modo navegador WebUI.",
+  "widget": {
+    "chatInWidget": "Este chat está abierto en el widget flotante.",
+    "returnChatHere": "Traer el chat aquí",
+    "showWidget": "Mostrar como widget flotante",
+    "openChat": "Abrir chat con {{name}}",
+    "untitledAgent": "Agente",
+    "minimize": "Minimizar",
+    "closePopup": "Cerrar chat",
+    "returnToMain": "Abrir en la ventana principal",
+    "hideWidget": "Ocultar widget",
+    "state": {
+      "idle": "Listo",
+      "listening": "Escuchando…",
+      "thinking": "Pensando…",
+      "talking": "Respondiendo…",
+      "searching": "Navegando…",
+      "working": "Trabajando…",
+      "sleeping": "Durmiendo",
+      "error": "Algo salió mal",
+      "offline": "Sin conexión",
+      "notification": "Nueva respuesta"
+    },
+    "settings": {
+      "title": "Widgets flotantes de agentes",
+      "enabled": "Activar widgets flotantes de agentes",
+      "enabledDesc": "Cada agente tiene un robot en la barra de tareas que abre su chat.",
+      "autoLaunch": "Abrir un widget para agentes nuevos",
+      "movement": "Movimiento autónomo",
+      "movementFrequency": "Frecuencia de movimiento",
+      "frequency": {
+        "low": "Baja",
+        "medium": "Media",
+        "high": "Alta"
+      },
+      "scale": "Tamaño del widget",
+      "alwaysOnTop": "Siempre visible",
+      "reduceMotion": "Reducir movimiento",
+      "reduceMotionDesc": "Poses fijas y sin caminar en reposo.",
+      "muteVoice": "Silenciar voz",
+      "muteVoiceDesc": "No leer las respuestas en voz alta.",
+      "returnChats": "Traer todos los chats a la ventana principal"
+    }
+  }
 }

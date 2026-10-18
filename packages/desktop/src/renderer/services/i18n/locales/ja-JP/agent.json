@@ -57,7 +57,7 @@
     "initializingTooltip": "エージェントを初期化中です。完了してから再接続してください",
     "processingTooltip": "現在の返信が完了してから再接続してください"
   },
-  "claudeLauncherSkipped": "独自の Claude コマンドが設定されているため、AionUi はブラウザ保護を追加しませんでした。",
+  "claudeLauncherSkipped": "独自の Claude コマンドが設定されているため、Pixebot Browser はブラウザ保護を追加しませんでした。",
   "engine": {
     "default": "既定",
     "setDefault": "既定にする",
@@ -69,7 +69,7 @@
     "label": "エンジン"
   },
   "cannotDeleteDefault": "既定のエージェントは削除できません。",
-  "ruleMarkersBroken": "このエージェントの指示にある AionUi ブロックのマーカーを修正してください。",
+  "ruleMarkersBroken": "このエージェントの指示にある Pixebot Browser ブロックのマーカーを修正してください。",
   "ruleTooLong": "この指示は長すぎます",
   "notebook": {
     "title": "ノート",

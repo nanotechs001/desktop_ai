@@ -13,5 +13,48 @@
   "resetPosition": "位置をリセット",
   "hide": "非表示",
   "showHide": "表示/非表示",
-  "desktopOnly": "デスクトップペットはデスクトップアプリでのみ利用可能です。WebUIブラウザモードでは使用できません。"
+  "desktopOnly": "デスクトップペットはデスクトップアプリでのみ利用可能です。WebUIブラウザモードでは使用できません。",
+  "widget": {
+    "chatInWidget": "このチャットはフローティングウィジェットで開いています。",
+    "returnChatHere": "チャットをここに戻す",
+    "showWidget": "フローティングウィジェットで表示",
+    "openChat": "{{name}} とのチャットを開く",
+    "untitledAgent": "エージェント",
+    "minimize": "最小化",
+    "closePopup": "チャットを閉じる",
+    "returnToMain": "メインウィンドウで開く",
+    "hideWidget": "ウィジェットを非表示",
+    "state": {
+      "idle": "待機中",
+      "listening": "聞き取り中…",
+      "thinking": "考え中…",
+      "talking": "応答中…",
+      "searching": "閲覧中…",
+      "working": "作業中…",
+      "sleeping": "スリープ中",
+      "error": "問題が発生しました",
+      "offline": "オフライン",
+      "notification": "新しい返信"
+    },
+    "settings": {
+      "title": "フローティングエージェントウィジェット",
+      "enabled": "フローティングエージェントウィジェットを有効にする",
+      "enabledDesc": "各エージェントにタスクバー上のデスクトップロボットが表示され、クリックでチャットを開けます。",
+      "autoLaunch": "新しいエージェントでウィジェットを起動",
+      "movement": "自律移動",
+      "movementFrequency": "移動頻度",
+      "frequency": {
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      },
+      "scale": "ウィジェットのサイズ",
+      "alwaysOnTop": "常に最前面に表示",
+      "reduceMotion": "動きを減らす",
+      "reduceMotionDesc": "静止ポーズを保ち、待機中の歩行を止めます。",
+      "muteVoice": "音声をミュート",
+      "muteVoiceDesc": "返信を読み上げません。",
+      "returnChats": "すべてのチャットをメインウィンドウに戻す"
+    }
+  }
 }

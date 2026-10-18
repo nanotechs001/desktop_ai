@@ -74,6 +74,8 @@ import {
   setIsQuitting,
 } from './process/utils/tray';
 import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
+import { AgentWidgetManager } from './process/pet/agentWidget/agentWidgetManager';
+import { initAgentWidgetBridge } from './process/pet/agentWidget/agentWidgetBridge';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -207,6 +209,24 @@ let isExplicitQuit = false;
 let appReadyDone = false;
 
 let mainWindow: BrowserWindow;
+
+// Floating agent widgets: one transparent window per conversation, loading the
+// same renderer bundle at #/widget/:id so it shares the backend session.
+const agentWidgetManager = new AgentWidgetManager({
+  preloadPath: path.join(__dirname, '../preload/index.js'),
+  getMainWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
+  loadWidget: (win, conversationId) => {
+    const hash = `/widget/${encodeURIComponent(conversationId)}`;
+    const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+    const load =
+      !app.isPackaged && rendererUrl
+        ? win.loadURL(`${rendererUrl}#${hash}`)
+        : win.loadFile(path.join(__dirname, '../renderer/index.html'), { hash });
+    load.catch((error: unknown) => console.error('[AgentWidget] Failed to load widget renderer:', error));
+  },
+});
+initAgentWidgetBridge(agentWidgetManager);
+
 const backendManager = new BackendLifecycleManager(
   {
     version: app.getVersion(),
@@ -555,6 +575,11 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
 
   initMainAdapterWithWindow(mainWindow);
   bindMainWindowReferences(mainWindow);
+  // Widgets survive a main window hidden to the tray, but close with a closed
+  // one so the window-all-closed quit path still runs. A re-created main
+  // window (macOS activate) brings them back.
+  mainWindow.on('closed', () => agentWidgetManager.closeAllWindows());
+  agentWidgetManager.restoreAll();
 
   setupApplicationMenu();
 
@@ -771,7 +796,7 @@ const handleAppReady = async (): Promise<void> => {
   const { cdpStartupEnabled, setActiveCdpPort } = await import('./process/utils/configureChromium');
   try {
     const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
-    const { resolveChatAgent } = await import('./process/artifacts');
+    const { resolveChatAgent, isDefaultAgent } = await import('./process/artifacts');
     const { onAgentProfileDeleted } = await import('./process/services/browserSession/profiles/browserProfiles');
     // A deleted Agent's chats then resolve afresh (and its tabs fall back to the default Agent profile).
     onAgentProfileDeleted((agentId) => resolveChatAgent.forgetAgent(agentId));
@@ -781,6 +806,8 @@ const handleAppReady = async (): Promise<void> => {
       blockedPorts: () => (backendManager.port > 0 ? [backendManager.port] : []),
       // An agent's tabs open in its chat's Agent browser profile (looked up when it opens one, once the backend is up).
       resolveAgent: resolveChatAgent,
+      // Regular chats (the default Agent) browse in a temporary per-chat session instead.
+      isDefaultAgent,
     });
     if (agentBrowser) {
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;
@@ -1025,6 +1052,12 @@ const handleAppReady = async (): Promise<void> => {
     createWindow({ showOnReady: showMainWindowOnReady });
     appReadyDone = true;
     mark('createWindow');
+
+    if (!isE2ETestMode) {
+      agentWidgetManager.init().catch((error: unknown) => {
+        console.error('[AgentWidget] Failed to restore widgets:', error);
+      });
+    }
 
     // 读取语言设置并初始化主进程 i18n，然后刷新托盘菜单
     // Read language setting and initialize main process i18n, then refresh tray menu

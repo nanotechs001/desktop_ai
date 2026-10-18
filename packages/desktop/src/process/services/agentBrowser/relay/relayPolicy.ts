@@ -154,6 +154,10 @@ export const mayAct = (tab: TabOwnership | null, client: RelayClient): boolean =
   if (tab.sharedWith !== 'all') return false;
   // Ruling N-16: a shared Personal tab is open to every client; a shared Agent-profile tab only to that Agent's.
   if (tab.profile.kind === 'personal') return true;
+  // A regular chat's temporary tab is only ever its own chat's: nothing crosses between chats.
+  if (tab.profile.kind === 'temporary') {
+    return client.profile?.kind === 'temporary' && client.profile.conversationId === tab.profile.conversationId;
+  }
   return client.profile?.kind === 'agent' && client.profile.agentId === tab.profile.agentId;
 };
 

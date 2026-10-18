@@ -272,5 +272,5 @@
     "7zip-bin@5.2.0": "patches/7zip-bin@5.2.0.patch",
     "electron-chrome-web-store@0.13.0": "patches/electron-chrome-web-store@0.13.0.patch"
   },
-  "productName": "AionUi"
+  "productName": "Pixebot Browser"
 }

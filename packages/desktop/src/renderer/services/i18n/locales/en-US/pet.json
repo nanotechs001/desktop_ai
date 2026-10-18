@@ -13,5 +13,48 @@
   "resetPosition": "Reset Position",
   "hide": "Hide",
   "showHide": "Show/Hide",
-  "desktopOnly": "Desktop Pet is only available in the desktop application. It cannot be used in WebUI browser mode."
+  "desktopOnly": "Desktop Pet is only available in the desktop application. It cannot be used in WebUI browser mode.",
+  "widget": {
+    "chatInWidget": "This chat is open in the floating widget.",
+    "returnChatHere": "Return chat here",
+    "showWidget": "Show as floating widget",
+    "openChat": "Open chat with {{name}}",
+    "untitledAgent": "Agent",
+    "minimize": "Minimize",
+    "closePopup": "Close chat",
+    "returnToMain": "Open in main window",
+    "hideWidget": "Hide widget",
+    "state": {
+      "idle": "Ready",
+      "listening": "Listening…",
+      "thinking": "Thinking…",
+      "talking": "Responding…",
+      "searching": "Browsing…",
+      "working": "Working…",
+      "sleeping": "Sleeping",
+      "error": "Something went wrong",
+      "offline": "Offline",
+      "notification": "New reply"
+    },
+    "settings": {
+      "title": "Floating agent widgets",
+      "enabled": "Enable floating agent widgets",
+      "enabledDesc": "Each agent gets a desktop robot that sits on the taskbar and opens its chat.",
+      "autoLaunch": "Launch a widget for new agents",
+      "movement": "Autonomous movement",
+      "movementFrequency": "Movement frequency",
+      "frequency": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      },
+      "scale": "Widget size",
+      "alwaysOnTop": "Always on top",
+      "reduceMotion": "Reduce motion",
+      "reduceMotionDesc": "Hold still poses and stop idle walking.",
+      "muteVoice": "Mute voice",
+      "muteVoiceDesc": "Keep spoken replies silent.",
+      "returnChats": "Return all chats to the main window"
+    }
+  }
 }

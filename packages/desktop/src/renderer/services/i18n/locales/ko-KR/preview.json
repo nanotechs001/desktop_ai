@@ -85,7 +85,7 @@
       "outsideSandbox": "이 파일은 현재 프로젝트 샌드박스 범위 밖에 있습니다."
     },
     "serverInstall": {
-      "hint": "AionUi가 서버에서 실행 중입니다. 미리보기 구성 요소는 해당 서버에 설치해야 합니다. 서버에서 다음 명령을 실행한 후 다시 시도하세요:",
+      "hint": "Pixebot Browser가 서버에서 실행 중입니다. 미리보기 구성 요소는 해당 서버에 설치해야 합니다. 서버에서 다음 명령을 실행한 후 다시 시도하세요:",
       "icuNote": "설치 후에도 시작되지 않으면 서버에 ICU 라이브러리를 설치하세요(Debian/Ubuntu: apt-get install -y libicu-dev)."
     }
   },
@@ -270,7 +270,8 @@
       "personal": "개인",
       "newTabIn": "새 탭 열기 위치…",
       "unavailable": "이 에이전트의 브라우저 프로필을 열 수 없습니다.",
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "temporary": "임시 (이 채팅)"
     },
     "cookieImport": {
       "more": "더 보기",
@@ -301,5 +302,7 @@
         "list_failed": "이 Mac에서 브라우저를 찾지 못했습니다."
       }
     }
-  }
+  },
+  "showChat": "채팅 표시",
+  "hideChat": "채팅 숨기기"
 }

@@ -191,6 +191,15 @@ describe('decideRelayCommand: ownership and pause', () => {
     expect(mayAct({ ...tab, sharedWith: null }, { ...agent, profile: sales })).toBe(false);
   });
 
+  it("allows a shared temporary tab only to its own regular chat's agent", () => {
+    const chatA = { kind: 'temporary', conversationId: 'conv-a' } as const;
+    const tab: TabOwnership = { ...userTab, sharedWith: 'all', profile: chatA };
+    expect(mayAct(tab, { ...agent, profile: chatA })).toBe(true);
+    expect(mayAct(tab, { ...agent, profile: { kind: 'temporary', conversationId: 'conv-b' } })).toBe(false);
+    expect(mayAct(tab, { ...agent, profile: { kind: 'agent', agentId: 'bare:sales' } })).toBe(false);
+    expect(mayAct(tab, agent)).toBe(false);
+  });
+
   it('denies everything when the tab is gone', () => {
     expect(decide('Page.getFrameTree', {}, { tab: null }).allow).toBe(false);
   });

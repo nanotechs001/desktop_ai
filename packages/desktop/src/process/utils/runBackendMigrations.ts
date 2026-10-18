@@ -212,7 +212,7 @@ function buildBuiltinBrowserServer(): McpImportServer {
   return buildBuiltinNodeServer(
     BUILTIN_BROWSER_MCP_NAME,
     BUILTIN_BROWSER_SCRIPT,
-    "Use AionUi's built-in browser pane: open and manage tabs, and read and act on pages with the tools listed. " +
+    "Use Pixebot Browser's built-in browser pane: open and manage tabs, and read and act on pages with the tools listed. " +
       'Each Agent browses in its own browser profile; when a site needs a sign-in, ask the user to sign in in the pane or import cookies.'
   );
 }

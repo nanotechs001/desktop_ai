@@ -72,7 +72,7 @@
     "high": "高",
     "urgent": "緊急"
   },
-  "browserAlwaysOn": "永遠開啟:代理使用 AionUi 瀏覽器面板",
+  "browserAlwaysOn": "永遠開啟:代理使用 Pixebot Browser 瀏覽器面板",
   "artifactsAlwaysOn": "永遠開啟:代理用它展示頁面和文件",
   "notesAlwaysOn": "永遠開啟:代理用它在筆記本中儲存經驗"
 }

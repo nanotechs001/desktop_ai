@@ -41,6 +41,7 @@ vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover',
 }));
 vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({ useChatNavHistory: () => nav }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ ...layoutState, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
@@ -58,15 +59,14 @@ describe('Titlebar chat history controls', () => {
     nav.forward.mockClear();
   });
 
-  it('shows sidebar toggle, Search, Back and Forward in that order', () => {
+  it('shows Search, Back and Forward in that order, without a sidebar toggle outside Settings', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
-    const sidebar = screen.getByRole('button', { name: 'common.collapse' });
+    expect(screen.queryByRole('button', { name: 'common.collapse' })).not.toBeInTheDocument();
     const search = screen.getByRole('button', { name: 'conversation.history.searchChats' });
     const back = screen.getByRole('button', { name: 'common.historyBack' });
     const forward = screen.getByRole('button', { name: 'common.forward' });
 
-    expect(sidebar.nextElementSibling).toBe(search);
     expect(search.nextElementSibling).toBe(back);
     expect(back.nextElementSibling).toBe(forward);
   });
@@ -96,12 +96,7 @@ describe('Titlebar chat history controls', () => {
   it('renders the titlebar controls as Arco buttons', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
-    for (const name of [
-      'common.collapse',
-      'conversation.history.searchChats',
-      'common.historyBack',
-      'common.forward',
-    ]) {
+    for (const name of ['conversation.history.searchChats', 'common.historyBack', 'common.forward']) {
       expect(screen.getByRole('button', { name })).toHaveClass('arco-btn', 'app-titlebar__button');
     }
   });

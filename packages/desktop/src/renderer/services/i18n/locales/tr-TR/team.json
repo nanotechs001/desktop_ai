@@ -43,7 +43,7 @@
     "subAgentsPlaceholder": "Takım üyesi Agent'ları seçin",
     "confirm": "Confirm Create",
     "noSupportedAgents": "Desteklenen uygun Agent bulunamadı",
-    "supportedAgentsHint": "Şu anda Claude ve Aion CLI Agent'ları desteklenmektedir. Daha fazla Agent yakında eklenecek.",
+    "supportedAgentsHint": "Şu anda Claude ve Pixebot CLI Agent'ları desteklenmektedir. Daha fazla Agent yakında eklenecek.",
     "leaderDesc": "Hedeflerinizi anlayarak görevleri tamamlamak için Agent'ları koordine eder",
     "searchPlaceholder": "Search",
     "noSearchResults": "Sonuç bulunamadı",

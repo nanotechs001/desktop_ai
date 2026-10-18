@@ -13,5 +13,48 @@
   "resetPosition": "Redefinir Posição",
   "hide": "Ocultar",
   "showHide": "Mostrar/Ocultar",
-  "desktopOnly": "O Mascote de Mesa está disponível apenas no aplicativo para desktop. Ele não pode ser usado no modo navegador WebUI."
+  "desktopOnly": "O Mascote de Mesa está disponível apenas no aplicativo para desktop. Ele não pode ser usado no modo navegador WebUI.",
+  "widget": {
+    "chatInWidget": "Este chat está aberto no widget flutuante.",
+    "returnChatHere": "Trazer o chat de volta",
+    "showWidget": "Mostrar como widget flutuante",
+    "openChat": "Abrir chat com {{name}}",
+    "untitledAgent": "Agente",
+    "minimize": "Minimizar",
+    "closePopup": "Fechar chat",
+    "returnToMain": "Abrir na janela principal",
+    "hideWidget": "Ocultar widget",
+    "state": {
+      "idle": "Pronto",
+      "listening": "Ouvindo…",
+      "thinking": "Pensando…",
+      "talking": "Respondendo…",
+      "searching": "Navegando…",
+      "working": "Trabalhando…",
+      "sleeping": "Dormindo",
+      "error": "Algo deu errado",
+      "offline": "Offline",
+      "notification": "Nova resposta"
+    },
+    "settings": {
+      "title": "Widgets flutuantes de agentes",
+      "enabled": "Ativar widgets flutuantes de agentes",
+      "enabledDesc": "Cada agente ganha um robô na barra de tarefas que abre o seu chat.",
+      "autoLaunch": "Abrir widget para novos agentes",
+      "movement": "Movimento autônomo",
+      "movementFrequency": "Frequência de movimento",
+      "frequency": {
+        "low": "Baixa",
+        "medium": "Média",
+        "high": "Alta"
+      },
+      "scale": "Tamanho do widget",
+      "alwaysOnTop": "Sempre no topo",
+      "reduceMotion": "Reduzir movimento",
+      "reduceMotionDesc": "Poses paradas e sem caminhar quando ocioso.",
+      "muteVoice": "Silenciar voz",
+      "muteVoiceDesc": "Não ler as respostas em voz alta.",
+      "returnChats": "Trazer todos os chats para a janela principal"
+    }
+  }
 }

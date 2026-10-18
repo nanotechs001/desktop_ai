@@ -50,10 +50,26 @@ type HistoryPanelProps = {
   onClose: () => void;
   /** Shows a "Search messages" entry in the header; omitted where message search lives elsewhere. */
   onSearchMessages?: () => void;
+  /** Only chats that pass are listed (e.g. regular chats, without VA Bot conversations). */
+  filter?: (conversation: TChatConversation) => boolean;
+  /** Heading above the search field. */
+  title?: string;
+  placement?: 'left' | 'right';
+  /** Replaces opening the chat in this window (e.g. a robot switching to the picked conversation). */
+  onSelect?: (conversation: TChatConversation) => void;
+  /** Rendered inside another surface (no drawer): no room reserved for the window's titlebar. */
+  embedded?: boolean;
 };
 
 /** Search field and chat list. Mounted only while the drawer is open, so its data hooks cost nothing when closed. */
-const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open'>> = ({ onClose, onSearchMessages }) => {
+export const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open' | 'placement'>> = ({
+  onClose,
+  onSearchMessages,
+  filter,
+  title,
+  onSelect,
+  embedded,
+}) => {
   const { t } = useTranslation();
   const [keyword, setKeyword] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -71,11 +87,25 @@ const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open'>> = ({ onClose, 
     [history.conversations]
   );
   const resolveConversationName = useCallback((id: string) => conversationNameById.get(id), [conversationNameById]);
-
-  const sections = useMemo(
-    () => buildHistorySections(history.groupedHistory, keyword, Date.now(), t),
-    [history.groupedHistory, keyword, t]
+  const openConversation = useCallback(
+    (conversation: TChatConversation) => {
+      if (!onSelect) {
+        actions.handleConversationClick(conversation);
+        return;
+      }
+      onSelect(conversation);
+      onClose();
+    },
+    [actions, onSelect, onClose]
   );
+
+  const sections = useMemo(() => {
+    const all = buildHistorySections(history.groupedHistory, keyword, Date.now(), t);
+    if (!filter) return all;
+    return all
+      .map((section) => ({ ...section, conversations: section.conversations.filter(filter) }))
+      .filter((section) => section.conversations.length > 0);
+  }, [history.groupedHistory, keyword, t, filter]);
   const visible = useMemo(() => sections.flatMap((section) => section.conversations), [sections]);
   const activeConversation = visible[Math.min(activeIndex, visible.length - 1)];
 
@@ -96,17 +126,21 @@ const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open'>> = ({ onClose, 
         setActiveIndex((prev) => Math.max(0, Math.min(prev + step, visible.length - 1)));
       } else if (event.key === 'Enter' && activeConversation && !event.nativeEvent.isComposing) {
         event.preventDefault();
-        actions.handleConversationClick(activeConversation);
+        openConversation(activeConversation);
       }
     },
-    [activeConversation, actions, visible.length]
+    [activeConversation, openConversation, visible.length]
   );
 
   return (
     <>
       <div className='h-full flex flex-col'>
         {/* The titlebar height keeps the search field clear of the macOS traffic lights. */}
-        <div className='shrink-0 px-12px pb-8px' style={{ paddingTop: 'var(--titlebar-height, 40px)' }}>
+        <div
+          className='shrink-0 px-12px pb-8px'
+          style={{ paddingTop: embedded ? '8px' : 'var(--titlebar-height, 40px)' }}
+        >
+          {title && <div className='px-4px pb-8px text-16px font-semibold text-t-primary'>{title}</div>}
           <Input
             autoFocus
             allowClear
@@ -163,7 +197,7 @@ const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open'>> = ({ onClose, 
                       selected={openConversationId === conversation.id}
                       menuVisible={actions.dropdownVisibleId === conversation.id}
                       onToggleChecked={ignoreChecked}
-                      onConversationClick={actions.handleConversationClick}
+                      onConversationClick={openConversation}
                       onOpenMenu={actions.handleOpenMenu}
                       onMenuVisibleChange={actions.handleMenuVisibleChange}
                       onEditStart={actions.handleEditStart}
@@ -207,10 +241,10 @@ const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open'>> = ({ onClose, 
 };
 
 /** Left drawer listing every chat by date with title search; clicking a chat opens it and closes the panel. */
-const HistoryPanel: React.FC<HistoryPanelProps> = ({ open, onClose, onSearchMessages }) => (
+const HistoryPanel: React.FC<HistoryPanelProps> = ({ open, onClose, placement = 'left', ...body }) => (
   <Drawer
     visible={open}
-    placement='left'
+    placement={placement}
     width={PANEL_WIDTH}
     title={null}
     footer={null}
@@ -219,7 +253,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ open, onClose, onSearchMess
     onCancel={onClose}
     bodyStyle={{ padding: 0 }}
   >
-    <HistoryPanelBody onClose={onClose} onSearchMessages={onSearchMessages} />
+    <HistoryPanelBody onClose={onClose} {...body} />
   </Drawer>
 );
 

@@ -85,7 +85,7 @@
       "outsideSandbox": "该文件不在当前项目沙箱范围内。"
     },
     "serverInstall": {
-      "hint": "AionUi 运行在服务器上，预览组件需要安装在该服务器上。请在服务器执行以下命令后重试：",
+      "hint": "Pixebot Browser 运行在服务器上，预览组件需要安装在该服务器上。请在服务器执行以下命令后重试：",
       "icuNote": "若安装后仍无法启动，请在服务器安装 ICU 库（Debian/Ubuntu：apt-get install -y libicu-dev）。"
     }
   },
@@ -270,7 +270,8 @@
       "personal": "个人",
       "newTabIn": "在以下资料中新建标签页…",
       "unavailable": "无法打开此智能体的浏览器资料。",
-      "retry": "重试"
+      "retry": "重试",
+      "temporary": "临时（本对话）"
     },
     "cookieImport": {
       "more": "更多",
@@ -301,5 +302,7 @@
         "list_failed": "无法在此 Mac 上查找浏览器。"
       }
     }
-  }
+  },
+  "showChat": "显示对话",
+  "hideChat": "隐藏对话"
 }

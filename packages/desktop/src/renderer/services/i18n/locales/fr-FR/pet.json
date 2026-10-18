@@ -13,5 +13,48 @@
   "resetPosition": "Réinitialiser la position",
   "hide": "Masquer",
   "showHide": "Afficher/Masquer",
-  "desktopOnly": "La mascotte de bureau est uniquement disponible dans l'application de bureau. Elle ne peut pas être utilisée en mode navigateur WebUI."
+  "desktopOnly": "La mascotte de bureau est uniquement disponible dans l'application de bureau. Elle ne peut pas être utilisée en mode navigateur WebUI.",
+  "widget": {
+    "chatInWidget": "Cette conversation est ouverte dans le widget flottant.",
+    "returnChatHere": "Ramener la conversation ici",
+    "showWidget": "Afficher en widget flottant",
+    "openChat": "Ouvrir la conversation avec {{name}}",
+    "untitledAgent": "Agent",
+    "minimize": "Réduire",
+    "closePopup": "Fermer la conversation",
+    "returnToMain": "Ouvrir dans la fenêtre principale",
+    "hideWidget": "Masquer le widget",
+    "state": {
+      "idle": "Prêt",
+      "listening": "À l’écoute…",
+      "thinking": "Réflexion…",
+      "talking": "Réponse en cours…",
+      "searching": "Navigation…",
+      "working": "Au travail…",
+      "sleeping": "En veille",
+      "error": "Un problème est survenu",
+      "offline": "Hors ligne",
+      "notification": "Nouvelle réponse"
+    },
+    "settings": {
+      "title": "Widgets flottants des agents",
+      "enabled": "Activer les widgets flottants des agents",
+      "enabledDesc": "Chaque agent obtient un robot posé sur la barre des tâches qui ouvre sa conversation.",
+      "autoLaunch": "Lancer un widget pour les nouveaux agents",
+      "movement": "Déplacement autonome",
+      "movementFrequency": "Fréquence de déplacement",
+      "frequency": {
+        "low": "Faible",
+        "medium": "Moyenne",
+        "high": "Élevée"
+      },
+      "scale": "Taille du widget",
+      "alwaysOnTop": "Toujours au premier plan",
+      "reduceMotion": "Réduire les animations",
+      "reduceMotionDesc": "Poses fixes et pas de promenade au repos.",
+      "muteVoice": "Couper la voix",
+      "muteVoiceDesc": "Ne pas lire les réponses à voix haute.",
+      "returnChats": "Ramener toutes les conversations dans la fenêtre principale"
+    }
+  }
 }

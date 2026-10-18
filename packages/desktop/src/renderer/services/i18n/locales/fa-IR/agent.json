@@ -57,7 +57,7 @@
     "initializingTooltip": "عامل در حال راه‌اندازی است. پس از آماده شدن دوباره متصل شوید",
     "processingTooltip": "قبل از اتصال مجدد، منتظر پایان پاسخ فعلی باشید"
   },
-  "claudeLauncherSkipped": "شما دستور Claude خودتان را تنظیم کرده‌اید، بنابراین AionUi محافظت‌های مرورگر خود را اضافه نکرد.",
+  "claudeLauncherSkipped": "شما دستور Claude خودتان را تنظیم کرده‌اید، بنابراین Pixebot Browser محافظت‌های مرورگر خود را اضافه نکرد.",
   "engine": {
     "default": "پیش‌فرض",
     "setDefault": "تنظیم به‌عنوان پیش‌فرض",
@@ -69,7 +69,7 @@
     "label": "موتور"
   },
   "cannotDeleteDefault": "عامل پیش‌فرض را نمی‌توان حذف کرد.",
-  "ruleMarkersBroken": "نشانگرهای بلوک AionUi را در دستورالعمل‌های این عامل اصلاح کنید.",
+  "ruleMarkersBroken": "نشانگرهای بلوک Pixebot Browser را در دستورالعمل‌های این عامل اصلاح کنید.",
   "ruleTooLong": "این دستورها بیش از حد طولانی‌اند",
   "notebook": {
     "title": "دفترچه",

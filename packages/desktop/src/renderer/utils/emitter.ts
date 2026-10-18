@@ -61,6 +61,8 @@ interface EventTypes {
    * the send box of that conversation may react.
    */
   'sendbox.mention.session': [{ id: string; name: string }, string | undefined];
+  /** A send box's microphone started (true) or stopped (false) recording; drives the widget's "listening" pose. */
+  'speech.recording': [boolean];
 }
 
 export const emitter = new EventEmitter<EventTypes>();

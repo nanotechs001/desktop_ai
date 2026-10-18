@@ -9,8 +9,9 @@ import { BROWSER_RULE_TEXT } from '@process/services/agentBrowser/browserRule';
 import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { FakeRelay } from './fakeRelay';
 
-const PANE_SENTENCE = 'Use this AionUi browser pane tool, never an external browser.';
-const NOT_AVAILABLE = 'AionUi browser is not available in this session. Start or restart the conversation from AionUi.';
+const PANE_SENTENCE = 'Use this Pixebot browser pane tool, never an external browser.';
+const NOT_AVAILABLE =
+  'Pixebot browser is not available in this session. Start or restart the conversation from Pixebot Browser.';
 
 let relay: FakeRelay;
 const closers: Array<() => Promise<void> | void> = [];
@@ -72,7 +73,7 @@ describe('aion-browser server', () => {
     );
   });
 
-  it('missing relay env → every action returns a clear "restart the conversation in AionUi" error, server stays up', async () => {
+  it('missing relay env → every action returns a clear "restart the conversation in Pixebot Browser" error, server stays up', async () => {
     const client = await connectClient({});
     for (const args of [
       { action: 'open' },
@@ -102,7 +103,7 @@ describe('aion-browser server', () => {
     const env = { ...relay.env, AION_BROWSER_RELAY_URL: 'ws://127.0.0.1:503/' };
     const reply = await callTabs(await connectClient(env), { action: 'list' });
     expect(reply.isError).toBe(true);
-    expect(textOf(reply)).toMatch(/^Could not reach the AionUi browser/);
+    expect(textOf(reply)).toMatch(/^Could not reach the Pixebot browser/);
   });
 
   it('turns an unreachable relay into a tool error instead of throwing', async () => {
@@ -111,7 +112,7 @@ describe('aion-browser server', () => {
     const client = await connectClient(env);
     const reply = await callTabs(client, { action: 'list' });
     expect(reply.isError).toBe(true);
-    expect(textOf(reply)).toMatch(/AionUi/);
+    expect(textOf(reply)).toMatch(/Pixebot Browser/);
     relay = await FakeRelay.start(); // for afterEach
   });
 });
@@ -154,7 +155,7 @@ describe('tabs open', () => {
     });
     const reply = await callTabs(await connectClient(relay.env), { action: 'open', url: 'https://example.com' });
     expect(reply.isError).toBe(true);
-    expect(textOf(reply)).toBe('Open a conversation in AionUi so the browser pane is available, then retry.');
+    expect(textOf(reply)).toBe('Open a conversation in Pixebot Browser so the browser pane is available, then retry.');
   });
 
   it('passes relay refusals (e.g. the tab limit) on as readable errors', async () => {

@@ -32,6 +32,8 @@ export type AgentBrowserOptions = {
   blockedPorts: () => readonly number[];
   /** The chat → Agent lookup the notebooks use (Task 13); without it every agent tab uses the default Agent profile. */
   resolveAgent?: (conversationId: string) => Promise<AgentResolution>;
+  /** True for the built-in default Agent (a regular chat): its chats browse in a temporary per-chat session. */
+  isDefaultAgent?: (agentId: string) => Promise<boolean>;
 };
 
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
@@ -156,18 +158,28 @@ const registerProviders = (
 };
 
 /**
- * The profile an agent's tabs open in: its chat's Agent, else (another engine, a built-in, no chat, a failed lookup,
- * an Agent whose browser data was deleted) the shared default Agent profile. Never Personal. Not `final` when the
- * lookup itself failed.
+ * The profile an agent's tabs open in. A VA Bot chat (a user-created Agent) uses that Agent's persistent profile. A
+ * regular chat (the built-in default Agent, a built-in preset, no Agent) uses its own temporary in-memory session,
+ * so nothing it signs in to outlives it or reaches another chat. Tabs with no chat (or an Agent whose browser data
+ * was deleted) fall back to the shared default Agent profile. Never Personal. Not `final` when the lookup failed.
  */
 export async function agentTabProfile(
   resolveAgent: AgentBrowserOptions['resolveAgent'],
-  conversationId: string | undefined
+  conversationId: string | undefined,
+  isDefaultAgent?: AgentBrowserOptions['isDefaultAgent']
 ): Promise<ProfileLookup> {
   const resolved = conversationId && resolveAgent ? await resolveAgent(conversationId) : null;
-  const profile = liveAgentProfile({ kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID });
   // A lookup that itself failed (not "no Agent") is retried later by the relay.
-  return { profile, final: !(resolved?.ok === false && resolved.transient === true) };
+  const final = !(resolved?.ok === false && resolved.transient === true);
+  if (conversationId) {
+    const regular =
+      !resolved?.ok ||
+      resolved.agentId === DEFAULT_AGENT_ID ||
+      (isDefaultAgent ? await isDefaultAgent(resolved.agentId).catch(() => false) : false);
+    if (regular) return { profile: { kind: 'temporary', conversationId }, final };
+  }
+  const profile = liveAgentProfile({ kind: 'agent', agentId: resolved?.ok ? resolved.agentId : DEFAULT_AGENT_ID });
+  return { profile, final };
 }
 
 /** `profile`, or the default Agent profile once that Agent's browser data was deleted (a client connected before). */
@@ -218,7 +230,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     // Only a tab in the profile's own partition answers, so a same-url tab elsewhere is never claimed.
     waitForTab: (url, conversationId, profile) =>
       waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(liveAgentProfile(profile))),
-    resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId),
+    resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
     requestConfirm: (request, signal) => confirms.request(request, undefined, signal),

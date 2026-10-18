@@ -72,7 +72,7 @@
     "high": "Élevé",
     "urgent": "Urgent"
   },
-  "browserAlwaysOn": "Toujours actif : les agents utilisent le volet navigateur d'AionUi",
+  "browserAlwaysOn": "Toujours actif : les agents utilisent le volet navigateur d'Pixebot Browser",
   "artifactsAlwaysOn": "Toujours actif : les agents s'en servent pour afficher pages et documents",
   "notesAlwaysOn": "Toujours actif : les agents enregistrent des leçons dans leur carnet"
 }

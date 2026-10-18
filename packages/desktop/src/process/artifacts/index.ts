@@ -239,6 +239,10 @@ const defaultAgentId = async (): Promise<string | null> => {
   return assistants.some((a) => a.id === id && a.source !== 'builtin') ? id : null;
 };
 
+/** True for the built-in default Agent (fixed id, or the one the user adopted as default): a regular chat. */
+export const isDefaultAgent = async (agentId: string): Promise<boolean> =>
+  agentId === DEFAULT_AGENT_ID || agentId === (await backendDefaultAgentDeps.getSetting(DEFAULT_AGENT_SETTING_KEY));
+
 /** A missing conversation is null; any other backend failure throws (the resolver retries next time). */
 const getConversation = async (id: string): Promise<{ assistant?: { id: string; source: string } } | null> => {
   try {

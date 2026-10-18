@@ -410,6 +410,8 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       // A plan renders in ConversationPlanBar, never in the stream. Filtered
       // here rather than rendered as null: a null row still occupies a slot.
       if (message.type === 'plan') continue;
+      // A newer agent CLI than the verified one is normal after it auto-updates: no chat notice for it.
+      if (message.type === 'tips' && message.content.code === 'CLI_VERSION_NEWER') continue;
       if (message.type === 'tool_group') {
         const writeFileResults = message.content.flatMap((item) =>
           item.name === 'WriteFile' && isWriteFileResult(item.result_display) ? [item.result_display] : []

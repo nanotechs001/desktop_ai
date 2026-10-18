@@ -1,0 +1,127 @@
+{
+  "version": 2,
+  "fps": 30,
+  "cellPx": 176,
+  "states": {
+    "idle": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 34,
+      "keyframeDurationMs": 140,
+      "sourceDurationMs": 1120,
+      "outputDurationMs": 1133.333,
+      "framePattern": "frames-30fps/idle/frame-%03d.png",
+      "preview": "previews-30fps/idle.webp"
+    },
+    "thinking": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 34,
+      "keyframeDurationMs": 140,
+      "sourceDurationMs": 1120,
+      "outputDurationMs": 1133.333,
+      "framePattern": "frames-30fps/thinking/frame-%03d.png",
+      "preview": "previews-30fps/thinking.webp"
+    },
+    "talking": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 22,
+      "keyframeDurationMs": 90,
+      "sourceDurationMs": 720,
+      "outputDurationMs": 733.333,
+      "framePattern": "frames-30fps/talking/frame-%03d.png",
+      "preview": "previews-30fps/talking.webp"
+    },
+    "sleeping": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 44,
+      "keyframeDurationMs": 180,
+      "sourceDurationMs": 1440,
+      "outputDurationMs": 1466.667,
+      "framePattern": "frames-30fps/sleeping/frame-%03d.png",
+      "preview": "previews-30fps/sleeping.webp"
+    },
+    "searching": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 27,
+      "keyframeDurationMs": 110,
+      "sourceDurationMs": 880,
+      "outputDurationMs": 900,
+      "framePattern": "frames-30fps/searching/frame-%03d.png",
+      "preview": "previews-30fps/searching.webp"
+    },
+    "working": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 24,
+      "keyframeDurationMs": 100,
+      "sourceDurationMs": 800,
+      "outputDurationMs": 800,
+      "framePattern": "frames-30fps/working/frame-%03d.png",
+      "preview": "previews-30fps/working.webp"
+    },
+    "turn-to-user": {
+      "fps": 30,
+      "loop": false,
+      "frameCount": 22,
+      "keyframeDurationMs": 90,
+      "sourceDurationMs": 720,
+      "outputDurationMs": 733.333,
+      "framePattern": "frames-30fps/turn-to-user/frame-%03d.png",
+      "preview": "previews-30fps/turn-to-user.webp"
+    },
+    "facing-user": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 34,
+      "keyframeDurationMs": 140,
+      "sourceDurationMs": 1120,
+      "outputDurationMs": 1133.333,
+      "framePattern": "frames-30fps/facing-user/frame-%03d.png",
+      "preview": "previews-30fps/facing-user.webp"
+    },
+    "dragging": {
+      "fps": 30,
+      "loop": true,
+      "frameCount": 29,
+      "keyframeDurationMs": 120,
+      "sourceDurationMs": 960,
+      "outputDurationMs": 966.667,
+      "framePattern": "frames-30fps/dragging/frame-%03d.png",
+      "preview": "previews-30fps/dragging.webp"
+    },
+    "drop-landing": {
+      "fps": 30,
+      "loop": false,
+      "frameCount": 22,
+      "keyframeDurationMs": 90,
+      "sourceDurationMs": 720,
+      "outputDurationMs": 733.333,
+      "framePattern": "frames-30fps/drop-landing/frame-%03d.png",
+      "preview": "previews-30fps/drop-landing.webp"
+    },
+    "appearing": {
+      "fps": 30,
+      "loop": false,
+      "frameCount": 21,
+      "keyframeDurationMs": 85,
+      "sourceDurationMs": 680,
+      "outputDurationMs": 700,
+      "framePattern": "frames-30fps/appearing/frame-%03d.png",
+      "preview": "previews-30fps/appearing.webp"
+    },
+    "disappearing": {
+      "fps": 30,
+      "loop": false,
+      "frameCount": 21,
+      "keyframeDurationMs": 85,
+      "sourceDurationMs": 680,
+      "outputDurationMs": 700,
+      "framePattern": "frames-30fps/disappearing/frame-%03d.png",
+      "preview": "previews-30fps/disappearing.webp"
+    }
+  }
+}

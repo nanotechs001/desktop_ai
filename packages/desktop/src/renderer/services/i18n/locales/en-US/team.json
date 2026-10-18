@@ -43,7 +43,7 @@
     "subAgentsPlaceholder": "Select teammate Agents",
     "confirm": "Confirm Create",
     "noSupportedAgents": "No supported Agents available",
-    "supportedAgentsHint": "Currently supports Claude and Aion CLI Agents. More Agents coming soon.",
+    "supportedAgentsHint": "Currently supports Claude and Pixebot CLI Agents. More Agents coming soon.",
     "leaderDesc": "Understands your goals and coordinates Agents to complete tasks",
     "searchPlaceholder": "Search",
     "noSearchResults": "No results found",

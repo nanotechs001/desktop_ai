@@ -13,5 +13,48 @@
   "resetPosition": "위치 초기화",
   "hide": "숨기기",
   "showHide": "표시/숨기기",
-  "desktopOnly": "데스크톱 펫은 데스크톱 애플리케이션에서만 사용할 수 있습니다. WebUI 브라우저 모드에서는 사용할 수 없습니다."
+  "desktopOnly": "데스크톱 펫은 데스크톱 애플리케이션에서만 사용할 수 있습니다. WebUI 브라우저 모드에서는 사용할 수 없습니다.",
+  "widget": {
+    "chatInWidget": "이 채팅은 플로팅 위젯에서 열려 있습니다.",
+    "returnChatHere": "채팅을 여기로 가져오기",
+    "showWidget": "플로팅 위젯으로 표시",
+    "openChat": "{{name}}와(과) 채팅 열기",
+    "untitledAgent": "에이전트",
+    "minimize": "최소화",
+    "closePopup": "채팅 닫기",
+    "returnToMain": "메인 창에서 열기",
+    "hideWidget": "위젯 숨기기",
+    "state": {
+      "idle": "준비됨",
+      "listening": "듣는 중…",
+      "thinking": "생각 중…",
+      "talking": "응답 중…",
+      "searching": "탐색 중…",
+      "working": "작업 중…",
+      "sleeping": "절전 중",
+      "error": "문제가 발생했습니다",
+      "offline": "오프라인",
+      "notification": "새 응답"
+    },
+    "settings": {
+      "title": "플로팅 에이전트 위젯",
+      "enabled": "플로팅 에이전트 위젯 사용",
+      "enabledDesc": "각 에이전트에 작업 표시줄 위의 데스크톱 로봇이 생기며, 클릭하면 채팅이 열립니다.",
+      "autoLaunch": "새 에이전트에 위젯 자동 실행",
+      "movement": "자율 이동",
+      "movementFrequency": "이동 빈도",
+      "frequency": {
+        "low": "낮음",
+        "medium": "보통",
+        "high": "높음"
+      },
+      "scale": "위젯 크기",
+      "alwaysOnTop": "항상 위에 표시",
+      "reduceMotion": "동작 줄이기",
+      "reduceMotionDesc": "정지 자세를 유지하고 대기 중 걷기를 멈춥니다.",
+      "muteVoice": "음성 끄기",
+      "muteVoiceDesc": "응답을 소리 내어 읽지 않습니다.",
+      "returnChats": "모든 채팅을 메인 창으로 가져오기"
+    }
+  }
 }

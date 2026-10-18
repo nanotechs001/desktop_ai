@@ -67,10 +67,10 @@
   "more": "Більше",
   "refresh": "Оновити",
   "readOnly": "Лише читання",
-  "tray.showWindow": "Показати AionUi",
+  "tray.showWindow": "Показати Pixebot Browser",
   "tray.newChat": "Новий чат",
   "tray.closeToTray": "Згорнути в трей",
-  "tray.about": "Про AionUi",
+  "tray.about": "Про Pixebot Browser",
   "tray.restart": "Перезапустити програму",
   "tray.quit": "Вийти",
   "tray.runningTasks": "Запущені завдання",
@@ -81,39 +81,39 @@
   "backendStartup": {
     "incompatibleRuntime": {
       "title": "Ця система не підтримується вбудованим backend",
-      "description": "AionUi відкрився, але локальний backend AionCore не може працювати в цій версії Linux. Оновіться до підтримуваного дистрибутива Linux і перезапустіть AionUi.",
+      "description": "Pixebot Browser відкрився, але локальний backend Pixebot Core не може працювати в цій версії Linux. Оновіться до підтримуваного дистрибутива Linux і перезапустіть Pixebot Browser.",
       "requiredVersions": "Потрібні символи середовища виконання: {{versions}}"
     },
     "incompleteInstallation": {
-      "title": "Встановлення AionUi неповне",
-      "description": "У цьому встановленні бракує потрібних локальних ресурсів, тому AionCore не може запуститися. Завантажте та перевстановіть останню версію AionUi. Якщо проблема повториться після перевстановлення, перевірте, чи захисне або антивірусне ПЗ не помістило AionCore у карантин.",
+      "title": "Встановлення Pixebot Browser неповне",
+      "description": "У цьому встановленні бракує потрібних локальних ресурсів, тому Pixebot Core не може запуститися. Завантажте та перевстановіть останню версію Pixebot Browser. Якщо проблема повториться після перевстановлення, перевірте, чи захисне або антивірусне ПЗ не помістило Pixebot Core у карантин.",
       "downloadLatest": "Завантажити останню версію",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностичний звіт надіслано",
       "diagnosticsReportFailed": "Не вдалося надіслати діагностичний звіт",
-      "runtimeComponentDescription": "У цій інсталяції бракує потрібних вбудованих компонентів середовища виконання, тому {{resource}} не може запуститися. Перевстановіть найновіший пакет AionUi. Якщо проблема повториться після перевстановлення, перевірте, чи не помістило програмне забезпечення безпеки або антивірус компоненти AionUi у карантин."
+      "runtimeComponentDescription": "У цій інсталяції бракує потрібних вбудованих компонентів середовища виконання, тому {{resource}} не може запуститися. Перевстановіть найновіший пакет Pixebot Browser. Якщо проблема повториться після перевстановлення, перевірте, чи не помістило програмне забезпечення безпеки або антивірус компоненти Pixebot Browser у карантин."
     },
     "packageArchitectureMismatch": {
-      "title": "AionUi package architecture mismatch",
-      "description": "This AionUi package is for {{packageArch}}, but this Mac is {{deviceArch}}. You may have downloaded the wrong package. Please download and install the {{expectedArch}} package."
+      "title": "Pixebot Browser package architecture mismatch",
+      "description": "This Pixebot Browser package is for {{packageArch}}, but this Mac is {{deviceArch}}. You may have downloaded the wrong package. Please download and install the {{expectedArch}} package."
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "AionUi відкрився, але AionCore зупинився під час ініціалізації локальних даних. Повторне встановлення AionUi може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
+      "description": "Pixebot Browser відкрився, але Pixebot Core зупинився під час ініціалізації локальних даних. Повторне встановлення Pixebot Browser може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
       "diagnosticsReportFailed": "Failed to send diagnostics report"
     },
     "databaseNewerThanApp": {
-      "title": "Потрібна новіша версія AionUi",
-      "description": "Ваші локальні дані створено новішою версією AionUi, і ця версія не може їх відкрити. Оновіть AionUi до останньої версії, щоб продовжити — дані цілі, перевстановлення чи скидання не потрібні.",
-      "descriptionWithVersion": "Ваші локальні дані створено версією AionUi, новішою за встановлену зараз (v{{currentVersion}}), тому ця версія не може їх відкрити. Оновіть AionUi до останньої версії, щоб продовжити — дані цілі, перевстановлення чи скидання не потрібні."
+      "title": "Потрібна новіша версія Pixebot Browser",
+      "description": "Ваші локальні дані створено новішою версією Pixebot Browser, і ця версія не може їх відкрити. Оновіть Pixebot Browser до останньої версії, щоб продовжити — дані цілі, перевстановлення чи скидання не потрібні.",
+      "descriptionWithVersion": "Ваші локальні дані створено версією Pixebot Browser, новішою за встановлену зараз (v{{currentVersion}}), тому ця версія не може їх відкрити. Оновіть Pixebot Browser до останньої версії, щоб продовжити — дані цілі, перевстановлення чи скидання не потрібні."
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "AionUi відкрився, але AionCore зупинився під час підготовки локальних даних запуску, як-от записи агентів або рушіїв. Повторне встановлення AionUi може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
+      "description": "Pixebot Browser відкрився, але Pixebot Core зупинився під час підготовки локальних даних запуску, як-от записи агентів або рушіїв. Повторне встановлення Pixebot Browser може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -121,7 +121,7 @@
     },
     "startupDirectory": {
       "title": "Startup directory is unavailable",
-      "description": "AionUi opened, but AionCore could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart AionUi.",
+      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -129,7 +129,7 @@
     },
     "recoverableDatabaseCorruption": {
       "title": "Локальні дані пошкоджено",
-      "description": "AionUi виявив пошкодження локальної бази даних і не може продовжити запуск. Після підтвердження стару базу даних буде збережено як резервну копію, а для продовження запуску буде створено нову локальну базу даних. Попередні розмови більше не відображатимуться, стара база даних збережеться як файл резервної копії.",
+      "description": "Pixebot Browser виявив пошкодження локальної бази даних і не може продовжити запуск. Після підтвердження стару базу даних буде збережено як резервну копію, а для продовження запуску буде створено нову локальну базу даних. Попередні розмови більше не відображатимуться, стара база даних збережеться як файл резервної копії.",
       "confirmRebuild": "Зберегти стару БД і створити нову",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsHint": "Надсилання діагностики не змінить локальну базу даних.",
@@ -145,8 +145,8 @@
       }
     },
     "transientConcurrentStartup": {
-      "title": "AionUi запускається",
-      "description": "Коли це вікно відкрилося, інший процес запуску AionUi усе ще використовував локальні дані. Це тимчасово, і ваші дані в безпеці — перевстановлення не потрібне. Зачекайте трохи та повторіть спробу або перезапустіть AionUi.",
+      "title": "Pixebot Browser запускається",
+      "description": "Коли це вікно відкрилося, інший процес запуску Pixebot Browser усе ще використовував локальні дані. Це тимчасово, і ваші дані в безпеці — перевстановлення не потрібне. Зачекайте трохи та повторіть спробу або перезапустіть Pixebot Browser.",
       "sendDiagnostics": "Send diagnostics",
       "diagnosticsSent": "Diagnostics sent",
       "diagnosticsReportSuccess": "Diagnostics report sent",
@@ -155,11 +155,11 @@
     },
     "pendingSlow": {
       "title": "Запуск",
-      "description": "AionCore запускається, зачекайте. Якщо він довго не відповідає, закрийте застосунок і відкрийте його знову."
+      "description": "Pixebot Core запускається, зачекайте. Якщо він довго не відповідає, закрийте застосунок і відкрийте його знову."
     },
     "exited": {
       "title": "Запуск не завершено",
-      "description": "AionCore не зміг завершити запуск і закрився. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд AionCore встановлено.",
+      "description": "Pixebot Core не зміг завершити запуск і закрився. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено.",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностику надіслано",
@@ -167,7 +167,7 @@
     },
     "portReportTimeout": {
       "title": "Час запуску вичерпано",
-      "description": "AionCore не завершив запуск за очікуваний час. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд AionCore встановлено.",
+      "description": "Pixebot Core не завершив запуск за очікуваний час. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено.",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностику надіслано",
@@ -175,7 +175,7 @@
     },
     "startupFailed": {
       "title": "Не вдалося запустити",
-      "description": "AionCore не вдалося запустити. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд AionCore встановлено.",
+      "description": "Pixebot Core не вдалося запустити. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено.",
       "sendDiagnostics": "Надіслати діагностику",
       "diagnosticsSent": "Діагностику надіслано",
       "diagnosticsReportSuccess": "Діагностику надіслано",

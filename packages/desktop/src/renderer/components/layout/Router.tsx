@@ -22,6 +22,22 @@ const LoginPage = React.lazy(() => import('@renderer/pages/login'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
+const AgentWidgetPage = React.lazy(() => import('@renderer/pages/agentWidget'));
+
+/**
+ * Floating agent widget windows. Rendered outside the app Layout (no sider,
+ * no titlebar); a transparent desktop robot never shows a login page or a
+ * full-screen loader, it just stays empty until the session is ready.
+ */
+const WidgetRoute: React.FC = () => {
+  const { status } = useAuth();
+  if (status !== 'authenticated') return null;
+  return (
+    <Suspense fallback={null}>
+      <AgentWidgetPage />
+    </Suspense>
+  );
+};
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<AppLoader />}>
@@ -68,6 +84,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           path='/login'
           element={status === 'authenticated' ? <Navigate to='/guid' replace /> : withRouteFallback(LoginPage)}
         />
+        <Route path='/widget/:id' element={<WidgetRoute />} />
         <Route element={<ProtectedLayout layout={layout} />}>
           <Route index element={<Navigate to='/guid' replace />} />
           <Route path='/guid' element={withRouteFallback(Guid)} />

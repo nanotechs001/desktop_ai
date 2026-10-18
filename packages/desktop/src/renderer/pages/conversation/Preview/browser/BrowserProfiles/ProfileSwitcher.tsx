@@ -12,18 +12,14 @@ import type { BrowserTabProfile } from '@/common/types/browser';
 import { iconColors } from '@/renderer/styles/colors';
 import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
 import { profilePresentation } from './ProfileBadge';
-import { useProfileAgents } from './useBrowserProfiles';
-
-const PERSONAL_KEY = 'personal';
-const AGENT_KEY_PREFIX = 'agent:';
+import { profileKeyOf, useProfileAgents } from './useBrowserProfiles';
 
 type ProfileSwitcherProps = {
   /** Opens a new tab in the chosen profile. */
   onOpen: (profile: BrowserTabProfile) => void;
 };
 
-const keyOf = (profile: BrowserTabProfile): string =>
-  profile.kind === 'agent' ? `${AGENT_KEY_PREFIX}${profile.agentId}` : PERSONAL_KEY;
+const keyOf = (profile: BrowserTabProfile): string => profileKeyOf(profile);
 
 /**
  * The new-tab menu's profile switcher: a new tab in Personal or in any Agent's profile, e.g. to sign that Agent in

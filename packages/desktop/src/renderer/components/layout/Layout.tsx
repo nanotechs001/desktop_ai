@@ -22,15 +22,17 @@ import { setCurrentConversation } from '@renderer/pages/conversation/explorer/cu
 import { useContainerWidth } from '@renderer/pages/conversation/hooks/useContainerWidth';
 import { useProjectExplorerColumnWidth } from '@renderer/hooks/ui/useProjectExplorerColumnWidth';
 import { useResizableSplit } from '@renderer/hooks/ui/useResizableSplit';
+import { useVerticalSplit } from '@renderer/pages/conversation/hooks/useVerticalSplit';
 import { useProjectPreviewRegionWidth } from '@renderer/hooks/ui/useProjectPreviewRegionWidth';
+import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
 import { useProjectPanelCollapse } from '@renderer/hooks/ui/useProjectPanelCollapse';
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
-import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
 import BrowserTabLayer from '@renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { useDefaultAgentSync, useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
+import { useAgentWidgetSync } from '@renderer/pages/agentWidget/useAgentWidgetSync';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
 import { useBrowserNotification } from '@renderer/hooks/system/notification/useBrowserNotification';
 import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/useDesktopTurnNotification';
@@ -39,6 +41,7 @@ import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShor
 import { isElectronDesktop } from '@renderer/utils/platform';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import UpdateMigrationDialog from '@/renderer/components/settings/UpdateMigrationDialog';
+import brandLogo from '@renderer/assets/logos/brand/app.png';
 import '@renderer/styles/layout.css';
 
 const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size = 18, strokeWidth = 4 }) => (
@@ -151,6 +154,7 @@ const Layout: React.FC<{
     setCollapsed((previous) => !previous);
   }, []);
   useConversationShortcuts({ navigate, toggleSider });
+  useAgentWidgetSync();
   // Expose navigate to code running outside the Router tree (e.g. the globally
   // mounted FeedbackReportModal's "via chat" action).
   useEffect(() => {
@@ -158,7 +162,7 @@ const Layout: React.FC<{
     return () => setGlobalNavigate(null);
   }, [navigate]);
   const { t } = useTranslation();
-  // The "AionUi" wordmark acts as Home / Back-to-Chat, but only from settings routes.
+  // The "Pixebot Browser" wordmark acts as Home / Back-to-Chat, but only from settings routes.
   // In non-settings routes the user is already "home", so it is a no-op (and not actionable).
   const isSettingsRoute = location.pathname.startsWith('/settings');
   // Only wired to the wordmark in the isSettingsRoute branch below, so the
@@ -189,6 +193,9 @@ const Layout: React.FC<{
     closePreview: closePreviewOnRouteChange,
     isOpen: isPreviewOpen,
     isMaximized: isPreviewMaximized,
+    isVaBotMode,
+    isVaChatCollapsed,
+    toggleVaChat,
   } = usePreviewContext();
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
@@ -220,12 +227,28 @@ const Layout: React.FC<{
   // 最大化：隐藏聊天区、让预览铺满它腾出的空间；左侧边栏与右侧资源管理器列均不动。
   // Maximized: hide the chat area and let the preview fill the space it vacated;
   // the left sidebar and the right explorer column are both left untouched.
-  const previewMaximized = previewRegionActive && isPreviewMaximized;
+  // VA Bot conversations: browser on top, [chat | files] underneath (vertical split).
+  // Regular chats keep the side-by-side [chat | preview | files] row.
+  const vaLayout = previewRegionActive && isVaBotMode;
+  // "Maximized" hides the chat: the VA Bot chat toggle, or the regular maximize button.
+  const previewMaximized = previewRegionActive && (isVaBotMode ? isVaChatCollapsed : isPreviewMaximized);
   const { widthPx: previewWidthPx, createDragHandle: createPreviewRegionDragHandle } = useProjectPreviewRegionWidth(
     mainRowWidth,
     explorerCollapsed ? 0 : explorerWidthPx,
-    previewRegionActive
+    previewRegionActive && !vaLayout
   );
+  const {
+    height: chatPaneHeightPx,
+    containerRef: previewSplitRef,
+    renderHandle: renderPreviewSplitHandle,
+  } = useVerticalSplit({
+    storageKey: 'chat-pane-height-px',
+    defaultHeight: 360,
+    // Dragging the divider to the bottom hides the chat (same as the chat button).
+    onCollapse: () => {
+      if (!isVaChatCollapsed) toggleVaChat();
+    },
+  });
   const routeLayoutMountedRef = useRef(false);
   useEffect(() => {
     if (!routeLayoutMountedRef.current) {
@@ -412,103 +435,87 @@ const Layout: React.FC<{
         )}
 
         <ArcoLayout className={'size-full layout flex-1 min-h-0'}>
-          <ArcoLayout.Sider
-            collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
-            collapsed={collapsed}
-            width={siderWidth}
-            className={classNames('!bg-2 layout-sider', {
-              collapsed: collapsed,
-            })}
-            style={siderStyle}
-          >
-            <ArcoLayout.Header
-              className={classNames(
-                'flex items-center pt-8px pb-8px layout-sider-header',
-                collapsed ? 'justify-center px-0' : 'justify-start ps-18px pe-16px gap-12px',
-                isMobile && 'layout-sider-header--mobile'
-              )}
-            >
-              <div
-                className={classNames('bg-black shrink-0 size-32px relative rd-0.5rem', {
-                  '!size-24px': collapsed,
-                })}
-                onClick={onClick}
-              >
-                <svg
-                  className={classNames('w-5.5 h-5.5 absolute inset-0 m-auto', {
-                    'scale-140': !collapsed,
-                  })}
-                  viewBox='0 0 80 80'
-                  fill='none'
-                >
-                  <path
-                    key='logo-path-1'
-                    d='M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20'
-                    fill='white'
-                  ></path>
-                  <circle key='logo-circle' cx='40' cy='46' r='3' fill='white'></circle>
-                  <path
-                    key='logo-path-2'
-                    d='M18 50 Q40 70 62 50'
-                    stroke='white'
-                    strokeWidth='3.5'
-                    fill='none'
-                    strokeLinecap='round'
-                  ></path>
-                </svg>
-              </div>
-              {isSettingsRoute ? (
-                <Tooltip content={t('common.back', { defaultValue: 'Back to Chat' })} position='bottom'>
-                  <div
-                    className='text-16px text-t-primary collapsed-hidden font-semibold cursor-pointer'
-                    role='button'
-                    tabIndex={0}
-                    aria-label={t('common.back', { defaultValue: 'Back to Chat' })}
-                    onClick={handleBrandHome}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleBrandHome();
-                      }
-                    }}
-                  >
-                    AionUi
-                  </div>
-                </Tooltip>
-              ) : (
-                <div className='text-16px text-t-primary collapsed-hidden font-semibold'>AionUi</div>
-              )}
-              {isMobile && !collapsed && (
-                <button
-                  type='button'
-                  className='app-titlebar__button app-titlebar__button--mobile'
-                  onClick={() => setCollapsed(true)}
-                  title='Collapse sidebar'
-                  aria-label='Collapse sidebar'
-                >
-                  <SidebarIcon size={18} strokeWidth={2.5} />
-                </button>
-              )}
-              {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
-            </ArcoLayout.Header>
-            <ArcoLayout.Content className='pt-0 px-8px pb-0 layout-sider-content'>
-              {React.isValidElement(sider)
-                ? React.cloneElement(sider, {
-                    onSessionClick: () => {
-                      cleanupSiderTooltips();
-                      if (isMobile) setCollapsed(true);
-                    },
-                    collapsed,
-                  } as any)
-                : sider}
-            </ArcoLayout.Content>
-            {!isMobile &&
-              createSiderDragHandle({
-                className: 'z-20',
-                style: { right: '-4px', width: '8px' },
-                linePlacement: 'start',
+          {/* Desktop: navigation lives in the titlebar's top-right corner; the sider only holds the Settings menu. */}
+          {(isMobile || isSettingsRoute) && (
+            <ArcoLayout.Sider
+              collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
+              collapsed={collapsed}
+              width={siderWidth}
+              className={classNames('!bg-2 layout-sider', {
+                collapsed: collapsed,
               })}
-          </ArcoLayout.Sider>
+              style={siderStyle}
+            >
+              <ArcoLayout.Header
+                className={classNames(
+                  'flex items-center pt-8px pb-8px layout-sider-header',
+                  collapsed ? 'justify-center px-0' : 'justify-start ps-18px pe-16px gap-12px',
+                  isMobile && 'layout-sider-header--mobile'
+                )}
+              >
+                <img
+                  src={brandLogo}
+                  alt=''
+                  draggable={false}
+                  data-brand-logo
+                  className={classNames('shrink-0 size-32px object-contain cursor-pointer', {
+                    '!size-24px': collapsed,
+                  })}
+                  onClick={onClick}
+                />
+                {isSettingsRoute ? (
+                  <Tooltip content={t('common.back', { defaultValue: 'Back to Chat' })} position='bottom'>
+                    <div
+                      className='text-16px text-t-primary collapsed-hidden font-semibold cursor-pointer'
+                      role='button'
+                      tabIndex={0}
+                      aria-label={t('common.back', { defaultValue: 'Back to Chat' })}
+                      onClick={handleBrandHome}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleBrandHome();
+                        }
+                      }}
+                    >
+                      Pixebot Browser
+                    </div>
+                  </Tooltip>
+                ) : (
+                  <div className='text-16px text-t-primary collapsed-hidden font-semibold'>Pixebot Browser</div>
+                )}
+                {isMobile && !collapsed && (
+                  <button
+                    type='button'
+                    className='app-titlebar__button app-titlebar__button--mobile'
+                    onClick={() => setCollapsed(true)}
+                    title='Collapse sidebar'
+                    aria-label='Collapse sidebar'
+                  >
+                    <SidebarIcon size={18} strokeWidth={2.5} />
+                  </button>
+                )}
+                {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
+              </ArcoLayout.Header>
+              <ArcoLayout.Content className='pt-0 px-8px pb-0 layout-sider-content'>
+                {React.isValidElement(sider)
+                  ? React.cloneElement(sider, {
+                      onSessionClick: () => {
+                        cleanupSiderTooltips();
+                        if (isMobile) setCollapsed(true);
+                      },
+                      collapsed,
+                    } as any)
+                  : sider}
+              </ArcoLayout.Content>
+              {!isMobile &&
+                createSiderDragHandle({
+                  className: 'z-20',
+                  style: { right: '-4px', width: '8px' },
+                  linePlacement: 'start',
+                })}
+            </ArcoLayout.Sider>
+          )}
 
           {/* Content + project Explorer share one measured flex row (stage3
                 FULL / P2). `mainRowRef` gives the [content|explorer] width for the
@@ -516,74 +523,103 @@ const Layout: React.FC<{
                 explorer column is a sibling of the route content, above the
                 per-conversation subtree → persists across same-project switches. */}
           <div ref={mainRowRef} className='flex flex-1 min-h-0 overflow-hidden'>
-            <ArcoLayout.Content
-              className={'bg-1 layout-content flex flex-col min-h-0 flex-1'}
-              onClick={() => {
-                if (isMobile && !collapsed) setCollapsed(true);
-              }}
-              style={
-                isMobile
-                  ? {
-                      width: '100%',
-                    }
-                  : previewMaximized
-                    ? // 最大化时聊天区隐藏（保持挂载不卸载，还原后即刻恢复）
-                      // Hidden while maximized (kept mounted so restoring is instant)
-                      { display: 'none' }
-                    : undefined
-              }
+            {/* Chat-first DOM order in both layouts, so the chat never remounts when the
+                  preview toggles or the layout switches. VA Bot: column-reverse puts the
+                  browser on top. Regular: a row, chat left of the preview. */}
+            <div
+              ref={previewSplitRef}
+              className={vaLayout ? 'flex flex-col-reverse flex-1 min-w-0 min-h-0' : 'flex flex-1 min-w-0 min-h-0'}
             >
-              <Outlet />
-              <PwaPullToRefresh />
-              <Suspense fallback={null}>
-                <UpdateModal />
-              </Suspense>
-              {IS_DISCONTINUED_BUILD && <UpdateMigrationDialog />}
-            </ArcoLayout.Content>
-            {/* Hoisted preview region (project conversations only). Structurally
+              {/* Bottom row (VA Bot: chat + files side by side). Hidden, but kept mounted
+                    so showing it again is instant, while the chat is collapsed/maximized away. */}
+              <div
+                className='flex min-w-0 min-h-0'
+                style={
+                  previewMaximized
+                    ? { display: 'none' }
+                    : vaLayout
+                      ? { flex: `0 0 ${chatPaneHeightPx}px` }
+                      : { flex: '1 1 0' }
+                }
+              >
+                <ArcoLayout.Content
+                  className={'bg-1 layout-content flex flex-col min-h-0 min-w-0 flex-1'}
+                  data-chat-pane
+                  onClick={() => {
+                    if (isMobile && !collapsed) setCollapsed(true);
+                  }}
+                  style={isMobile ? { width: '100%' } : undefined}
+                >
+                  <Outlet />
+                  <PwaPullToRefresh />
+                  <Suspense fallback={null}>
+                    <UpdateModal />
+                  </Suspense>
+                  {IS_DISCONTINUED_BUILD && <UpdateMigrationDialog />}
+                </ArcoLayout.Content>
+                {!isMobile && vaLayout && (
+                  <ProjectPanelHost
+                    widthPx={explorerWidthPx}
+                    collapsed={explorerCollapsed}
+                    dragHandle={createExplorerDragHandle({
+                      className: 'absolute start-0 top-0 bottom-0 z-20',
+                      reverse: true,
+                    })}
+                  />
+                )}
+              </div>
+              {vaLayout && !previewMaximized && renderPreviewSplitHandle()}
+              {/* Hoisted preview region (project conversations only). Structurally
                   persistent: lives above the per-conversation subtree, so a
                   same-project conversation switch does not remount it. */}
-            {previewRegionActive && (
-              <div
-                data-project-preview-region
-                className='preview-panel flex flex-col relative overflow-visible'
-                style={{
-                  // 最大化时铺满聊天区腾出的空间（explorer 列仍占其固定宽度）；
-                  // 否则用拖拽得到的固定宽度。还原后自动回到该宽度。
-                  // Maximized: fill the space the chat vacated (the explorer column
-                  // keeps its own fixed width); otherwise the dragged fixed width,
-                  // which restoring returns to automatically.
-                  ...(previewMaximized
-                    ? { flexGrow: 1, flexShrink: 1, flexBasis: 0 }
-                    : { width: `${Math.round(previewWidthPx)}px`, flexGrow: 0, flexShrink: 0 }),
-                  // 只保留左边框作为与会话区的分界；上/右/下不留边距，
-                  // 否则窗口底色会从缝隙里透出来（深色模式下尤其突兀）。
-                  // Left border only, as the divider from the chat area. No outer
-                  // margins: any gap would expose the window's own background,
-                  // which is jarring in dark mode.
-                  borderLeft: '1px solid var(--bg-3)',
-                  minWidth: `${MIN_PREVIEW_PANEL_PX}px`,
-                  boxSizing: 'border-box',
-                }}
-              >
-                {/* 最大化时聊天区已隐藏，拖拽把手无处可拖，隐藏之。
-                      While maximized the chat is hidden, so the resize handle has
-                      nothing to drag against — hide it. */}
-                {!previewMaximized &&
-                  createPreviewRegionDragHandle({
-                    className: 'absolute top-0 bottom-0 z-30',
-                    style: { width: '20px', left: '-20px' },
-                    reverse: true,
-                    linePlacement: 'end',
-                    lineClassName: 'opacity-30 group-hover:opacity-100 group-active:opacity-100',
-                    lineStyle: { width: '2px' },
-                  })}
-                <div className='h-full w-full overflow-hidden'>
-                  <PreviewPanel />
+              {previewRegionActive && (
+                <div
+                  data-project-preview-region
+                  className='preview-panel flex flex-col relative overflow-visible'
+                  style={
+                    vaLayout || previewMaximized
+                      ? {
+                          // Fills the space the chat leaves (all of it when the chat is hidden).
+                          flexGrow: 1,
+                          flexShrink: 1,
+                          flexBasis: 0,
+                          minHeight: 0,
+                          minWidth: 0,
+                          borderBottom: vaLayout && !previewMaximized ? '1px solid var(--bg-3)' : undefined,
+                          borderLeft: vaLayout ? undefined : '1px solid var(--bg-3)',
+                          boxSizing: 'border-box',
+                        }
+                      : {
+                          // Regular chats: the dragged fixed width beside the chat. Left border
+                          // only, as the divider; no outer margins (the window background would
+                          // show through, jarring in dark mode).
+                          width: `${Math.round(previewWidthPx)}px`,
+                          flexGrow: 0,
+                          flexShrink: 0,
+                          borderLeft: '1px solid var(--bg-3)',
+                          minWidth: `${MIN_PREVIEW_PANEL_PX}px`,
+                          boxSizing: 'border-box',
+                        }
+                  }
+                >
+                  {/* While the chat is hidden the width handle has nothing to drag against. */}
+                  {!vaLayout &&
+                    !previewMaximized &&
+                    createPreviewRegionDragHandle({
+                      className: 'absolute top-0 bottom-0 z-30',
+                      style: { width: '20px', left: '-20px' },
+                      reverse: true,
+                      linePlacement: 'end',
+                      lineClassName: 'opacity-30 group-hover:opacity-100 group-active:opacity-100',
+                      lineStyle: { width: '2px' },
+                    })}
+                  <div className='h-full w-full overflow-hidden'>
+                    <PreviewPanel />
+                  </div>
                 </div>
-              </div>
-            )}
-            {!isMobile && (
+              )}
+            </div>
+            {!isMobile && !vaLayout && (
               <ProjectPanelHost
                 widthPx={explorerWidthPx}
                 collapsed={explorerCollapsed}

@@ -52,6 +52,6 @@ export const claudeLauncherDeps: ClaudeLauncherDeps = {
   },
   warn(message) {
     console.warn(`[AionUi] ${message}`);
-    void showNotification({ title: 'AionUi', body: i18n.t('agent.claudeLauncherSkipped') });
+    void showNotification({ title: 'Pixebot Browser', body: i18n.t('agent.claudeLauncherSkipped') });
   },
 };

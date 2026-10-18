@@ -13,5 +13,48 @@
   "resetPosition": "Konumu Sıfırla",
   "hide": "Gizle",
   "showHide": "Göster/Gizle",
-  "desktopOnly": "Masaüstü evcil hayvanı yalnızca masaüstü uygulamasında kullanılabilir. WebUI tarayıcı modunda kullanılamaz."
+  "desktopOnly": "Masaüstü evcil hayvanı yalnızca masaüstü uygulamasında kullanılabilir. WebUI tarayıcı modunda kullanılamaz.",
+  "widget": {
+    "chatInWidget": "Bu sohbet kayan widget içinde açık.",
+    "returnChatHere": "Sohbeti buraya geri al",
+    "showWidget": "Kayan widget olarak göster",
+    "openChat": "{{name}} ile sohbeti aç",
+    "untitledAgent": "Ajan",
+    "minimize": "Küçült",
+    "closePopup": "Sohbeti kapat",
+    "returnToMain": "Ana pencerede aç",
+    "hideWidget": "Widget’ı gizle",
+    "state": {
+      "idle": "Hazır",
+      "listening": "Dinliyor…",
+      "thinking": "Düşünüyor…",
+      "talking": "Yanıtlıyor…",
+      "searching": "Geziniyor…",
+      "working": "Çalışıyor…",
+      "sleeping": "Uyuyor",
+      "error": "Bir sorun oluştu",
+      "offline": "Çevrimdışı",
+      "notification": "Yeni yanıt"
+    },
+    "settings": {
+      "title": "Kayan ajan widget’ları",
+      "enabled": "Kayan ajan widget’larını etkinleştir",
+      "enabledDesc": "Her ajan, görev çubuğunda duran ve sohbetini açan bir masaüstü robotu alır.",
+      "autoLaunch": "Yeni ajanlar için widget başlat",
+      "movement": "Otomatik hareket",
+      "movementFrequency": "Hareket sıklığı",
+      "frequency": {
+        "low": "Düşük",
+        "medium": "Orta",
+        "high": "Yüksek"
+      },
+      "scale": "Widget boyutu",
+      "alwaysOnTop": "Her zaman üstte",
+      "reduceMotion": "Hareketi azalt",
+      "reduceMotionDesc": "Sabit pozlar kullan ve boştayken yürümeyi durdur.",
+      "muteVoice": "Sesi kapat",
+      "muteVoiceDesc": "Yanıtları sesli okuma.",
+      "returnChats": "Tüm sohbetleri ana pencereye geri al"
+    }
+  }
 }

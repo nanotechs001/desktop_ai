@@ -61,7 +61,7 @@ vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview', () => ({
-  usePreviewContext: () => ({ openPreview: vi.fn() }),
+  usePreviewContext: () => ({ openPreview: vi.fn(), setVaBotMode: vi.fn() }),
 }));
 
 function legacyConversation(type: 'gemini' | 'codex' | 'openclaw-gateway' | 'nanobot' | 'remote'): TChatConversation {

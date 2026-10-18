@@ -57,7 +57,7 @@
     "initializingTooltip": "Der Agent wird initialisiert. Verbinden Sie ihn erneut, sobald er bereit ist",
     "processingTooltip": "Warten Sie auf das Ende der aktuellen Antwort, bevor Sie neu verbinden"
   },
-  "claudeLauncherSkipped": "Du hast einen eigenen Claude-Befehl festgelegt, daher hat AionUi seine Browser-Schutzmaßnahmen nicht hinzugefügt.",
+  "claudeLauncherSkipped": "Du hast einen eigenen Claude-Befehl festgelegt, daher hat Pixebot Browser seine Browser-Schutzmaßnahmen nicht hinzugefügt.",
   "engine": {
     "default": "Standard",
     "setDefault": "Als Standard festlegen",
@@ -69,7 +69,7 @@
     "label": "Engine"
   },
   "cannotDeleteDefault": "Der Standard-Agent kann nicht gelöscht werden.",
-  "ruleMarkersBroken": "Korrigiere die AionUi-Blockmarkierungen in den Anweisungen dieses Agents.",
+  "ruleMarkersBroken": "Korrigiere die Pixebot Browser-Blockmarkierungen in den Anweisungen dieses Agents.",
   "ruleTooLong": "Diese Anweisungen sind zu lang",
   "notebook": {
     "title": "Notizbuch",

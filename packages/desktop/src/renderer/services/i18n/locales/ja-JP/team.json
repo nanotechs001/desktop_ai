@@ -43,7 +43,7 @@
     "subAgentsPlaceholder": "チームメンバーのエージェントを選択",
     "confirm": "Confirm Create",
     "noSupportedAgents": "利用可能なエージェントが見つかりません",
-    "supportedAgentsHint": "現在 Claude と Aion CLI のエージェントに対応しています。ほかのエージェントも順次追加予定です。",
+    "supportedAgentsHint": "現在 Claude と Pixebot CLI のエージェントに対応しています。ほかのエージェントも順次追加予定です。",
     "leaderDesc": "目標を理解し、エージェントを調整してタスクを完了します",
     "searchPlaceholder": "Search",
     "noSearchResults": "結果が見つかりません",

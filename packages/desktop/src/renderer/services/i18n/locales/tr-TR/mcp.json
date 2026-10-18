@@ -72,7 +72,7 @@
     "high": "Yüksek",
     "urgent": "Acil"
   },
-  "browserAlwaysOn": "Her zaman açık: ajanlar AionUi tarayıcı panelini kullanır",
+  "browserAlwaysOn": "Her zaman açık: ajanlar Pixebot Browser tarayıcı panelini kullanır",
   "artifactsAlwaysOn": "Her zaman açık: ajanlar sayfa ve belgeleri göstermek için kullanır",
   "notesAlwaysOn": "Her zaman açık: ajanlar öğrendiklerini not defterine kaydeder"
 }

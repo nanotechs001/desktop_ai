@@ -6,6 +6,7 @@
 
 import type { SpeechToTextConfig } from '@/common/types/provider/speech';
 import type { Theme } from '@/common/theme/types';
+import type { AgentWidgetPersistedState } from '@/common/types/agent/agentWidget';
 import { buildStorage } from '@/common/platform/storage';
 
 // 系统配置存储
@@ -86,6 +87,9 @@ export interface IConfigStorageRefer {
   // Desktop Pet: whether tool-call confirmations are routed to the pet's bubble
   // (true) or remain in the main chat window (false). Default true.
   'pet.confirmEnabled'?: boolean;
+  // Floating agent widgets: settings + per-conversation widget records
+  // (position, popup/chat state). Holds no chat content — that stays in aioncore.
+  agentWidget?: AgentWidgetPersistedState;
 }
 
 /**

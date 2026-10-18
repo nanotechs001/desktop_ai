@@ -11,7 +11,7 @@ import { RelayClient } from '@process/resources/builtinMcp/aionBrowser/relayClie
 import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
 import { FakeRelay } from './fakeRelay';
 
-const PANE_SENTENCE = 'Use this AionUi browser pane tool, never an external browser.';
+const PANE_SENTENCE = 'Use this Pixebot browser pane tool, never an external browser.';
 const PAUSED = 'Paused: the user took over this tab. Wait for the user to resume.';
 
 type ToolReply = {

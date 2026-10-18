@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { BrowserTabProfile } from '@/common/types/browser';
+import { profileKeyOf } from './BrowserProfiles/useBrowserProfiles';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
 import ConfirmPrompt from './BrowserChrome/ConfirmPrompt';
 import PermissionPrompt from './BrowserChrome/PermissionPrompt';
@@ -124,8 +125,7 @@ const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } =>
 };
 
 /** A stable key per browser profile. */
-const profileKey = (profile: BrowserTabProfile | undefined): string =>
-  profile?.kind === 'agent' ? `agent:${profile.agentId}` : 'personal';
+const profileKey = (profile: BrowserTabProfile | undefined): string => profileKeyOf(profile);
 
 /** The `<webview>` of a tab in the layer, if mounted. */
 const webviewOf = (layer: HTMLElement, tabId: string): HTMLElement | null =>

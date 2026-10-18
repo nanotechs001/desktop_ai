@@ -11,10 +11,10 @@ import { parseConversationId } from '@process/services/agentBrowser/relay/relayT
 import type { ReportedAction } from './actions';
 import { watchFrames } from './frames';
 
-/** Thrown by {@link RelayClient.connect} when the AionUi relay env vars are absent or unusable. */
+/** Thrown by {@link RelayClient.connect} when the Pixebot Browser relay env vars are absent or unusable. */
 export const RELAY_ENV_MISSING = 'relay-env-missing';
 
-/** The relay could not be reached (AionUi not running, wrong token, ...). */
+/** The relay could not be reached (Pixebot Browser not running, wrong token, ...). */
 export class RelayConnectError extends Error {
   constructor(message: string) {
     super(message);
@@ -90,7 +90,7 @@ const isRelayTab = (value: unknown): value is RelayTab => {
 };
 
 /**
- * The aion-browser server's link to the AionUi agent relay (a token-guarded loopback WebSocket speaking CDP).
+ * The aion-browser server's link to the Pixebot Browser agent relay (a token-guarded loopback WebSocket speaking CDP).
  * Connects lazily on first use and again after the socket drops, waiting out a capped backoff after failures.
  * Per-connection state (CDP sessions, the current tab) is forgotten when the connection goes, because the
  * relay ties tab ownership to the connection.
@@ -120,7 +120,7 @@ export class RelayClient {
 
   /** The live connection. Call after another method has connected; throws when the socket is gone. */
   get connection(): CdpConnection {
-    if (!this.conn || this.conn.closed) throw new Error('The connection to the AionUi browser was lost');
+    if (!this.conn || this.conn.closed) throw new Error('The connection to the Pixebot browser was lost');
     return this.conn;
   }
 
@@ -134,7 +134,7 @@ export class RelayClient {
   async openTab(url: string): Promise<string> {
     const conn = await this.ensureConnected();
     const { targetId } = await conn.send<{ targetId?: unknown }>('Target.createTarget', { url });
-    if (typeof targetId !== 'string') throw new Error('The AionUi browser returned no tab id');
+    if (typeof targetId !== 'string') throw new Error('The Pixebot browser returned no tab id');
     return targetId;
   }
 
@@ -166,7 +166,7 @@ export class RelayClient {
     const attach = conn
       .send<{ sessionId?: unknown }>('Target.attachToTarget', { targetId, flatten: true })
       .then(async ({ sessionId }) => {
-        if (typeof sessionId !== 'string') throw new Error('The AionUi browser returned no session id');
+        if (typeof sessionId !== 'string') throw new Error('The Pixebot browser returned no session id');
         // Keeps rAF, focus and menus working in a tab the user is not looking at (spec §4 Observation step 1).
         await conn.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
         if (this.sessions.get(targetId) === attach) this.sessionIds.set(targetId, sessionId);

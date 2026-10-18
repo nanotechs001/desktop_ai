@@ -47,3 +47,16 @@ export function pickDefaultEngineId(engines: readonly EngineEntry[], storedId: s
  */
 export const isUndeletableAgent = (assistantId: string, storedDefaultId: string | undefined): boolean =>
   assistantId === DEFAULT_AGENT_ID || assistantId === storedDefaultId;
+
+/**
+ * A VA Bot is an Agent the user created: not the built-in default Agent, not a built-in preset.
+ * VA Bot conversations get the persistent browser profile, the browser-on-top layout and the
+ * taskbar robot; every other conversation is a regular chat with a temporary browser.
+ */
+export const isVaBotAgent = (
+  assistant: { id?: string; source?: string } | null | undefined,
+  storedDefaultId: string | undefined
+): boolean => {
+  const id = assistant?.id;
+  return Boolean(id) && assistant?.source !== 'builtin' && !isUndeletableAgent(id as string, storedDefaultId);
+};

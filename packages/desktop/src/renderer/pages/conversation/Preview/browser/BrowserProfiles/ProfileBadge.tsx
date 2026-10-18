@@ -5,7 +5,7 @@
  */
 
 import { Tooltip } from '@arco-design/web-react';
-import { User } from '@icon-park/react';
+import { Hourglass, User } from '@icon-park/react';
 import type { TFunction } from 'i18next';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +27,12 @@ export function profilePresentation(
   t: TFunction,
   size: number = DEFAULT_SIZE_PX
 ): AgentPresentation {
+  if (profile?.kind === 'temporary') {
+    return {
+      name: t('preview.browserChrome.profile.temporary'),
+      avatar: <Hourglass theme='outline' size={size} fill={iconColors.secondary} />,
+    };
+  }
   if (profile?.kind !== 'agent') {
     return {
       name: t('preview.browserChrome.profile.personal'),

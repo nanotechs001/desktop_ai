@@ -57,7 +57,7 @@
     "initializingTooltip": "에이전트를 초기화하는 중입니다. 완료된 후 다시 연결하세요",
     "processingTooltip": "현재 답변이 완료된 후 다시 연결하세요"
   },
-  "claudeLauncherSkipped": "직접 설정한 Claude 명령이 있어 AionUi가 브라우저 보호 장치를 추가하지 않았습니다.",
+  "claudeLauncherSkipped": "직접 설정한 Claude 명령이 있어 Pixebot Browser가 브라우저 보호 장치를 추가하지 않았습니다.",
   "engine": {
     "default": "기본",
     "setDefault": "기본으로 설정",
@@ -69,7 +69,7 @@
     "label": "엔진"
   },
   "cannotDeleteDefault": "기본 에이전트는 삭제할 수 없습니다.",
-  "ruleMarkersBroken": "이 에이전트 지침의 AionUi 블록 마커를 수정하세요.",
+  "ruleMarkersBroken": "이 에이전트 지침의 Pixebot Browser 블록 마커를 수정하세요.",
   "ruleTooLong": "이 지시가 너무 깁니다",
   "notebook": {
     "title": "노트",

@@ -12,7 +12,12 @@ import { installContextMenu } from './contextMenu/contextMenuInstall';
 import { installDownloads } from './downloads';
 import { initBrowserExtensions, installExtensionProtocols, type BrowserExtensions } from './extensions';
 import { installPermissions } from './permissions';
-import { partitionOfSession, profileOfPartition, rememberBrowserSession } from './profiles/browserProfiles';
+import {
+  isTemporaryPartition,
+  partitionOfSession,
+  profileOfPartition,
+  rememberBrowserSession,
+} from './profiles/browserProfiles';
 import { installBrowserShortcuts } from './shortcuts';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
@@ -183,6 +188,8 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
     if (contents.getType() === 'webview') extensionsOf(contents)?.addTab(contents);
   });
 
+  onBrowserContentsCreated(wipeTemporarySessionWhenClosed);
+
   app.on('web-contents-created', (_event, contents) => {
     if (!isBrowserContents(contents, deps.getMainWindow())) return;
     // Snapshot: registering or unsubscribing during dispatch only affects later contents.
@@ -194,6 +201,32 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
         logListenerError(error);
       }
     }
+  });
+}
+
+/** Open tabs/popups per regular-chat temporary partition. */
+const liveTemporaryContents = new Map<string, number>();
+
+/**
+ * A regular chat's temporary browser lives only while its tabs do: when its last tab or popup closes, its cookies,
+ * storage and cache are wiped (the in-memory session is gone on restart anyway). The session itself stays
+ * registered, so reopening a tab reuses it, empty, without installing its handlers twice.
+ */
+function wipeTemporarySessionWhenClosed(contents: Electron.WebContents): void {
+  const partition = partitionOfSession(contents.session);
+  if (!partition || !isTemporaryPartition(partition)) return;
+  const browserSession = contents.session;
+  liveTemporaryContents.set(partition, (liveTemporaryContents.get(partition) ?? 0) + 1);
+  contents.once('destroyed', () => {
+    const left = (liveTemporaryContents.get(partition) ?? 1) - 1;
+    if (left > 0) {
+      liveTemporaryContents.set(partition, left);
+      return;
+    }
+    liveTemporaryContents.delete(partition);
+    Promise.all([browserSession.clearStorageData(), browserSession.clearCache()]).catch((error: unknown) => {
+      console.warn('[BrowserSession] could not wipe a temporary chat browser:', error);
+    });
   });
 }
 

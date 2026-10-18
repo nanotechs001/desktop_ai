@@ -57,7 +57,7 @@
     "initializingTooltip": "The agent is initializing. Reconnect when it is ready",
     "processingTooltip": "Wait for the current reply to finish before reconnecting"
   },
-  "claudeLauncherSkipped": "You set your own Claude command, so AionUi did not add its browser safeguards.",
+  "claudeLauncherSkipped": "You set your own Claude command, so Pixebot Browser did not add its browser safeguards.",
   "engine": {
     "default": "Default",
     "setDefault": "Set as default",
@@ -69,7 +69,7 @@
     "label": "Engine"
   },
   "cannotDeleteDefault": "The default Agent can't be deleted.",
-  "ruleMarkersBroken": "Fix the AionUi block markers in this Agent's instructions.",
+  "ruleMarkersBroken": "Fix the Pixebot Browser block markers in this Agent's instructions.",
   "ruleTooLong": "These instructions are too long",
   "notebook": {
     "title": "Notebook",

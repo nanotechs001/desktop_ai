@@ -57,7 +57,7 @@
     "initializingTooltip": "O agente está sendo inicializado. Reconecte quando estiver pronto",
     "processingTooltip": "Aguarde a resposta atual terminar antes de reconectar"
   },
-  "claudeLauncherSkipped": "Você definiu seu próprio comando do Claude, então o AionUi não adicionou suas proteções de navegador.",
+  "claudeLauncherSkipped": "Você definiu seu próprio comando do Claude, então o Pixebot Browser não adicionou suas proteções de navegador.",
   "engine": {
     "default": "Padrão",
     "setDefault": "Definir como padrão",
@@ -69,7 +69,7 @@
     "label": "Motor"
   },
   "cannotDeleteDefault": "O agente padrão não pode ser excluído.",
-  "ruleMarkersBroken": "Corrija os marcadores de bloco do AionUi nas instruções deste agente.",
+  "ruleMarkersBroken": "Corrija os marcadores de bloco do Pixebot Browser nas instruções deste agente.",
   "ruleTooLong": "Estas instruções são longas demais",
   "notebook": {
     "title": "Caderno",
