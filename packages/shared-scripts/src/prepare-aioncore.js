@@ -587,5 +587,6 @@ module.exports = {
   getActionsArtifactMissingMessage,
   getActionsArtifactName,
   prepareAioncore,
+  prepareManagedResources,
   verifyPreparedAioncoreBundle,
 };

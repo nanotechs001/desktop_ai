@@ -289,6 +289,10 @@ Module._load = function patchedLoad(request, parent, isMain) {
     return { prepareAioncore: recordPrepareCall };
   }
 
+  if (request === './prepareLocalCore.js' || request.endsWith('/prepareLocalCore.js')) {
+    return { prepareLocalCore: recordPrepareCall };
+  }
+
   if (request === './resolveAioncoreVersion.js' || request.endsWith('/resolveAioncoreVersion.js')) {
     return { resolveAioncoreVersion: () => 'v-test' };
   }

@@ -748,16 +748,22 @@ try {
     return;
   }
 
-  // 5. Prepare aioncore binary (for packaged runtime usage)
-  const { prepareAioncore } = require('../packages/shared-scripts/src/prepare-aioncore.js');
-  const { resolveAioncoreVersion } = require('./resolveAioncoreVersion.js');
+  // 5. Prepare aioncore binary (for packaged runtime usage): our own backend built from core/,
+  // or the stock AionCore download when AIONUI_BACKEND_SOURCE=release (e.g. cross-arch builds).
   const projectRoot = path.resolve(__dirname, '..');
-  prepareAioncore({
-    projectRoot,
-    platform: process.platform,
-    arch: targetArch,
-    version: resolveAioncoreVersion(projectRoot),
-  });
+  if (process.env.AIONUI_BACKEND_SOURCE === 'release') {
+    const { prepareAioncore } = require('../packages/shared-scripts/src/prepare-aioncore.js');
+    const { resolveAioncoreVersion } = require('./resolveAioncoreVersion.js');
+    prepareAioncore({
+      projectRoot,
+      platform: process.platform,
+      arch: targetArch,
+      version: resolveAioncoreVersion(projectRoot),
+    });
+  } else {
+    const { prepareLocalCore } = require('./prepareLocalCore.js');
+    prepareLocalCore({ projectRoot, platform: process.platform, arch: targetArch });
+  }
 
   // 6. Prepare hub resources (index.json + extension zips for offline fallback)
   execSync('node scripts/prepareHubResources.js', { stdio: 'inherit', env: process.env });
