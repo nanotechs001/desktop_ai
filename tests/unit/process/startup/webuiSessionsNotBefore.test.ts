@@ -113,4 +113,46 @@ describe('WebUI sessionsNotBefore', () => {
     expect(setSessionsNotBefore).toHaveBeenCalledWith(1_800_000_000_000);
     expect(httpRequest.mock.calls.filter(([method]) => method === 'PUT')).toHaveLength(2);
   });
+  it('a revoke while the web host is starting is applied once the handle appears', async () => {
+    let finishStart: (value: unknown) => void = () => {};
+    const handle = { port: 25809, url: 'u', localUrl: 'l', stop: vi.fn(), setSessionsNotBefore };
+    startWebHost.mockImplementation(() => new Promise((resolve) => (finishStart = resolve)));
+    const { startDesktopWebUI, revokeOtherWebUISessions } = await importModule();
+    const starting = startDesktopWebUI({ port: 25809 });
+    await vi.waitFor(() => expect(startWebHost).toHaveBeenCalled());
+    await revokeOtherWebUISessions(1_800_000_000_000);
+    expect(setSessionsNotBefore).not.toHaveBeenCalled();
+    finishStart(handle);
+    await starting;
+    expect(setSessionsNotBefore).toHaveBeenCalledWith(1_800_000_000_000);
+  });
+
+  it('two failed reads at startup still apply the value already in force', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { startDesktopWebUI, revokeOtherWebUISessions } = await importModule();
+    await revokeOtherWebUISessions(1_800_000_000_000);
+    httpRequest.mockRejectedValue(new Error('settings down'));
+    await startDesktopWebUI({ port: 25809 });
+    expect(startWebHost).toHaveBeenCalledWith(expect.objectContaining({ sessionsNotBefore: 1_800_000_000_000 }));
+    error.mockRestore();
+  });
+
+  it('a restart whose reads fail keeps the value the previous start was given', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    httpRequest.mockImplementation(async (method: string) => (method === 'GET' ? { [KEY]: 1_700_000_000_000 } : {}));
+    const { startDesktopWebUI } = await importModule();
+    await startDesktopWebUI({ port: 25809 });
+    httpRequest.mockRejectedValue(new Error('settings down'));
+    await startDesktopWebUI({ port: 25809 });
+    expect(startWebHost).toHaveBeenLastCalledWith(expect.objectContaining({ sessionsNotBefore: 1_700_000_000_000 }));
+    error.mockRestore();
+  });
+
+  it('startup passes the later of the saved and the in-memory value', async () => {
+    const { startDesktopWebUI, revokeOtherWebUISessions } = await importModule();
+    await revokeOtherWebUISessions(1_600_000_000_000);
+    httpRequest.mockImplementation(async (method: string) => (method === 'GET' ? { [KEY]: 1_700_000_000_000 } : {}));
+    await startDesktopWebUI({ port: 25809 });
+    expect(startWebHost).toHaveBeenCalledWith(expect.objectContaining({ sessionsNotBefore: 1_700_000_000_000 }));
+  });
 });

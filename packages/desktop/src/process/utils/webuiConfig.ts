@@ -92,9 +92,7 @@ export function writeTunnelEnabled(enabled: boolean): Promise<void> {
 
 /**
  * Epoch ms before which WebUI sessions are refused; null when never set or unreadable (logged).
- * If the read fails twice, not-before stays off for this run of the WebUI (a sign-out already
- * pushed to a running host is unaffected). Accepted: when aioncore's settings are down, the
- * gate's own validator is usually down too and answers 503.
+ * A failed read never lowers the value: startDesktopWebUI also applies `knownSessionsNotBefore`.
  */
 async function readSessionsNotBefore(): Promise<number | null> {
   try {
@@ -225,6 +223,9 @@ export type DesktopWebUIHandle = {
 };
 
 let currentHandle: (WebHostHandle & { allowRemote: boolean }) | null = null;
+// The latest not-before this process has applied or revoked with; survives restarts and failed reads.
+let knownSessionsNotBefore: number | null = null;
+const laterNotBefore = (a: number | null, b: number | null): number | null => Math.max(a ?? 0, b ?? 0) || null;
 // First-use plaintext password for the active handle. Set by webui.start IPC
 // handler before startDesktopWebUI() when the backend reports needs_setup=true,
 // so Settings can display the generated password exactly once. Cleared on stop.
@@ -282,7 +283,8 @@ const toDesktopHandle = (handle: WebHostHandle, allowRemote: boolean): DesktopWe
  * happens first, so a save failure (which rejects) never leaves old sessions alive.
  */
 export async function revokeOtherWebUISessions(now: number = Date.now()): Promise<void> {
-  currentHandle?.setSessionsNotBefore(now);
+  knownSessionsNotBefore = laterNotBefore(knownSessionsNotBefore, now);
+  currentHandle?.setSessionsNotBefore(knownSessionsNotBefore);
   // One retry; a second failure rejects so the UI can warn.
   await retryOnce(() =>
     httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY]: now })
@@ -314,7 +316,8 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     throw new Error('[WebUI] Cannot start: aioncore is not running (globalThis.__backendPort unset)');
   }
 
-  const sessionsNotBefore = await readSessionsNotBefore();
+  const sessionsNotBefore = laterNotBefore(await readSessionsNotBefore(), knownSessionsNotBefore);
+  knownSessionsNotBefore = sessionsNotBefore;
 
   const handle = await startWebHost({
     app: {
@@ -353,6 +356,8 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
   });
 
   currentHandle = Object.assign(handle, { allowRemote });
+  // A sign-out while the host was starting reached no handle; apply it now.
+  if (knownSessionsNotBefore !== sessionsNotBefore) handle.setSessionsNotBefore(knownSessionsNotBefore);
   webuiTunnel.onWebuiRestarted();
   return toDesktopHandle(handle, allowRemote);
 }
