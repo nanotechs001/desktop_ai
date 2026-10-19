@@ -65,8 +65,9 @@ vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.is
 vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
 vi.mock('@renderer/components/OrphanChatsPrompt', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
+const revealBrowserFor = vi.hoisted(() => vi.fn());
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
-  usePreviewContext: () => ({ closePreview: () => {} }),
+  usePreviewContext: () => ({ closePreview: () => {}, revealBrowserFor }),
 }));
 
 import Layout from '@renderer/components/layout/Layout';
@@ -220,5 +221,21 @@ describe("Layout tray bridge: open a VA Bot's settings", () => {
     expect(navigate).toHaveBeenCalledWith('/assistants', {
       state: { openAssistantEditor: true, openAssistantId: 'bot-1' },
     });
+  });
+});
+
+describe("Layout tray bridge: a link clicked in a robot's chat", () => {
+  it('opens that conversation in the main window and its browser pane at the link', () => {
+    renderLayout();
+    navigate.mockClear();
+
+    window.dispatchEvent(
+      new CustomEvent('tray:open-link-in-conversation', {
+        detail: { conversation_id: 'c1', url: 'https://example.com/a' },
+      })
+    );
+
+    expect(revealBrowserFor).toHaveBeenCalledWith('c1', 'https://example.com/a');
+    expect(navigate).toHaveBeenCalledWith('/conversation/c1');
   });
 });

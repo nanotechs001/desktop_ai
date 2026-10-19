@@ -6,7 +6,7 @@
 
 import { z } from 'zod';
 import { ipcBridge } from '@/common';
-import { AGENT_ANIMATION_STATES, CONVERSATION_ID_PATTERN } from '@/common/types/agent/agentWidget';
+import { AGENT_ANIMATION_STATES, CONVERSATION_ID_PATTERN, isHttpUrl } from '@/common/types/agent/agentWidget';
 import { isBotColor } from '@/common/types/agent/botColors';
 import type { AgentWidgetManager } from './agentWidgetManager';
 import { settingsPatchSchema } from './agentWidgetStore';
@@ -32,6 +32,7 @@ const schemas = {
   rendererReady: target.extend({ agent_id: agentId.optional(), modified_at: z.number().finite().optional() }).strict(),
   showConversation: target.extend({ to: conversationId }).strict(),
   openAgentSettings: target.extend({ agent_id: agentId }).strict(),
+  openLinkInMain: target.extend({ url: z.string().max(8192).refine(isHttpUrl) }).strict(),
   animationDone: target.extend({ animation: z.enum(['appearing', 'disappearing']) }).strict(),
   setSuspended: target.extend({ suspended: z.boolean() }).strict(),
 };
@@ -90,6 +91,10 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   w.openAgentSettings.provider(async (p) =>
     manager.openAgentSettings(parse(schemas.openAgentSettings, p, 'openAgentSettings').agent_id)
   );
+  w.openLinkInMain.provider(async (p) => {
+    const { conversation_id, url } = parse(schemas.openLinkInMain, p, 'openLinkInMain');
+    manager.openLinkInMain(conversation_id, url);
+  });
   w.rendererReady.provider(async (p) => {
     const { conversation_id, agent_id, modified_at } = parse(schemas.rendererReady, p, 'rendererReady');
     manager.rendererReady(conversation_id, { agent_id, modified_at });

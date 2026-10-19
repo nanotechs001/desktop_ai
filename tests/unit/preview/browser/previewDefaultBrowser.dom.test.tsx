@@ -426,6 +426,47 @@ describe('watching a robot opens its chat browser pane', () => {
     expect(ctx.isOpen).toBe(true);
   });
 
+  it('opens the given address as a new tab in that conversation once it is entered', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    act(() => ctx.collapsePreview());
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+
+    act(() => ctx.revealBrowserFor('c1', 'https://example.com/x'));
+    expect(ctx.tabs.map((tab) => tab.content)).not.toContain('https://example.com/x');
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs.map((tab) => tab.content)).toEqual([BROWSER_BLANK_URL, 'https://example.com/x']);
+    expect(ctx.activeTabId).toBe(ctx.tabs[1].id);
+
+    // One-shot: entering again does not open it again.
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    expect(ctx.tabs.filter((tab) => tab.content === 'https://example.com/x')).toHaveLength(1);
+  });
+
+  it('opens the given address in the first tab of a conversation that has none, with no blank tab', () => {
+    mount();
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+    act(() => ctx.revealBrowserFor('c3', 'https://example.com/y'));
+    enterScope('/ws/c', { ...OPEN_BROWSER, conversationId: 'c3' });
+
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs.map((tab) => tab.content)).toEqual(['https://example.com/y']);
+  });
+
+  it('opens the given address at once when the conversation is already on screen', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    setCurrentConversation('c1');
+    act(() => ctx.collapsePreview());
+
+    act(() => ctx.revealBrowserFor('c1', 'https://example.com/z'));
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs.map((tab) => tab.content)).toContain('https://example.com/z');
+  });
+
   it('a request for a conversation that is never entered does not reopen another one', () => {
     mount();
     enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });

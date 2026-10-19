@@ -1617,6 +1617,8 @@ export const agentWidget = {
   openAgentSettings: bridge.buildProvider<void, AgentWidgetTarget & { agent_id: string }>(
     'agent-widget:open-agent-settings'
   ),
+  /** Show a link clicked in a robot's chat in the main window's browser pane on that conversation; the popup stays. */
+  openLinkInMain: bridge.buildProvider<void, AgentWidgetTarget & { url: string }>('agent-widget:open-link-in-main'),
   /** The widget renderer has its first frames decoded: show the window and play `appearing`. */
   rendererReady: bridge.buildProvider<void, AgentWidgetTarget & { agent_id?: string; modified_at?: number }>(
     'agent-widget:renderer-ready'

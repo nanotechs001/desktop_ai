@@ -10,6 +10,7 @@ import type { BrowserTabProfile } from '@/common/types/browser';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import { chatFileRefKey, isChatFileRef } from '@/common/types/chatFile';
 import { emitter } from '@/renderer/utils/emitter';
+import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from '../browser/constants';
 import { isBrowserMcpActivity, isBrowserMcpSettled } from '../browser/agentActivity';
@@ -148,6 +149,7 @@ export interface PreviewContextValue {
   /**
    * 打开浏览器 tab，省略 url 则开空白页。
    * Open a browser tab; blank page when url is omitted, in Personal unless another profile is given.
+   * In a robot's widget window (no visible browser pane) an address opens in the main window's pane instead.
    */
   openBrowserTab: (url?: string, profile?: BrowserTabProfile) => void;
   /** Hide the panel without recording a user choice (route changes, "new chat"). */
@@ -156,9 +158,10 @@ export interface PreviewContextValue {
   collapsePreview: () => void;
   /**
    * Open this conversation's browser pane even if the user closed it (Watch in the titlebar robot list): at once when
-   * the conversation is on screen, otherwise when it is entered next. One-shot.
+   * the conversation is on screen, otherwise when it is entered next. One-shot. With `url`, it opens in a new tab there
+   * (a link clicked in that conversation's robot chat).
    */
-  revealBrowserFor: (conversationId: string) => void;
+  revealBrowserFor: (conversationId: string, url?: string) => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
   /** The open conversation runs on a VA Bot (a user-created Agent): browser on top, chat underneath. */
@@ -1131,17 +1134,34 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     closePreview();
   }, [closePreview]);
 
-  // A Watch for a conversation not on screen yet; consumed when the route enters its scope.
-  const revealRequestRef = useRef<string | null>(null);
+  // A Watch (or a link) for a conversation not on screen yet; consumed when the route enters its scope.
+  const revealRequestRef = useRef<{ conversationId: string; url?: string } | null>(null);
   const revealBrowserFor = useCallback(
-    (conversationId: string) => {
+    (conversationId: string, url?: string) => {
       if (getCurrentConversation() !== conversationId) {
-        revealRequestRef.current = conversationId;
+        revealRequestRef.current = { conversationId, url };
         return;
       }
       userClosedRef.current = false;
-      if (tabsRef.current.length > 0) setIsOpen(true);
+      if (url) openBrowserTab(url);
+      else if (tabsRef.current.length > 0) setIsOpen(true);
       else openBrowserTab();
+    },
+    [openBrowserTab]
+  );
+
+  const openBrowserTabOrForward = useCallback(
+    (url?: string, profile?: BrowserTabProfile): void => {
+      const widgetConversationId = getWidgetConversationId();
+      if (widgetConversationId && url) {
+        ipcBridge.agentWidget.openLinkInMain
+          .invoke({ conversation_id: widgetConversationId, url })
+          .catch((error: unknown) =>
+            console.warn('[PreviewContext] could not open the link in the main window:', error)
+          );
+        return;
+      }
+      openBrowserTab(url, profile);
     },
     [openBrowserTab]
   );
@@ -1191,12 +1211,22 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const closePreviewIfScopeChanged = useCallback(
     (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
       const prev = currentScopeRef.current;
-      const revealing = options?.conversationId != null && revealRequestRef.current === options.conversationId;
+      const request = revealRequestRef.current;
+      const revealing = options?.conversationId != null && request?.conversationId === options.conversationId;
       if (revealing) revealRequestRef.current = null;
+      const revealUrl = revealing ? request?.url : undefined;
+      // A link from that conversation's robot chat: a new tab, in place of the blank one a fresh scope would open.
+      const openRevealUrl = (): boolean => {
+        if (!revealUrl) return false;
+        userClosedRef.current = false;
+        openBrowserTab(revealUrl);
+        return true;
+      };
       // Entering a conversation reopens its panel unless the user closed it: restore what is
       // there, or start with a blank browser tab.
       const reopenUnlessUserClosed = () => {
         if (revealing) userClosedRef.current = false;
+        if (openRevealUrl()) return;
         if (!options?.openBrowserIfEmpty || scopeKey == null || isOpen || userClosedRef.current) return;
         if (tabsRef.current.length > 0) setIsOpen(true);
         else autoOpenedTabIdRef.current = openBrowserTab();
@@ -1269,12 +1299,13 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsMaximized(false);
       setDomSnippets([]);
       userClosedRef.current = loaded.userClosed === true && !revealing;
+      // openPreview decides from tabsRef, which only catches up on the next render.
+      tabsRef.current = entered.tabs;
+      if (openRevealUrl()) return;
       if (options?.openBrowserIfEmpty && scopeKey != null && !userClosedRef.current) {
         if (entered.tabs.length > 0) {
           setIsOpen(true);
         } else {
-          // openPreview decides from tabsRef, which only catches up on the next render.
-          tabsRef.current = entered.tabs;
           autoOpenedTabIdRef.current = openBrowserTab();
         }
       }
@@ -1707,7 +1738,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       switchTab: setActiveTabId,
       updateContent,
       updateTab,
-      openBrowserTab,
+      openBrowserTab: openBrowserTabOrForward,
       browserTabLimitHitAt,
       persistQuotaExceededAt,
       saveContent,
@@ -1745,7 +1776,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveTabId,
     updateContent,
     updateTab,
-    openBrowserTab,
+    openBrowserTabOrForward,
     browserTabLimitHitAt,
     persistQuotaExceededAt,
     saveContent,

@@ -21,7 +21,7 @@ import type {
   AgentWidgetLifecycleAnimation,
   AgentWidgetSnapshot,
 } from '@/common/types/agent/agentWidget';
-import { DROP_IMPACT_MS, robotAnimationMs } from '@/common/types/agent/agentWidget';
+import { DROP_IMPACT_MS, isHttpUrl, robotAnimationMs } from '@/common/types/agent/agentWidget';
 import { mergeSettings, normalizeWidgetState, processConfigIO, type WidgetStateIO } from './agentWidgetStore';
 import {
   carriedPosition,
@@ -571,26 +571,35 @@ export class AgentWidgetManager {
     this.emitRobotsChanged();
   }
 
-  openInMain(conversationId: string): void {
-    this.setChatLocation(conversationId, 'main');
+  /** Restore, show and focus the main window; null when there is none. */
+  private focusMain(): BrowserWindow | null {
     const main = this.host.getMainWindow();
-    if (!main || main.isDestroyed()) return;
+    if (!main || main.isDestroyed()) return null;
     if (main.isMinimized()) main.restore();
     main.show();
     main.focus();
+    return main;
+  }
+
+  openInMain(conversationId: string): void {
+    this.setChatLocation(conversationId, 'main');
     // Same channel the tray menu uses; Layout.tsx navigates to the conversation.
-    main.webContents.send('tray:navigate-to-conversation', { conversation_id: conversationId });
+    this.focusMain()?.webContents.send('tray:navigate-to-conversation', { conversation_id: conversationId });
   }
 
   /** Show the main window on a VA Bot's settings; the chat stays in its popup. */
   openAgentSettings(agentId: string): void {
-    const main = this.host.getMainWindow();
-    if (!main || main.isDestroyed()) return;
-    if (main.isMinimized()) main.restore();
-    main.show();
-    main.focus();
     // Same bridge as the tray channels (preload turns it into a window event); Layout.tsx navigates.
-    main.webContents.send('tray:open-agent-settings', { agent_id: agentId });
+    this.focusMain()?.webContents.send('tray:open-agent-settings', { agent_id: agentId });
+  }
+
+  /**
+   * Show a link clicked in a robot's chat in the main window's browser pane, on that conversation; the chat stays
+   * in its popup. Only http(s) links are forwarded.
+   */
+  openLinkInMain(conversationId: string, url: string): void {
+    if (!isHttpUrl(url)) return;
+    this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId, url });
   }
 
   // ---------------------------------------------------------------------------

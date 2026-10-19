@@ -27,8 +27,11 @@ const openTabRequested = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
 }));
 
+const openLinkInMain = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+
 vi.mock('@/common', () => ({
   ipcBridge: {
+    agentWidget: { openLinkInMain: { invoke: openLinkInMain } },
     fileStream: { contentUpdate: { on: () => () => {} } },
     preview: { open: { on: () => () => {} } },
     browser: {
@@ -74,6 +77,28 @@ const browserTabs = () => ctx.tabs.filter((tab) => tab.content_type === 'browser
 beforeEach(() => {
   localStorage.clear();
   openTabRequested.handler = null;
+  openLinkInMain.mockClear();
+  window.location.hash = '';
+});
+
+describe('PreviewContext links in a robot widget window', () => {
+  it('forwards an address to the main window with the widget conversation and opens no local tab', () => {
+    window.location.hash = '#/widget/conv-9';
+    renderProvider();
+    act(() => ctx.openBrowserTab('https://example.com/a'));
+
+    expect(openLinkInMain).toHaveBeenCalledWith({ conversation_id: 'conv-9', url: 'https://example.com/a' });
+    expect(ctx.tabs).toHaveLength(0);
+    expect(ctx.isOpen).toBe(false);
+  });
+
+  it('keeps opening locally in the main window', () => {
+    renderProvider();
+    act(() => ctx.openBrowserTab('https://example.com/a'));
+
+    expect(openLinkInMain).not.toHaveBeenCalled();
+    expect(browserTabs()).toHaveLength(1);
+  });
 });
 
 describe('PreviewContext browser tabs', () => {

@@ -138,6 +138,7 @@ vi.mock('@/common', () => {
     'setIgnoreMouse',
     'openInMain',
     'openAgentSettings',
+    'openLinkInMain',
     'rendererReady',
     'animationDone',
     'setSuspended',
@@ -1204,6 +1205,74 @@ describe("opening a VA Bot's settings in the main window", () => {
     expect(main.webContents.send).not.toHaveBeenCalled();
     await expect(h.providers.openAgentSettings({ conversation_id: A, agent_id: 'bot-1' })).resolves.toBeUndefined();
     expect(main.webContents.send).toHaveBeenCalledWith('tray:open-agent-settings', { agent_id: 'bot-1' });
+  });
+});
+
+describe("opening a robot chat's link in the main window", () => {
+  const makeMain = () => ({
+    isDestroyed: () => false,
+    isMinimized: () => true,
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
+    webContents: { send: vi.fn() },
+  });
+  const URL_IN_CHAT = 'https://example.com/page?q=1';
+
+  it('brings the main window forward, keeps the chat in its popup and sends the link with its conversation', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.setChatLocation(A, 'widget');
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    manager.openLinkInMain(A, URL_IN_CHAT);
+
+    expect(main.restore).toHaveBeenCalled();
+    expect(main.show).toHaveBeenCalled();
+    expect(main.focus).toHaveBeenCalled();
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:open-link-in-conversation', {
+      conversation_id: A,
+      url: URL_IN_CHAT,
+    });
+    expect(manager.getChatLocations()[A]).toBe('widget');
+  });
+
+  it('does nothing without a main window', async () => {
+    const { manager } = await makeManager();
+    expect(() => manager.openLinkInMain(A, URL_IN_CHAT)).not.toThrow();
+  });
+
+  it('rejects a non-http(s) url or a malformed payload at the IPC boundary', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+    for (const url of [
+      'file:///etc/passwd',
+      'javascript:alert(1)',
+      'chrome://settings',
+      'not a url',
+      '',
+      'ftp://x.com',
+    ]) {
+      await expect(h.providers.openLinkInMain({ conversation_id: A, url })).rejects.toThrow();
+    }
+    await expect(h.providers.openLinkInMain({ conversation_id: A })).rejects.toThrow();
+    await expect(h.providers.openLinkInMain({ conversation_id: '../x', url: URL_IN_CHAT })).rejects.toThrow();
+    await expect(h.providers.openLinkInMain({ conversation_id: A, url: URL_IN_CHAT, extra: 1 })).rejects.toThrow();
+    expect(main.webContents.send).not.toHaveBeenCalled();
+    await expect(h.providers.openLinkInMain({ conversation_id: A, url: URL_IN_CHAT })).resolves.toBeUndefined();
+    expect(main.webContents.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('the manager refuses a non-http(s) url too', async () => {
+    const { manager } = await makeManager();
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+    manager.openLinkInMain(A, 'file:///etc/passwd');
+    expect(main.show).not.toHaveBeenCalled();
+    expect(main.webContents.send).not.toHaveBeenCalled();
   });
 });
 

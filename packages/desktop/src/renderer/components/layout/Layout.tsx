@@ -195,6 +195,7 @@ const Layout: React.FC<{
     isVaBotMode,
     isVaChatCollapsed,
     toggleVaChat,
+    revealBrowserFor,
   } = usePreviewContext();
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
@@ -361,6 +362,13 @@ const Layout: React.FC<{
       void navigate(`/conversation/${event.detail.conversation_id}`);
     };
 
+    // A link clicked in a robot's chat: that conversation's browser pane opens it, once the conversation is on screen
+    const handleOpenLinkInConversation = (event: CustomEvent<{ conversation_id: string; url: string }>) => {
+      const { conversation_id, url } = event.detail;
+      revealBrowserFor(conversation_id, url);
+      void navigate(`/conversation/${conversation_id}`);
+    };
+
     // A VA Bot robot's popup asked for that bot's settings
     const handleOpenAgentSettings = (event: CustomEvent<{ agent_id: string }>) => {
       void navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: event.detail.agent_id } });
@@ -390,6 +398,7 @@ const Layout: React.FC<{
     window.addEventListener('tray:navigate-to-guid', handleNavigateToGuid as EventListener);
     window.addEventListener('tray:navigate-to-conversation', handleNavigateToConversation as EventListener);
     window.addEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
+    window.addEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
     window.addEventListener('tray:open-about', handleOpenAbout as EventListener);
     window.addEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
     window.addEventListener('tray:check-update', handleCheckUpdate as EventListener);
@@ -398,11 +407,12 @@ const Layout: React.FC<{
       window.removeEventListener('tray:navigate-to-guid', handleNavigateToGuid as EventListener);
       window.removeEventListener('tray:navigate-to-conversation', handleNavigateToConversation as EventListener);
       window.removeEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
+      window.removeEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
       window.removeEventListener('tray:open-about', handleOpenAbout as EventListener);
       window.removeEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
       window.removeEventListener('tray:check-update', handleCheckUpdate as EventListener);
     };
-  }, [navigate]);
+  }, [navigate, revealBrowserFor]);
 
   const siderWidth = isMobile
     ? Math.max(
