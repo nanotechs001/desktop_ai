@@ -15,6 +15,9 @@
   "languageToggle": "Mudar idioma",
   "footerPrimary": "Transforme sua IA de linha de comando",
   "footerSecondary": "Moderno e Eficiente",
+  "qrSigningIn": "Fazendo login…",
+  "qrExpired": "Este código de login expirou",
+  "qrBackToLogin": "Ir para o login",
   "errors": {
     "empty": "Por favor, insira nome de usuário e senha",
     "invalidCredentials": "Nome de usuário ou senha inválidos",

@@ -15,6 +15,9 @@
   "languageToggle": "切换语言",
   "footerPrimary": "命令行 AI 的现代化体验",
   "footerSecondary": "高效且优雅",
+  "qrSigningIn": "正在为你登录…",
+  "qrExpired": "此登录二维码已过期",
+  "qrBackToLogin": "前往登录",
   "errors": {
     "empty": "请输入用户名和密码",
     "invalidCredentials": "用户名或密码错误",

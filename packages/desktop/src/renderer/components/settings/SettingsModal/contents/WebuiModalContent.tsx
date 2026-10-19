@@ -24,6 +24,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { formatTime } from '@/renderer/services/i18n/format';
 import { useSettingsViewMode } from '../settingsViewContext';
+import { useWebuiTunnel } from './useWebuiTunnel';
 import { changeWebuiCredential } from './webuiCredentialChange';
 
 /**
@@ -103,6 +104,7 @@ const WebuiModalContent: React.FC = () => {
   const [qrExpiresAt, setQrExpiresAt] = useState<number | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const qrRefreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const tunnel = useWebuiTunnel();
 
   // 加载状态 / Load status
   const loadStatus = useCallback(async () => {
@@ -473,22 +475,29 @@ const WebuiModalContent: React.FC = () => {
     }
   };
 
+  // The QR points at one base URL, picked once: the secure link when it is up,
+  // otherwise the LAN URL when LAN remote access is on. Null means no QR.
+  const lanQrBase = status?.allowRemote
+    ? (status.networkUrl ?? status.localUrl ?? `http://localhost:${status.port ?? port}`)
+    : null;
+  const qrBaseUrl = status?.running ? (tunnel.url ?? lanQrBase) : null;
+  const qrBaseUrlRef = useRef(qrBaseUrl);
+  qrBaseUrlRef.current = qrBaseUrl;
+
   // 生成二维码 / Generate QR code
   const generateQRCode = useCallback(async () => {
-    if (!status?.running) return;
+    const baseUrl = qrBaseUrlRef.current;
+    if (!baseUrl) return;
 
     setQrLoading(true);
     try {
       // Backend returns only { token, expires_at_ms }; the scannable URL is
-      // composed here from the current status so it points at the right host
-      // (networkUrl for remote-enabled servers, localUrl otherwise).
+      // composed here so it points at the right host (see qrBaseUrl).
       const qrData = await webui.generateQRToken.invoke();
+      // The base changed while the token was being issued; that token belongs to a stale link.
+      if (qrBaseUrlRef.current !== baseUrl) return;
 
       if (qrData) {
-        const baseUrl =
-          status.allowRemote && status.networkUrl
-            ? status.networkUrl
-            : (status.localUrl ?? `http://localhost:${status.port ?? port}`);
         setQrUrl(`${baseUrl}/qr-login?token=${qrData.token}`);
         setQrExpiresAt(qrData.expires_at_ms);
 
@@ -513,32 +522,35 @@ const WebuiModalContent: React.FC = () => {
     } finally {
       setQrLoading(false);
     }
-  }, [status?.running, status?.allowRemote, status?.networkUrl, status?.localUrl, status?.port, port, t]);
+  }, [t]);
 
-  // 当服务器启动且允许远程访问时自动生成二维码 / Auto-generate QR code when server starts and remote access is allowed
+  // 有可用的二维码地址时自动生成 / Auto-generate the QR code once there is a base URL to point at
   useEffect(() => {
-    if (status?.running && status.allowRemote && !qrUrl) {
+    if (qrBaseUrl && !qrUrl) {
       void generateQRCode();
     }
-    // 清理定时器 / Cleanup timer
-    return () => {
-      if (qrRefreshTimerRef.current) {
-        clearTimeout(qrRefreshTimerRef.current);
-      }
-    };
-  }, [status?.allowRemote, status?.running, generateQRCode, qrUrl]);
+  }, [qrBaseUrl, generateQRCode, qrUrl]);
 
-  // 服务器停止或关闭远程访问时清除二维码 / Clear QR code when server stops or remote access is disabled
-  useEffect(() => {
-    if (!status?.running || !status.allowRemote) {
-      setQrUrl(null);
-      setQrExpiresAt(null);
+  // 卸载时清理定时器（不能放在上面的 effect 里，否则二维码一生成就会取消自动刷新）
+  // Clear the refresh timer on unmount only; in the effect above it would cancel the refresh as soon as the QR renders
+  useEffect(
+    () => () => {
       if (qrRefreshTimerRef.current) {
         clearTimeout(qrRefreshTimerRef.current);
-        qrRefreshTimerRef.current = null;
       }
+    },
+    []
+  );
+
+  // 地址变化或不再可用时清除二维码 / Drop the QR code when its base URL changes or goes away
+  useEffect(() => {
+    setQrUrl(null);
+    setQrExpiresAt(null);
+    if (qrRefreshTimerRef.current) {
+      clearTimeout(qrRefreshTimerRef.current);
+      qrRefreshTimerRef.current = null;
     }
-  }, [status?.allowRemote, status?.running]);
+  }, [qrBaseUrl]);
 
   // 格式化过期时间 / Format expiration time
   const formatExpiresAt = (timestamp: number) => {
@@ -667,6 +679,56 @@ const WebuiModalContent: React.FC = () => {
           >
             <Switch checked={allowRemotePreference} onChange={handleAllowRemoteChange} />
           </PreferenceRow>
+
+          {/* 安全链接（Cloudflare）/ Secure link (Cloudflare) */}
+          <PreferenceRow
+            label={t('settings.webui.tunnelLabel')}
+            description={
+              <>
+                <span className='text-t-secondary'>{t('settings.webui.tunnelDesc')}</span>
+                {!webuiEnabled && <div className='text-warning'>{t('settings.webui.tunnelNeedsWebui')}</div>}
+              </>
+            }
+          >
+            <Switch
+              aria-label={t('settings.webui.tunnelLabel')}
+              checked={tunnel.checked}
+              disabled={!webuiEnabled}
+              onChange={tunnel.toggle}
+            />
+          </PreferenceRow>
+          {tunnel.status.state === 'downloading' && (
+            <div className='text-12px text-warning pb-8px'>{t('settings.webui.tunnelDownloading')}</div>
+          )}
+          {tunnel.status.state === 'starting' && (
+            <div className='text-12px text-warning pb-8px'>{t('settings.webui.tunnelStarting')}</div>
+          )}
+          {tunnel.status.state === 'error' && (
+            <div className='text-12px text-danger pb-8px'>
+              {t('settings.webui.tunnelError', { reason: tunnel.status.message })}
+            </div>
+          )}
+          {tunnel.url && (
+            <>
+              <PreferenceRow label={t('settings.webui.accessUrl')}>
+                <div className='flex items-center gap-8px min-w-0'>
+                  <span className='text-14px text-t-primary font-mono truncate'>{tunnel.url}</span>
+                  <Tooltip content={t('settings.webui.tunnelCopyLink')}>
+                    <Button
+                      type='text'
+                      size='mini'
+                      aria-label={t('settings.webui.tunnelCopyLink')}
+                      className='rd-100px !px-6px inline-flex items-center !h-24px'
+                      onClick={() => handleCopy(tunnel.url ?? '')}
+                    >
+                      <Copy size={16} />
+                    </Button>
+                  </Tooltip>
+                </div>
+              </PreferenceRow>
+              <div className='text-12px text-warning pb-8px'>{t('settings.webui.tunnelWarning')}</div>
+            </>
+          )}
         </div>
 
         {/* 登录信息卡片 / Login Info Card */}
@@ -719,8 +781,8 @@ const WebuiModalContent: React.FC = () => {
             </div>
           </div>
 
-          {/* 二维码登录（仅服务器运行且允许远程访问时显示）/ QR Code Login (only when server running and remote access allowed) */}
-          {status?.running && status.allowRemote && (
+          {/* 二维码登录（服务器运行且允许局域网访问或安全链接已开启时显示）/ QR Code Login (server running and LAN access or the secure link on) */}
+          {qrBaseUrl && (
             <>
               <div className='border-t border-line my-12px' />
               <div className='text-14px font-500 mb-4px text-t-primary'>{t('settings.webui.qrLogin')}</div>

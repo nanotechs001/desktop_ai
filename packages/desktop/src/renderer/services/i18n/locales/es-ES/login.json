@@ -15,6 +15,9 @@
   "languageToggle": "Cambiar idioma",
   "footerPrimary": "Transforma tu IA de línea de comandos",
   "footerSecondary": "Moderno y eficiente",
+  "qrSigningIn": "Iniciando sesión…",
+  "qrExpired": "Este código de inicio de sesión ha caducado",
+  "qrBackToLogin": "Ir a iniciar sesión",
   "errors": {
     "empty": "Ingresa usuario y contraseña",
     "invalidCredentials": "Usuario o contraseña inválidos",

@@ -15,6 +15,9 @@
   "languageToggle": "切換語言",
   "footerPrimary": "命令列 AI 的現代化體驗",
   "footerSecondary": "高效且優雅",
+  "qrSigningIn": "正在為你登入…",
+  "qrExpired": "此登入 QR Code 已過期",
+  "qrBackToLogin": "前往登入",
   "errors": {
     "empty": "請輸入使用者名稱與密碼",
     "invalidCredentials": "使用者名稱或密碼錯誤",

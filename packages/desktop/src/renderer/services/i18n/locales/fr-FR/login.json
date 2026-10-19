@@ -15,6 +15,9 @@
   "languageToggle": "Changer de langue",
   "footerPrimary": "Transformez votre IA en ligne de commande",
   "footerSecondary": "Moderne et efficace",
+  "qrSigningIn": "Connexion en cours…",
+  "qrExpired": "Ce code de connexion a expiré",
+  "qrBackToLogin": "Aller à la connexion",
   "errors": {
     "empty": "Veuillez entrer un nom d'utilisateur et un mot de passe",
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",

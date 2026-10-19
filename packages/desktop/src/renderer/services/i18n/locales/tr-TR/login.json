@@ -15,6 +15,9 @@
   "languageToggle": "Dili değiştir",
   "footerPrimary": "Komut satırı AI'nızı dönüştürün",
   "footerSecondary": "Modern ve Verimli",
+  "qrSigningIn": "Oturumunuz açılıyor…",
+  "qrExpired": "Bu giriş kodunun süresi doldu",
+  "qrBackToLogin": "Giriş sayfasına git",
   "errors": {
     "empty": "Lütfen kullanıcı adı ve şifre girin",
     "invalidCredentials": "Geçersiz kullanıcı adı veya şifre",

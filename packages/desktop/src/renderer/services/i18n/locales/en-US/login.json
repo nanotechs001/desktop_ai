@@ -15,6 +15,9 @@
   "languageToggle": "Change language",
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
+  "qrSigningIn": "Signing you in…",
+  "qrExpired": "This login code expired",
+  "qrBackToLogin": "Go to sign in",
   "errors": {
     "empty": "Please enter username and password",
     "invalidCredentials": "Invalid username or password",

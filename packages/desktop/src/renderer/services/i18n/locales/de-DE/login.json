@@ -15,6 +15,9 @@
   "languageToggle": "Sprache ändern",
   "footerPrimary": "Verwandle deine Kommandozeilen-KI",
   "footerSecondary": "Modern & Effizient",
+  "qrSigningIn": "Anmeldung läuft…",
+  "qrExpired": "Dieser Anmeldecode ist abgelaufen",
+  "qrBackToLogin": "Zur Anmeldung",
   "errors": {
     "empty": "Bitte Benutzername und Passwort eingeben",
     "invalidCredentials": "Ungültiger Benutzername oder Passwort",

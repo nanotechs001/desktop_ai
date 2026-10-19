@@ -19,6 +19,7 @@ const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSet
 const ArchivedSettings = React.lazy(() => import('@renderer/pages/settings/ArchivedSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
 const LoginPage = React.lazy(() => import('@renderer/pages/login'));
+const QrLoginPage = React.lazy(() => import('@renderer/pages/login/QrLoginPage'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
@@ -73,8 +74,19 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
   return React.cloneElement(layout);
 };
 
+/**
+ * The sign-in QR encodes a plain path (`/qr-login?token=…`), which the web host answers with
+ * index.html, but this app routes on the hash. Move the path into the hash before the
+ * HashRouter reads the location; idempotent, and it drops the token from the real query.
+ */
+const moveQrLoginPathToHash = () => {
+  const { pathname, search } = window.location;
+  if (pathname === '/qr-login') window.history.replaceState(null, '', `/#/qr-login${search}`);
+};
+
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
+  moveQrLoginPathToHash();
 
   return (
     <HashRouter>
@@ -84,6 +96,8 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           path='/login'
           element={status === 'authenticated' ? <Navigate to='/guid' replace /> : withRouteFallback(LoginPage)}
         />
+        {/* Public like /login: the one-time QR token is the credential, so no session is needed. */}
+        <Route path='/qr-login' element={withRouteFallback(QrLoginPage)} />
         <Route path='/widget/:id' element={<WidgetRoute />} />
         <Route element={<ProtectedLayout layout={layout} />}>
           <Route index element={<Navigate to='/guid' replace />} />
