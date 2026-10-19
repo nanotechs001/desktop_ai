@@ -40,6 +40,8 @@ export type WebHostOptions = {
   dirs?: BackendSystemDirs;
   /** True while the Cloudflare tunnel runs (see StaticServerOptions.isTunnelActive). */
   isTunnelActive?: () => boolean;
+  /** Epoch ms: sessions issued before it are refused (see StaticServerOptions.sessionsNotBefore). */
+  sessionsNotBefore?: number | null;
   backend: { kind: 'ownBackend'; resolveBackend: BackendBinaryResolver } | { kind: 'useExistingBackend'; port: number };
 };
 
@@ -53,5 +55,7 @@ export type WebHostHandle = {
   localUrl: string;
   networkUrl?: string;
   lanIP?: string;
+  /** Refuse sessions issued before this epoch ms (null = off); takes effect at once. */
+  setSessionsNotBefore: (ms: number | null) => void;
   stop: () => Promise<void>;
 };

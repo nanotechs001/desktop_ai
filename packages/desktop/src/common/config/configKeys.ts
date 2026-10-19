@@ -19,6 +19,8 @@ export type ConfigKeyMap = {
   'webui.desktop.enabled': boolean | undefined;
   'webui.desktop.allowRemote': boolean | undefined;
   'webui.desktop.port': number | undefined;
+  /** Epoch ms: WebUI sessions issued before it are refused (set when the WebUI password/username changes). */
+  'webui.desktop.sessionsNotBefore': number | undefined;
   'theme.activeId': string;
   'theme.userThemes': Theme[];
   'workspace.pasteConfirm': boolean | undefined;

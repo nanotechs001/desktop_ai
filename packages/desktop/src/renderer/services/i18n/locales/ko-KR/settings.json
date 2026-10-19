@@ -518,6 +518,8 @@
   "webui.passwordTooLong": "비밀번호는 128자 이하여야 합니다",
   "webui.passwordTooCommon": "비밀번호가 너무 일반적입니다. 더 강력한 비밀번호를 선택하세요",
   "webui.passwordChanged": "비밀번호가 성공적으로 변경되었습니다",
+  "webui.signOutOthersNote": "다른 기기는 로그아웃됩니다",
+  "webui.signOutOthersFailed": "다른 기기를 로그아웃하지 못했습니다. WebUI를 다시 시작하여 적용하세요.",
   "webui.passwordChangeFailed": "비밀번호 변경 실패",
   "webui.usernameChanged": "사용자 이름이 성공적으로 변경되었습니다",
   "webui.usernameChangeFailed": "사용자 이름 변경 실패",

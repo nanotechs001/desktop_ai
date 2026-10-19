@@ -5,7 +5,11 @@ import {
   forwardingHeaders,
   GATE_LIMITS,
   isCanonicalPath,
+  isRefreshRequest,
+  isRefreshRevoked,
+  isSessionRevoked,
   normalizePath,
+  tokenIssuedAtMs,
 } from './index.js';
 
 describe('classifyRequest', () => {
@@ -328,5 +332,87 @@ describe('forwardingHeaders', () => {
   it('uses "unknown" for a missing or empty peer, never "undefined"', () => {
     expect(forwardingHeaders(undefined, {}, false)['x-forwarded-for']).toBe('unknown');
     expect(forwardingHeaders('', {}, true)['x-forwarded-for']).toBe('unknown');
+  });
+});
+
+const jwt = (payload: unknown): string => `e30.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
+
+describe('tokenIssuedAtMs', () => {
+  it('reads iat (seconds) from the unverified payload as milliseconds', () => {
+    expect(tokenIssuedAtMs(jwt({ iat: 1_700_000_000 }))).toBe(1_700_000_000_000);
+  });
+
+  it.each([
+    ['not a jwt', 'garbage'],
+    ['bad base64 payload', 'a.!!!.c'],
+    ['payload that is not JSON', `a.${Buffer.from('nope').toString('base64url')}.c`],
+    ['payload without iat', jwt({ sub: 'x' })],
+    ['non-numeric iat', jwt({ iat: '1700000000' })],
+    ['non-finite iat', jwt({ iat: null })],
+  ])('returns null for %s', (_name, token) => {
+    expect(tokenIssuedAtMs(token)).toBeNull();
+  });
+});
+
+describe('isSessionRevoked', () => {
+  const NOT_BEFORE = 2_000_000; // ms
+  const old = jwt({ iat: 1_999 });
+  const fresh = jwt({ iat: 2_000 });
+
+  it('never revokes while not-before is null', () => {
+    expect(isSessionRevoked({ cookie: `aionui-session=${old}` }, null)).toBe(false);
+    expect(isSessionRevoked({ cookie: 'aionui-session=garbage' }, null)).toBe(false);
+  });
+
+  it('revokes a cookie issued before not-before and keeps one issued at or after it', () => {
+    expect(isSessionRevoked({ cookie: `aionui-session=${old}` }, NOT_BEFORE)).toBe(true);
+    expect(isSessionRevoked({ cookie: `aionui-session=${fresh}` }, NOT_BEFORE)).toBe(false);
+  });
+
+  it('revokes a Bearer token issued before not-before and keeps a newer one', () => {
+    expect(isSessionRevoked({ authorization: `Bearer ${old}` }, NOT_BEFORE)).toBe(true);
+    expect(isSessionRevoked({ authorization: `Bearer ${fresh}` }, NOT_BEFORE)).toBe(false);
+  });
+
+  it('fails closed on an undecodable or iat-less token', () => {
+    expect(isSessionRevoked({ cookie: 'aionui-session=garbage' }, NOT_BEFORE)).toBe(true);
+    expect(isSessionRevoked({ authorization: 'Bearer garbage' }, NOT_BEFORE)).toBe(true);
+    expect(isSessionRevoked({ cookie: `aionui-session=${jwt({})}` }, NOT_BEFORE)).toBe(true);
+  });
+
+  it('checks every credential present, so a stale cookie cannot ride along a fresh Bearer', () => {
+    expect(isSessionRevoked({ cookie: `aionui-session=${old}`, authorization: `Bearer ${fresh}` }, NOT_BEFORE)).toBe(
+      true
+    );
+  });
+
+  it('leaves a request with no credential to the validator', () => {
+    expect(isSessionRevoked({}, NOT_BEFORE)).toBe(false);
+  });
+});
+
+describe('isRefreshRevoked / isRefreshRequest', () => {
+  const NOT_BEFORE = 2_000_000;
+
+  it('is off while not-before is null', () => {
+    expect(isRefreshRevoked(undefined, null)).toBe(false);
+  });
+
+  it('revokes an old refresh cookie and keeps a fresh one', () => {
+    expect(isRefreshRevoked(`aionui-refresh=${jwt({ iat: 1_999 })}`, NOT_BEFORE)).toBe(true);
+    expect(isRefreshRevoked(`a=b; aionui-refresh=${jwt({ iat: 2_000 })}`, NOT_BEFORE)).toBe(false);
+  });
+
+  it('fails closed on a missing, malformed or session-cookie-only refresh credential', () => {
+    expect(isRefreshRevoked(undefined, NOT_BEFORE)).toBe(true);
+    expect(isRefreshRevoked('aionui-refresh=garbage', NOT_BEFORE)).toBe(true);
+    expect(isRefreshRevoked(`aionui-session=${jwt({ iat: 3_000 })}`, NOT_BEFORE)).toBe(true);
+  });
+
+  it('recognizes only POST /api/auth/refresh, ignoring query and case', () => {
+    expect(isRefreshRequest('POST', '/api/auth/refresh')).toBe(true);
+    expect(isRefreshRequest('post', '/API/auth/Refresh?x=1')).toBe(true);
+    expect(isRefreshRequest('GET', '/api/auth/refresh')).toBe(false);
+    expect(isRefreshRequest('POST', '/api/auth/status')).toBe(false);
   });
 });

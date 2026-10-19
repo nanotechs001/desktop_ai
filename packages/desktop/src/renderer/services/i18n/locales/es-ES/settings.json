@@ -506,6 +506,8 @@
   "webui.passwordTooLong": "La contraseña debe tener menos de 128 caracteres",
   "webui.passwordTooCommon": "La contraseña es demasiado común, por favor elige una más segura",
   "webui.passwordChanged": "Contraseña cambiada correctamente",
+  "webui.signOutOthersNote": "Se cerrará la sesión en los demás dispositivos",
+  "webui.signOutOthersFailed": "No se pudo cerrar la sesión en los demás dispositivos. Reinicia la WebUI para aplicarlo.",
   "webui.passwordChangeFailed": "Error al cambiar la contraseña",
   "webui.usernameChanged": "Nombre de usuario actualizado correctamente",
   "webui.usernameChangeFailed": "Error al actualizar el nombre de usuario",

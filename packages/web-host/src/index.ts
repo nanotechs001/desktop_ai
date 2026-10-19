@@ -57,6 +57,7 @@ export async function startWebHost(opts: WebHostOptions): Promise<WebHostHandle>
       port: opts.port,
       allowRemote: opts.allowRemote ?? false,
       isTunnelActive: opts.isTunnelActive,
+      sessionsNotBefore: opts.sessionsNotBefore,
     });
   } catch (err) {
     // If static-server fails, clean up backend
@@ -72,6 +73,7 @@ export async function startWebHost(opts: WebHostOptions): Promise<WebHostHandle>
     localUrl: staticHandle.localUrl,
     networkUrl: staticHandle.networkUrl,
     lanIP: staticHandle.lanIP,
+    setSessionsNotBefore: staticHandle.setSessionsNotBefore,
     async stop() {
       await staticHandle.stop();
       await backendHandle.stop();

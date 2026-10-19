@@ -24,6 +24,9 @@ import {
   forwardingHeaders,
   GATE_LIMITS,
   isCanonicalPath,
+  isRefreshRequest,
+  isRefreshRevoked,
+  isSessionRevoked,
   normalizePath,
   type SessionValidator,
 } from './auth-gate/index.js';
@@ -35,6 +38,8 @@ export type StaticServerOptions = {
   allowRemote?: boolean;
   /** True while the Cloudflare tunnel runs; only then is a loopback peer's Cf-Connecting-Ip trusted. */
   isTunnelActive?: () => boolean;
+  /** Epoch ms: sessions and refresh tokens issued before it are refused (see isSessionRevoked). */
+  sessionsNotBefore?: number | null;
   /** Raw-listener timeouts; defaults suit production, tests shorten them. */
   timeouts?: { headerMs?: number; refuseLingerMs?: number };
 };
@@ -45,6 +50,8 @@ export type StaticServerHandle = {
   localUrl: string;
   networkUrl?: string;
   lanIP?: string;
+  /** Refuse sessions issued before this epoch ms (null = off) and drop the validation cache. */
+  setSessionsNotBefore: (ms: number | null) => void;
   stop: () => Promise<void>;
 };
 
@@ -307,6 +314,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
 
   const isTunnelActive = opts.isTunnelActive ?? (() => false);
   const validate = createSessionValidator(fetchAuthUser(opts.backendPort));
+  let sessionsNotBefore = opts.sessionsNotBefore ?? null;
   // Internal-server connections are local splices; map each one's local port back to the real client.
   const peers = new Map<number, string>();
   const headerMs = opts.timeouts?.headerMs ?? HEADER_TIMEOUT_MS;
@@ -326,11 +334,20 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     // Validate exactly the credentials aioncore will receive (a Connection-named cookie is gone from both).
     const creds = credentialsOf(headers);
     if (decision === 'auth') {
+      if (isSessionRevoked(creds, sessionsNotBefore)) {
+        replyError(res, 401, 'UNAUTHORIZED');
+        return;
+      }
       const verdict = await validate(creds);
       if (verdict !== 'valid') {
         replyError(res, verdict === 'invalid' ? 401 : 503, verdict === 'invalid' ? 'UNAUTHORIZED' : 'AUTH_UNAVAILABLE');
         return;
       }
+    }
+    // An old refresh token must not mint fresh tokens.
+    if (isRefreshRequest(method, url) && isRefreshRevoked(creds.cookie, sessionsNotBefore)) {
+      replyError(res, 401, 'UNAUTHORIZED');
+      return;
     }
     forwardToBackend(req, res, opts.backendPort, headers, (status) => {
       if (method === 'POST' && normalizePath(url) === '/logout' && status >= 200 && status < 300) {
@@ -424,7 +441,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       return;
     }
     const headers = forwardingHeaders(peer, head.headers, isTunnelActive());
-    const verdict = await validate(credentialsOf(headers));
+    const creds = credentialsOf(headers);
+    const verdict = isSessionRevoked(creds, sessionsNotBefore) ? 'invalid' : await validate(creds);
     if (client.destroyed) return;
     settle();
     if (verdict !== 'valid') {
@@ -527,6 +545,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     localUrl,
     networkUrl,
     lanIP,
+    setSessionsNotBefore: (ms) => {
+      sessionsNotBefore = ms;
+      validate.clear();
+    },
     stop: () =>
       new Promise<void>((resolve) => {
         tcp_server.close(() => {

@@ -24,6 +24,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { formatTime } from '@/renderer/services/i18n/format';
 import { useSettingsViewMode } from '../settingsViewContext';
+import { changeWebuiCredential } from './webuiCredentialChange';
 
 /**
  * 偏好设置行组件
@@ -402,6 +403,8 @@ const WebuiModalContent: React.FC = () => {
     setSetUsernameModalVisible(true);
   };
 
+  const warnSignOutFailed = () => Message.warning(t('settings.webui.signOutOthersFailed'));
+
   // 提交新密码 / Submit new password
   const handleSetNewPassword = async () => {
     try {
@@ -410,9 +413,11 @@ const WebuiModalContent: React.FC = () => {
 
       // changePassword goes through httpBridge; on 4xx/5xx it throws
       // BackendHttpError, caught below and translated via errorCodeMap.
-      await webui.changePassword.invoke({
-        newPassword: values.newPassword,
-      });
+      await changeWebuiCredential(
+        () => webui.changePassword.invoke({ newPassword: values.newPassword }),
+        () => webui.revokeSessions.invoke(),
+        warnSignOutFailed
+      );
       Message.success(t('settings.webui.passwordChanged'));
       setSetPasswordModalVisible(false);
       form.resetFields();
@@ -448,9 +453,11 @@ const WebuiModalContent: React.FC = () => {
 
       // HTTP bridge: changeUsername returns { username: string } directly;
       // httpBridge throws BackendHttpError on 4xx/5xx — caught below.
-      const result = await webui.changeUsername.invoke({
-        newUsername: values.newUsername,
-      });
+      const result = await changeWebuiCredential(
+        () => webui.changeUsername.invoke({ newUsername: values.newUsername }),
+        () => webui.revokeSessions.invoke(),
+        warnSignOutFailed
+      );
       const nextUsername = result?.username ?? values.newUsername.trim();
       Message.success(t('settings.webui.usernameChanged'));
       setSetUsernameModalVisible(false);
@@ -850,6 +857,7 @@ const WebuiModalContent: React.FC = () => {
           <Form.Item
             label={t('settings.webui.newUsername')}
             field='newUsername'
+            extra={t('settings.webui.signOutOthersNote')}
             rules={[
               { required: true, message: t('settings.webui.newUsernameRequired') },
               {
@@ -903,6 +911,7 @@ const WebuiModalContent: React.FC = () => {
           <Form.Item
             label={t('settings.webui.newPassword')}
             field='newPassword'
+            extra={t('settings.webui.signOutOthersNote')}
             rules={[
               { required: true, message: t('settings.webui.newPasswordRequired') },
               { minLength: 8, message: t('settings.webui.passwordMinLength') },

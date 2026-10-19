@@ -1707,6 +1707,8 @@ export const webui = {
   getStatus: bridge.buildProvider<IWebUIStatus, void>('webui.get-status'),
   start: bridge.buildProvider<IWebUIStartResult, { port?: number; allowRemote?: boolean }>('webui.start'),
   stop: bridge.buildProvider<void, void>('webui.stop'),
+  /** Sign out every other WebUI device (main process owns the running web host). */
+  revokeSessions: bridge.buildProvider<void, void>('webui.revoke-sessions'),
   statusChanged: bridge.buildEmitter<{
     running: boolean;
     port?: number;

@@ -2690,6 +2690,8 @@ export type I18nKey =
   | 'settings.webui.running'
   | 'settings.webui.setNewPassword'
   | 'settings.webui.setNewUsername'
+  | 'settings.webui.signOutOthersFailed'
+  | 'settings.webui.signOutOthersNote'
   | 'settings.webui.startFailed'
   | 'settings.webui.startSuccess'
   | 'settings.webui.starting'

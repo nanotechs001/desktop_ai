@@ -518,6 +518,8 @@
   "webui.passwordTooLong": "Şifre 128 karakterden az olmalıdır",
   "webui.passwordTooCommon": "Şifre çok yaygın, lütfen daha güçlü bir şifre seçin",
   "webui.passwordChanged": "Şifre başarıyla değiştirildi",
+  "webui.signOutOthersNote": "Diğer cihazların oturumu kapatılacak",
+  "webui.signOutOthersFailed": "Diğer cihazların oturumu kapatılamadı. Uygulamak için WebUI'yi yeniden başlatın.",
   "webui.passwordChangeFailed": "Şifre değiştirilemedi",
   "webui.usernameChanged": "Kullanıcı adı başarıyla güncellendi",
   "webui.usernameChangeFailed": "Kullanıcı adı güncellenemedi",

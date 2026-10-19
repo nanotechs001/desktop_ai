@@ -17,6 +17,7 @@ const WEBUI_CONFIG_FILE = 'webui.config.json';
 const DESKTOP_WEBUI_ENABLED_KEY = 'webui.desktop.enabled';
 const DESKTOP_WEBUI_ALLOW_REMOTE_KEY = 'webui.desktop.allowRemote';
 const DESKTOP_WEBUI_PORT_KEY = 'webui.desktop.port';
+const DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY = 'webui.desktop.sessionsNotBefore';
 
 /**
  * Read WebUI preferences from the backend's /api/settings/client store.
@@ -52,6 +53,18 @@ async function writeWebUIDesktopEnabled(enabled: boolean): Promise<void> {
     await httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_ENABLED_KEY]: enabled });
   } catch (error) {
     console.error('[WebUI] Failed to reconcile webui.desktop.enabled on backend:', error);
+  }
+}
+
+/** Epoch ms before which WebUI sessions are refused; null when never set or unreadable (logged). */
+async function readSessionsNotBefore(): Promise<number | null> {
+  try {
+    const settings = await httpRequest<Record<string, unknown>>('GET', '/api/settings/client');
+    const value = settings?.[DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY];
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+  } catch (error) {
+    console.error('[WebUI] Failed to read sessionsNotBefore from backend:', error);
+    return null;
   }
 }
 
@@ -209,6 +222,16 @@ const toDesktopHandle = (handle: WebHostHandle, allowRemote: boolean): DesktopWe
 });
 
 /**
+ * Sign out every other WebUI device: sessions issued before `now` are refused by the running
+ * web host at once, and the value is saved so the next WebUI start applies it too. The push
+ * happens first, so a save failure (which rejects) never leaves old sessions alive.
+ */
+export async function revokeOtherWebUISessions(now: number = Date.now()): Promise<void> {
+  currentHandle?.setSessionsNotBefore(now);
+  await httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY]: now });
+}
+
+/**
  * Spawn a WebUI instance (static server + backend) and remember the handle so
  * callers can later stop it or query its status.
  *
@@ -232,6 +255,8 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     throw new Error('[WebUI] Cannot start: aioncore is not running (globalThis.__backendPort unset)');
   }
 
+  const sessionsNotBefore = await readSessionsNotBefore();
+
   const handle = await startWebHost({
     app: {
       version: app.getVersion(),
@@ -247,6 +272,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     staticDir: path.join(__dirname, '../renderer'),
     port: preferredPort,
     allowRemote,
+    sessionsNotBefore,
     // Must align with the desktop IPC path's backend dataDir (src/index.ts), otherwise
     // users see divergent SQLite state between desktop app and bundled WebUI.
     dataDir: getDataPath(),

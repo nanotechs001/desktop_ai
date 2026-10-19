@@ -518,6 +518,8 @@
   "webui.passwordTooLong": "密碼不能超過128個字元",
   "webui.passwordTooCommon": "密碼過於常見，請選擇更強的密碼",
   "webui.passwordChanged": "密碼修改成功",
+  "webui.signOutOthersNote": "其他裝置將被登出",
+  "webui.signOutOthersFailed": "無法登出其他裝置。請重新啟動 WebUI 以生效。",
   "webui.passwordChangeFailed": "密碼修改失敗",
   "webui.usernameChanged": "使用者名稱修改成功",
   "webui.usernameChangeFailed": "使用者名稱修改失敗",

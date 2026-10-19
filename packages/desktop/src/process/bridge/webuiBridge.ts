@@ -20,6 +20,7 @@ import {
   stopDesktopWebUI,
   getDesktopWebUIStatus,
   setDesktopWebUIInitialPassword,
+  revokeOtherWebUISessions,
 } from '@process/utils/webuiConfig';
 
 type AdminUsernameResult = { username?: string };
@@ -98,6 +99,10 @@ export function initWebuiBridge(): void {
       initialPassword: handle.initialPassword,
     });
     return handle;
+  });
+
+  ipcBridge.webui.revokeSessions.provider(async () => {
+    await revokeOtherWebUISessions();
   });
 
   ipcBridge.webui.stop.provider(async () => {

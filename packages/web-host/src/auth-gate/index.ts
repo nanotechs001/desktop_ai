@@ -80,17 +80,60 @@ export function classifyRequest(method: string, rawPath: string): GateDecision {
 type SessionHeaders = { cookie?: string; authorization?: string };
 
 const SESSION_COOKIE = 'aionui-session';
+const REFRESH_COOKIE = 'aionui-refresh';
 
-/** Mirrors aioncore's `extract_cookie_value`: the first non-empty `aionui-session` value wins. */
-function sessionCookieValue(cookie: string | undefined): string {
+/** Mirrors aioncore's `extract_cookie_value`: the first non-empty value for `name` wins. */
+function cookieValue(cookie: string | undefined, name: string): string {
   for (const part of (cookie ?? '').split(';')) {
     const trimmed = part.trim();
     const eq = trimmed.indexOf('=');
-    if (eq < 0 || trimmed.slice(0, eq).trim() !== SESSION_COOKIE) continue;
+    if (eq < 0 || trimmed.slice(0, eq).trim() !== name) continue;
     const value = trimmed.slice(eq + 1).trim();
     if (value) return value;
   }
   return '';
+}
+
+const sessionCookieValue = (cookie: string | undefined): string => cookieValue(cookie, SESSION_COOKIE);
+
+/**
+ * `iat` of a JWT in epoch ms, read from the UNVERIFIED payload (aioncore still verifies the
+ * signature). Null when the token cannot be decoded or has no numeric `iat`.
+ */
+export function tokenIssuedAtMs(token: string): number | null {
+  const payload = token.split('.')[1];
+  if (!payload) return null;
+  try {
+    const iat = (JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { iat?: unknown } | null)?.iat;
+    return typeof iat === 'number' && Number.isFinite(iat) ? iat * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fail closed: an undecodable token or one without iat counts as issued before any not-before.
+const issuedBefore = (token: string, notBefore: number): boolean => (tokenIssuedAtMs(token) ?? -Infinity) < notBefore;
+
+/**
+ * True when a credential on this request predates `sessionsNotBefore` (epoch ms; null = off).
+ * Checks every credential aioncore might use: the `Bearer` token and the session cookie.
+ * A request with no credential is left to the validator.
+ */
+export function isSessionRevoked(headers: SessionHeaders, sessionsNotBefore: number | null): boolean {
+  if (sessionsNotBefore === null) return false;
+  const bearer = headers.authorization?.startsWith('Bearer ') ? headers.authorization.slice(7) : '';
+  return [bearer, sessionCookieValue(headers.cookie)].some((t) => t !== '' && issuedBefore(t, sessionsNotBefore));
+}
+
+/** True when the refresh cookie predates `sessionsNotBefore`, or is missing (the body fallback cannot be checked). */
+export function isRefreshRevoked(cookie: string | undefined, sessionsNotBefore: number | null): boolean {
+  if (sessionsNotBefore === null) return false;
+  const token = cookieValue(cookie, REFRESH_COOKIE);
+  return token === '' || issuedBefore(token, sessionsNotBefore);
+}
+
+export function isRefreshRequest(method: string, rawPath: string): boolean {
+  return method.toUpperCase() === 'POST' && normalizePath(rawPath)?.toLowerCase() === '/api/auth/refresh';
 }
 
 type Verdict = 'valid' | 'invalid' | 'unavailable';

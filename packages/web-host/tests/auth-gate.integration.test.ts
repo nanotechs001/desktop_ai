@@ -37,7 +37,8 @@ async function startFakeBackend(): Promise<FakeBackend> {
       authCalls += 1;
       const cookie = req.headers.cookie ?? '';
       // Like the live aioncore: a revoked session is 401, a garbage cookie or token is 400.
-      const status = cookie.includes(GOOD) ? (revoked ? 401 : 200) : 400;
+      const goodToken = /\.good\b/.test(cookie + (req.headers.authorization ?? '')); // see jwtFor()
+      const status = cookie.includes(GOOD) || goodToken ? (revoked ? 401 : 200) : 400;
       res.writeHead(forced ?? status).end();
       return;
     }
@@ -422,5 +423,104 @@ describe('WebUI listener peer address', () => {
     expect(fake.on).not.toHaveBeenCalledWith('data', expect.anything());
     await handle.stop();
     await backend.close();
+  });
+});
+
+describe('WebUI listener sessionsNotBefore', () => {
+  const NOT_BEFORE_S = 2_000_000_000; // seconds; setSessionsNotBefore takes ms
+  // aioncore (fake) accepts any token whose signature segment is "good"; the gate only reads iat.
+  const jwtFor = (iatSeconds: number | null, refresh = false): string =>
+    `e30.${Buffer.from(JSON.stringify(iatSeconds === null ? { r: refresh } : { iat: iatSeconds })).toString('base64url')}.good`;
+  const OLD = jwtFor(NOT_BEFORE_S - 1);
+  const NEW = jwtFor(NOT_BEFORE_S);
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    backend = await startFakeBackend();
+    handle = await startStaticServer({
+      staticDir: STATIC_DIR,
+      backendPort: backend.port,
+      port: 0,
+      sessionsNotBefore: NOT_BEFORE_S * 1000,
+    });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  it('refuses a cookie issued before not-before, and lets a newer one through', async () => {
+    const stale = await request(handle.port, 'GET', '/api/agents', { cookie: `aionui-session=${OLD}` });
+    expect(stale.status).toBe(401);
+    expect(backend.seen).toHaveLength(0);
+    const fresh = await request(handle.port, 'GET', '/api/agents', { cookie: `aionui-session=${NEW}` });
+    expect(fresh.status).toBe(200);
+  });
+
+  it('refuses a Bearer token issued before not-before, and lets a newer one through', async () => {
+    expect((await request(handle.port, 'GET', '/api/agents', { authorization: `Bearer ${OLD}` })).status).toBe(401);
+    expect((await request(handle.port, 'GET', '/api/agents', { authorization: `Bearer ${NEW}` })).status).toBe(200);
+    expect(backend.seen).toHaveLength(1);
+  });
+
+  it('refuses a malformed token and one without iat while not-before is set', async () => {
+    for (const token of ['garbage.good', jwtFor(null)]) {
+      const r = await request(handle.port, 'GET', '/api/agents', { cookie: `aionui-session=${token}` });
+      expect(r.status).toBe(401);
+    }
+    expect(backend.seen).toHaveLength(0);
+  });
+
+  it('refuses a WebSocket upgrade with an old cookie and accepts one with a new cookie', async () => {
+    const old = await rawExchange(handle.port, [upgrade('/ws', `Cookie: aionui-session=${OLD}\r\n`)]);
+    expect(old.text.startsWith('HTTP/1.1 401')).toBe(true);
+    expect(backend.seen).toHaveLength(0);
+    const fresh = await rawExchange(handle.port, [upgrade('/ws', `Cookie: aionui-session=${NEW}\r\n`)]);
+    expect(fresh.text.startsWith('HTTP/1.1 101')).toBe(true);
+  });
+
+  it('refuses an old refresh cookie without forwarding it, and forwards a new one', async () => {
+    const stale = await request(handle.port, 'POST', '/api/auth/refresh', { cookie: `aionui-refresh=${OLD}` });
+    expect(stale.status).toBe(401);
+    const none = await request(handle.port, 'POST', '/api/auth/refresh');
+    expect(none.status).toBe(401);
+    expect(backend.seen).toHaveLength(0);
+    const fresh = await request(handle.port, 'POST', '/api/auth/refresh', { cookie: `aionui-refresh=${NEW}` });
+    expect(fresh.status).toBe(200);
+    expect(backend.seen.map((s) => s.url)).toEqual(['/api/auth/refresh']);
+  });
+
+  it('keeps login, logout and status open', async () => {
+    expect((await request(handle.port, 'POST', '/login')).status).toBe(200);
+    expect((await request(handle.port, 'GET', '/api/auth/status')).status).toBe(200);
+  });
+
+  it('setSessionsNotBefore applies at once, clears the validator cache, and null turns it off', async () => {
+    const cookie = `aionui-session=${OLD}`;
+    handle.setSessionsNotBefore(null);
+    expect((await request(handle.port, 'GET', '/api/agents', { cookie })).status).toBe(200);
+    expect((await request(handle.port, 'GET', '/api/agents', { cookie })).status).toBe(200);
+    expect(backend.authCalls).toBe(1); // second hit served from the cache
+    handle.setSessionsNotBefore(NOT_BEFORE_S * 1000);
+    expect((await request(handle.port, 'GET', '/api/agents', { cookie })).status).toBe(401);
+    handle.setSessionsNotBefore(null);
+    expect((await request(handle.port, 'GET', '/api/agents', { cookie })).status).toBe(200);
+    expect(backend.authCalls).toBe(2); // cache was cleared by the setter
+  });
+});
+
+describe('WebUI listener without sessionsNotBefore', () => {
+  it("keeps today's behaviour: a malformed token that aioncore accepts passes", async () => {
+    const backend = await startFakeBackend();
+    const handle = await startStaticServer({ staticDir: STATIC_DIR, backendPort: backend.port, port: 0 });
+    try {
+      expect((await request(handle.port, 'GET', '/api/agents', { cookie: GOOD })).status).toBe(200);
+      expect((await request(handle.port, 'POST', '/api/auth/refresh', {})).status).toBe(200);
+    } finally {
+      await handle.stop();
+      await backend.close();
+    }
   });
 });

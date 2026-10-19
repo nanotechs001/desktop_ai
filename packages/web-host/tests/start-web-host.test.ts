@@ -61,6 +61,32 @@ describe('startWebHost', () => {
     vi.doUnmock('../src/static-server.js');
   });
 
+  test('Passes sessionsNotBefore to the static server and exposes its setter', async () => {
+    const setSessionsNotBefore = vi.fn();
+    const startStaticServer = vi.fn().mockResolvedValue({
+      port: 33000,
+      url: 'http://127.0.0.1:33000',
+      localUrl: 'http://127.0.0.1:33000',
+      setSessionsNotBefore,
+      stop: vi.fn().mockResolvedValue(undefined),
+    });
+    vi.doMock('../src/static-server.js', () => ({ startStaticServer }));
+
+    const { startWebHost } = await import('../src/index.js');
+    const handle = await startWebHost({
+      app: { version: '1.0.0', isPackaged: false, resourcesPath: '/app', userDataPath: '/tmp/test-data' },
+      staticDir: '/tmp/static',
+      sessionsNotBefore: 1_700_000_000_000,
+      backend: { kind: 'useExistingBackend', port: 55555 },
+    });
+
+    expect(startStaticServer).toHaveBeenCalledWith(expect.objectContaining({ sessionsNotBefore: 1_700_000_000_000 }));
+    handle.setSessionsNotBefore(42);
+    expect(setSessionsNotBefore).toHaveBeenCalledWith(42);
+
+    vi.doUnmock('../src/static-server.js');
+  });
+
   test.todo('Backend port conflict: throws and does not leak resources');
   test.todo('Static-server port conflict: cleans up backend before throwing');
   test.todo('Stop cleanup: stops static-server then backend in sequence');
