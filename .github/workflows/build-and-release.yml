@@ -16,7 +16,7 @@ env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
 
 jobs:
-  # 独立 code-quality job,供桌面构建和 web-cli 打包共用,避免重复跑
+  # Standalone code-quality job shared by the desktop builds, so it runs only once
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
