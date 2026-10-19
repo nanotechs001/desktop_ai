@@ -288,7 +288,8 @@ export const useAssistantEditor = ({
     setEditDescription(assistant.description || '');
     setEditAvatar(assistant.avatar || '');
     setEditAvatarPreview(undefined);
-    setEditColor(configService.get('agent.colors')?.[assistant.id] ?? '');
+    const storedColor = configService.get('agent.colors')?.[assistant.id];
+    setEditColor(isBotColor(storedColor) ? storedColor : '');
     setEditAgent(assistant.agent_id || '');
     // A generated (bare CLI) Agent is the engine itself: it never follows the default.
     setEditUsesDefault(!isGeneratedAssistant(assistant) && !configService.get('agent.enginePins')?.[assistant.id]);
@@ -542,7 +543,10 @@ export const useAssistantEditor = ({
         // The Agent exists from here on: if a step below fails, Save again updates it instead of creating another.
         setIsCreating(false);
         setActiveAssistantId(created.id);
-        await rememberBotColor(created.id, isBotColor(editColor) ? editColor : newBotColor());
+        // A failed color write must not skip the rest: the Agent exists and the fallback dot still shows.
+        await rememberBotColor(created.id, isBotColor(editColor) ? editColor : newBotColor()).catch((error: unknown) =>
+          console.warn('[useAssistantEditor] could not store the new Agent color:', error)
+        );
         await refreshAssistantCatalog();
         if (!(await persistAssistantRules(created.id, editContext))) return;
         await syncEnginePin(created.id, editUsesDefault, engineId);

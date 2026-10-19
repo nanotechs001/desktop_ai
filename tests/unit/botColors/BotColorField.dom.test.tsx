@@ -43,6 +43,16 @@ describe('BotColorField', () => {
     expect(screen.getByRole('button', { name: BOT_COLOR_PALETTE[4] })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('rings only the current swatch, with classes the stylesheet really generates', () => {
+    renderField(BOT_COLOR_PALETTE[3]);
+    const selected = screen.getByRole('button', { name: BOT_COLOR_PALETTE[3] });
+    for (const name of ['outline-2px', 'outline-solid', 'outline-primary', 'outline-offset-2px']) {
+      expect(selected).toHaveClass(name);
+    }
+    expect(selected.className).not.toMatch(/\bring-/);
+    expect(screen.getByRole('button', { name: BOT_COLOR_PALETTE[4] })).not.toHaveClass('outline-primary');
+  });
+
   it('reports a clicked swatch', () => {
     const onChange = renderField(BOT_COLOR_PALETTE[0]);
     fireEvent.click(screen.getByRole('button', { name: BOT_COLOR_PALETTE[5] }));

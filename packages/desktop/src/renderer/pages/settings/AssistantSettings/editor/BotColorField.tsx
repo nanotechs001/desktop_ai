@@ -27,7 +27,7 @@ const BotColorField: React.FC<BotColorFieldProps> = ({ value, onChange }) => {
           aria-label={color}
           aria-pressed={color === current}
           onClick={() => onChange(color)}
-          className={`!h-20px !w-20px !min-w-0 !border-none !p-0 ${color === current ? 'ring-2 ring-primary-6 ring-offset-2' : ''}`}
+          className={`!h-20px !w-20px !min-w-0 !border-none !p-0 ${color === current ? 'outline-2px outline-solid outline-primary outline-offset-2px' : ''}`}
           style={{ backgroundColor: color }}
         />
       ))}

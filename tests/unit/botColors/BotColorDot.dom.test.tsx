@@ -17,6 +17,14 @@ describe('BotColorDot', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it.each(['red', 'red;', 'url(x)', '#abc', '#12345g', 'rgb(0,0,0)', '#112233; background: red'])(
+    'renders nothing for the invalid color %j',
+    (color) => {
+      const { container } = render(<BotColorDot color={color} />);
+      expect(container).toBeEmptyDOMElement();
+    }
+  );
+
   it('paints a small round dot hidden from assistive tech', () => {
     const { container } = render(<BotColorDot color='#3e63dd' />);
     const dot = container.firstElementChild as HTMLElement;

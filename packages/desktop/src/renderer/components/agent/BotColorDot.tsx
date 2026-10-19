@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isBotColor } from '@/common/types/agent/botColors';
 import React from 'react';
 
 type BotColorDotProps = {
-  /** `#rrggbb`; nothing is drawn without one. */
+  /** `#rrggbb`; nothing is drawn without a valid one, so a bad stored value never reaches a style. */
   color?: string;
   size?: number;
   className?: string;
@@ -15,7 +16,7 @@ type BotColorDotProps = {
 
 /** The small dot that marks a VA Bot's color. Decorative: the bot's name is always shown beside it. */
 const BotColorDot: React.FC<BotColorDotProps> = ({ color, size = 8, className }) => {
-  if (!color) return null;
+  if (!isBotColor(color)) return null;
   // The color is data (user-chosen), so it cannot be a utility class.
   return (
     <span

@@ -902,6 +902,50 @@ describe('useAssistantEditor', () => {
       expect(result.current.editColor).toBe('');
     });
 
+    it.each(['red;', 'url(x)', '#12', 42])(
+      'opens an Agent whose stored color is malformed (%j) with no color',
+      async (bad) => {
+        engineConfig.store.set('agent.colors', { a1: bad });
+        const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
+
+        await act(async () => {
+          await result.current.handleEdit(userAssistant);
+        });
+
+        expect(result.current.editColor).toBe('');
+      }
+    );
+
+    it('still finishes creating the Agent when the color cannot be stored', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'new-id' });
+      const loadAssistants = vi.fn();
+      const originalSet = engineConfig.configService.set.getMockImplementation()!;
+      engineConfig.configService.set.mockImplementation(async (key: string, value: unknown) => {
+        if (key === 'agent.colors') throw new Error('settings down');
+        return originalSet(key, value);
+      });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, loadAssistants }));
+
+      await act(async () => {
+        await result.current.handleCreate();
+      });
+      act(() => result.current.setEditName('Fresh'));
+      await act(async () => {
+        await result.current.handleSave();
+      });
+      engineConfig.configService.set.mockImplementation(originalSet);
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('color'), expect.any(Error));
+      expect(loadAssistants).toHaveBeenCalled();
+      expect(ipcBridge.agentBrowser.ensureAgentRule.invoke).toHaveBeenCalled();
+      expect(mockMessage.success).toHaveBeenCalled();
+      expect(result.current.editVisible).toBe(false);
+      error.mockRestore();
+      warn.mockRestore();
+    });
+
     it('saves a changed color of an existing Agent with Save, and writes nothing when it did not change', async () => {
       (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
       engineConfig.store.set('agent.colors', { a1: '#112233', other: '#445566' });
