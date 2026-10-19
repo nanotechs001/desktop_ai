@@ -130,7 +130,7 @@ describe('buildHookScript', () => {
     const out = JSON.parse(blocked.stdout);
     expect(out.decision).toBe('block');
     expect(out.reason).toBe(
-      'Use the Pixebot Browser browser pane tools (aionui-browser) instead of opening an external browser.'
+      'Use the Pixebot browser pane tools (aionui-browser) instead of opening an external browser.'
     );
     expect(out.hookSpecificOutput).toEqual({
       hookEventName: 'PreToolUse',

@@ -35,6 +35,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/renderer/utils/platform', () => ({
   isElectronDesktop: () => true,
+  isMacOS: () => true,
 }));
 
 vi.mock('@/renderer/components/base/AionScrollArea', () => ({
