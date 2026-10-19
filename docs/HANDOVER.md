@@ -6,24 +6,13 @@ Pixebot Browser is a rebrand of the AionUi desktop app (Electron + React), with 
 
 ## Where things are
 
-|                      |                                                                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repo                 | https://github.com/nanotechs001/desktop_ai (local: `E:\AI_WORKER\desktop_ai`)                                                                  |
-| Working branch       | `feat/pixebot-browser` — **nothing pushed yet**                                                                                                |
-| Backend              | `core/` (squashed git subtree of AionCore v0.2.2 + our "Always allow" fix)                                                                     |
-| Old backend checkout | `E:\AI_WORKER\AionCore` (fork `nanotechs001/AionCore`, branch `fix/claude-always-allow`). No longer needed; its 3 GB `target/` can be deleted. |
-| Dev data             | `%APPDATA%\AionUi-Dev\` (database backup: `aionui\backup-before-lf-checksums\`)                                                                |
+|          |                                                                                 |
+| -------- | ------------------------------------------------------------------------------- |
+| Repo     | https://github.com/nanotechs001/desktop_ai                                      |
+| Backend  | `core/` (squashed git subtree of AionCore v0.2.2 + our "Always allow" fix)      |
+| Dev data | `%APPDATA%\AionUi-Dev\` (database backup: `aionui\backup-before-lf-checksums\`) |
 
-Commits on the branch (oldest first):
-
-1. `5160386ec` feat: Pixebot Browser rebrand, VA Bots and floating desktop robots
-2. `7ae079286` / `2e3c38dab` chore(core): add AionCore backend under `core/`
-3. `94404d22d` build(core): run the app on the in-repo backend
-4. `d02d36c74` feat(titlebar): halo-orb VA Bots icon, drop logo from nav; add handover notes (also reformatted `core/` by accident)
-5. `a8c9ec823` chore(core): undo accidental formatting of the backend sources (`core/` now matches `2e3c38dab` exactly)
-6. `3d69252c2` chore: keep formatter and linter out of `core/` (`.prettierignore`, `.oxlintrc.json`)
-
-**Status check (2026-10-18):** working tree clean; branch has no upstream (not pushed). `core/target/release/aioncore.exe` is built (14:14). Installer steps 1–2 below were done and the backend bundle verified later the same day, the appId and data folder were switched (Decisions 1–2), and a test installer was rebuilt (all uncommitted); next is step 4, installing and checking it. The update paths no longer touch upstream (both read `nanotechs001/desktop_ai` releases); the remaining upstream-disconnect items are under Next.
+**Status check (2026-10-18):** the update paths no longer touch upstream (both read `nanotechs001/desktop_ai` releases); the remaining upstream-disconnect items are under Next.
 
 ## Run it
 
@@ -48,7 +37,7 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 - Needs a Mac (or a macOS CI runner): `scripts/prepareLocalCore.js` builds `core/` for the host only, so run `bun run build-mac:arm64` / `build-mac:x64` on that architecture (or `AIONUI_BACKEND_SOURCE=release`, which bundles the stock backend without our fixes).
 - Signing/notarization: `electron-builder.yml` `mac` uses hardened runtime + `entitlements.plist`; `scripts/afterSign.js` notarizes only when `appleId` / `appleIdPassword` (and a Developer ID certificate via `CSC_LINK`/keychain) are set — otherwise the app is unsigned and Gatekeeper blocks it on other Macs.
 - Never run on macOS: the robot widget (always-on-top level `floating`, click-through), browser panel and updater (`latest-mac.yml` in GitHub releases) need a check on a real Mac.
-- `.github/workflows/build-and-release.yml` etc. are upstream's CI; they don't use `prepareLocalCore` and need adapting before CI can produce Mac builds.
+- `.github/workflows/build-and-release.yml` and `_build-reusable.yml` don't use `prepareLocalCore` and need adapting before CI can produce Mac builds. The upstream-only workflows (project automation, issue triage, GPT review, web-cli packing, release distribution) are removed.
 
 **Mobile app (`mobile/`, Expo) — rebranded 2026-10-18, not built yet**
 
@@ -84,7 +73,7 @@ Checks: `bunx tsc --noEmit`, `bun run lint` (0 errors expected; ~985 warnings ar
 **Official agents (VA Bots "Official" tab)**
 
 - Defined only in this repo and compiled into the backend: `core/crates/aionui-app/assets/builtin-assistants/` (`assistants.json`, `rules/<id>.<locale>.md`, `avatars/<id>.jpg`) and `core/crates/aionui-app/assets/builtin-skills/` (embedded via `include_dir!` in `aionui-assistant/src/builtin.rs` and `aionui-extension/src/skill_service.rs`). Nothing fetches them at runtime. Edit them there and rebuild `core/`.
-- They come from upstream only if the backend does: `AIONUI_BACKEND_SOURCE=release` builds and `scripts/pack-web-cli.js` (always downloads) bundle the stock AionCore with upstream's agents. A `git subtree pull` into `core/` can overwrite local edits to these files.
+- They come from upstream only if the backend does: `AIONUI_BACKEND_SOURCE=release` builds bundle the stock AionCore with upstream's agents. A `git subtree pull` into `core/` can overwrite local edits to these files.
 - (2026-10-18) Rebranded: every user-facing "AionUi" in `assistants.json` (all locales, e.g. "Pixebot Browser Butler"), the rule files (en-US, ru-RU, zh-CN) and the `builtin-skills` texts now says "Pixebot Browser". Identifiers are unchanged: agent ids (`aionui-assistant`), skill names (`aionui-config`, `aionui-troubleshooting`, `aionui-webui-*`), `aioncore`, `AIONUI_*`, `@aionui/webui`, file names. Kept on purpose: the Moltbook agent's `AionUi-` name prefix and "Powered by @aionui" line (a handle on a third-party site), the upstream wiki links in `aionui-webui-setup`, and paths/commands that name real AionUi files (`/Applications/AionUi.app`, `%APPDATA%/AionUi/webui.config.json`, `ps aux | grep AionUi`, sample `log_dir`, the font paths in `xiaohongshu-recruiter/scripts/generate_images.js`); check those against a real Pixebot install. The WebUI probe in `aionui-webui-public` accepts either `<title>`. Some texts still say Settings is "bottom left", which no longer matches the titlebar layout. Auto-inject skill descriptions must stay ≤ 200 chars (test in `aionui-extension/src/skill_service.rs`). `cargo test -p aionui-assistant` passes; `-p aionui-extension` passes except 5 Unix-only tests (`lifecycle::tests::test_execute_hook_*`, `import_skills_replaces_dangling_link_with_copy`) that fail on Windows regardless. **Not yet in the release binary:** `bun run core:build` was skipped (dev app kept running), so `core/target/release/aioncore.exe` still carries the old texts until the next `core:build` (close the dev app first).
 
 **Backend**
@@ -120,8 +109,7 @@ Functional (do first; these would talk to upstream):
 - [x] `useUpdateNotificationController.ts` releases URL → `${APP_REPO_URL}/releases`.
 - [ ] Backend download (`packages/shared-scripts/src/prepare-aioncore.js`, `scripts/prepareAioncore.js`) — replaced by the step above; keep only as an optional fallback or remove.
 - [x] Model API attribution headers (done 2026-10-18): `common/api/ClientFactory.ts` sends `HTTP-Referer: APP_REPO_URL` and `X-Title: APP_PRODUCT_NAME` (OpenRouter app attribution) instead of `aionui.com` / `AionUi`.
-- [x] Hub extensions at build time (done 2026-10-18): `scripts/prepareHubResources.js` copies a pinned copy from `resources/hub-vendor/` (AionHub `dist-latest` @ `f9570c4`, verified against `hub-vendor.lock.json`) into `resources/hub/`; no network request. `AIONUI_HUB_DOWNLOAD=1` (with optional `AIONUI_HUB_TAG`) restores the upstream download; `AIONUI_HUB_SKIP=1` still skips. Refresh steps: `resources/hub-vendor/README.md`.
-  - What they are: seven `aionext-*` zips (Auggie, Claude Code, CodeBuddy, Codex, Goose, OpenCode, Qwen Code), each an `aion-extension.json` registering one ACP adapter plus a `scripts/install.ts` that `bun install`s that agent's npm packages. Runtime finding: nothing in this app reads the bundled `hub/` folder except the startup-failure diagnostics (`missingHubDir` in `process/startup/backendStartupFailure.ts`). The backend's hub (`/api/hub/*`, `HubIndexManager`) reads `index.json` from the user-data extensions folder, and its parser expects `extensions` as a list, while this `index.json` has a map, so it would not parse it anyway. Likely dead weight; kept to avoid removing functionality.
+- [x] Hub extensions (removed 2026-10-19): the vendored AionHub zips (`resources/hub-vendor/`), `scripts/prepareHubResources.js`, the `hub/` extraResources entry and the `missingHubDir` startup diagnostic are gone; the hub UI had already been removed and nothing read the bundled `hub/` folder.
 - [ ] Skills market (`core/crates/aionui-extension/src/constants.rs` `SKILLS_MARKET_PATH = https://github.com/AionUI/aionui-skills`): left as is. It is only an identifier: the home-page toggle stores it as a custom skill source, and skill scanning skips it because it is not a folder; nothing fetches it. Changing the string would leave the old entry orphaned for anyone who already turned it on (disable matches the new string only). If the toggle should go, hide `SkillsMarketBanner` instead.
 - [ ] Backend version check (`core/crates/aionui-system/src/version.rs` `DEFAULT_REPO = iOfficeAI/AionUi`, used when a request names no repo). The desktop updater does not call it; change it in `core/` when convenient.
 
@@ -133,8 +121,7 @@ In-app links (repoint to the own repo, or hide when there is no equivalent):
 
 Repo infrastructure:
 
-- [ ] `.github/ISSUE_TEMPLATE/config.yml`, `.github/workflows/project-automation.yml` and `issue-triage.yml` (upstream org/project specific), `pr-checks.yml` (`iOfficeAI/AionUi` repo check), `homebrew/aionui.rb.example`, `.claude/skills/bump-version/SKILL.md`.
-- [x] `scripts/install-ubuntu.sh`, `scripts/install-web.sh` (2026-10-18): URLs now point at `nanotechs001/desktop_ai`, and the header marks them UNSUPPORTED: asset names and install paths are still AionUi's and no matching release assets exist yet.
+- [x] Upstream repo infrastructure (removed 2026-10-19): upstream workflows and `.github` meta files (issue templates, CODEOWNERS, triage map, GPT review actions), `pr-checks.yml` / `_build-reusable.yml` repo guards and the discontinued-build flag, `homebrew/`, the web-cli package and its install/release-asset scripts, `Dockerfile`, `Makefile`, `.gemini/`, `.specify/`, `.claude/skills/bump-version/`, upstream PRDs/guides/e2e docs, README media. Release updater metadata (`latest*.yml`) is now assembled inline in `build-and-release.yml`.
 - [x] Root `package.json` author → `nanotechs001` / `nanotechs001@users.noreply.github.com` (placeholder contact; electron-builder uses it as the Linux package maintainer and Windows company name — replace with a real address if wanted). `"name": "AionUi"` kept: Electron derives `app.getName()` from it (no `productName` in the root package.json), which feeds the dev data folder, single-instance lock and macOS safe-storage key, so renaming it could orphan existing data.
 - Kept on purpose: `iOfficeAI/OfficeCli` links and installer URLs (third-party tool the Office agents need); `core/Cargo.toml` git dependency on `iOfficeAI/aionrs` (build-time source for the agent crates; vendor or fork it to cut that tie); `core/scripts/just/update-aionrs.*`; `copyright: Copyright © 2024 AionUi` and the Apache license headers (attribution required by the license); upstream issue numbers in code comments and test fixtures.
 

@@ -1,6 +1,6 @@
-# AionUi - Project Guide
+# Pixebot Browser - Project Guide
 
-All contributors (human and AI) must follow [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. ([Chinese version](CONTRIBUTING.zh.md))
+All contributors (human and AI) must follow [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ## Code Conventions
 
@@ -61,7 +61,7 @@ Two process types — never mix their APIs:
 | Renderer | `packages/desktop/src/renderer/` | No Node.js APIs |
 
 Cross-process communication must go through the IPC bridge (`packages/desktop/src/preload/`).
-See [docs/architecture/overview.md](docs/architecture/overview.md) for details.
+See [docs/contributing/file-structure.md](docs/contributing/file-structure.md) for the layout of each process.
 
 ## Testing
 
@@ -138,17 +138,14 @@ Commits and PR titles must follow the Conventional Commit format defined in [CON
 
 Allowed types: `feat`, `fix`, `perf`, `refactor`, `docs`, `style`, `chore`, `test`, `ci`, `build`.
 
-When opening a PR, fill in the PR body using [.github/pull_request_template.md](.github/pull_request_template.md) and complete its checklists honestly (only check items you actually ran or verified).
-
 **NEVER add AI signatures** (Co-Authored-By, Generated with, etc.).
 
 ## Skills Index
 
-| Skill            | Purpose                                                                     | Triggers                                                                                               |
-| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **architecture** | File & directory structure conventions for all process types                | Creating files, adding modules, architectural decisions                                                |
-| **i18n**         | Internationalization workflow and standards                                 | Adding or changing user-facing text, modifying `locales/` or `packages/desktop/src/common/config/i18n` |
-| **testing**      | Testing workflow and quality standards                                      | Writing tests, changing runtime behavior, fixing bugs, or claiming behavior is verified                |
-| **bump-version** | Version bump workflow: update package.json, checks, branch, PR, tag release | Bumping version, `/bump-version`                                                                       |
+| Skill            | Purpose                                                      | Triggers                                                                                               |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **architecture** | File & directory structure conventions for all process types | Creating files, adding modules, architectural decisions                                                |
+| **i18n**         | Internationalization workflow and standards                  | Adding or changing user-facing text, modifying `locales/` or `packages/desktop/src/common/config/i18n` |
+| **testing**      | Testing workflow and quality standards                       | Writing tests, changing runtime behavior, fixing bugs, or claiming behavior is verified                |
 
 > Skills are located in `.claude/skills/` and contain project conventions that apply to **all** agents and contributors.
