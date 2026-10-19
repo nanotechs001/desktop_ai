@@ -130,9 +130,19 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
 
   return (
     <>
-      {items.map((item) => (
-        <React.Fragment key={item.key}>
+      {items.map((item) =>
+        // VA Bots also lists the bots' robots on hover.
+        item.key === 'assistants' ? (
+          <RobotListButton
+            key={item.key}
+            buttonClassName={buttonClassName}
+            label={item.label}
+            icon={item.icon}
+            onClick={item.onClick}
+          />
+        ) : (
           <Button
+            key={item.key}
             type='text'
             size='mini'
             className={buttonClassName}
@@ -141,12 +151,8 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
             aria-label={item.label}
             title={item.label}
           />
-          {/* Next to VA Bots: only rendered while some bot has a robot. */}
-          {item.key === 'assistants' && (
-            <RobotListButton buttonClassName={buttonClassName} iconSize={iconSize} strokeWidth={strokeWidth} />
-          )}
-        </React.Fragment>
-      ))}
+        )
+      )}
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

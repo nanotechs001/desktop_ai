@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Badge, Button, Dropdown, Menu, Tag, Tooltip } from '@arco-design/web-react';
-import { Message, PreviewOpen, Robot } from '@icon-park/react';
+import { Message, PreviewOpen } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
@@ -17,8 +17,10 @@ import { useAgentWidgetSettings, useRobots } from '@/renderer/pages/agentWidget/
 
 type RobotListButtonProps = {
   buttonClassName?: string;
-  iconSize: number;
-  strokeWidth?: number;
+  /** The VA Bots button's own label, icon and click (open the Agents dashboard). */
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
 };
 
 /** `name` is empty when neither the bot nor the chat has one (shown as the untitled label). */
@@ -36,11 +38,11 @@ const showRobot = (robot: AgentWidgetRobot): Promise<unknown> =>
     .catch(() => {});
 
 /**
- * Titlebar action, shown while any VA Bot has a robot: hovering lists them by bot name. Watch (or the row) opens the
- * chat here with its browser pane; Chat opens the robot's popup on the desktop. Hidden robots are tagged and counted
- * in the badge. Robots whose chat no longer exists are left out.
+ * The titlebar VA Bots button. A click opens the Agents dashboard; while any VA Bot has a robot, hovering (or focusing)
+ * it lists them by bot name. Watch (or the row) opens the chat here with its browser pane; Chat opens the robot's popup
+ * on the desktop. Hidden robots are tagged and counted in the badge. Robots whose chat no longer exists are left out.
  */
-const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, iconSize, strokeWidth }) => {
+const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, label, icon, onClick }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { revealBrowserFor } = usePreviewContext();
@@ -66,10 +68,20 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, icon
     // Only the robot list drives the lookup (a changing `t` must not re-run it).
   }, [listed]);
 
-  if (!settings?.enabled || robots.length === 0) return null;
+  const plainButton = (
+    <Button
+      type='text'
+      size='mini'
+      className={buttonClassName}
+      icon={icon}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    />
+  );
+  if (!settings?.enabled || robots.length === 0) return plainButton;
 
   const hidden = robots.filter((robot) => robot.hidden);
-  const label = t('pet.widget.robotList');
   const watchLabel = t('pet.widget.watchRobot');
   const chatLabel = t('pet.widget.chatWithRobot');
 
@@ -134,31 +146,22 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, icon
   );
 
   return (
-    // Click too, for keyboard and touch; a click after hovering must not toggle the list shut again.
-    <Dropdown
-      droplist={menu}
-      trigger={['hover', 'click']}
-      triggerProps={{ clickToClose: false }}
-      position='br'
-      popupVisible={open}
-      onVisibleChange={setOpen}
-    >
+    // Focus too, for keyboard users: a click opens the dashboard, so it cannot also open the list.
+    <Dropdown droplist={menu} trigger={['hover', 'focus']} position='br' popupVisible={open} onVisibleChange={setOpen}>
       <Button
         type='text'
         size='mini'
         className={buttonClassName}
         aria-label={label}
         title={label}
-        data-testid='titlebar-robots'
+        data-testid='titlebar-assistants'
+        onClick={() => {
+          setOpen(false);
+          onClick();
+        }}
         icon={
           <Badge count={hidden.length} dotStyle={{ fontSize: 9, minWidth: 14, height: 14, lineHeight: '14px' }}>
-            <Robot
-              theme='outline'
-              size={iconSize}
-              fill='currentColor'
-              strokeWidth={strokeWidth}
-              className='block leading-none'
-            />
+            {icon}
           </Badge>
         }
       />

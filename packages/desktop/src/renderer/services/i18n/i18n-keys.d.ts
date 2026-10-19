@@ -1180,7 +1180,6 @@ export type I18nKey =
   | 'pet.widget.openChat'
   | 'pet.widget.returnChatHere'
   | 'pet.widget.returnToMain'
-  | 'pet.widget.robotList'
   | 'pet.widget.settings.alwaysOnTop'
   | 'pet.widget.settings.autoLaunch'
   | 'pet.widget.settings.enabled'
