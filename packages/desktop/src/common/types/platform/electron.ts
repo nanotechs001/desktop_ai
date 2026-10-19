@@ -56,7 +56,6 @@ export interface BackendStartupFailureInfo {
   startupDirectoryIssueKind?: BackendStartupDirectoryIssueKind;
   missingBackendBinary?: boolean;
   missingBundledAioncoreDir?: boolean;
-  missingHubDir?: boolean;
   missingPwaDir?: boolean;
   reason: BackendStartupFailureReason;
   backendBoundaryCode?: string;

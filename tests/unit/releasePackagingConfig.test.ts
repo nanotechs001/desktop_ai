@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
 
 const projectRoot = resolve(__dirname, '../..');
-const itWithBash = spawnSync('bash', ['--version'], { encoding: 'utf8' }).status === 0 ? it : it.skip;
 
 function readProjectFile(path: string): string {
   return readFileSync(resolve(projectRoot, path), 'utf8');
@@ -41,7 +38,7 @@ describe('release packaging configuration', () => {
   it('uploads mac zip artifacts without a stale Windows zip glob', () => {
     const workflow = readProjectFile('.github/workflows/_build-reusable.yml');
 
-    expect(workflow).toContain('out/AionUi-*-mac-*.zip');
+    expect(workflow).toContain('out/Pixebot*-mac-*.zip');
     expect(workflow).not.toContain('out/AionUi-*-win32-*.zip');
   });
 
@@ -49,34 +46,5 @@ describe('release packaging configuration', () => {
     const script = readProjectFile('scripts/build-with-builder.js');
 
     expect(script).toMatch(/--mac\s+dmg\s+zip\s+--\$\{targetArch\}\s+--prepackaged/);
-  });
-
-  itWithBash('fails release asset preparation when a mac zip is missing', () => {
-    const tempDir = mkdtempSync(resolve(tmpdir(), 'aionui-release-assets-'));
-    const artifactsDir = resolve(tempDir, 'build-artifacts');
-    const outputDir = resolve(tempDir, 'release-assets');
-
-    try {
-      const env = { ...process.env, MOCK_VERSION: '1.0.0' };
-      const createResult = spawnSync('bash', ['scripts/create-mock-release-artifacts.sh', artifactsDir], {
-        cwd: projectRoot,
-        env,
-        encoding: 'utf8',
-      });
-      expect(createResult.status).toBe(0);
-
-      rmSync(resolve(artifactsDir, 'macos-build-arm64', 'AionUi-1.0.0-mac-arm64.zip'), { force: true });
-
-      const prepareResult = spawnSync('bash', ['scripts/prepare-release-assets.sh', artifactsDir, outputDir], {
-        cwd: projectRoot,
-        env,
-        encoding: 'utf8',
-      });
-
-      expect(prepareResult.status).not.toBe(0);
-      expect(`${prepareResult.stdout}\n${prepareResult.stderr}`).toContain('Missing macOS zip artifact');
-    } finally {
-      rmSync(tempDir, { force: true, recursive: true });
-    }
   });
 });

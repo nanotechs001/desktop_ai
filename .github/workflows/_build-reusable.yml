@@ -30,12 +30,6 @@ on:
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
-  AIONUI_HUB_TAG: 'dist-ebc6a2b'
-  # Discontinued-build flag: only AionUi's final `-final` tag (e.g.
-  # v2.1.40-final) produces a build that guides users to the AionPro website.
-  # AionPro's own release tags never contain `-final`, so this stays 'false'
-  # there and in-app update behavior is untouched.
-  IS_DISCONTINUED_BUILD: ${{ contains(github.ref_name, '-final') && 'true' || 'false' }}
 
 jobs:
   code-quality:
@@ -542,29 +536,6 @@ jobs:
             echo "No out directory found!"
           fi
 
-      # Verify desktop asar does not contain packages/web-cli/ contamination
-      # 验证桌面 asar 没有被 web-cli 代码污染
-      - name: Verify desktop asar isolation
-        if: >-
-          success() &&
-          (!startsWith(matrix.platform, 'windows') || steps.windows-build.outputs.result == 'success')
-        shell: bash
-        run: |
-          set -euo pipefail
-          ASAR=$(find out -type f -name 'app.asar' -not -path '*node_modules*' | head -n 1 || true)
-          if [ -z "$ASAR" ]; then
-            echo "::notice::No app.asar found for ${{ matrix.platform }}, skipping isolation check"
-            exit 0
-          fi
-          echo "Inspecting $ASAR for web-cli leakage..."
-          LEAK_COUNT=$(bunx @electron/asar list "$ASAR" 2>/dev/null | grep -cE '^/packages/web-cli(/|$)' || true)
-          if [ "$LEAK_COUNT" != "0" ]; then
-            echo "::error::Desktop asar contains $LEAK_COUNT web-cli entries:"
-            bunx @electron/asar list "$ASAR" | grep -E '^/packages/web-cli(/|$)' | head -20
-            exit 1
-          fi
-          echo "✅ asar isolation verified: no packages/web-cli entries"
-
       # Upload artifacts when:
       # - Build succeeded (all platforms)
       # - macOS: notarization timeout but artifacts exist (handled in build step)
@@ -596,7 +567,7 @@ jobs:
             out/*.msi
             out/*.dmg
             out/*.deb
-            out/AionUi-*-mac-*.zip
+            out/Pixebot*-mac-*.zip
             out/*.yml
           if-no-files-found: warn
           retention-days: 7

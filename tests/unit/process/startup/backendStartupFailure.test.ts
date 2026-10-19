@@ -261,7 +261,7 @@ describe('classifyBackendStartupFailure — slow startup / exited', () => {
       details: {
         stage: 'resolve_binary',
         isPackaged: true,
-        resourcesDirEntries: ['app.asar', 'app.asar.unpacked/', 'hub/', 'pwa/'],
+        resourcesDirEntries: ['app.asar', 'app.asar.unpacked/', 'pwa/'],
       },
       message: 'aioncore startup failed while resolving backend binary',
       name: 'BackendStartupError',

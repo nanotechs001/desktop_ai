@@ -22,7 +22,6 @@ project-root/
 ├── resources/              # Static resources (icons, images, installers)
 ├── public/                 # Shared Vite public assets
 ├── patches/                # npm/bun patches
-├── homebrew/               # Homebrew formula
 ├── package.json            # Workspace root config
 ├── tsconfig.json           # Shared TS config
 ├── vitest.config.ts        # Shared test config

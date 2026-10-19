@@ -61,9 +61,7 @@ function getFlag(name: string): string | undefined {
 }
 
 /**
- * Same resolution as scripts/webui.ts:resolveBackendDataDir — keep both in sync
- * so `bun run webui` and `bun run resetpass` always target the same SQLite DB.
- * See the comment there for why the default is `~/.aionui-web*` (not `~/.aionui*`).
+ * Data dir of the headless WebUI backend: `--data-dir` / `AIONUI_DATA_DIR`, else `~/.aionui-web*`.
  */
 function resolveWorkDir(): string {
   const override = getFlag('--data-dir') ?? process.env.AIONUI_DATA_DIR;
@@ -101,9 +99,8 @@ function resolveBackendBinary(): string {
 }
 
 /**
- * Same default port as scripts/webui.ts (mirrors WEBUI_DEFAULT_PORT on the
- * desktop side). Callers can override with `--port` / `AIONUI_PORT` to match
- * a non-default webui launch.
+ * Default port mirrors WEBUI_DEFAULT_PORT on the desktop side. Callers can
+ * override with `--port` / `AIONUI_PORT` to match a non-default WebUI launch.
  */
 function resolveWebUIProbePort(): number {
   const cli = getFlag('--port');

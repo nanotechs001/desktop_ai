@@ -41,5 +41,4 @@ ignore:
   - 'resources/**'
   - 'skills/**'
   - 'assistant/**'
-  - 'homebrew/**'
   - 'patches/**'

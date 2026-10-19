@@ -167,7 +167,6 @@ function classifyIncompleteInstallation(details: ErrorWithDetails['details']): B
     missingBackendBinary:
       missingBundledAioncoreDir || missingRuntimeDir || missingManagedResourcesDir || missingRuntimeBinary,
     missingBundledAioncoreDir,
-    missingHubDir: getMissingDirectoryFlag(resourcesDirEntries, 'hub/'),
     missingPwaDir: getMissingDirectoryFlag(resourcesDirEntries, 'pwa/'),
     reason: 'backend_incomplete_installation',
     missingResources,

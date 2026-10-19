@@ -105,12 +105,6 @@ out/
 **/.claude/settings.json
 .qwen/
 .qwen/*/
-.specify/scripts/
-.gemini/
-.gemini/*/
-
-# Keep important project documentation
-!.specify/memory/constitution.md
 
 # Temporary and backup files
 *.tmp
@@ -145,10 +139,6 @@ debug.log
 test-*.js
 !examples/**/test-*.js
 diagnose-*.js
-
-# Keep .gemini config for AI code review (but ignore local cache)
-!.gemini/
-.gemini/cache/
 gha-creds-*.json
 
 # Spec-Kit working files
@@ -204,7 +194,6 @@ worktrees/
 docs/superpowers/
 resources/bundled-bun
 resources/bundled-aioncore
-resources/hub
 
 # Server build output
 dist-server/

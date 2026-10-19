@@ -72,18 +72,6 @@ jobs:
         ]}
     secrets: inherit
 
-  pack-web-cli:
-    name: Pack Web CLI
-    uses: ./.github/workflows/pack-web-cli.yml
-    needs: code-quality
-    # 与桌面构建同频触发：dev 分支或正式 tag（排除 -dev- tag）
-    if: vars.PUBLISH_RELEASE == 'true' && needs.code-quality.result == 'success' && (github.ref == 'refs/heads/dev' || (startsWith(github.ref, 'refs/tags/') && !contains(github.ref, '-dev-')))
-    with:
-      ref: ''
-      append_commit_hash: false
-      skip_code_quality: true
-    secrets: inherit
-
   # 自动重试 workflow（当构建失败时）
   auto-retry-workflow:
     name: Auto Retry on Build Failure
@@ -251,14 +239,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
   # 发布到 GitHub Releases
-  # PUBLISH_RELEASE 未设置（上游 AionUi）：跳过构建，但正式 tag 仍创建纯源码 draft Release；
-  # PUBLISH_RELEASE=true（下游签名构建）：与之前一致，要求构建成功并附带安装包。
+  # PUBLISH_RELEASE 未设置：跳过构建，但正式 tag 仍创建纯源码 draft Release；
+  # PUBLISH_RELEASE=true：要求构建成功并附带安装包。
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [code-quality, build-pipeline, create-tag, pack-web-cli]
+    needs: [code-quality, build-pipeline, create-tag]
     # Tag 推送时 create-tag 会被跳过，所以需要检查两种情况（排除 -dev- tag 避免重复）
-    if: always() && needs.code-quality.result == 'success' && (needs.create-tag.result == 'success' || (startsWith(github.ref, 'refs/tags/') && !contains(github.ref, '-dev-'))) && (vars.PUBLISH_RELEASE != 'true' || (needs.build-pipeline.result == 'success' && needs.pack-web-cli.result == 'success'))
+    if: always() && needs.code-quality.result == 'success' && (needs.create-tag.result == 'success' || (startsWith(github.ref, 'refs/tags/') && !contains(github.ref, '-dev-'))) && (vars.PUBLISH_RELEASE != 'true' || (needs.build-pipeline.result == 'success'))
     # dev 分支使用 dev-release 环境，正式 tag 使用 release 环境
     environment: ${{ needs.create-tag.outputs.is_dev == 'true' && 'dev-release' || 'release' }}
 
@@ -285,7 +273,7 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "is_dev=$IS_DEV" >> $GITHUB_OUTPUT
 
-      # 仅下游签名构建有安装包产物；上游 AionUi 发布纯源码 Release，无产物可下载
+      # 仅 PUBLISH_RELEASE=true 的签名构建有安装包产物
       - name: Download all build artifacts
         if: vars.PUBLISH_RELEASE == 'true'
         uses: actions/download-artifact@v7
@@ -295,7 +283,22 @@ jobs:
       - name: Prepare release assets (normalize updater metadata)
         if: vars.PUBLISH_RELEASE == 'true'
         shell: bash
-        run: bash scripts/prepare-release-assets.sh build-artifacts release-assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          # Distributables (file names are unique per platform/arch).
+          find build-artifacts -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.deb' -o -name '*.zip' \) -exec cp -f {} release-assets/ \;
+          # electron-updater metadata: one deterministic file per platform/arch.
+          pick() { find build-artifacts -type f -path "*/$1/*" -name "$2" | sort | head -n 1; }
+          copy() { [ -n "$1" ] && cp -f "$1" "release-assets/$2" || echo "::warning::Missing updater metadata $2"; }
+          copy "$(pick windows-build-x64 latest.yml)" latest.yml
+          copy "$(pick windows-build-arm64 latest.yml)" latest-win-arm64.yml
+          copy "$(pick macos-build-x64 latest-mac.yml)" latest-mac.yml
+          # electron-updater on macOS arm64 looks for latest-arm64-mac.yml.
+          copy "$(pick macos-build-arm64 latest-mac.yml)" latest-arm64-mac.yml
+          copy "$(pick linux-build-x64 latest-linux.yml)" latest-linux.yml
+          copy "$(pick linux-build-arm64 latest-linux-arm64.yml)" latest-linux-arm64.yml
+          ls -lh release-assets
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -309,9 +312,6 @@ jobs:
             release-assets/**/*.deb
             release-assets/**/*.zip
             release-assets/**/*.yml
-            release-assets/**/*.tar.gz
-            release-assets/**/*.sha256
-            release-assets/install-web.sh
           generate_release_notes: true
           draft: true
           prerelease: ${{ steps.version.outputs.is_dev == 'true' || contains(steps.version.outputs.tag_name, 'beta') || contains(steps.version.outputs.tag_name, 'alpha') || contains(steps.version.outputs.tag_name, 'rc') }}

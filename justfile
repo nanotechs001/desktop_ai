@@ -1,4 +1,4 @@
-# AionUI Development Justfile
+# Pixebot Browser development justfile
 # Usage: just <recipe>
 
 # On Windows, simple recipes (no shebang) use PowerShell
@@ -16,18 +16,6 @@ default:
 dev:
     bun run start
 
-# Start WebUI development mode
-webui:
-    bun run webui
-
-# Start WebUI with remote access
-webui-remote:
-    bun run webui:remote
-
-# Start WebUI production mode
-webui-prod:
-    bun run webui:prod
-
 # Run CLI mode
 cli:
     bun run cli
@@ -43,7 +31,7 @@ preflight:
     $ErrorActionPreference = 'Continue'
     $failed = $false
     Write-Host "=========================================="
-    Write-Host "  AionUI Build Preflight Check"
+    Write-Host "  Pixebot Browser Build Preflight Check"
     Write-Host "=========================================="
     Write-Host ""
     Write-Host "[1/6] Node.js..."
@@ -90,7 +78,7 @@ preflight:
 # Show current build environment info
 info:
     #!/usr/bin/env bash
-    echo "AionUI Build Environment"
+    echo "Pixebot Browser Build Environment"
     echo "========================"
     echo "Node:     $(node --version)"
     echo "bun:      $(bun --version)"
@@ -232,7 +220,7 @@ build-win-arm64: preflight
 build-win: preflight
     #!/usr/bin/env pwsh
     Write-Host "Cleaning output directory..."
-    Get-Process -Name "AionUI","electron" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Pixebot Browser","electron" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (Test-Path "out") { Remove-Item -Recurse -Force "out" -ErrorAction SilentlyContinue }
     npm install
     npm run postinstall; if ($LASTEXITCODE -ne 0) { Write-Host "postinstall failed (continuing)"; $LASTEXITCODE = 0 }
@@ -350,17 +338,9 @@ test-watch:
 test-coverage:
     bun run test:coverage
 
-# Run contract tests
-test-contract:
-    bun run test:contract
-
 # Run integration tests
 test-integration:
     bun run test:integration
-
-# Verify packaged artifact contains complete renderer assets (i18n safety)
-test-packaged-i18n:
-    bun run test:packaged:i18n
 
 # Run E2E tests (Playwright + Electron — auto-launches app)
 # Builds main+preload+renderer into out/ first to ensure fresh artifacts.
@@ -390,10 +370,6 @@ e2e-report:
 # CDP remote debugging is enabled by default on port 9222 in dev mode
 dev-ext:
     node scripts/dev-bootstrap.mjs launch start --extensions
-
-# Start WebUI with example extensions loaded
-webui-ext:
-    node scripts/dev-bootstrap.mjs launch webui --extensions
 
 # Start CLI with example extensions loaded
 cli-ext:

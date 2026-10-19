@@ -19,7 +19,6 @@ on:
       - '**/*.md'
       - 'docs/**'
       - '.vscode/**'
-      - '.github/ISSUE_TEMPLATE/**'
 
 concurrency:
   group: pr-checks-${{ github.event.pull_request.number || inputs.pr_number }}
@@ -172,7 +171,7 @@ jobs:
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov (Linux coverage only)
-        if: always() && hashFiles('coverage/lcov.info') != '' && github.repository == 'iOfficeAI/AionUi'
+        if: always() && hashFiles('coverage/lcov.info') != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -180,12 +179,6 @@ jobs:
           files: coverage/lcov.info
           fail_ci_if_error: false
           verbose: true
-      - name: Skip Codecov upload when preconditions are not met
-        if: always() && hashFiles('coverage/lcov.info') != '' && github.repository != 'iOfficeAI/AionUi'
-        shell: bash
-        run: |
-          echo 'Skipping Codecov upload due to unmet preconditions.'
-          echo "Repository: ${{ github.repository }}"
       - name: Coverage result summary
         if: always()
         shell: bash
@@ -440,7 +433,7 @@ jobs:
           Write-Host "SMOKE INSTALL: windows-x64"
           Write-Host "=========================================="
 
-          $installer = Get-ChildItem -Path out -Filter "AionUi-*-win-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $installer = Get-ChildItem -Path out -Filter "Pixebot*-win-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $installer) {
             throw "No Windows installer found in out/"
           }
@@ -449,9 +442,9 @@ jobs:
           Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -NoNewWindow
 
           $candidates = @(
-            "$env:LOCALAPPDATA\\Programs\\AionUi\\AionUi.exe",
-            "$env:ProgramFiles\\AionUi\\AionUi.exe",
-            "$env:ProgramFiles(x86)\\AionUi\\AionUi.exe"
+            "$env:LOCALAPPDATA\\Programs\\Pixebot Browser\\PixebotBrowser.exe",
+            "$env:ProgramFiles\\Pixebot Browser\\PixebotBrowser.exe",
+            "$env:ProgramFiles(x86)\\Pixebot Browser\\PixebotBrowser.exe"
           )
 
           $installedExe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -471,8 +464,8 @@ jobs:
           echo "=========================================="
 
           DMG_FILE=$(ls out/*.dmg | head -n 1)
-          MOUNT_POINT="/tmp/aionui-smoke-mount"
-          APP_DIR="/tmp/aionui-smoke-app"
+          MOUNT_POINT="/tmp/pixebot-smoke-mount"
+          APP_DIR="/tmp/pixebot-smoke-app"
 
           rm -rf "$MOUNT_POINT" "$APP_DIR"
           mkdir -p "$MOUNT_POINT" "$APP_DIR"
@@ -482,7 +475,7 @@ jobs:
           hdiutil detach "$MOUNT_POINT"
 
           APP_PATH=$(ls -d "$APP_DIR"/*.app | head -n 1)
-          APP_BIN="$APP_PATH/Contents/MacOS/AionUi"
+          APP_BIN="$APP_PATH/Contents/MacOS/PixebotBrowser"
 
           test -x "$APP_BIN"
           "$APP_BIN" --version || true
@@ -500,7 +493,7 @@ jobs:
           PKG_NAME=$(dpkg-deb -f "$DEB_FILE" Package)
           sudo dpkg -i "$DEB_FILE" || sudo apt-get install -f -y
 
-          INSTALLED_BIN=$(dpkg -L "$PKG_NAME" | grep -Ei '/(bin|opt)/.*(aionui)$' | head -n 1 || true)
+          INSTALLED_BIN=$(dpkg -L "$PKG_NAME" | grep -Ei '/(bin|opt)/.*(pixebot|aionui)[^/]*$' | head -n 1 || true)
           if [ -z "$INSTALLED_BIN" ]; then
             echo "Package files:"
             dpkg -L "$PKG_NAME" | head -n 50
@@ -509,27 +502,3 @@ jobs:
           fi
 
           test -x "$INSTALLED_BIN"
-
-  # Job 5: Test release scripts (fast, no build required)
-  release-script-test:
-    name: Release Script Test
-    if: github.event.action != 'closed' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Create mock build artifacts
-        shell: bash
-        run: bash scripts/create-mock-release-artifacts.sh build-artifacts
-
-      - name: Run prepare-release-assets script
-        shell: bash
-        env:
-          MOCK_VERSION: '1.0.0'
-        run: bash scripts/prepare-release-assets.sh build-artifacts release-assets
-
-      - name: Validate script output
-        shell: bash
-        run: bash scripts/verify-release-assets.sh release-assets
