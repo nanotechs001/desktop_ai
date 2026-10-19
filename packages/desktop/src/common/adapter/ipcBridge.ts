@@ -1490,6 +1490,11 @@ export const agentNotes = {
   removeAgent: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('agent-notes.remove-agent'),
 };
 
+/** Skills an agent proposed and the user saves from the review card. */
+export const agentSkills = {
+  save: bridge.buildProvider<SaveSkillResult, SaveSkillRequest>('agent-skills.save'),
+};
+
 /** The artifact server this launch: its origin (`http://127.0.0.1:<port>`); fails while artifacts are unavailable. */
 export const artifacts = {
   origin: bridge.buildProvider<IBridgeResponse<string>, void>('artifacts.origin'),
@@ -2312,6 +2317,7 @@ export const channel = {
 };
 
 import type { Note } from '@/common/types/agent/artifacts';
+import type { SaveSkillRequest, SaveSkillResult } from '@/common/types/agent/skillProposal';
 
 export type IRealtimeReconnectedEvent = {
   timestamp: number;

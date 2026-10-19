@@ -40,3 +40,18 @@ export function parseSkillProposal(value: unknown): SkillProposal | undefined {
   // The cast is needed because this repo's tsconfig lacks strictNullChecks, so zod infers every key as optional.
   return parsed.success ? (parsed.data as SkillProposal) : undefined;
 }
+
+/** What the review card sends when the user saves a proposed skill. */
+export type SaveSkillRequest = { conversation_id: string } & SkillProposal;
+
+/** The outcome of saving: `library_only` for a built-in bot (it can't be edited), `enable_failed` when only turning it on failed. */
+export type SaveSkillResult =
+  | {
+      ok: true;
+      skill_name: string;
+      agent_id?: string;
+      enabled_for?: string;
+      library_only?: boolean;
+      enable_failed?: boolean;
+    }
+  | { ok: false; code: 'invalid' | 'exists' | 'import_failed' | 'rate_limited' | 'no_agent'; message: string };

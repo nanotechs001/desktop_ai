@@ -7,7 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { ipcBridge } from '@/common';
 import { getEnvAwareName } from '@/common/config/appEnv';
@@ -16,6 +16,7 @@ import type { Note } from '@/common/types/agent/artifacts';
 import { DEFAULT_AGENT_ID, DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
 import { syncNotesToRule } from '@process/services/agentBrowser/assistantRules';
 import { backendDefaultAgentDeps } from '@process/services/agentBrowser/defaultAgent';
+import { createSkillSaver, type SkillSaverDeps } from '@process/services/agentSkills/saveSkill';
 import { createAgentResolver, createNotesStore, notesRoot, type NotesApi, type NotesStore } from './notes';
 import { renderArtifactPage } from './pages';
 import { startArtifactServer, type ArtifactServer } from './server';
@@ -244,7 +245,9 @@ export const isDefaultAgent = async (agentId: string): Promise<boolean> =>
   agentId === DEFAULT_AGENT_ID || agentId === (await backendDefaultAgentDeps.getSetting(DEFAULT_AGENT_SETTING_KEY));
 
 /** A missing conversation is null; any other backend failure throws (the resolver retries next time). */
-const getConversation = async (id: string): Promise<{ assistant?: { id: string; source: string } } | null> => {
+const getConversation = async (
+  id: string
+): Promise<{ assistant?: { id: string; source: string; name?: string } } | null> => {
   try {
     return await ipcBridge.conversation.get.invoke({ id });
   } catch (e) {
@@ -258,6 +261,51 @@ const getConversation = async (id: string): Promise<{ assistant?: { id: string; 
  * assistant, else the default Agent; built-ins refused. One instance, so both share its cache.
  */
 export const resolveChatAgent = createAgentResolver({ getConversation, getDefaultAgentId: defaultAgentId });
+
+const findAssistant = async (agentId: string) =>
+  (await ipcBridge.assistants.list.invoke()).find((a) => a.id === agentId);
+
+/** The real dependencies of the skill saver: the chat's bot, the skill library and the bot's enabled skills. */
+const skillSaverDeps: SkillSaverDeps = {
+  async getChatAgent(conversationId) {
+    const assistant = (await getConversation(conversationId))?.assistant;
+    // The resolver refuses built-ins, but their skills can still go to the library.
+    if (assistant?.source === 'builtin') return { agentId: assistant.id, name: assistant.name, builtin: true };
+    const resolved = await resolveChatAgent(conversationId);
+    if (!resolved.ok) return null;
+    const name = assistant?.name ?? (await findAssistant(resolved.agentId))?.name;
+    return { agentId: resolved.agentId, name, builtin: false };
+  },
+  listSkillNames: async () => (await ipcBridge.fs.listAvailableSkills.invoke()).map((skill) => skill.name),
+  async importSkill(skillPath) {
+    const result = await ipcBridge.fs.importSkill.invoke({ skill_path: skillPath });
+    if (!result.skill_name) throw new Error(result.failed?.[0]?.code ?? 'The skill was not imported');
+    return { skill_name: result.skill_name };
+  },
+  async getEnabledSkills(agentId) {
+    const assistant = await findAssistant(agentId);
+    if (!assistant) throw new Error(`Agent ${agentId} not found`);
+    return assistant.enabled_skills ?? [];
+  },
+  async setEnabledSkills(agentId, skills) {
+    await ipcBridge.assistants.update.invoke({ id: agentId, enabled_skills: skills });
+  },
+  makeTempDir: () => fs.mkdtemp(path.join(tmpdir(), 'pixebot-skill-')),
+  removeDir: (dir) => fs.rm(dir, { recursive: true, force: true }),
+};
+
+/** Registers the renderer's `agentSkills.save`. A lookup failure becomes a failed result, never a rejected call. */
+export function startAgentSkills(): void {
+  const saver = createSkillSaver(skillSaverDeps);
+  ipcBridge.agentSkills.save.provider(async (request) => {
+    try {
+      return await saver.save(request);
+    } catch (error) {
+      console.error('[agentSkills] save failed', error);
+      return { ok: false, code: 'import_failed', message: error instanceof Error ? error.message : String(error) };
+    }
+  });
+}
 
 /**
  * Sets up Agent notebooks: the store (every change re-syncs the Agent's rule), the renderer's `agentNotes` IPC, and
@@ -273,5 +321,6 @@ export async function startAgentNotes(): Promise<NotesApi> {
   ipcBridge.agentNotes.update.provider((request) => guardAsync(() => handlers.update(request)));
   ipcBridge.agentNotes.delete.provider((request) => guardAsync(() => handlers.delete(request)));
   ipcBridge.agentNotes.removeAgent.provider((request) => guardAsync(() => handlers.removeAgent(request)));
+  startAgentSkills();
   return { store, resolveAgent: resolveChatAgent };
 }
