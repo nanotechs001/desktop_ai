@@ -15,6 +15,7 @@ import { NOTE_LIMITS } from '@/common/types/agent/artifacts';
 import { startArtifacts } from '@process/artifacts';
 import { NOTES_MARKERS, createAgentResolver, createNotesStore, upsertNotesBlock } from '@process/artifacts/notes';
 import { createArtifactsApi } from '@process/resources/builtinMcp/aionArtifacts/apiClient';
+import { BROWSER_RULE_TEXT } from '@process/services/agentBrowser/browserRule';
 import { NOTES_UNAVAILABLE, createNotesMcpServer } from '@process/resources/builtinMcp/aionNotes/tools';
 
 vi.mock('@/common', () => ({ ipcBridge: {} }));
@@ -70,6 +71,14 @@ afterEach(async () => {
 });
 
 describe('aionui-notes MCP', () => {
+  it('every notes tool the browser rule names is registered', async () => {
+    const client = await connect(envFor('chat-agent-1'));
+    const { tools } = await client.listTools();
+    const named = [...BROWSER_RULE_TEXT.matchAll(/mcp__aionui-notes__(\w+)/g)].map((match) => match[1]);
+    expect(named.length).toBeGreaterThan(0);
+    for (const name of named) expect(tools.map((tool) => tool.name)).toContain(name);
+  });
+
   it('lists propose_skill next to add', async () => {
     const client = await connect(envFor('chat-agent-1'));
     const { tools } = await client.listTools();

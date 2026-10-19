@@ -77,13 +77,23 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });
 
-  it('tells the agent to save lessons with notes.add after a task and stays within the cap', () => {
+  it('has a Skills and lessons section naming the real tool ids, within the cap', () => {
+    expect(BROWSER_RULE_TEXT).toContain('# Skills and lessons');
     expect(BROWSER_RULE_TEXT).toContain(
-      'When you finish a task, use `notes.add` (the `add` tool of `aionui-notes`) to save one or two short lessons for next time'
+      '- Before you start a task, check your skills; if one matches the work, follow it.'
     );
+    expect(BROWSER_RULE_TEXT).toContain('`mcp__aionui-notes__add`');
+    expect(BROWSER_RULE_TEXT).toContain('`mcp__aionui-notes__propose_skill`');
+    expect(BROWSER_RULE_TEXT).toContain(
+      'Before your final reply on any task where you used tools or the user corrected you, save one or two short lessons'
+    );
+    expect(BROWSER_RULE_TEXT).toContain('Never say a skill is saved');
+    expect(BROWSER_RULE_TEXT).not.toContain('Skip it when you learned nothing new');
+    expect(BROWSER_RULE_TEXT).not.toContain('# Lessons');
     // The notes block brings its own "# Notebook" heading; the rule must not repeat it.
     expect(BROWSER_RULE_TEXT).not.toContain('# Notebook');
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+    expect(BROWSER_RULE_MAX_CHARS).toBe(2000);
   });
 
   it('tells the agent to refer to itself as the agent', () => {
