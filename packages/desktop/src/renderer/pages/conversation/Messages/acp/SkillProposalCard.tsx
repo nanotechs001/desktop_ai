@@ -84,11 +84,12 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
     if (dismissed) return <div className='text-13px text-t-secondary'>{t('messages.skillCard.notSaved')}</div>;
 
     if (result?.ok === true) {
-      const text = result.library_only
-        ? t('messages.skillCard.savedLibrary')
-        : result.enable_failed
-          ? t('messages.skillCard.enableFailed')
-          : t('messages.skillCard.saved', { bot: result.enabled_for });
+      const text =
+        result.library_only || (!result.enable_failed && !result.enabled_for)
+          ? t('messages.skillCard.savedLibrary')
+          : result.enable_failed
+            ? t('messages.skillCard.enableFailed')
+            : t('messages.skillCard.saved', { bot: result.enabled_for });
       return note(
         text,
         result.agent_id && !result.library_only ? (
