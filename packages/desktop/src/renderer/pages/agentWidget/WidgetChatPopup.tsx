@@ -11,7 +11,6 @@ import { Close, History, Left, Minus, PreviewCloseOne, SettingTwo, Tv } from '@i
 import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
-import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import ConversationChatBody from '@/renderer/pages/conversation/components/ConversationChatBody';
 import { HistoryPanelBody } from '@/renderer/components/layout/Titlebar/HistoryPanel';
 import { ConversationHistoryProvider } from '@/renderer/hooks/context/ConversationHistoryContext';
@@ -52,6 +51,8 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const agentId = props.conversation?.assistant?.id;
   const thisBotOnly = useCallback((c: TChatConversation) => Boolean(agentId) && c.assistant?.id === agentId, [agentId]);
+  // The robot stands for a bot, so the header names the bot; the chat's own title is in its history.
+  const botName = props.conversation?.assistant?.name || props.name;
   const historyLabel = t('conversation.history.botChatHistory', {
     name: props.conversation?.assistant?.name || props.name,
   });
@@ -60,7 +61,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
     <section
       className={classNames(styles.popup, !props.visible && styles.hidden)}
       role='dialog'
-      aria-label={props.name}
+      aria-label={botName}
       data-widget-hit
       onKeyDown={(e) => {
         if (e.key === 'Escape') props.onMinimize();
@@ -68,10 +69,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
     >
       <header className={styles.header}>
         <div className={styles.title}>
-          <div className={styles.name}>
-            <VaBotColorDot assistant={props.conversation?.assistant} className={styles.nameDot} />
-            {props.name}
-          </div>
+          <div className={styles.name}>{botName}</div>
           <div className={styles.status} aria-live='polite'>
             <span className={styles.dot} data-state={state} aria-hidden />
             {t(`pet.widget.state.${state}`)}

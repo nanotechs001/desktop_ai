@@ -75,19 +75,37 @@ describe('WidgetChatPopup settings gear', () => {
   });
 });
 
-describe('WidgetChatPopup bot color', () => {
-  it('shows the bot color dot in the header for a VA Bot', () => {
-    configService.setLocal('agent.colors', { 'bot-1': '#3e63dd' });
-    renderPopup({ id: 'bot-1', name: 'Bot', source: 'user' });
-    expect(colorDots()).toHaveLength(1);
+describe('WidgetChatPopup header', () => {
+  it("names the bot, not the chat's title", () => {
+    render(
+      <WidgetChatPopup
+        conversation={{ id: 'c1', name: 'Opening greeting', assistant: { id: 'bot-1', name: 'Research Bot' } } as never}
+        name='Opening greeting'
+        state='idle'
+        layout={LAYOUT as never}
+        visible
+        chatReady
+        onMinimize={vi.fn()}
+        onClose={vi.fn()}
+        onReturnToMain={vi.fn()}
+        onHideWidget={vi.fn()}
+        onShowConversation={vi.fn()}
+        onOpenBotSettings={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('dialog', { name: 'Research Bot' })).toBeTruthy();
+    expect(screen.getByText('Research Bot')).toBeTruthy();
+    expect(screen.queryByText('Opening greeting')).toBeNull();
   });
 
-  it('shows none for a built-in Agent or a conversation without a bot', () => {
-    configService.setLocal('agent.colors', { 'bot-1': '#3e63dd' });
-    renderPopup({ id: 'bot-1', name: 'Bot', source: 'builtin' });
-    expect(colorDots()).toHaveLength(0);
-    cleanup();
+  it('falls back to the given name without a bot', () => {
     renderPopup(undefined);
+    expect(screen.getByText('Bot')).toBeTruthy();
+  });
+
+  it('shows no color dot: the color lives on the robot', () => {
+    configService.setLocal('agent.colors', { 'bot-1': '#3e63dd' });
+    renderPopup({ id: 'bot-1', name: 'Bot', source: 'user' });
     expect(colorDots()).toHaveLength(0);
   });
 });

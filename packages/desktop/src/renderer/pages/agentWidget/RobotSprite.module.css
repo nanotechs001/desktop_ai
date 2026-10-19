@@ -126,6 +126,18 @@
   filter: blur(3px);
 }
 
+/* The bot's color at the robot's top right, always shown; ringed in the background color so it reads on any wallpaper. */
+.colorMark {
+  position: absolute;
+  top: 6%;
+  right: 12%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bg-1);
+  pointer-events: none;
+}
+
 /* Hop layer: anchored at the feet so squash never pushes the robot into the taskbar. */
 .hop {
   transform-origin: 50% 100%;

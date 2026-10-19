@@ -60,3 +60,26 @@ describe('robot underglow', () => {
     expect(rule).not.toMatch(/animation|transition/);
   });
 });
+
+// The bot's color, as a dot at the robot's top right: always shown, and outside the mirrored layer so it stays on the
+// right when the robot turns to face left.
+describe('robot color mark', () => {
+  const mountFacing = (mirrored: boolean, glowColor?: string) =>
+    render(
+      <RobotSprite visual={{ ...visual, mirrored }} state='idle' size={88} reduceMotion={false} glowColor={glowColor} />
+    ).container;
+  const markOf = (root: HTMLElement) => root.querySelector<HTMLElement>('[data-robot-color-mark]');
+
+  it.each([false, true])('shows the bot color outside the mirrored layer (facing left: %s)', (mirrored) => {
+    const root = mountFacing(mirrored, '#3e63dd');
+    const mark = markOf(root);
+    expect(mark?.style.backgroundColor).toBe('rgb(62, 99, 221)');
+    expect(mark?.closest('[data-facing]')).toBeNull();
+  });
+
+  it('shows nothing without a valid bot color', () => {
+    expect(markOf(mountFacing(false))).toBeNull();
+    cleanup();
+    expect(markOf(mountFacing(false, 'red;'))).toBeNull();
+  });
+});
