@@ -41,7 +41,7 @@ const setup = (opts: { port?: number | null; platform?: string } = {}) => {
   let port: number | null = opts.port === undefined ? 25809 : opts.port;
   const children: FakeChild[] = [];
   const statuses: TunnelStatus[] = [];
-  const ensureBinary = vi.fn(async () => '/data/bin/cloudflared');
+  const ensureBinary = vi.fn(async (_onDownload: () => void) => '/data/bin/cloudflared');
   const spawn = vi.fn((_cmd: string, _args: string[]) => {
     const child = new FakeChild(1000 + children.length);
     children.push(child);
@@ -89,7 +89,7 @@ describe('createTunnelManager', () => {
     vi.useRealTimers();
   });
 
-  it('moves downloading, starting, then running with the URL, ignoring noise before it', async () => {
+  it('moves starting, then running with the URL, ignoring noise before it', async () => {
     const t = setup();
     const started = t.manager.start();
     await vi.waitFor(() => expect(t.spawn).toHaveBeenCalled());
@@ -106,8 +106,40 @@ describe('createTunnelManager', () => {
     t.last().print('INF |  https://quiet-river-');
     t.last().print('1234.trycloudflare.com   |\n');
     await started;
-    expect(t.statuses.map((s) => s.state)).toEqual(['downloading', 'starting', 'running']);
+    expect(t.statuses.map((s) => s.state)).toEqual(['starting', 'running']);
     expect(t.manager.status()).toEqual({ state: 'running', url: 'https://quiet-river-1234.trycloudflare.com' });
+  });
+
+  it('shows downloading only while the binary is fetched', async () => {
+    const t = setup();
+    t.ensureBinary.mockImplementationOnce(async (onDownload) => {
+      onDownload();
+      return '/data/bin/cloudflared';
+    });
+    await startRunning(t);
+    expect(t.statuses.map((s) => s.state)).toEqual(['starting', 'downloading', 'starting', 'running']);
+  });
+
+  it('shares one binary step between a stale and a new attempt', async () => {
+    const t = setup();
+    let release: (path: string) => void = () => {};
+    t.ensureBinary.mockImplementationOnce(
+      (onDownload) =>
+        new Promise((resolve) => {
+          onDownload();
+          release = resolve;
+        })
+    );
+    const first = t.manager.start();
+    await t.manager.stop();
+    const second = t.manager.start();
+    await vi.waitFor(() => expect(t.manager.status()).toEqual({ state: 'downloading' }));
+    release('/data/bin/cloudflared');
+    await vi.waitFor(() => expect(t.spawn).toHaveBeenCalledTimes(1));
+    t.last().print(URL_LINE('shared'));
+    await Promise.all([first, second]);
+    expect(t.ensureBinary).toHaveBeenCalledTimes(1);
+    expect(t.manager.isActive()).toBe(true);
   });
 
   it('reads the URL from stdout too', async () => {
@@ -136,7 +168,21 @@ describe('createTunnelManager', () => {
     t.ensureBinary.mockRejectedValueOnce(new Error('cloudflared checksum mismatch'));
     await t.manager.start();
     expect(t.manager.status()).toEqual({ state: 'error', message: 'cloudflared checksum mismatch' });
+    // a user start that fails is not retried
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(t.ensureBinary).toHaveBeenCalledTimes(1);
     expect(t.spawn).not.toHaveBeenCalled();
+  });
+
+  it('a boot start that fails retries after 5 s', async () => {
+    const t = setup();
+    t.ensureBinary.mockRejectedValueOnce(new Error('offline'));
+    await t.manager.start({ retryOnFailure: true });
+    expect(t.manager.status()).toEqual({ state: 'error', message: 'offline' });
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(t.ensureBinary).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.spawn).toHaveBeenCalledTimes(1);
   });
 
   it('gives an error when cloudflared exits before printing a URL', async () => {
@@ -275,6 +321,22 @@ describe('createTunnelManager', () => {
     // the old process exiting is not a crash
     await vi.advanceTimersByTimeAsync(120_000);
     expect(t.spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('onWebuiRestarted() while the binary is being prepared does nothing (the port is read at spawn)', async () => {
+    const t = setup();
+    let release: (path: string) => void = () => {};
+    t.ensureBinary.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+    const started = t.manager.start();
+    await vi.waitFor(() => expect(t.ensureBinary).toHaveBeenCalled());
+    t.setPort(25810);
+    t.manager.onWebuiRestarted();
+    release('/data/bin/cloudflared');
+    await vi.waitFor(() => expect(t.spawn).toHaveBeenCalledTimes(1));
+    expect(t.spawn.mock.calls[0][1]).toContain('http://127.0.0.1:25810');
+    t.last().print(URL_LINE('port'));
+    await started;
+    expect(t.ensureBinary).toHaveBeenCalledTimes(1);
   });
 
   it('onWebuiRestarted() on the same port, or with the tunnel off, does nothing', async () => {

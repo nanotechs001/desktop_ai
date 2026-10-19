@@ -224,13 +224,14 @@ let currentInitialPassword: string | undefined;
 
 /** The secure link (Cloudflare quick tunnel) to the running WebUI; cloudflared lives in `<data dir>/bin`. */
 export const webuiTunnel = createTunnelManager({
-  ensureBinary: () =>
+  ensureBinary: (onDownload) =>
     ensureCloudflared({
       binDir: path.join(getDataPath(), 'bin'),
       platformKey: cloudflaredPlatformKey(),
       fetch,
       fs: fs.promises,
       extractTgz,
+      onDownload,
     }),
   spawn: (cmd, args) => spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }),
   getWebuiPort: () => currentHandle?.port ?? null,
@@ -420,7 +421,9 @@ export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
       `[WebUI] Auto-restored from desktop preferences (port=${handle.port}, allowRemote=${handle.allowRemote})`
     );
     if (tunnelEnabled) {
-      webuiTunnel.start().catch((error) => console.error('[WebUI] Failed to auto-start the secure link:', error));
+      webuiTunnel
+        .start({ retryOnFailure: true })
+        .catch((error) => console.error('[WebUI] Failed to auto-start the secure link:', error));
     }
   } catch (error) {
     // Reconcile the persisted preference with reality. Leaving enabled=true

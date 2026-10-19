@@ -117,7 +117,7 @@ describe('WebUI secure link wiring', () => {
     );
     const { restoreDesktopWebUIFromPreferences } = await importModule();
     await restoreDesktopWebUIFromPreferences();
-    expect(tunnel.start).toHaveBeenCalled();
+    expect(tunnel.start).toHaveBeenCalledWith({ retryOnFailure: true });
   });
 
   it.each([[{ 'webui.desktop.enabled': true }], [{ 'webui.desktop.enabled': false, [KEY]: true }]])(

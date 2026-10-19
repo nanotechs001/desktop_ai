@@ -29,7 +29,8 @@ export function initWebuiTunnelIpc(): void {
       if (error instanceof Error && error.message === WEBUI_OFF_MESSAGE) return { success: false, code: 'webui-off' };
       throw error;
     }
-    await writeTunnelEnabled(true);
+    // A stop (or WebUI off) during a long first download has already saved false; keep it.
+    if (webuiTunnel.status().state !== 'stopped') await writeTunnelEnabled(true);
     return { success: true, status: webuiTunnel.status() };
   });
 

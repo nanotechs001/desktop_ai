@@ -33,7 +33,8 @@ export type ChildLike = {
 type Timers = { setTimeout: (fn: () => void, ms: number) => unknown; clearTimeout: (handle: unknown) => void };
 
 export type TunnelManagerDeps = {
-  ensureBinary: () => Promise<string>;
+  /** Resolves the verified binary path; calls `onDownload` when it has to fetch it first. */
+  ensureBinary: (onDownload: () => void) => Promise<string>;
   spawn: (cmd: string, args: string[]) => ChildLike;
   getWebuiPort: () => number | null;
   emit: (status: TunnelStatus) => void;
@@ -43,7 +44,8 @@ export type TunnelManagerDeps = {
 };
 
 export type TunnelManager = {
-  start: () => Promise<void>;
+  /** `retryOnFailure` (boot auto-start): a failed first attempt enters the restart backoff. */
+  start: (opts?: { retryOnFailure?: boolean }) => Promise<void>;
   stop: () => Promise<void>;
   status: () => TunnelStatus;
   isActive: () => boolean;
@@ -90,7 +92,13 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
   let generation = 0;
   let current: Proc | null = null;
   let restarts = 0;
+  /** In a restart chain: a failed attempt schedules the next backoff step. */
+  let retrying = false;
   let retryTimer: unknown = null;
+  /** One binary step at a time; a new attempt joins a stale attempt's download instead of racing it. */
+  let binaryFlight: Promise<string> | null = null;
+  let fetching = false;
+  let awaitingBinary: number | null = null;
 
   const setStatus = (next: TunnelStatus): void => {
     status = next;
@@ -140,8 +148,19 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
   /** A failed attempt; inside a restart chain it schedules the next try. */
   const fail = (message: string): void => {
     setStatus({ state: 'error', message });
-    if (restarts > 0) scheduleRestart();
+    if (retrying) scheduleRestart();
   };
+
+  const getBinary = (): Promise<string> =>
+    (binaryFlight ??= deps
+      .ensureBinary(() => {
+        fetching = true;
+        if (awaitingBinary === generation) setStatus({ state: 'downloading' });
+      })
+      .finally(() => {
+        binaryFlight = null;
+        fetching = false;
+      }));
 
   const spawnAndWait = (id: number, bin: string, port: number): Promise<void> =>
     new Promise<void>((settle) => {
@@ -177,6 +196,7 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
         if (!wasRunning) return fail(message);
         setStatus({ state: 'error', message });
         restarts = 0;
+        retrying = true;
         scheduleRestart();
       };
 
@@ -192,6 +212,7 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
         phase = 'running';
         timers.clearTimeout(startTimer);
         restarts = 0;
+        retrying = false;
         setStatus({ state: 'running', url });
         settle();
       };
@@ -211,18 +232,22 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
     });
 
   const attempt = async (id: number): Promise<void> => {
-    setStatus({ state: 'downloading' });
+    setStatus({ state: 'starting' });
+    awaitingBinary = id;
+    if (fetching) setStatus({ state: 'downloading' });
     let bin: string;
     try {
-      bin = await deps.ensureBinary();
+      bin = await getBinary();
     } catch (error) {
       if (id === generation) fail(messageOf(error));
       return;
+    } finally {
+      if (awaitingBinary === id) awaitingBinary = null;
     }
     if (id !== generation) return;
     const port = deps.getWebuiPort();
     if (port === null) return fail(WEBUI_OFF_MESSAGE);
-    setStatus({ state: 'starting' });
+    if (status.state === 'downloading') setStatus({ state: 'starting' });
     await spawnAndWait(id, bin, port);
   };
 
@@ -235,16 +260,18 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
   };
 
   return {
-    async start() {
+    async start(opts) {
       if (deps.getWebuiPort() === null) throw new Error(WEBUI_OFF_MESSAGE);
       if (wanted && status.state !== 'error') return;
       wanted = true;
+      retrying = opts?.retryOnFailure === true;
       await restart();
     },
     async stop() {
       wanted = false;
       generation += 1;
       restarts = 0;
+      retrying = false;
       cancelRetry();
       await dropCurrent();
       if (status.state !== 'stopped') setStatus({ state: 'stopped' });
@@ -253,7 +280,8 @@ export function createTunnelManager(deps: TunnelManagerDeps): TunnelManager {
     isActive: () => status.state === 'running',
     onWebuiRestarted() {
       const port = deps.getWebuiPort();
-      if (!wanted || port === null || status.state === 'downloading') return;
+      // An attempt still preparing the binary reads the port when it spawns.
+      if (!wanted || port === null || awaitingBinary === generation) return;
       if (current?.port === port && status.state !== 'error') return;
       void restart();
     },

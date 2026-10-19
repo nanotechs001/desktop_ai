@@ -51,7 +51,13 @@ const makeFs = (initial: Record<string, Buffer> = {}) => {
     }),
     mkdir: vi.fn(async () => undefined),
     rm: vi.fn(async (p: string) => {
-      files.delete(p);
+      for (const key of files.keys()) if (key === p || key.startsWith(`${p}/`)) files.delete(key);
+    }),
+    rename: vi.fn(async (from: string, to: string) => {
+      const data = files.get(from);
+      if (!data) throw enoent();
+      files.delete(from);
+      files.set(to, data);
     }),
     chmod: vi.fn(async () => undefined),
   };
@@ -65,6 +71,7 @@ const setup = (platformKey: string, body: Buffer, initial: Record<string, Buffer
   const extract = vi.fn(async (_buf: Buffer, dest: string) => {
     fs.files.set(path.join(dest, 'cloudflared'), inner);
   });
+  const onDownload = vi.fn();
   const deps = {
     binDir: '/data/bin',
     platformKey,
@@ -72,20 +79,24 @@ const setup = (platformKey: string, body: Buffer, initial: Record<string, Buffer
     fs,
     extractTgz: extract,
     assets: testAssets,
+    onDownload,
   };
-  return { fs, fetch, extract, deps };
+  return { fs, fetch, extract, onDownload, deps };
 };
 
 describe('ensureCloudflared', () => {
   it('downloads the pinned asset, verifies it, makes it executable and returns its path', async () => {
-    const { fs, fetch, deps } = setup('linux-x64', BIN);
+    const { fs, fetch, onDownload, deps } = setup('linux-x64', BIN);
     await expect(ensureCloudflared(deps)).resolves.toBe('/data/bin/cloudflared');
     expect(fetch).toHaveBeenCalledWith(
       `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64`,
       expect.anything()
     );
+    expect(onDownload).toHaveBeenCalledTimes(1);
     expect(fs.files.get('/data/bin/cloudflared')).toEqual(BIN);
-    expect(fs.chmod).toHaveBeenCalledWith('/data/bin/cloudflared', 0o755);
+    expect(fs.chmod).toHaveBeenCalledWith('/data/bin/cloudflared.tmp', 0o755);
+    expect(fs.rename).toHaveBeenCalledWith('/data/bin/cloudflared.tmp', '/data/bin/cloudflared');
+    expect([...fs.files.keys()]).toEqual(['/data/bin/cloudflared']);
   });
 
   it('uses cloudflared.exe on Windows and does not chmod', async () => {
@@ -95,9 +106,10 @@ describe('ensureCloudflared', () => {
   });
 
   it('does not download again when the binary on disk has the pinned hash', async () => {
-    const { fetch, deps } = setup('linux-x64', BIN, { '/data/bin/cloudflared': BIN });
+    const { fetch, onDownload, deps } = setup('linux-x64', BIN, { '/data/bin/cloudflared': BIN });
     await expect(ensureCloudflared(deps)).resolves.toBe('/data/bin/cloudflared');
     expect(fetch).not.toHaveBeenCalled();
+    expect(onDownload).not.toHaveBeenCalled();
   });
 
   it('replaces a binary on disk whose hash does not match', async () => {
@@ -110,14 +122,15 @@ describe('ensureCloudflared', () => {
   it('throws on a checksum mismatch and leaves no binary behind', async () => {
     const { fs, deps } = setup('linux-x64', Buffer.from('evil'));
     await expect(ensureCloudflared(deps)).rejects.toThrow('cloudflared checksum mismatch');
-    expect(fs.files.has('/data/bin/cloudflared')).toBe(false);
+    expect(fs.files.size).toBe(0);
   });
 
   it('verifies and extracts the tgz on darwin', async () => {
     const { fs, extract, deps } = setup('darwin-arm64', TGZ);
     await expect(ensureCloudflared(deps)).resolves.toBe('/data/bin/cloudflared');
-    expect(extract).toHaveBeenCalledWith(TGZ, '/data/bin');
-    expect(fs.chmod).toHaveBeenCalledWith('/data/bin/cloudflared', 0o755);
+    expect(extract).toHaveBeenCalledWith(TGZ, '/data/bin/cloudflared.extract');
+    expect(fs.chmod).toHaveBeenCalledWith('/data/bin/cloudflared.extract/cloudflared', 0o755);
+    expect([...fs.files.keys()]).toEqual(['/data/bin/cloudflared']);
   });
 
   it('does not extract a tgz whose own hash does not match', async () => {
@@ -129,7 +142,7 @@ describe('ensureCloudflared', () => {
   it('deletes an extracted binary whose hash does not match', async () => {
     const { fs, deps } = setup('darwin-arm64', TGZ, {}, Buffer.from('evil inner'));
     await expect(ensureCloudflared(deps)).rejects.toThrow('cloudflared checksum mismatch');
-    expect(fs.files.has('/data/bin/cloudflared')).toBe(false);
+    expect(fs.files.size).toBe(0);
   });
 
   it('throws when the download fails', async () => {

@@ -59,6 +59,21 @@ describe('webui.tunnel IPC', () => {
     expect(writeTunnelEnabled).not.toHaveBeenCalled();
   });
 
+  it('a stop while a start is still pending ends with the link saved off', async () => {
+    let finishStart = () => {};
+    tunnel.start.mockImplementationOnce(() => new Promise<void>((resolve) => (finishStart = resolve)));
+    tunnel.stop.mockImplementationOnce(async () => {
+      tunnel.status.mockReturnValue({ state: 'stopped' });
+    });
+    const started = call('start');
+    await vi.waitFor(() => expect(tunnel.start).toHaveBeenCalled());
+    await handlers.get('stop')!();
+    finishStart();
+    await expect(started).resolves.toEqual({ success: true, status: { state: 'stopped' } });
+    expect(writeTunnelEnabled.mock.calls).toEqual([[false]]);
+    tunnel.status.mockReturnValue({ state: 'running', url: 'https://a-b.trycloudflare.com' });
+  });
+
   it('stop stops the tunnel and persists it off', async () => {
     tunnel.status.mockReturnValueOnce({ state: 'stopped' });
     await expect(call('stop')).resolves.toEqual({ success: true, status: { state: 'stopped' } });

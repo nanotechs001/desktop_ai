@@ -63,7 +63,8 @@ export type CloudflaredFs = {
   readFile: (file: string) => Promise<Buffer>;
   writeFile: (file: string, data: Buffer, options?: { mode?: number }) => Promise<void>;
   mkdir: (dir: string, options: { recursive: true }) => Promise<unknown>;
-  rm: (file: string, options: { force: true }) => Promise<void>;
+  rm: (file: string, options: { force: true; recursive?: boolean }) => Promise<void>;
+  rename: (from: string, to: string) => Promise<void>;
   chmod: (file: string, mode: number) => Promise<void>;
 };
 
@@ -73,6 +74,8 @@ export type EnsureCloudflaredDeps = {
   fetch: typeof fetch;
   fs: CloudflaredFs;
   extractTgz: (buf: Buffer, dest: string) => Promise<void>;
+  /** Called once a download starts (nothing usable on disk). */
+  onDownload?: () => void;
   /** Test seam; defaults to the pinned table. */
   assets?: Partial<Record<string, CloudflaredAsset>>;
 };
@@ -91,6 +94,8 @@ const readOrNull = async (fs: CloudflaredFs, file: string): Promise<Buffer | nul
 
 const download = async (fetchImpl: typeof fetch, asset: string): Promise<Buffer> => {
   const url = `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/${asset}`;
+  // Redirects to GitHub's asset CDN are fine: the pinned hash, not the host, guarantees integrity.
+  // shortcut: Node fetch (and cloudflared) ignore the system proxy; upgrade if users behind proxies report it.
   const res = await fetchImpl(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`cloudflared download failed (HTTP ${res.status})`);
   return Buffer.from(await res.arrayBuffer());
@@ -109,22 +114,30 @@ export async function ensureCloudflared(deps: EnsureCloudflaredDeps): Promise<st
   if (existing && sha256(existing) === entry.sha256) return binPath;
   await fs.rm(binPath, { force: true });
   await fs.mkdir(binDir, { recursive: true });
+  deps.onDownload?.();
 
+  // Verified bytes are staged next to binPath and renamed into place, so binPath is only ever replaced atomically.
   const body = await download(deps.fetch, entry.asset);
-  if (entry.archive === 'tgz') {
-    if (sha256(body) !== entry.archiveSha256) throw new Error(CHECKSUM_MISMATCH);
-    await deps.extractTgz(body, binDir);
-  } else {
-    if (sha256(body) !== entry.sha256) throw new Error(CHECKSUM_MISMATCH);
-    await fs.writeFile(binPath, body, { mode: 0o755 });
+  const extractDir = path.join(binDir, 'cloudflared.extract');
+  const staged = entry.archive === 'tgz' ? path.join(extractDir, 'cloudflared') : `${binPath}.tmp`;
+  try {
+    if (entry.archive === 'tgz') {
+      if (sha256(body) !== entry.archiveSha256) throw new Error(CHECKSUM_MISMATCH);
+      await fs.rm(extractDir, { force: true, recursive: true });
+      await fs.mkdir(extractDir, { recursive: true });
+      await deps.extractTgz(body, extractDir);
+    } else {
+      if (sha256(body) !== entry.sha256) throw new Error(CHECKSUM_MISMATCH);
+      await fs.writeFile(staged, body, { mode: 0o755 });
+    }
+    const unpacked = await readOrNull(fs, staged);
+    if (!unpacked || sha256(unpacked) !== entry.sha256) throw new Error(CHECKSUM_MISMATCH);
+    if (!isWindows) await fs.chmod(staged, 0o755);
+    await fs.rename(staged, binPath);
+  } finally {
+    await fs.rm(staged, { force: true });
+    if (entry.archive === 'tgz') await fs.rm(extractDir, { force: true, recursive: true });
   }
-
-  const written = await readOrNull(fs, binPath);
-  if (!written || sha256(written) !== entry.sha256) {
-    await fs.rm(binPath, { force: true });
-    throw new Error(CHECKSUM_MISMATCH);
-  }
-  if (!isWindows) await fs.chmod(binPath, 0o755);
   return binPath;
 }
 
