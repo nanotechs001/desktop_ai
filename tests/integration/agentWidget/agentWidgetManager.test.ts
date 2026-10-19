@@ -137,6 +137,7 @@ vi.mock('@/common', () => {
     'landStep',
     'setIgnoreMouse',
     'openInMain',
+    'openAgentSettings',
     'rendererReady',
     'animationDone',
     'setSuspended',
@@ -196,7 +197,11 @@ const memoryIO = (initial: unknown) => {
   };
 };
 
-const host = { preloadPath: '/preload/index.js', loadWidget: vi.fn(), getMainWindow: () => null };
+const host = {
+  preloadPath: '/preload/index.js',
+  loadWidget: vi.fn(),
+  getMainWindow: vi.fn((): unknown => null),
+};
 const managers: AgentWidgetManager[] = [];
 
 async function makeManager(initial: unknown = { settings: { enabled: true } }) {
@@ -224,6 +229,7 @@ beforeEach(() => {
   h.scaleAt = () => 1;
   h.screenListeners = {};
   host.loadWidget.mockClear();
+  host.getMainWindow.mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -1151,6 +1157,51 @@ describe('IPC boundary', () => {
 
     await expect(h.providers.ensure({ conversation_id: A })).resolves.toBe(true);
     await expect(h.providers.setSettings({ scale: 99 })).resolves.toMatchObject({ scale: 1.5 });
+  });
+});
+
+describe('opening a VA Bot\'s settings in the main window', () => {
+  const makeMain = () => ({
+    isDestroyed: () => false,
+    isMinimized: () => true,
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
+    webContents: { send: vi.fn() },
+  });
+
+  it('brings the main window forward and tells it which bot, leaving the chat where it is', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.setChatLocation(A, 'widget');
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    manager.openAgentSettings('bot-1');
+
+    expect(main.restore).toHaveBeenCalled();
+    expect(main.show).toHaveBeenCalled();
+    expect(main.focus).toHaveBeenCalled();
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:open-agent-settings', { agent_id: 'bot-1' });
+    expect(manager.getChatLocations()[A]).toBe('widget');
+  });
+
+  it('does nothing without a main window', async () => {
+    const { manager } = await makeManager();
+    expect(() => manager.openAgentSettings('bot-1')).not.toThrow();
+  });
+
+  it('rejects a request without an agent_id at the IPC boundary', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+    await expect(h.providers.openAgentSettings({ conversation_id: A })).rejects.toThrow();
+    await expect(h.providers.openAgentSettings({ conversation_id: A, agent_id: '' })).rejects.toThrow();
+    await expect(h.providers.openAgentSettings({ conversation_id: A, agent_id: 'b', extra: 1 })).rejects.toThrow();
+    expect(main.webContents.send).not.toHaveBeenCalled();
+    await expect(h.providers.openAgentSettings({ conversation_id: A, agent_id: 'bot-1' })).resolves.toBeUndefined();
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:open-agent-settings', { agent_id: 'bot-1' });
   });
 });
 

@@ -208,3 +208,16 @@ describe('Layout sider brand Home button', () => {
     }
   });
 });
+
+describe('Layout tray bridge: open a VA Bot\'s settings', () => {
+  it('opens that bot in the assistant editor', () => {
+    renderLayout();
+    navigate.mockClear();
+
+    window.dispatchEvent(new CustomEvent('tray:open-agent-settings', { detail: { agent_id: 'bot-1' } }));
+
+    expect(navigate).toHaveBeenCalledWith('/assistants', {
+      state: { openAssistantEditor: true, openAssistantId: 'bot-1' },
+    });
+  });
+});

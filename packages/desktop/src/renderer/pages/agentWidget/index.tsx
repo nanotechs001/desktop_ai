@@ -267,6 +267,9 @@ const AgentWidgetPage: React.FC = () => {
           onMinimize={() => setExpanded(false)}
           onClose={() => void ipcBridge.agentWidget.setChatLocation.invoke({ ...target, location: 'main' })}
           onReturnToMain={() => void ipcBridge.agentWidget.openInMain.invoke(target)}
+          onOpenBotSettings={(agent_id) =>
+            void ipcBridge.agentWidget.openAgentSettings.invoke({ ...target, agent_id }).catch(() => {})
+          }
           onHideWidget={() => void ipcBridge.agentWidget.hide.invoke(target)}
           onShowConversation={(to) =>
             void ipcBridge.agentWidget.showConversation.invoke({ ...target, to }).catch(() => {})

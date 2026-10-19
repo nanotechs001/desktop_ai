@@ -1608,6 +1608,10 @@ export const agentWidget = {
   setIgnoreMouse: bridge.buildProvider<void, AgentWidgetTarget & { ignore: boolean }>('agent-widget:set-ignore-mouse'),
   /** Return the chat to the main window and bring that window forward on the conversation. */
   openInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:open-in-main'),
+  /** Bring the main window forward on this VA Bot's settings; the popup stays where it is. */
+  openAgentSettings: bridge.buildProvider<void, AgentWidgetTarget & { agent_id: string }>(
+    'agent-widget:open-agent-settings'
+  ),
   /** The widget renderer has its first frames decoded: show the window and play `appearing`. */
   rendererReady: bridge.buildProvider<void, AgentWidgetTarget & { agent_id?: string; modified_at?: number }>(
     'agent-widget:renderer-ready'

@@ -29,6 +29,7 @@ const schemas = {
   setIgnoreMouse: target.extend({ ignore: z.boolean() }).strict(),
   rendererReady: target.extend({ agent_id: agentId.optional(), modified_at: z.number().finite().optional() }).strict(),
   showConversation: target.extend({ to: conversationId }).strict(),
+  openAgentSettings: target.extend({ agent_id: agentId }).strict(),
   animationDone: target.extend({ animation: z.enum(['appearing', 'disappearing']) }).strict(),
   setSuspended: target.extend({ suspended: z.boolean() }).strict(),
 };
@@ -84,6 +85,9 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
     manager.setIgnoreMouse(conversation_id, ignore);
   });
   w.openInMain.provider(async (p) => manager.openInMain(parse(target, p, 'openInMain').conversation_id));
+  w.openAgentSettings.provider(async (p) =>
+    manager.openAgentSettings(parse(schemas.openAgentSettings, p, 'openAgentSettings').agent_id)
+  );
   w.rendererReady.provider(async (p) => {
     const { conversation_id, agent_id, modified_at } = parse(schemas.rendererReady, p, 'rendererReady');
     manager.rendererReady(conversation_id, { agent_id, modified_at });

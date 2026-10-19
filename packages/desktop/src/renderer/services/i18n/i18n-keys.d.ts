@@ -1171,6 +1171,7 @@ export type I18nKey =
   | 'messages.slash.hint'
   | 'messages.slash.title'
   | 'messages.unknownMessageType'
+  | 'pet.widget.botSettings'
   | 'pet.widget.chatInWidget'
   | 'pet.widget.chatWithRobot'
   | 'pet.widget.closePopup'

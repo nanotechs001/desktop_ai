@@ -582,6 +582,17 @@ export class AgentWidgetManager {
     main.webContents.send('tray:navigate-to-conversation', { conversation_id: conversationId });
   }
 
+  /** Show the main window on a VA Bot's settings; the chat stays in its popup. */
+  openAgentSettings(agentId: string): void {
+    const main = this.host.getMainWindow();
+    if (!main || main.isDestroyed()) return;
+    if (main.isMinimized()) main.restore();
+    main.show();
+    main.focus();
+    // Same bridge as the tray channels (preload turns it into a window event); Layout.tsx navigates.
+    main.webContents.send('tray:open-agent-settings', { agent_id: agentId });
+  }
+
   // ---------------------------------------------------------------------------
   // Windows
   // ---------------------------------------------------------------------------

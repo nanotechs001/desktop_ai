@@ -7,7 +7,7 @@
 import React, { useCallback, useState } from 'react';
 import classNames from 'classnames';
 import { Button, Spin, Tooltip } from '@arco-design/web-react';
-import { Close, History, Left, Minus, PreviewCloseOne, Tv } from '@icon-park/react';
+import { Close, History, Left, Minus, PreviewCloseOne, SettingTwo, Tv } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
@@ -30,6 +30,8 @@ type WidgetChatPopupProps = {
   onHideWidget: () => void;
   /** A conversation picked from this bot's history: the robot switches to it. */
   onShowConversation: (conversationId: string) => void;
+  /** The gear: open this VA Bot's settings in the main window. */
+  onOpenBotSettings: (agentId: string) => void;
 };
 
 const action = (label: string, icon: React.ReactNode, onClick: () => void) => (
@@ -73,6 +75,10 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
         </div>
         {agentId && action(historyLabel, <History theme='outline' size='14' />, () => setHistoryOpen(true))}
         {action(t('pet.widget.returnToMain'), <Tv theme='outline' size='14' />, props.onReturnToMain)}
+        {agentId &&
+          action(t('pet.widget.botSettings'), <SettingTwo theme='outline' size='14' />, () =>
+            props.onOpenBotSettings(agentId)
+          )}
         {action(t('pet.widget.hideWidget'), <PreviewCloseOne theme='outline' size='14' />, props.onHideWidget)}
         {action(t('pet.widget.minimize'), <Minus theme='outline' size='14' />, props.onMinimize)}
         {action(t('pet.widget.closePopup'), <Close theme='outline' size='14' />, props.onClose)}

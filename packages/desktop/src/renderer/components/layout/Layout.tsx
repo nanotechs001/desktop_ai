@@ -358,6 +358,11 @@ const Layout: React.FC<{
       void navigate(`/conversation/${event.detail.conversation_id}`);
     };
 
+    // A VA Bot robot's popup asked for that bot's settings
+    const handleOpenAgentSettings = (event: CustomEvent<{ agent_id: string }>) => {
+      void navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: event.detail.agent_id } });
+    };
+
     // Open about dialog when requested from tray / 托盘请求打开关于对话框
     const handleOpenAbout = () => {
       // Navigate to settings/about page / 导航到设置/关于页面
@@ -381,6 +386,7 @@ const Layout: React.FC<{
     // Listen for tray events / 监听托盘事件
     window.addEventListener('tray:navigate-to-guid', handleNavigateToGuid as EventListener);
     window.addEventListener('tray:navigate-to-conversation', handleNavigateToConversation as EventListener);
+    window.addEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
     window.addEventListener('tray:open-about', handleOpenAbout as EventListener);
     window.addEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
     window.addEventListener('tray:check-update', handleCheckUpdate as EventListener);
@@ -388,6 +394,7 @@ const Layout: React.FC<{
     return () => {
       window.removeEventListener('tray:navigate-to-guid', handleNavigateToGuid as EventListener);
       window.removeEventListener('tray:navigate-to-conversation', handleNavigateToConversation as EventListener);
+      window.removeEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
       window.removeEventListener('tray:open-about', handleOpenAbout as EventListener);
       window.removeEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
       window.removeEventListener('tray:check-update', handleCheckUpdate as EventListener);
