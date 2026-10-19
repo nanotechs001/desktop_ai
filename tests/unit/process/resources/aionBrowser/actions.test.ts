@@ -39,6 +39,11 @@ let relayClient: RelayClient;
 const call = async (name: string, args: Record<string, unknown>): Promise<ToolReply> =>
   (await client.callTool({ name, arguments: args })) as ToolReply;
 const textOf = (reply: ToolReply): string => reply.content.map((part) => part.text ?? '').join('');
+/** A JPEG header (SOI + SOF0) of the given pixel width, as base64: enough for the width to be read. */
+const jpegOfWidth = (width: number): string =>
+  Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x10, width >> 8, width & 0xff, 0x03]).toString(
+    'base64'
+  );
 const inputRequests = () => relay.requests.filter((r) => r.method.startsWith('Input.'));
 
 /** Opens wc-7 and observes it; returns the id of its "Save" button. */
@@ -712,6 +717,21 @@ describe('fallback tools', () => {
     expect(reply.content).toEqual([{ type: 'image', data: '/9j/AAAA', mimeType: 'image/jpeg' }]);
     expect(relay.callsTo('Page.captureScreenshot')[0]).toMatchObject({ format: 'jpeg' });
   });
+
+  it('screenshot still works when the page does not answer, measuring the pixel ratio from the image', async () => {
+    // A frozen page, or one behind a dialog: no in-page call ever returns.
+    relay.on('Runtime.callFunctionOn', () => new Promise(() => {}));
+    relay.on('Runtime.evaluate', () => new Promise(() => {}));
+    // Device px at scale 1 (2x display), CSS px once scaled down.
+    relay.on('Page.captureScreenshot', (params) => ({
+      data: jpegOfWidth((params.clip as { scale: number }).scale === 1 ? 2400 : 1200),
+    }));
+    await call('tabs', { action: 'open' });
+    const reply = await call('screenshot', {});
+    expect(reply.isError).toBeFalsy();
+    expect(reply.content).toEqual([{ type: 'image', data: jpegOfWidth(1200), mimeType: 'image/jpeg' }]);
+    expect(relay.callsTo('Page.captureScreenshot').map((p) => (p.clip as { scale: number }).scale)).toEqual([1, 0.5]);
+  }, 10_000);
 
   it('click_point on a tab the user took over returns paused with the note, not an error', async () => {
     await call('tabs', { action: 'open' });

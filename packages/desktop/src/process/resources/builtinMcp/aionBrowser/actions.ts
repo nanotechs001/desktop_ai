@@ -717,13 +717,7 @@ const layoutMetrics = (ctx: ActionContext): Promise<LayoutMetrics> =>
  */
 export async function screenshot(ctx: ActionContext, targetId?: string): Promise<string> {
   const t = targetId ? await resolveTarget(ctx, targetId, false) : null;
-  const [{ cssVisualViewport: css }, { frames }] = await Promise.all([
-    layoutMetrics(ctx),
-    collectFramesReport(ctx.conn, ctx.sessionId),
-  ]);
-  // The image comes out in device px; scaling by 1/dpr keeps image px equal to the CSS px click_point takes.
-  const ratio = await callIn(ctx.conn, frames[0], DEVICE_PIXEL_RATIO, []);
-  const dpr = isNumber(ratio) && ratio > 0 ? ratio : 1;
+  const { cssVisualViewport: css } = await layoutMetrics(ctx);
   const viewport = { x: 0, y: 0, w: css.clientWidth, h: css.clientHeight };
   // A target shows only where its frame is visible (resolve checked its center, so this is never empty).
   const area = (t ? intersect(t.rect, t.frame.clip) : viewport) ?? viewport;
@@ -733,14 +727,48 @@ export async function screenshot(ctx: ActionContext, targetId?: string): Promise
     y: area.y + css.pageY,
     width: Math.min(area.w, MAX_SCREENSHOT_SIDE),
     height: Math.min(area.h, MAX_SCREENSHOT_SIDE),
-    scale: 1 / dpr,
   };
-  const { data } = await sendBounded<{ data: string }>(ctx, 'Page.captureScreenshot', {
-    format: 'jpeg',
-    quality: 70,
-    clip,
-  });
-  return data;
+  // The image comes out in device px; scaling by 1/dpr keeps image px equal to the CSS px click_point takes.
+  const capture = async (scale: number): Promise<string> =>
+    (
+      await sendBounded<{ data: string }>(ctx, 'Page.captureScreenshot', {
+        format: 'jpeg',
+        quality: 70,
+        clip: { ...clip, scale },
+      })
+    ).data;
+  const dpr = await pageDevicePixelRatio(ctx).catch((): null => null);
+  if (dpr !== null) return capture(1 / dpr);
+  // The page did not answer (frozen, or a dialog is open): the capture still works, so read the ratio off the image.
+  const raw = await capture(1);
+  const width = jpegWidth(raw);
+  const measured = width !== null && clip.width > 0 ? width / clip.width : 1;
+  return measured > 1 ? capture(1 / measured) : raw;
+}
+
+/** The page's devicePixelRatio, asked in its top frame; rejects when the page does not answer in time. */
+async function pageDevicePixelRatio(ctx: ActionContext): Promise<number> {
+  const ratio = await withTimeout(
+    collectFramesReport(ctx.conn, ctx.sessionId).then(({ frames }) =>
+      callIn(ctx.conn, frames[0], DEVICE_PIXEL_RATIO, [])
+    ),
+    FRAME_TIMEOUT_MS,
+    'The page'
+  );
+  return isNumber(ratio) && ratio > 0 ? ratio : 1;
+}
+
+/** Pixel width from a base64 JPEG's SOF header, or null when there is none. */
+function jpegWidth(base64: string): number | null {
+  const bytes = Buffer.from(base64, 'base64');
+  for (let i = 2; i + 8 < bytes.length; ) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1];
+    // SOF0-SOF15, except DHT (C4), JPG (C8) and DAC (CC), which share the range.
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return bytes.readUInt16BE(i + 7);
+    i += 2 + bytes.readUInt16BE(i + 2);
+  }
+  return null;
 }
 
 /**
