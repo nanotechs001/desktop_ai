@@ -28,7 +28,7 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
   progress = null,
 }) => {
   const { t } = useTranslation();
-  const state = useDeletePreview(activeAssistant?.id, visible);
+  const state = useDeletePreview(activeAssistant?.id, visible, deleting);
   const preview = state.status === 'ready' ? state.preview : null;
 
   return (

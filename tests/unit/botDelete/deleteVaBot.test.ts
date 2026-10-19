@@ -17,6 +17,8 @@ const m = vi.hoisted(() => ({
   listJobs: vi.fn(),
   removeJob: vi.fn(),
   getPlatformSettings: vi.fn(),
+  clientSettings: {} as Record<string, unknown>,
+  widgetRemove: vi.fn(),
   syncChannelSettings: vi.fn(),
   listRobots: vi.fn(),
   httpRequest: vi.fn(),
@@ -41,7 +43,10 @@ vi.mock('@/common', () => ({
       getPlatformSettings: { invoke: (...a: unknown[]) => m.getPlatformSettings(...a) },
       syncChannelSettings: { invoke: (...a: unknown[]) => m.syncChannelSettings(...a) },
     },
-    agentWidget: { listRobots: { invoke: (...a: unknown[]) => m.listRobots(...a) } },
+    agentWidget: {
+      listRobots: { invoke: (...a: unknown[]) => m.listRobots(...a) },
+      remove: { invoke: (...a: unknown[]) => m.widgetRemove(...a) },
+    },
   },
 }));
 vi.mock('@/common/adapter/httpBridge', () => ({ httpRequest: (...a: unknown[]) => m.httpRequest(...a) }));
@@ -82,7 +87,14 @@ beforeEach(() => {
   m.listJobs.mockImplementation(async () => (m.calls.push('listJobs'), []));
   m.removeJob.mockImplementation(async () => (m.calls.push('removeJob'), undefined));
   m.getPlatformSettings.mockImplementation(async () => (m.calls.push('getPlatformSettings'), noBinding));
-  m.httpRequest.mockImplementation(async () => (m.calls.push('clearBinding'), undefined));
+  m.clientSettings = {};
+  m.widgetRemove.mockResolvedValue(undefined);
+  // GET reads the client settings (a binding exists only when its key does); PUT clears one.
+  m.httpRequest.mockImplementation(async (method: string) => {
+    if (method === 'GET') return m.clientSettings;
+    m.calls.push('clearBinding');
+    return undefined;
+  });
   m.syncChannelSettings.mockResolvedValue(undefined);
   m.assistantsDelete.mockImplementation(async () => (m.calls.push('deleteBot'), undefined));
   m.removeAgentNotes.mockImplementation(async () => (m.calls.push('forget'), { success: true }));
@@ -97,26 +109,13 @@ describe('deleteVaBot', () => {
     m.listJobs.mockImplementation(
       async () => (m.calls.push('listJobs'), [job('j1', { agent_config: { assistant_id: BOT } })])
     );
-    m.getPlatformSettings.mockImplementation(async ({ platform }: { platform: string }) => {
-      m.calls.push('getPlatformSettings');
-      return platform === 'slack' ? { ...noBinding, assistant: { assistant_id: BOT } } : noBinding;
-    });
+    m.clientSettings = { 'assistant.slack.agent': { assistant_id: BOT } };
 
     const outcome = await deleteVaBot(BOT, {});
 
     expect(outcome).toEqual({ ok: true });
     const firstOf = (name: string) => m.calls.indexOf(name);
-    const order = [
-      'profile',
-      'collect',
-      'removeChats',
-      'listJobs',
-      'removeJob',
-      'getPlatformSettings',
-      'clearBinding',
-      'deleteBot',
-      'forget',
-    ];
+    const order = ['profile', 'collect', 'removeChats', 'listJobs', 'removeJob', 'clearBinding', 'deleteBot', 'forget'];
     expect(order.map(firstOf)).toEqual(
       order
         .map(firstOf)
@@ -229,46 +228,92 @@ describe('deleteVaBot', () => {
   });
 
   describe('channel bindings', () => {
-    const boundTo = (...platforms: string[]) =>
-      m.getPlatformSettings.mockImplementation(async ({ platform }: { platform: string }) => ({
-        ...noBinding,
-        assistant: platforms.includes(platform) ? { assistant_id: BOT } : { assistant_id: 'someone-else' },
-      }));
+    const boundTo = (...platforms: string[]) => {
+      m.clientSettings = Object.fromEntries(
+        platforms.map((platform) => [`assistant.${platform}.agent`, { assistant_id: BOT }])
+      );
+    };
+    const clearedKeys = () => m.httpRequest.mock.calls.filter(([method]) => method === 'PUT').map(([, , body]) => body);
 
     it('clears the binding of each platform that points at this bot and no other, then resets that platform', async () => {
       boundTo('telegram', 'slack');
+      m.clientSettings['assistant.discord.agent'] = { assistant_id: 'someone-else' };
 
       await deleteVaBot(BOT, {});
 
-      expect(m.httpRequest).toHaveBeenCalledTimes(2);
-      expect(m.httpRequest).toHaveBeenCalledWith('PUT', '/api/settings/client', { 'assistant.telegram.agent': null });
-      expect(m.httpRequest).toHaveBeenCalledWith('PUT', '/api/settings/client', { 'assistant.slack.agent': null });
+      expect(clearedKeys()).toEqual([{ 'assistant.telegram.agent': null }, { 'assistant.slack.agent': null }]);
       expect(m.syncChannelSettings).toHaveBeenCalledWith({ platform: 'telegram' });
       expect(m.syncChannelSettings).toHaveBeenCalledWith({ platform: 'slack' });
+      expect(m.syncChannelSettings).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not list or clear a platform nobody set up, even when its default would resolve to this bot', async () => {
+      // The backend answers getPlatformSettings with the default bot when nothing is bound; that is not a binding.
+      m.getPlatformSettings.mockResolvedValue({ ...noBinding, assistant: { assistant_id: BOT } });
+      m.clientSettings = {};
+
+      await deleteVaBot(BOT, {});
+      expect(clearedKeys()).toEqual([]);
+      expect(m.getPlatformSettings).not.toHaveBeenCalled();
     });
 
     it('also clears a legacy binding that names the bot by custom_agent_id', async () => {
-      m.getPlatformSettings.mockImplementation(async ({ platform }: { platform: string }) => ({
-        ...noBinding,
-        assistant: platform === 'discord' ? { custom_agent_id: BOT } : null,
-      }));
+      m.clientSettings = { 'assistant.discord.agent': { custom_agent_id: BOT } };
       await deleteVaBot(BOT, {});
-      expect(m.httpRequest).toHaveBeenCalledWith('PUT', '/api/settings/client', { 'assistant.discord.agent': null });
+      expect(clearedKeys()).toEqual([{ 'assistant.discord.agent': null }]);
     });
 
-    it('still deletes the bot when a binding cannot be read or cleared (logged, not blocking)', async () => {
+    it('still deletes the bot when the bindings cannot be read or cleared (logged, not blocking)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      m.getPlatformSettings.mockImplementation(async ({ platform }: { platform: string }) => {
-        if (platform === 'lark') throw new Error('read failed');
-        return { ...noBinding, assistant: platform === 'slack' ? { assistant_id: BOT } : null };
+      m.httpRequest.mockRejectedValue(new Error('down'));
+      expect(await deleteVaBot(BOT, {})).toEqual({ ok: true });
+
+      boundTo('slack');
+      m.httpRequest.mockImplementation(async (method: string) => {
+        if (method === 'GET') return m.clientSettings;
+        throw new Error('write failed');
       });
-      m.httpRequest.mockRejectedValue(new Error('write failed'));
-
-      const outcome = await deleteVaBot(BOT, {});
-
-      expect(outcome).toEqual({ ok: true });
-      expect(m.assistantsDelete).toHaveBeenCalled();
+      expect(await deleteVaBot(BOT, {})).toEqual({ ok: true });
+      expect(m.assistantsDelete).toHaveBeenCalledTimes(2);
       expect(warn).toHaveBeenCalled();
+    });
+  });
+
+  describe('robots', () => {
+    it('removes every robot of this bot after its chats, and no other robot', async () => {
+      m.listRobots.mockResolvedValue([
+        { conversation_id: 'r1', agent_id: BOT, hidden: false },
+        { conversation_id: 'r2', agent_id: BOT, hidden: true },
+        { conversation_id: 'r3', agent_id: 'other', hidden: false },
+      ]);
+      m.widgetRemove.mockImplementation(async () => (m.calls.push('removeRobot'), undefined));
+
+      await deleteVaBot(BOT, {});
+
+      expect(m.widgetRemove.mock.calls.map(([arg]) => arg)).toEqual([
+        { conversation_id: 'r1' },
+        { conversation_id: 'r2' },
+      ]);
+      expect(m.calls.indexOf('removeRobot')).toBeGreaterThan(m.calls.indexOf('removeChats'));
+      expect(m.calls.indexOf('removeRobot')).toBeLessThan(m.calls.indexOf('deleteBot'));
+    });
+
+    it('only logs when a robot cannot be listed or removed', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      m.listRobots.mockResolvedValueOnce([{ conversation_id: 'r1', agent_id: BOT, hidden: false }]);
+      m.widgetRemove.mockRejectedValue(new Error('gone'));
+      expect(await deleteVaBot(BOT, {})).toEqual({ ok: true });
+
+      m.listRobots.mockRejectedValueOnce(new Error('down'));
+      expect(await deleteVaBot(BOT, {})).toEqual({ ok: true });
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('leaves the robots alone when a chat could not be deleted (the bot stays)', async () => {
+      m.listRobots.mockResolvedValue([{ conversation_id: 'r1', agent_id: BOT, hidden: false }]);
+      m.removeChats.mockResolvedValue({ removed: [], failed: ['c1'] });
+      await deleteVaBot(BOT, {});
+      expect(m.widgetRemove).not.toHaveBeenCalled();
     });
   });
 
@@ -324,16 +369,22 @@ describe('previewVaBotDelete', () => {
       job('c', { agent_config: { assistant_id: 'other' } }),
     ]);
     m.listRobots.mockResolvedValue([{ conversation_id: 'zzz', agent_id: BOT, hidden: false }]);
-    m.getPlatformSettings.mockImplementation(async ({ platform }: { platform: string }) => ({
-      ...noBinding,
-      assistant: platform === 'dingtalk' || platform === 'telegram' ? { assistant_id: BOT } : null,
-    }));
+    m.clientSettings = {
+      'assistant.dingtalk.agent': { assistant_id: BOT },
+      'assistant.telegram.agent': { assistant_id: BOT },
+      'assistant.slack.agent': { assistant_id: 'other' },
+    };
 
     const preview = await previewVaBotDelete(BOT);
 
     expect(preview).toEqual({ chats: 2, tasks: 2, hasRobot: true, channels: ['Telegram', 'DingTalk'] });
     expect(m.deleteProfileData).not.toHaveBeenCalled();
     expect(m.removeChats).not.toHaveBeenCalled();
+  });
+
+  it('does not list a platform that only resolves to this bot as the default', async () => {
+    m.getPlatformSettings.mockResolvedValue({ ...noBinding, assistant: { assistant_id: BOT } });
+    expect((await previewVaBotDelete(BOT)).channels).toEqual([]);
   });
 
   it('reports zeros (so the lines are hidden) when the bot owns nothing', async () => {
@@ -356,7 +407,7 @@ describe('previewVaBotDelete', () => {
   it('still previews when the robots or a channel cannot be read', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     m.listRobots.mockRejectedValue(new Error('x'));
-    m.getPlatformSettings.mockRejectedValue(new Error('x'));
+    m.httpRequest.mockRejectedValue(new Error('x'));
     expect(await previewVaBotDelete(BOT)).toEqual({ chats: 2, tasks: 0, hasRobot: false, channels: [] });
   });
 });

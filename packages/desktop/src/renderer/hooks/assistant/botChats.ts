@@ -8,6 +8,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { scopeToToken } from '@/common/adapter/sidebarMapper';
 import type { TChatConversation } from '@/common/config/storage';
 import { emitter } from '@/renderer/utils/emitter';
@@ -19,7 +20,11 @@ export const DEFAULT_REMOVE_CONCURRENCY = 4;
 
 type Page<T> = { items: T[]; has_more: boolean; total?: number };
 
-/** Every live conversation. Throws when a page fails, is malformed, or the pages don't add up: a partial list must never drive a delete. */
+/**
+ * Every live conversation. Throws when a page fails, is malformed or stalls: a partial list must never drive a
+ * delete. A `total` that disagrees with the rows is only logged: the backend skips unreadable legacy rows but still
+ * counts them, and chats can change while the list is paged.
+ */
 const listLiveConversations = async (): Promise<TChatConversation[]> => {
   const all: TChatConversation[] = [];
   let cursor: string | undefined;
@@ -32,7 +37,9 @@ const listLiveConversations = async (): Promise<TChatConversation[]> => {
     if (!Array.isArray(page?.items)) throw new Error('Malformed conversation page');
     all.push(...page.items);
     if (!page.has_more) {
-      if (page.total !== undefined && all.length !== page.total) throw new Error('Conversation pages are incomplete');
+      if (page.total !== undefined && all.length !== page.total) {
+        console.warn(`[botChats] the conversation list returned ${all.length} rows for a total of ${page.total}`);
+      }
       return all;
     }
     if (page.items.length === 0) throw new Error('Conversation paging stalled');
@@ -41,12 +48,25 @@ const listLiveConversations = async (): Promise<TChatConversation[]> => {
   throw new Error('Too many conversation pages');
 };
 
-/** Every archived conversation, across all groups and their pages. Throws on any failure. */
-const listArchivedConversations = async (): Promise<TChatConversation[]> => {
+/** `fn` over every item, at most `width` at a time. Rejects on the first failure in a batch after it settles. */
+const mapInBatches = async <T, R>(items: readonly T[], width: number, fn: (item: T) => Promise<R>): Promise<R[]> => {
+  const results: R[] = [];
+  for (let start = 0; start < items.length; start += width) {
+    // eslint-disable-next-line no-await-in-loop -- bounded concurrency: one batch at a time
+    results.push(...(await Promise.all(items.slice(start, start + width).map(fn))));
+  }
+  return results;
+};
+
+/** The ids of every archived conversation, across all groups and their pages. Throws on any failure. */
+const listArchivedIds = async (): Promise<string[]> => {
   const first = await ipcBridge.sidebar.get.invoke({ archived: true, limit: ARCHIVED_PAGE_SIZE });
-  const all: TChatConversation[] = [];
+  if (first.has_more_groups) {
+    console.warn('[botChats] more archived groups than the sidebar returns; the rest are not searched', first);
+  }
+  const ids: string[] = [];
   for (const group of first.groups) {
-    all.push(...group.items.map((item) => item.conversation));
+    ids.push(...group.items.map((item) => item.conversation.id));
     let hasMore = group.has_more;
     let cursor = group.next_cursor;
     for (let i = 0; hasMore && i < MAX_PAGES; i++) {
@@ -58,21 +78,40 @@ const listArchivedConversations = async (): Promise<TChatConversation[]> => {
         limit: ARCHIVED_PAGE_SIZE,
         archived: true,
       });
-      all.push(...next.items.map((item) => item.conversation));
+      ids.push(...next.items.map((item) => item.conversation.id));
       hasMore = next.has_more;
       cursor = next.next_cursor;
     }
     if (hasMore) throw new Error('Too many archived pages');
   }
-  return all;
+  return ids;
 };
 
-/** The bot's chats, live and archived, each once. Throws when the list can't be read completely. */
+/** A chat that is gone is skipped; any other error is thrown. */
+const getConversation = async (id: string): Promise<TChatConversation | null> => {
+  try {
+    return (await ipcBridge.conversation.get.invoke({ id })) ?? null;
+  } catch (error) {
+    if (isBackendHttpError(error) && error.status === 404) return null;
+    throw error;
+  }
+};
+
+/**
+ * The bot's chats, live and archived, each once. Throws when the list can't be read. Sidebar rows carry no
+ * assistant identity (only the conversation service fills it in), so archived chats are looked up one by one.
+ */
 export async function collectBotChats(agentId: string): Promise<TChatConversation[]> {
-  const [live, archived] = await Promise.all([listLiveConversations(), listArchivedConversations()]);
+  const [live, archivedIds] = await Promise.all([listLiveConversations(), listArchivedIds()]);
+  const liveIds = new Set(live.map((conversation) => conversation.id));
+  const archived = await mapInBatches(
+    [...new Set(archivedIds)].filter((id) => !liveIds.has(id)),
+    DEFAULT_REMOVE_CONCURRENCY,
+    getConversation
+  );
   const byId = new Map<string, TChatConversation>();
   for (const conversation of [...live, ...archived]) {
-    if (conversation.assistant?.id === agentId) byId.set(conversation.id, conversation);
+    if (conversation?.assistant?.id === agentId) byId.set(conversation.id, conversation);
   }
   return [...byId.values()];
 }

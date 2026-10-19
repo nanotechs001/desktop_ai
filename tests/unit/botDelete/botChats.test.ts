@@ -13,6 +13,7 @@ const ipc = vi.hoisted(() => ({
   getUserConversations: vi.fn(),
   sidebarGet: vi.fn(),
   sidebarItems: vi.fn(),
+  get: vi.fn(),
   remove: vi.fn(),
   widgetRemove: vi.fn(),
   emit: vi.fn(),
@@ -22,9 +23,12 @@ vi.mock('@/common', () => ({
   ipcBridge: {
     database: { getUserConversations: { invoke: ipc.getUserConversations } },
     sidebar: { get: { invoke: ipc.sidebarGet }, items: { invoke: ipc.sidebarItems } },
-    conversation: { remove: { invoke: ipc.remove } },
+    conversation: { get: { invoke: ipc.get }, remove: { invoke: ipc.remove } },
     agentWidget: { remove: { invoke: ipc.widgetRemove } },
   },
+}));
+vi.mock('@/common/adapter/httpBridge', () => ({
+  isBackendHttpError: (error: unknown) => typeof (error as { status?: unknown })?.status === 'number',
 }));
 vi.mock('@/renderer/utils/emitter', () => ({ emitter: { emit: ipc.emit } }));
 
@@ -37,6 +41,14 @@ const chat = (id: string, assistantId?: string): TChatConversation =>
     name: `chat ${id}`,
     assistant: assistantId ? { id: assistantId, source: 'user', name: 'n', avatar: '', backend: 'b' } : undefined,
   }) as unknown as TChatConversation;
+
+// The sidebar read model sends conversations WITHOUT their assistant identity; only `conversation.get` fills it in.
+const archivedRow = (id: string): TChatConversation => ({ id, name: `chat ${id}` }) as unknown as TChatConversation;
+const identities = (map: Record<string, string | undefined>) =>
+  ipc.get.mockImplementation(async ({ id }: { id: string }) => {
+    if (!(id in map)) throw Object.assign(new Error('not found'), { status: 404 });
+    return chat(id, map[id]);
+  });
 
 const page = (items: TChatConversation[], total: number, has_more = false) => ({ items, total, has_more });
 const archivedGroup = (items: TChatConversation[], extra: object = {}) => ({
@@ -67,22 +79,23 @@ describe('collectBotChats', () => {
     expect(ipc.getUserConversations).toHaveBeenNthCalledWith(2, expect.objectContaining({ cursor: 'x' }));
   });
 
-  it('includes the archived chats, paging each archived group, and counts a chat in both lists once', async () => {
+  it('finds archived chats through conversation.get (the sidebar rows carry no identity), paging each group', async () => {
     ipc.getUserConversations.mockResolvedValue(page([chat('live', 'bot'), chat('both', 'bot')], 2));
     ipc.sidebarGet.mockResolvedValue({
       groups: [
-        archivedGroup([chat('arch1', 'bot'), chat('both', 'bot'), chat('arch-other', 'other')], {
+        archivedGroup([archivedRow('arch1'), archivedRow('both'), archivedRow('arch-other')], {
           has_more: true,
           next_cursor: 'c1',
         }),
-        { ...archivedGroup([chat('proj1', 'bot')]), scope: { type: 'project', project_id: 'p', name: 'P' } },
+        { ...archivedGroup([archivedRow('proj1')]), scope: { type: 'project', project_id: 'p', name: 'P' } },
       ],
       has_more_groups: false,
     });
     ipc.sidebarItems.mockResolvedValue({
-      items: [{ type: 'conversation', conversation: chat('arch2', 'bot') }],
+      items: [{ type: 'conversation', conversation: archivedRow('arch2') }],
       has_more: false,
     });
+    identities({ arch1: 'bot', 'arch-other': 'other', proj1: 'bot', arch2: 'bot' });
 
     const found = await collectBotChats('bot');
 
@@ -91,6 +104,73 @@ describe('collectBotChats', () => {
     expect(ipc.sidebarItems).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'chats', cursor: 'c1', archived: true })
     );
+    // 'both' is already known from the live list, so it is not fetched again.
+    expect(ipc.get).not.toHaveBeenCalledWith({ id: 'both' });
+  });
+
+  it('gives exactly the two archived chats of the bot when another bot has one too', async () => {
+    ipc.sidebarGet.mockResolvedValue({
+      groups: [archivedGroup([archivedRow('a1'), archivedRow('a2'), archivedRow('x1')])],
+      has_more_groups: false,
+    });
+    identities({ a1: 'bot', a2: 'bot', x1: 'other' });
+
+    expect((await collectBotChats('bot')).map((c) => c.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('looks archived chats up at most 4 at a time', async () => {
+    ipc.sidebarGet.mockResolvedValue({
+      groups: [archivedGroup(Array.from({ length: 10 }, (_, i) => archivedRow(`a${i}`)))],
+      has_more_groups: false,
+    });
+    let running = 0;
+    let peak = 0;
+    ipc.get.mockImplementation(async ({ id }: { id: string }) => {
+      running += 1;
+      peak = Math.max(peak, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      return chat(id, 'bot');
+    });
+
+    expect(await collectBotChats('bot')).toHaveLength(10);
+    expect(peak).toBe(4);
+  });
+
+  it('skips an archived chat that is gone (404 or empty) but throws on any other lookup error', async () => {
+    ipc.sidebarGet.mockResolvedValue({
+      groups: [archivedGroup([archivedRow('gone'), archivedRow('empty'), archivedRow('mine')])],
+      has_more_groups: false,
+    });
+    ipc.get.mockImplementation(async ({ id }: { id: string }) => {
+      if (id === 'gone') throw Object.assign(new Error('not found'), { status: 404 });
+      return id === 'empty' ? null : chat(id, 'bot');
+    });
+    expect((await collectBotChats('bot')).map((c) => c.id)).toEqual(['mine']);
+
+    ipc.get.mockRejectedValue(Object.assign(new Error('server error'), { status: 500 }));
+    await expect(collectBotChats('bot')).rejects.toThrow();
+    ipc.get.mockRejectedValue(new Error('network down'));
+    await expect(collectBotChats('bot')).rejects.toThrow();
+  });
+
+  it('still collects the rows when the live total is larger than what the backend returned (skipped legacy rows), with a warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ipc.getUserConversations.mockResolvedValue(page([chat('a', 'bot'), chat('b', 'bot')], 5));
+
+    expect((await collectBotChats('bot')).map((c) => c.id)).toEqual(['a', 'b']);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('warns when the archive has more groups than the sidebar returns', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ipc.sidebarGet.mockResolvedValue({ groups: [], has_more_groups: true });
+
+    await collectBotChats('bot');
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('archived'), expect.anything());
+    warn.mockRestore();
   });
 
   it('never matches chats of the default Agent, other bots or plain chats', async () => {
@@ -101,7 +181,6 @@ describe('collectBotChats', () => {
   it.each([
     ['a live page fails', () => ipc.getUserConversations.mockRejectedValue(new Error('down'))],
     ['a live page is malformed', () => ipc.getUserConversations.mockResolvedValue({ items: 'nope' })],
-    ['the live pages do not add up to the total', () => ipc.getUserConversations.mockResolvedValue(page([], 3))],
     ['a page says there is more but is empty', () => ipc.getUserConversations.mockResolvedValue(page([], 3, true))],
     ['the archive read fails', () => ipc.sidebarGet.mockRejectedValue(new Error('down'))],
     [

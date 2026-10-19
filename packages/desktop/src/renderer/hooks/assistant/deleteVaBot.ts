@@ -11,6 +11,7 @@ import { ipcBridge } from '@/common';
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { configService } from '@/common/config/configService';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
+import type { IChannelAssistantBindingRead } from '@/common/types/channel/channel';
 import type { AgentWidgetRobot } from '@/common/types/agent/agentWidget';
 import { forgetBotColor } from '@/renderer/hooks/agent/useBotColor';
 import { persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
@@ -44,20 +45,29 @@ const botJobs = async (agentId: string, chatIds: ReadonlySet<string>): Promise<I
   });
 };
 
-/** Platforms whose binding names this bot. A platform that can't be read is logged and skipped. */
+const bindingKey = (platform: string): string => `assistant.${platform}.agent`;
+
+/**
+ * Platforms whose stored binding names this bot. Only the stored client setting counts: `getPlatformSettings`
+ * answers with the default bot when nothing is bound, which would list platforms the user never set up.
+ * Unreadable settings are logged and mean "none".
+ */
 const boundPlatforms = async (agentId: string): Promise<(typeof CHANNEL_PLATFORMS)[number][]> => {
-  const settled = await Promise.all(
-    CHANNEL_PLATFORMS.map(async (platform) => {
-      try {
-        const { assistant } = await ipcBridge.channel.getPlatformSettings.invoke({ platform: platform.id });
-        return assistant?.assistant_id === agentId || assistant?.custom_agent_id === agentId ? platform : null;
-      } catch (error) {
-        console.warn(`[deleteVaBot] could not read the ${platform.id} binding:`, error);
-        return null;
-      }
-    })
-  );
-  return settled.filter((platform) => platform !== null);
+  try {
+    const keys = CHANNEL_PLATFORMS.map((platform) => bindingKey(platform.id)).join(',');
+    const settings = await httpRequest<Record<string, unknown> | undefined>('GET', `/api/settings/client?keys=${keys}`);
+    return CHANNEL_PLATFORMS.filter((platform) => {
+      const binding = settings?.[bindingKey(platform.id)] as IChannelAssistantBindingRead | string | null | undefined;
+      return (
+        typeof binding === 'object' &&
+        binding !== null &&
+        (binding.assistant_id === agentId || binding.custom_agent_id === agentId)
+      );
+    });
+  } catch (error) {
+    console.warn('[deleteVaBot] could not read the channel bindings:', error);
+    return [];
+  }
 };
 
 /** Real counts for the warning. Chats and tasks must be right, so a failure to read them fails the preview. */
@@ -80,9 +90,27 @@ export async function previewVaBotDelete(agentId: string): Promise<DeletePreview
   };
 }
 
+/** Removes the robots whose `agent_id` is this bot. Failures are only logged. */
+const removeBotRobots = async (agentId: string): Promise<void> => {
+  try {
+    const robots = await ipcBridge.agentWidget.listRobots.invoke();
+    await Promise.all(
+      robots
+        .filter((robot) => robot.agent_id === agentId)
+        .map((robot) =>
+          ipcBridge.agentWidget.remove
+            .invoke({ conversation_id: robot.conversation_id })
+            .catch((error: unknown) => console.warn('[deleteVaBot] could not remove a robot:', error))
+        )
+    );
+  } catch (error) {
+    console.warn('[deleteVaBot] could not list the robots:', error);
+  }
+};
+
 /** Clearing deletes the stored binding (a null client preference), which makes the platform fall back to the default Agent. */
 const clearBinding = async (platform: string): Promise<void> => {
-  await httpRequest<void>('PUT', '/api/settings/client', { [`assistant.${platform}.agent`]: null });
+  await httpRequest<void>('PUT', '/api/settings/client', { [bindingKey(platform)]: null });
   // The platform's running sessions still hold the old bot; setAssistantSetting does this too.
   await ipcBridge.channel.syncChannelSettings.invoke({ platform });
 };
@@ -148,6 +176,9 @@ export async function deleteVaBot(
   if (removal.failed.length > 0) {
     return { ok: false, stage: 'chats', failed: removal.failed.length, total: chats.length };
   }
+
+  // Robots of this bot that no chat accounted for (idempotent; the chats' own removals already dropped theirs).
+  await removeBotRobots(agentId);
 
   // 3. Scheduled tasks
   try {

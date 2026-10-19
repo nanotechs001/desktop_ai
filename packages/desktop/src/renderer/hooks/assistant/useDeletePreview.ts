@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { previewVaBotDelete, type DeletePreview } from './deleteVaBot';
 
 export type DeletePreviewState =
@@ -12,9 +12,19 @@ export type DeletePreviewState =
   | { status: 'error' }
   | { status: 'ready'; preview: DeletePreview };
 
-/** What deleting the bot would take, counted afresh each time the dialog opens for a bot. */
-export function useDeletePreview(agentId: string | undefined, open: boolean): DeletePreviewState {
+/**
+ * What deleting the bot would take, counted afresh each time the dialog opens for a bot, and again when a delete
+ * (`busy`) stops without closing it: a failed delete leaves fewer chats than the last count.
+ */
+export function useDeletePreview(agentId: string | undefined, open: boolean, busy = false): DeletePreviewState {
   const [state, setState] = useState<DeletePreviewState>({ status: 'loading' });
+  const [recounts, setRecounts] = useState(0);
+  const wasBusy = useRef(false);
+
+  useEffect(() => {
+    if (wasBusy.current && !busy) setRecounts((count) => count + 1);
+    wasBusy.current = busy;
+  }, [busy]);
 
   useEffect(() => {
     // Back to loading first, so a reopened dialog never shows the last count.
@@ -30,7 +40,7 @@ export function useDeletePreview(agentId: string | undefined, open: boolean): De
     return () => {
       stale = true;
     };
-  }, [agentId, open]);
+  }, [agentId, open, recounts]);
 
   return state;
 }

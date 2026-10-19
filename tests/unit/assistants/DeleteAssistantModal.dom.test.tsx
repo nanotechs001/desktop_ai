@@ -151,6 +151,27 @@ describe('DeleteAssistantModal', () => {
     expect(preview.fn).toHaveBeenCalledTimes(2);
   });
 
+  it('counts again when a delete stops (a failure leaves fewer chats than the warning showed)', async () => {
+    const wrap = (deleting: boolean) => (
+      <ConfigProvider>
+        <DeleteAssistantModal {...defaultProps} visible activeAssistant={assistant} deleting={deleting} />
+      </ConfigProvider>
+    );
+    const { rerender } = render(wrap(false));
+    await screen.findByText('agent.deleteBot.chats|count=12');
+
+    rerender(wrap(true));
+    // While deleting the old list stays on screen and nothing is recounted.
+    expect(screen.getByText('agent.deleteBot.chats|count=12')).toBeInTheDocument();
+    expect(preview.fn).toHaveBeenCalledTimes(1);
+
+    preview.fn.mockResolvedValue({ ...full, chats: 5 });
+    rerender(wrap(false));
+
+    expect(await screen.findByText('agent.deleteBot.chats|count=5')).toBeInTheDocument();
+    expect(preview.fn).toHaveBeenCalledTimes(2);
+  });
+
   it('makes Delete a danger button and calls onConfirm when it is clicked', async () => {
     const onConfirm = vi.fn();
     const user = userEvent.setup();
