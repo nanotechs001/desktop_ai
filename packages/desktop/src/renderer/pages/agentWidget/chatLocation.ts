@@ -42,10 +42,10 @@ function setLocation(id: string, location: AgentChatLocation): void {
 function start(): void {
   if (started || !isElectronDesktop()) return;
   started = true;
-  const ownId = getWidgetConversationId();
-  const myRole: AgentChatLocation = ownId ? 'widget' : 'main';
-  // A widget window only cares about its own conversation; the main window about all of them.
-  const concernsMe = (id: string) => ownId === null || id === ownId;
+  const myRole: AgentChatLocation = getWidgetConversationId() ? 'widget' : 'main';
+  // A widget window only cares about its own conversation; the main window about all of them. Read the hash
+  // each time: a robot that moves to another conversation of its VA Bot keeps the page and changes the hash.
+  const concernsMe = (id: string) => myRole === 'main' || id === getWidgetConversationId();
 
   ipcBridge.agentWidget.chatLocationChanged.on(({ conversation_id, location }) => {
     if (!concernsMe(conversation_id)) return;
