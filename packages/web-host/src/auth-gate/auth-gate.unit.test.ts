@@ -448,6 +448,10 @@ describe('sessionIssuedAtMs', () => {
     expect(sessionIssuedAtMs(headers)).toBe(20_000);
   });
 
+  it('is 0 when there is no credential at all (never Infinity)', () => {
+    expect(sessionIssuedAtMs({})).toBe(0);
+  });
+
   it('is 0 when a credential cannot be decoded, so any not-before closes it', () => {
     expect(sessionIssuedAtMs({ cookie: `aionui-session=${jwt({ iat: 50 })}`, authorization: 'Bearer junk' })).toBe(0);
     expect(sessionIssuedAtMs({ cookie: 'aionui-session=junk' })).toBe(0);

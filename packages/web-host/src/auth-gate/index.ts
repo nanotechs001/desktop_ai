@@ -130,9 +130,10 @@ export function isSessionRevoked(headers: SessionHeaders, sessionsNotBefore: num
   return sessionTokens(headers).some((t) => issuedBefore(t, sessionsNotBefore));
 }
 
-/** Oldest `iat` (epoch ms) among the request's credentials; 0 when one cannot be decoded (closed by any not-before). */
+/** Oldest `iat` (epoch ms) among the request's credentials; 0 when one cannot be decoded or none exists (closed by any not-before). */
 export function sessionIssuedAtMs(headers: SessionHeaders): number {
-  return Math.min(...sessionTokens(headers).map((t) => tokenIssuedAtMs(t) ?? 0));
+  const tokens = sessionTokens(headers);
+  return tokens.length === 0 ? 0 : Math.min(...tokens.map((t) => tokenIssuedAtMs(t) ?? 0));
 }
 
 // aioncore reads Cookie/Authorization with `HeaderValue::to_str()`, which fails on any byte outside

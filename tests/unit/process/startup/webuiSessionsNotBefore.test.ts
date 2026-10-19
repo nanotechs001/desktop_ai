@@ -57,6 +57,17 @@ describe('WebUI sessionsNotBefore', () => {
     expect(startWebHost).toHaveBeenCalledWith(expect.objectContaining({ sessionsNotBefore: null }));
   });
 
+  it('startup retries the read once before giving up', async () => {
+    httpRequest.mockImplementation(async (method: string) => (method === 'GET' ? { [KEY]: 1_700_000_000_000 } : {}));
+    httpRequest.mockRejectedValueOnce(new Error('settings busy'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { startDesktopWebUI } = await importModule();
+    await startDesktopWebUI({ port: 25809 });
+    expect(startWebHost).toHaveBeenCalledWith(expect.objectContaining({ sessionsNotBefore: 1_700_000_000_000 }));
+    expect(httpRequest.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(2);
+    error.mockRestore();
+  });
+
   it('startup still starts, and logs, when the setting cannot be read', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     httpRequest.mockRejectedValue(new Error('boom'));
@@ -64,6 +75,7 @@ describe('WebUI sessionsNotBefore', () => {
     await startDesktopWebUI({ port: 25809 });
     expect(startWebHost).toHaveBeenCalledWith(expect.objectContaining({ sessionsNotBefore: null }));
     expect(error).toHaveBeenCalled();
+    expect(httpRequest.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(2);
     error.mockRestore();
   });
 

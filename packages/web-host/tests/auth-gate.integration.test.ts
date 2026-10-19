@@ -21,6 +21,7 @@ type FakeBackend = {
   authCalls: number;
   bytes: () => number; // raw bytes received on all connections
   authStatus: (status: number | null) => void; // force a status for /api/auth/user
+  holdAuth: () => { waiting: () => number; release: () => void }; // delay /api/auth/user answers until release()
   close: () => Promise<void>;
 };
 
@@ -29,6 +30,7 @@ async function startFakeBackend(): Promise<FakeBackend> {
   let authCalls = 0;
   let bytes = 0;
   let forced: number | null = null;
+  let held: Array<() => void> | null = null;
   let revoked = false;
   const sockets = new Set<net.Socket>();
 
@@ -39,7 +41,9 @@ async function startFakeBackend(): Promise<FakeBackend> {
       // Like the live aioncore: a revoked session is 401, a garbage cookie or token is 400.
       const goodToken = /\.good\b/.test(cookie + (req.headers.authorization ?? '')); // see jwtFor()
       const status = cookie.includes(GOOD) || goodToken ? (revoked ? 401 : 200) : 400;
-      res.writeHead(forced ?? status).end();
+      const answer = (): void => void res.writeHead(forced ?? status).end();
+      if (held) held.push(answer);
+      else answer();
       return;
     }
     seen.push({ method: req.method ?? '', url: req.url ?? '', headers: req.headers });
@@ -67,6 +71,17 @@ async function startFakeBackend(): Promise<FakeBackend> {
     },
     bytes: () => bytes,
     authStatus: (s) => (forced = s),
+    holdAuth: () => {
+      const queue: Array<() => void> = [];
+      held = queue;
+      return {
+        waiting: () => queue.length,
+        release: () => {
+          held = null;
+          for (const answer of queue.splice(0)) answer();
+        },
+      };
+    },
     close: () =>
       new Promise<void>((r) => {
         for (const s of sockets) s.destroy();
@@ -638,6 +653,64 @@ describe('WebUI listener open sockets', () => {
     a.sock.destroy();
     await settle(100);
     expect(() => handle.setSessionsNotBefore(2_000_000)).not.toThrow();
+  });
+});
+
+describe('WebUI listener sign-out during validation', () => {
+  const jwtAt = (iat: number): string => `e30.${Buffer.from(JSON.stringify({ iat })).toString('base64url')}.good`;
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    backend = await startFakeBackend();
+    handle = await startStaticServer({ staticDir: STATIC_DIR, backendPort: backend.port, port: 0 });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  const until = async (cond: () => boolean): Promise<void> => {
+    for (let i = 0; i < 100 && !cond(); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(cond()).toBe(true);
+  };
+
+  it('refuses an HTTP request whose session is revoked while aioncore is still validating it', async () => {
+    const held = backend.holdAuth();
+    const pending = request(handle.port, 'GET', '/api/agents', { cookie: `aionui-session=${jwtAt(1_000)}` });
+    await until(() => held.waiting() === 1);
+    handle.setSessionsNotBefore(2_000_000);
+    held.release();
+    expect((await pending).status).toBe(401);
+    expect(backend.seen).toHaveLength(0);
+  });
+
+  it('refuses an upgrade whose session is revoked while aioncore is still validating it', async () => {
+    const held = backend.holdAuth();
+    const pending = rawExchange(handle.port, [upgrade('/ws', `Cookie: aionui-session=${jwtAt(1_000)}\r\n`)]);
+    await until(() => held.waiting() === 1);
+    handle.setSessionsNotBefore(2_000_000);
+    held.release();
+    expect((await pending).text.startsWith('HTTP/1.1 401')).toBe(true);
+    expect(backend.seen).toHaveLength(0);
+  });
+
+  it('stop() destroys open upgraded sockets instead of waiting for them', async () => {
+    const sock = net.connect({ host: '127.0.0.1', port: handle.port });
+    let closed = false;
+    sock.on('close', () => (closed = true));
+    sock.on('error', () => {});
+    let text = '';
+    sock.on('data', (d: Buffer) => (text += d.toString('latin1')));
+    sock.write(upgrade('/ws', `Cookie: aionui-session=${jwtAt(1_000)}\r\n`));
+    await until(() => text.startsWith('HTTP/1.1 101'));
+    await Promise.race([
+      handle.stop(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('stop() hung on an open socket')), 2000)),
+    ]);
+    await until(() => closed);
+    handle = { ...handle, stop: async () => {} }; // already stopped; keep afterEach quiet
   });
 });
 

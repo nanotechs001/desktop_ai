@@ -347,6 +347,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
         return;
       }
       const verdict = await validate(creds);
+      // A sign-out can land while aioncore is still answering; check again before forwarding.
+      if (verdict === 'valid' && isSessionRevoked(creds, sessionsNotBefore)) {
+        replyError(res, 401, 'UNAUTHORIZED');
+        return;
+      }
       if (verdict !== 'valid') {
         replyError(res, verdict === 'invalid' ? 401 : 503, verdict === 'invalid' ? 'UNAUTHORIZED' : 'AUTH_UNAVAILABLE');
         return;
@@ -455,7 +460,9 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     }
     const headers = forwardingHeaders(peer, head.headers, isTunnelActive());
     const creds = credentialsOf(headers);
-    const verdict = isSessionRevoked(creds, sessionsNotBefore) ? 'invalid' : await validate(creds);
+    let verdict = isSessionRevoked(creds, sessionsNotBefore) ? 'invalid' : await validate(creds);
+    // A sign-out can land while aioncore is still answering; check again before splicing.
+    if (verdict === 'valid' && isSessionRevoked(creds, sessionsNotBefore)) verdict = 'invalid';
     if (client.destroyed) return;
     settle();
     if (verdict !== 'valid') {
@@ -574,6 +581,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     },
     stop: () =>
       new Promise<void>((resolve) => {
+        // Spliced sockets never end on their own; close() would wait for them.
+        for (const { client, upstream } of openSockets) {
+          client.destroy();
+          upstream.destroy();
+        }
         tcp_server.close(() => {
           http_server.close(() => resolve());
         });
