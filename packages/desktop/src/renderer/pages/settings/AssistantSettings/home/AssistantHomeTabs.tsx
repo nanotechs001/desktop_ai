@@ -110,8 +110,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
             data-testid='assistants-header'
             title={t('settings.assistants', { defaultValue: 'Agents' })}
             description={t('settings.assistantHomeLeadShort', {
-              defaultValue:
-                'Dedicated work agents that manage the browser and learn over time.',
+              defaultValue: 'Dedicated work agents that manage the browser and learn over time.',
             })}
             actions={
               <>

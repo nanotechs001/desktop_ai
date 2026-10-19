@@ -34,7 +34,7 @@ const HOP_HEIGHT_PHYSICAL_PX = 8;
 // listed too; otherwise hovering them would make the window click-through and their clicks would reach the desktop.
 // The name pill hides this long after the last pointer movement over the robot.
 const NAME_HOVER_IDLE_MS = 2000;
-const WIDGET_HIT_SELECTOR ='[data-widget-hit], .arco-trigger, .arco-modal-wrapper, .arco-message-wrapper';
+const WIDGET_HIT_SELECTOR = '[data-widget-hit], .arco-trigger, .arco-modal-wrapper, .arco-message-wrapper';
 
 /**
  * Floating desktop robot for one conversation (rendered in its own transparent
