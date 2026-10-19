@@ -280,7 +280,7 @@ type RobotSpriteProps = {
   state: AgentAnimationState;
   size: number;
   reduceMotion: boolean;
-  /** The bot's `#rrggbb` color: a still underglow beneath the robot and a dot at its top right. Nothing is drawn without a valid one. */
+  /** The bot's `#rrggbb` color: a still underglow behind the robot. Nothing is drawn without a valid one. */
   glowColor?: string;
   /** A one-shot (turn, lifecycle, landing) finished playing. */
   onClipEnd?: (strip: RobotStrip) => void;
@@ -295,40 +295,34 @@ const RobotSprite: React.FC<RobotSpriteProps> = ({ visual, state, size, reduceMo
   const spriteRef = useRef<HTMLDivElement>(null);
   useRobotClock(spriteRef, visual, size, reduceMotion, onClipEnd);
   return (
-    <>
-      <div
-        aria-hidden
-        className={classNames(styles.direction, visual.panicking && styles.panicking)}
-        data-facing={visual.mirrored ? 'left' : 'right'}
-      >
-        {isBotColor(glowColor) && (
-          <span
-            aria-hidden
-            data-robot-glow
-            className={styles.glow}
-            style={{ '--bot-glow': glowColor } as React.CSSProperties}
-          />
-        )}
-        <div className={classNames(styles.hop, visual.hopping && styles.hopping)}>
-          <div
-            ref={spriteRef}
-            data-state={state}
-            data-strip={visual.strip}
-            className={classNames(
-              styles.robot,
-              reduceMotion && styles.still,
-              visual.fade === 'in' && styles.fadeIn,
-              visual.fade === 'out' && styles.fadeOut
-            )}
-            style={{ '--robot-size': `${size}px` } as React.CSSProperties}
-          />
-        </div>
-      </div>
-      {/* Outside the mirrored layer, so it stays at the top right whichever way the robot faces. */}
+    <div
+      aria-hidden
+      className={classNames(styles.direction, visual.panicking && styles.panicking)}
+      data-facing={visual.mirrored ? 'left' : 'right'}
+    >
       {isBotColor(glowColor) && (
-        <span aria-hidden data-robot-color-mark className={styles.colorMark} style={{ backgroundColor: glowColor }} />
+        <span
+          aria-hidden
+          data-robot-glow
+          className={styles.glow}
+          style={{ '--bot-glow': glowColor } as React.CSSProperties}
+        />
       )}
-    </>
+      <div className={classNames(styles.hop, visual.hopping && styles.hopping)}>
+        <div
+          ref={spriteRef}
+          data-state={state}
+          data-strip={visual.strip}
+          className={classNames(
+            styles.robot,
+            reduceMotion && styles.still,
+            visual.fade === 'in' && styles.fadeIn,
+            visual.fade === 'out' && styles.fadeOut
+          )}
+          style={{ '--robot-size': `${size}px` } as React.CSSProperties}
+        />
+      </div>
+    </div>
   );
 };
 

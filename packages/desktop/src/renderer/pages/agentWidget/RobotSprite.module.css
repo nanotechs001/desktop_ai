@@ -112,35 +112,30 @@
   position: absolute;
   bottom: 0;
   left: 50%;
-  width: 80%;
-  height: 22%;
+  width: 84%;
+  height: 24%;
   transform: translateX(-50%);
   border-radius: 50%;
   pointer-events: none;
+  /* Behind the robot: the hop layer stacks above it (z-index 1). */
+  z-index: 0;
+  /* Strong enough to tell robots apart by color at a glance. */
   background: radial-gradient(
     ellipse at center,
-    color-mix(in srgb, var(--bot-glow) 55%, transparent) 0%,
-    color-mix(in srgb, var(--bot-glow) 22%, transparent) 45%,
-    transparent 72%
+    var(--bot-glow) 0%,
+    color-mix(in srgb, var(--bot-glow) 72%, transparent) 38%,
+    color-mix(in srgb, var(--bot-glow) 28%, transparent) 62%,
+    transparent 78%
   );
-  filter: blur(3px);
+  filter: blur(2px);
 }
 
-/* The bot's color at the robot's top right, always shown; ringed in the background color so it reads on any wallpaper. */
-.colorMark {
-  position: absolute;
-  top: 6%;
-  right: 12%;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--bg-1);
-  pointer-events: none;
-}
-
-/* Hop layer: anchored at the feet so squash never pushes the robot into the taskbar. */
+/* Hop layer: anchored at the feet so squash never pushes the robot into the taskbar. Positioned so it stacks
+   above the glow. */
 .hop {
   transform-origin: 50% 100%;
+  position: relative;
+  z-index: 1;
 }
 
 /* Slime hop while walking: anticipation, lift, apex, touch down, landing squash, recovery and a short

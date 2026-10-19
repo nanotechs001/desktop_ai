@@ -49,6 +49,18 @@ describe('robot underglow', () => {
     expect(glowOf(mount('#3e63dd', true))).not.toBeNull();
   });
 
+  it('sits behind the robot: the robot layer stacks above the glow', () => {
+    const css = readFileSync(
+      path.resolve(__dirname, '../../../../packages/desktop/src/renderer/pages/agentWidget/RobotSprite.module.css'),
+      'utf8'
+    );
+    const glow = css.match(/\.glow\s*{[^}]*}/)?.[0] ?? '';
+    const hop = css.match(/\.hop\s*{[^}]*}/)?.[0] ?? '';
+    expect(glow).toMatch(/z-index:\s*0/);
+    expect(hop).toMatch(/position:\s*relative/);
+    expect(hop).toMatch(/z-index:\s*1/);
+  });
+
   it('never animates: the glow rule has no animation or transition', () => {
     const css = readFileSync(
       path.resolve(__dirname, '../../../../packages/desktop/src/renderer/pages/agentWidget/RobotSprite.module.css'),
@@ -61,26 +73,12 @@ describe('robot underglow', () => {
   });
 });
 
-// The bot's color, as a dot at the robot's top right: always shown, and outside the mirrored layer so it stays on the
-// right when the robot turns to face left.
+// The glow is the robot's only color mark: no dot on its head.
 describe('robot color mark', () => {
-  const mountFacing = (mirrored: boolean, glowColor?: string) =>
-    render(
-      <RobotSprite visual={{ ...visual, mirrored }} state='idle' size={88} reduceMotion={false} glowColor={glowColor} />
-    ).container;
-  const markOf = (root: HTMLElement) => root.querySelector<HTMLElement>('[data-robot-color-mark]');
-
-  it.each([false, true])('shows the bot color outside the mirrored layer (facing left: %s)', (mirrored) => {
-    const root = mountFacing(mirrored, '#3e63dd');
-    const mark = markOf(root);
-    expect(mark?.style.backgroundColor).toBe('rgb(62, 99, 221)');
-    expect(mark?.closest('[data-facing]')).toBeNull();
-  });
-
-  it('shows nothing without a valid bot color', () => {
-    expect(markOf(mountFacing(false))).toBeNull();
-    cleanup();
-    expect(markOf(mountFacing(false, 'red;'))).toBeNull();
+  it('draws no dot on the robot, only the glow', () => {
+    const root = mount('#3e63dd');
+    expect(root.querySelector('[data-robot-color-mark]')).toBeNull();
+    expect(glowOf(root)).not.toBeNull();
   });
 });
 
