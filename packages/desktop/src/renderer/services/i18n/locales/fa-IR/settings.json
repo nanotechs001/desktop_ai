@@ -824,10 +824,8 @@
   "appDescription": "یک دسکتاپ. ایجنت‌های هوش مصنوعی شما، واقعاً همکار.",
   "helpDocumentation": "مستندات راهنما",
   "updateLog": "تاریخچه به‌روزرسانی",
-  "feedback": "بازخورد",
   "bugReport": "گزارش مشکل",
   "bugReportTitle": "گزارش مشکل",
-  "oneClickFeedback": "گزارش مشکل",
   "bugReportModuleLabel": "ماژول",
   "bugReportModulePlaceholder": "ماژول مرتبط با مشکل را انتخاب کنید",
   "bugReportDescriptionLabel": "توضیحات",
@@ -1337,26 +1335,6 @@
   "assistantAgentUnchecked": "موتور مورد نیاز هنوز بررسی نشده است.",
   "assistantAgentMissing": "موتور مورد نیاز نصب نشده است.",
   "assistantTeamUnsupported": "این عامل فعلاً در حالت تیم قابل استفاده نیست.",
-  "webui.letButlerSetup": "اجازه دهید Butler آن را تنظیم کند",
-  "talkToButler": {
-    "createViaChat": "ایجاد از طریق چت",
-    "createManually": "ایجاد دستی",
-    "addViaChat": "افزودن از طریق چت",
-    "addManually": "افزودن دستی",
-    "solveViaChat": "حل از طریق چت",
-    "enabledToast": "Pixebot Browser Butler برای شما فعال شد",
-    "prompt": {
-      "createAssistant": "کمکم کن یک عامل جدید بسازم و مرحله‌به‌مرحله تنظیمش کنم.",
-      "addCustomAgent": "کمکم کن یک Agent سفارشی اضافه کنم.",
-      "addModel": "کمکم کن یک ارائه‌دهنده LLM و کلید API جدید اضافه کنم، سپس آن را مدل پیش‌فرض قرار دهم.",
-      "addMcp": "کمکم کن یک سرور MCP راه‌اندازی کنم.",
-      "addSkill": "کمکم کن یک مهارت وارد کنم و آن را به یک عامل متصل کنم.",
-      "setupRemote": "کمکم کن دسترسی ریموت را راه‌اندازی کنم تا بتوانم Pixebot Browser را از گوشی یا از اینترنت باز کنم.",
-      "diagnose": "در Pixebot Browser به مشکلی برخوردم، لطفاً کمک کن آن را عیب‌یابی کنم.\n\n[ماژول] {{module}}\n[توضیح] {{description}}\n[پیوست‌ها] اسکرین‌شات‌های ورودی را ببین.\n\nلطفاً علت را تشخیص بده و بگو چطور آن را رفع کنم.",
-      "diagnoseChatError": "در حین گفتگو در Pixebot Browser با خطایی مواجه شدم، لطفاً کمک کن آن را عیب‌یابی کنم.\n\n[خطا] {{error}}\n\nلطفاً علت را تشخیص بده و بگو چطور آن را رفع کنم."
-    },
-    "solveWithButler": "از باتلر بپرس"
-  },
   "providerIdConflict": "شناسه ارائه‌دهنده از قبل وجود دارد. دوباره تلاش کنید.",
   "autoInjectedSkillsHint": "در هر گفتگو به‌طور خودکار بارگذاری می‌شوند — نیازی به فعال‌سازی نیست؛ عامل تصمیم می‌گیرد چه زمانی از آن‌ها استفاده کند.",
   "browserData": {

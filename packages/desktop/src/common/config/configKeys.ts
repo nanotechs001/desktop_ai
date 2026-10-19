@@ -37,10 +37,6 @@ export type ConfigKeyMap = {
   'system.cronNotificationEnabled': boolean | undefined;
   'system.keepAwake': boolean | undefined;
   'skillsMarket.enabled': boolean | undefined;
-  'pet.enabled': boolean | undefined;
-  'pet.size': number | undefined;
-  'pet.dnd': boolean | undefined;
-  'pet.confirmEnabled': boolean | undefined;
   // Removed: 'system.autoPreviewOfficeFiles'. It gated "auto-open a preview tab
   // when an Office file appears in the workspace", a behaviour that was dropped
   // along with its hook — leaving the toggle would have been a switch the user

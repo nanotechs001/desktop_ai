@@ -824,10 +824,8 @@
   "appDescription": "Application GUI gratuite, locale et open-source pour Gemini CLI",
   "helpDocumentation": "Documentation d'aide",
   "updateLog": "Journal des mises à jour",
-  "feedback": "Retour d'expérience",
   "bugReport": "Signaler un bug",
   "bugReportTitle": "Signalement de bug",
-  "oneClickFeedback": "Signaler un problème",
   "bugReportModuleLabel": "Module",
   "bugReportModulePlaceholder": "Sélectionner le module lié au problème",
   "bugReportDescriptionLabel": "Description",
@@ -1337,26 +1335,6 @@
   "assistantAgentUnchecked": "Le moteur requis n'a pas encore été vérifié.",
   "assistantAgentMissing": "Le moteur requis n'est pas installé.",
   "assistantTeamUnsupported": "Cet agent ne peut pas être utilisé en mode équipe pour le moment.",
-  "webui.letButlerSetup": "Laisse le majordome l'installer",
-  "talkToButler": {
-    "createViaChat": "Créer via le chat",
-    "createManually": "Créer manuellement",
-    "addViaChat": "Ajouter via le chat",
-    "addManually": "Ajouter manuellement",
-    "solveViaChat": "Résoudre via le chat",
-    "enabledToast": "Activé le majordome Pixebot Browser pour vous",
-    "prompt": {
-      "createAssistant": "Aidez-moi à créer un nouvel agent et guidez-moi dans sa configuration.",
-      "addCustomAgent": "Aidez-moi à ajouter un agent personnalisé.",
-      "addModel": "Aidez-moi à ajouter un nouveau fournisseur LLM et une clé API, puis à le définir comme modèle par défaut.",
-      "addMcp": "Aidez-moi à configurer un serveur MCP.",
-      "addSkill": "Aidez-moi à importer une compétence et à la joindre à un agent.",
-      "setupRemote": "Aidez-moi à configurer l'accès à distance afin que je puisse ouvrir Pixebot Browser depuis mon téléphone ou via Internet.",
-      "diagnose": "J'ai rencontré un problème avec Pixebot Browser, aidez-moi à le diagnostiquer.\n\n[Module] {{module}}\n[Description] {{description}}\n[Pièces jointes] voir les captures d'écran dans l'entrée.\n\nVeuillez diagnostiquer la cause et me dire comment y remédier.",
-      "diagnoseChatError": "J'ai rencontré une erreur lors d'une conversation dans Pixebot Browser, aidez-moi à la diagnostiquer.\n\n[Erreur] {{error}}\n\nVeuillez diagnostiquer la cause et me dire comment y remédier."
-    },
-    "solveWithButler": "Demander au majordome"
-  },
   "providerIdConflict": "L'ID du fournisseur existe déjà. Veuillez réessayer.",
   "autoInjectedSkillsHint": "Chargé automatiquement dans chaque conversation – pas besoin de les activer ; l'agent décide quand les utiliser.",
   "browserData": {

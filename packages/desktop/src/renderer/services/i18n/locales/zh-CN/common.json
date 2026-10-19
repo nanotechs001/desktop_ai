@@ -86,10 +86,6 @@
       "title": "Pixebot Browser 安装不完整",
       "description": "当前安装缺少必要的本地资源，Pixebot Core 无法启动。请下载并重新安装最新版 Pixebot Browser；如果重新安装后仍然出现，请检查系统安全软件或杀毒软件是否隔离了 Pixebot Core。",
       "downloadLatest": "下载最新版",
-      "sendDiagnostics": "发送诊断报告",
-      "diagnosticsSent": "诊断报告已发送",
-      "diagnosticsReportSuccess": "诊断报告已发送",
-      "diagnosticsReportFailed": "诊断报告发送失败",
       "runtimeComponentDescription": "当前安装缺少必要的内置运行组件，{{resource}} 无法启动。请重新安装最新版 Pixebot Browser；如果重新安装后仍然出现，请检查系统安全软件或杀毒软件是否隔离了 Pixebot Browser 组件。"
     },
     "packageArchitectureMismatch": {
@@ -98,11 +94,7 @@
     },
     "dataMigration": {
       "title": "本地数据迁移失败",
-      "description": "Pixebot Browser 已打开，但 Pixebot Core 在初始化本地数据时停止。重复安装 Pixebot Browser 未必能解决此问题。请重启应用；若反复出现，可能需要检查本地数据库迁移状态。",
-      "sendDiagnostics": "发送诊断报告",
-      "diagnosticsSent": "诊断报告已发送",
-      "diagnosticsReportSuccess": "诊断报告已发送",
-      "diagnosticsReportFailed": "诊断报告发送失败"
+      "description": "Pixebot Browser 已打开，但 Pixebot Core 在初始化本地数据时停止。重复安装 Pixebot Browser 未必能解决此问题。请重启应用；若反复出现，可能需要检查本地数据库迁移状态。"
     },
     "databaseNewerThanApp": {
       "title": "需要更新 Pixebot Browser",
@@ -111,29 +103,16 @@
     },
     "localDataRepair": {
       "title": "本地数据修复失败",
-      "description": "Pixebot Browser 已打开，但 Pixebot Core 在准备本地启动数据时停止，例如 Agent 或引擎记录。重新安装 Pixebot Browser 可能无法解决此问题。请重启应用；若反复出现，可能需要检查本地数据库。",
-      "sendDiagnostics": "发送诊断",
-      "diagnosticsSent": "诊断已发送",
-      "diagnosticsReportSuccess": "诊断报告已发送",
-      "diagnosticsReportFailed": "诊断报告发送失败"
+      "description": "Pixebot Browser 已打开，但 Pixebot Core 在准备本地启动数据时停止，例如 Agent 或引擎记录。重新安装 Pixebot Browser 可能无法解决此问题。请重启应用；若反复出现，可能需要检查本地数据库。"
     },
     "startupDirectory": {
       "title": "启动目录不可用",
-      "description": "Pixebot Browser 已打开，但由于配置的工作目录或日志目录不存在、不可访问或权限受限，Pixebot Core 无法启动。请确认这些目录存在且可写，然后重启 Pixebot Browser。",
-      "sendDiagnostics": "发送诊断报告",
-      "diagnosticsSent": "诊断报告已发送",
-      "diagnosticsReportSuccess": "诊断报告已发送",
-      "diagnosticsReportFailed": "诊断报告发送失败"
+      "description": "Pixebot Browser 已打开，但由于配置的工作目录或日志目录不存在、不可访问或权限受限，Pixebot Core 无法启动。请确认这些目录存在且可写，然后重启 Pixebot Browser。"
     },
     "recoverableDatabaseCorruption": {
       "title": "本地数据已损坏",
       "description": "检测到本地数据库损坏，Pixebot Browser 无法继续启动。确认后将备份旧数据库，并创建新的本地数据库继续启动。历史会话将不再显示，旧数据库会保留为备份文件。",
       "confirmRebuild": "备份旧库并重建新库",
-      "sendDiagnostics": "发送诊断报告",
-      "diagnosticsHint": "发送诊断报告不会修改本地数据库。",
-      "diagnosticsSent": "诊断报告已发送",
-      "diagnosticsReportSuccess": "诊断报告已发送",
-      "diagnosticsReportFailed": "诊断报告发送失败",
       "rebuildFailed": "备份旧库并重建新库失败",
       "confirmDialog": {
         "title": "确认重建数据库？",
@@ -144,12 +123,7 @@
     },
     "transientConcurrentStartup": {
       "title": "Pixebot Browser 正在启动",
-      "description": "此窗口打开时，另一个 Pixebot Browser 启动进程仍在使用本地数据。这是暂时的，您的数据是安全的——无需重新安装。请稍候片刻后重试，或重启 Pixebot Browser。",
-      "sendDiagnostics": "发送诊断",
-      "diagnosticsSent": "诊断已发送",
-      "diagnosticsReportSuccess": "诊断报告已发送",
-      "diagnosticsReportFailed": "诊断报告发送失败",
-      "diagnosticsHint": "如果该问题反复出现，您可以发送诊断报告。"
+      "description": "此窗口打开时，另一个 Pixebot Browser 启动进程仍在使用本地数据。这是暂时的，您的数据是安全的——无需重新安装。请稍候片刻后重试，或重启 Pixebot Browser。"
     },
     "pendingSlow": {
       "title": "正在启动",
@@ -157,27 +131,15 @@
     },
     "exited": {
       "title": "启动未完成",
-      "description": "Pixebot Core 未能完成启动并已退出。请重启应用；若反复出现，请检查 Pixebot Core 后端是否已安装。",
-      "sendDiagnostics": "发送诊断",
-      "diagnosticsSent": "诊断已发送",
-      "diagnosticsReportSuccess": "诊断信息已上报",
-      "diagnosticsReportFailed": "诊断上报失败，请稍后重试"
+      "description": "Pixebot Core 未能完成启动并已退出。请重启应用；若反复出现，请检查 Pixebot Core 后端是否已安装。"
     },
     "portReportTimeout": {
       "title": "启动超时",
-      "description": "Pixebot Core 未在预期时间内完成启动。请重启应用；若反复出现，请检查 Pixebot Core 后端是否已安装。",
-      "sendDiagnostics": "发送诊断",
-      "diagnosticsSent": "诊断已发送",
-      "diagnosticsReportSuccess": "诊断信息已上报",
-      "diagnosticsReportFailed": "诊断上报失败，请稍后重试"
+      "description": "Pixebot Core 未在预期时间内完成启动。请重启应用；若反复出现，请检查 Pixebot Core 后端是否已安装。"
     },
     "startupFailed": {
       "title": "启动失败",
-      "description": "Pixebot Core 启动失败。请重启应用；若反复出现，请检查 Pixebot Core 后端是否已安装。",
-      "sendDiagnostics": "发送诊断",
-      "diagnosticsSent": "诊断已发送",
-      "diagnosticsReportSuccess": "诊断信息已上报",
-      "diagnosticsReportFailed": "诊断上报失败，请稍后重试"
+      "description": "Pixebot Core 启动失败。请重启应用；若反复出现，请检查 Pixebot Core 后端是否已安装。"
     }
   },
   "fileAttach.addFiles": "添加文件",

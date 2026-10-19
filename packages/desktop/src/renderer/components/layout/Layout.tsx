@@ -39,8 +39,6 @@ import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
 import { isElectronDesktop } from '@renderer/utils/platform';
-import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
-import UpdateMigrationDialog from '@/renderer/components/settings/UpdateMigrationDialog';
 import brandLogo from '@renderer/assets/logos/brand/app.png';
 import '@renderer/styles/layout.css';
 
@@ -555,7 +553,6 @@ const Layout: React.FC<{
                   <Suspense fallback={null}>
                     <UpdateModal />
                   </Suspense>
-                  {IS_DISCONTINUED_BUILD && <UpdateMigrationDialog />}
                 </ArcoLayout.Content>
                 {!isMobile && vaLayout && (
                   <ProjectPanelHost

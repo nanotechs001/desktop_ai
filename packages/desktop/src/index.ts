@@ -30,7 +30,6 @@ import type { BackendStartupFailureInfo } from './common/types/platform/electron
 import { registerWindowMaximizeListeners } from '@process/bridge';
 import { BackendLifecycleManager } from '@aionui/web-host';
 import { resolveBinaryPath } from '@process/backend';
-import './process/bridge/feedbackBridge';
 import { wasLaunchedAtLogin } from '@process/bridge/applicationBridge';
 import { onLanguageChanged } from './process/bridge/systemSettingsBridge';
 import { setInitialLanguage } from '@process/services/i18n';
@@ -601,16 +600,10 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
         autoUpdaterService.setBeforeQuitAndInstall(async () => {
           await backendManager.stop();
         });
-        // Check for updates after 3 seconds delay. Skipped in the discontinued
-        // build: AionUi's final version guides users to the website instead of
-        // auto-checking, so startup stays silent. The flag is a compile-time
-        // literal, so this branch is tree-shaken out of non-discontinued builds.
-        // 3秒后检查更新。停更版启动静默，不做应用内检测。
-        if (!process.env.IS_DISCONTINUED_BUILD) {
-          setTimeout(() => {
-            void autoUpdaterService.checkForUpdatesAndNotify();
-          }, 3000);
-        }
+        // Check for updates after 3 seconds delay
+        setTimeout(() => {
+          void autoUpdaterService.checkForUpdatesAndNotify();
+        }, 3000);
       })
       .catch((error) => {
         console.error('[App] Failed to initialize autoUpdaterService:', error);
@@ -1180,10 +1173,6 @@ installQuitCleanup({
   // Stop aioncore subprocess — backend shutdown kills all agent children
   // transitively (no separate frontend workerTaskManager remains).
   stopBackend: () => backendManager.stop(),
-  destroyPetWindow: async () => {
-    const { destroyPetWindow } = await import('./process/pet/petManager');
-    destroyPetWindow();
-  },
   logInfo: console.log,
   logWarn: console.warn,
   logError: console.error,

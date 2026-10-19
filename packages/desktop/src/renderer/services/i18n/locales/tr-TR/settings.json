@@ -812,10 +812,8 @@
   "appDescription": "One desktop. Your AI agents, actually coworking.",
   "helpDocumentation": "Yardım Dokümantasyonu",
   "updateLog": "Güncelleme Günlüğü",
-  "feedback": "Geri Bildirim",
   "bugReport": "Sorun Bildir",
   "bugReportTitle": "Sorun Bildir",
-  "oneClickFeedback": "Sorun Bildir",
   "bugReportModuleLabel": "Modül",
   "bugReportModulePlaceholder": "Sorunla ilgili modülü seçin",
   "bugReportDescriptionLabel": "Açıklama",
@@ -1337,26 +1335,6 @@
   "assistantAgentUnchecked": "Gereken motor henüz denetlenmedi.",
   "assistantAgentMissing": "Gereken motor yüklü değil.",
   "assistantTeamUnsupported": "Bu Agent şu anda takım modunda kullanılamıyor.",
-  "webui.letButlerSetup": "Kâhya ayarlasın",
-  "talkToButler": {
-    "createViaChat": "Sohbetle oluştur",
-    "createManually": "Elle oluştur",
-    "addViaChat": "Sohbetle ekle",
-    "addManually": "Elle ekle",
-    "solveViaChat": "Sohbetle çöz",
-    "enabledToast": "Pixebot Browser Kâhyası sizin için etkinleştirildi",
-    "prompt": {
-      "createAssistant": "Yeni bir Agent oluşturmama ve kurulumunda bana yol göstermene yardım et.",
-      "addCustomAgent": "Özel bir Agent eklememe yardım et.",
-      "addModel": "Yeni bir LLM sağlayıcısı ve API anahtarı ekle, ardından varsayılan model olarak ayarla.",
-      "addMcp": "Bir MCP sunucusu kurmama yardım et.",
-      "addSkill": "Bir beceri içe aktarıp bir Agent'a eklememe yardım et.",
-      "setupRemote": "Telefonumdan veya internetten Pixebot Browser’yi açabilmem için uzaktan erişimi ayarlamama yardım et.",
-      "diagnose": "Pixebot Browser kullanırken bir sorunla karşılaştım, teşhis etmeme yardım et.\n\n[Modül] {{module}}\n[Açıklama] {{description}}\n[Ekler] giriş alanındaki ekran görüntülerine bakın.\n\nLütfen nedenini teşhis et ve nasıl düzelteceğimi söyle.",
-      "diagnoseChatError": "Pixebot Browser sohbeti sırasında bir hatayla karşılaştım, teşhis etmeme yardım et.\n\n[Hata] {{error}}\n\nLütfen nedenini teşhis et ve nasıl düzelteceğimi söyle."
-    },
-    "solveWithButler": "Kâhya'ya sor"
-  },
   "providerIdConflict": "Provider ID zaten var. Lütfen tekrar deneyin.",
   "autoInjectedSkillsHint": "Her sohbete otomatik olarak yüklenir — etkinleştirmeye gerek yoktur; aracı bunları ne zaman kullanacağına karar verir.",
   "browserData": {

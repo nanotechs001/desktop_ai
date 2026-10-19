@@ -88,10 +88,6 @@
       "title": "Встановлення Pixebot Browser неповне",
       "description": "У цьому встановленні бракує потрібних локальних ресурсів, тому Pixebot Core не може запуститися. Завантажте та перевстановіть останню версію Pixebot Browser. Якщо проблема повториться після перевстановлення, перевірте, чи захисне або антивірусне ПЗ не помістило Pixebot Core у карантин.",
       "downloadLatest": "Завантажити останню версію",
-      "sendDiagnostics": "Надіслати діагностику",
-      "diagnosticsSent": "Діагностику надіслано",
-      "diagnosticsReportSuccess": "Діагностичний звіт надіслано",
-      "diagnosticsReportFailed": "Не вдалося надіслати діагностичний звіт",
       "runtimeComponentDescription": "У цій інсталяції бракує потрібних вбудованих компонентів середовища виконання, тому {{resource}} не може запуститися. Перевстановіть найновіший пакет Pixebot Browser. Якщо проблема повториться після перевстановлення, перевірте, чи не помістило програмне забезпечення безпеки або антивірус компоненти Pixebot Browser у карантин."
     },
     "packageArchitectureMismatch": {
@@ -100,11 +96,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "Pixebot Browser відкрився, але Pixebot Core зупинився під час ініціалізації локальних даних. Повторне встановлення Pixebot Browser може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser відкрився, але Pixebot Core зупинився під час ініціалізації локальних даних. Повторне встановлення Pixebot Browser може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних."
     },
     "databaseNewerThanApp": {
       "title": "Потрібна новіша версія Pixebot Browser",
@@ -113,29 +105,16 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "Pixebot Browser відкрився, але Pixebot Core зупинився під час підготовки локальних даних запуску, як-от записи агентів або рушіїв. Повторне встановлення Pixebot Browser може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser відкрився, але Pixebot Core зупинився під час підготовки локальних даних запуску, як-от записи агентів або рушіїв. Повторне встановлення Pixebot Browser може не вирішити проблему. Перезапустіть застосунок; якщо це повторюється, можливо, потрібно перевірити локальну базу даних."
     },
     "startupDirectory": {
       "title": "Startup directory is unavailable",
-      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser."
     },
     "recoverableDatabaseCorruption": {
       "title": "Локальні дані пошкоджено",
       "description": "Pixebot Browser виявив пошкодження локальної бази даних і не може продовжити запуск. Після підтвердження стару базу даних буде збережено як резервну копію, а для продовження запуску буде створено нову локальну базу даних. Попередні розмови більше не відображатимуться, стара база даних збережеться як файл резервної копії.",
       "confirmRebuild": "Зберегти стару БД і створити нову",
-      "sendDiagnostics": "Надіслати діагностику",
-      "diagnosticsHint": "Надсилання діагностики не змінить локальну базу даних.",
-      "diagnosticsSent": "Діагностику надіслано",
-      "diagnosticsReportSuccess": "Діагностичний звіт надіслано",
-      "diagnosticsReportFailed": "Не вдалося надіслати діагностичний звіт",
       "rebuildFailed": "Не вдалося зберегти стару БД і створити нову",
       "confirmDialog": {
         "title": "Відтворити базу даних?",
@@ -146,12 +125,7 @@
     },
     "transientConcurrentStartup": {
       "title": "Pixebot Browser запускається",
-      "description": "Коли це вікно відкрилося, інший процес запуску Pixebot Browser усе ще використовував локальні дані. Це тимчасово, і ваші дані в безпеці — перевстановлення не потрібне. Зачекайте трохи та повторіть спробу або перезапустіть Pixebot Browser.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report",
-      "diagnosticsHint": "Якщо це повторюється, ви можете надіслати звіт діагностики."
+      "description": "Коли це вікно відкрилося, інший процес запуску Pixebot Browser усе ще використовував локальні дані. Це тимчасово, і ваші дані в безпеці — перевстановлення не потрібне. Зачекайте трохи та повторіть спробу або перезапустіть Pixebot Browser."
     },
     "pendingSlow": {
       "title": "Запуск",
@@ -159,27 +133,15 @@
     },
     "exited": {
       "title": "Запуск не завершено",
-      "description": "Pixebot Core не зміг завершити запуск і закрився. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено.",
-      "sendDiagnostics": "Надіслати діагностику",
-      "diagnosticsSent": "Діагностику надіслано",
-      "diagnosticsReportSuccess": "Діагностику надіслано",
-      "diagnosticsReportFailed": "Не вдалося надіслати діагностику, повторіть спробу пізніше"
+      "description": "Pixebot Core не зміг завершити запуск і закрився. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено."
     },
     "portReportTimeout": {
       "title": "Час запуску вичерпано",
-      "description": "Pixebot Core не завершив запуск за очікуваний час. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено.",
-      "sendDiagnostics": "Надіслати діагностику",
-      "diagnosticsSent": "Діагностику надіслано",
-      "diagnosticsReportSuccess": "Діагностику надіслано",
-      "diagnosticsReportFailed": "Не вдалося надіслати діагностику, повторіть спробу пізніше"
+      "description": "Pixebot Core не завершив запуск за очікуваний час. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено."
     },
     "startupFailed": {
       "title": "Не вдалося запустити",
-      "description": "Pixebot Core не вдалося запустити. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено.",
-      "sendDiagnostics": "Надіслати діагностику",
-      "diagnosticsSent": "Діагностику надіслано",
-      "diagnosticsReportSuccess": "Діагностику надіслано",
-      "diagnosticsReportFailed": "Не вдалося надіслати діагностику, повторіть спробу пізніше"
+      "description": "Pixebot Core не вдалося запустити. Перезапустіть застосунок; якщо це повторюється, переконайтеся, що бекенд Pixebot Core встановлено."
     }
   },
   "fileAttach.addFiles": "Додати файли",

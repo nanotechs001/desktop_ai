@@ -824,10 +824,8 @@
   "appDescription": "One desktop. Your AI agents, actually coworking.",
   "helpDocumentation": "幫助文檔",
   "updateLog": "更新日誌",
-  "feedback": "意見反饋",
   "bugReport": "反饋問題",
   "bugReportTitle": "反饋問題",
-  "oneClickFeedback": "反饋問題",
   "bugReportModuleLabel": "問題模組",
   "bugReportModulePlaceholder": "請選擇問題所屬模組",
   "bugReportDescriptionLabel": "問題描述",
@@ -1339,26 +1337,6 @@
   "assistantAgentUnchecked": "所依賴的引擎尚未檢查。",
   "assistantAgentMissing": "所依賴的引擎尚未安裝。",
   "assistantTeamUnsupported": "該 Agent 目前無法在團隊模式中使用。",
-  "webui.letButlerSetup": "讓管家幫我設定",
-  "talkToButler": {
-    "createViaChat": "透過對話建立",
-    "createManually": "手動建立",
-    "addViaChat": "透過對話新增",
-    "addManually": "手動新增",
-    "solveViaChat": "透過對話排查",
-    "enabledToast": "已為你啟用 Pixebot Browser 管家",
-    "prompt": {
-      "createAssistant": "幫我建立一個新 Agent，並引導我完成設定。",
-      "addCustomAgent": "幫我新增一個自訂 Agent。",
-      "addModel": "幫我新增一個新的 LLM 模型和 API Key，並設為預設模型。",
-      "addMcp": "幫我設定一個 MCP 伺服器。",
-      "addSkill": "幫我匯入一個技能，並綁定到 Agent 上。",
-      "setupRemote": "幫我設定遠端存取，讓我在手機或外網也能開啟 Pixebot Browser。",
-      "diagnose": "我在使用 Pixebot Browser 時遇到問題，幫我排查一下。\n\n【模組】{{module}}\n【問題描述】{{description}}\n【附件】見輸入框中的截圖。\n\n請幫我診斷原因並給出解決辦法。",
-      "diagnoseChatError": "我在 Pixebot Browser 對話過程中遇到了報錯，幫我排查一下。\n\n【報錯內容】{{error}}\n\n請幫我診斷原因並給出解決辦法。"
-    },
-    "solveWithButler": "找管家排查"
-  },
   "providerIdConflict": "Provider ID 已存在，請重試。",
   "autoInjectedSkillsHint": "每次對話都會自動載入，無需手動啟用；由智能體自行決定何時呼叫。",
   "browserData": {

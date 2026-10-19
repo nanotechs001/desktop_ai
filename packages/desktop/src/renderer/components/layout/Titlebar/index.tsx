@@ -16,8 +16,6 @@ import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/u
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
-import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
-import MigrationInviteCapsule from './MigrationInviteCapsule';
 import { useChatNavHistory } from './useChatNavHistory';
 import './titlebar.css';
 
@@ -367,7 +365,6 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {layout?.isMobile && <div id='app-titlebar-actions-slot' className='app-titlebar__actions-slot' />}
-        {IS_DISCONTINUED_BUILD && <MigrationInviteCapsule />}
         {!layout?.isMobile && (
           <>
             {menuButtons}

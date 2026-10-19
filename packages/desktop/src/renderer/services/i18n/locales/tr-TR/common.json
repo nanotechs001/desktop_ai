@@ -86,10 +86,6 @@
       "title": "Pixebot Browser kurulumu eksik",
       "description": "Bu kurulumda gerekli yerel kaynaklar eksik, bu yüzden Pixebot Core başlatılamıyor. Lütfen en son Pixebot Browser sürümünü indirip yeniden kurun. Yeniden kurulumdan sonra sorun tekrarlarsa güvenlik veya antivirüs yazılımının Pixebot Core'u karantinaya alıp almadığını kontrol edin.",
       "downloadLatest": "Son sürümü indir",
-      "sendDiagnostics": "Tanı raporu gönder",
-      "diagnosticsSent": "Tanı raporu gönderildi",
-      "diagnosticsReportSuccess": "Tanı raporu gönderildi",
-      "diagnosticsReportFailed": "Tanı raporu gönderilemedi",
       "runtimeComponentDescription": "Bu kurulumda gerekli yerleşik çalışma zamanı bileşenleri eksik olduğu için {{resource}} başlatılamıyor. En son Pixebot Browser paketini yeniden yükleyin. Yeniden yükledikten sonra da devam ederse güvenlik veya antivirüs yazılımının Pixebot Browser bileşenlerini karantinaya alıp almadığını kontrol edin."
     },
     "packageArchitectureMismatch": {
@@ -98,11 +94,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "Pixebot Browser açıldı, ancak Pixebot Core yerel verileri başlatırken durdu. Pixebot Browser'yi yeniden yüklemek bu sorunu çözmeyebilir. Lütfen uygulamayı yeniden başlatın; sorun devam ederse yerel veritabanının incelenmesi gerekebilir.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser açıldı, ancak Pixebot Core yerel verileri başlatırken durdu. Pixebot Browser'yi yeniden yüklemek bu sorunu çözmeyebilir. Lütfen uygulamayı yeniden başlatın; sorun devam ederse yerel veritabanının incelenmesi gerekebilir."
     },
     "databaseNewerThanApp": {
       "title": "Daha yeni bir Pixebot Browser sürümü gerekli",
@@ -111,29 +103,16 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "Pixebot Browser açıldı, ancak Pixebot Core Agent veya motor kayıtları gibi yerel başlangıç verilerini hazırlarken durdu. Pixebot Browser'yi yeniden yüklemek bu sorunu çözmeyebilir. Lütfen uygulamayı yeniden başlatın; sorun devam ederse yerel veritabanının incelenmesi gerekebilir.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser açıldı, ancak Pixebot Core Agent veya motor kayıtları gibi yerel başlangıç verilerini hazırlarken durdu. Pixebot Browser'yi yeniden yüklemek bu sorunu çözmeyebilir. Lütfen uygulamayı yeniden başlatın; sorun devam ederse yerel veritabanının incelenmesi gerekebilir."
     },
     "startupDirectory": {
       "title": "Startup directory is unavailable",
-      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser."
     },
     "recoverableDatabaseCorruption": {
       "title": "Yerel veriler bozulmuş",
       "description": "Pixebot Browser yerel veritabanının bozulduğunu algıladı ve başlatmaya devam edemiyor. Onaydan sonra eski veritabanı yedeklenecek ve başlatmaya devam etmek için yeni bir yerel veritabanı oluşturulacak. Geçmiş sohbetler artık gösterilmeyecek ve eski veritabanı yedek dosyası olarak saklanacak.",
       "confirmRebuild": "Eski DB'yi yedekle ve yeni DB oluştur",
-      "sendDiagnostics": "Tanılama gönder",
-      "diagnosticsHint": "Tanılama göndermek yerel veritabanını değiştirmez.",
-      "diagnosticsSent": "Tanılama gönderildi",
-      "diagnosticsReportSuccess": "Tanılama raporu gönderildi",
-      "diagnosticsReportFailed": "Tanılama raporu gönderilemedi",
       "rebuildFailed": "Eski DB yedeklenip yeni DB oluşturulamadı",
       "confirmDialog": {
         "title": "Veritabanı yeniden oluşturulsun mu?",
@@ -144,12 +123,7 @@
     },
     "transientConcurrentStartup": {
       "title": "Pixebot Browser başlatılıyor",
-      "description": "Bu pencere açıldığında başka bir Pixebot Browser başlatma işlemi yerel verileri hâlâ kullanıyordu. Bu geçicidir ve verileriniz güvende — yeniden yükleme gerekmez. Lütfen biraz bekleyip tekrar deneyin veya Pixebot Browser'yi yeniden başlatın.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report",
-      "diagnosticsHint": "Bu durum tekrar ederse bir tanılama raporu gönderebilirsiniz."
+      "description": "Bu pencere açıldığında başka bir Pixebot Browser başlatma işlemi yerel verileri hâlâ kullanıyordu. Bu geçicidir ve verileriniz güvende — yeniden yükleme gerekmez. Lütfen biraz bekleyip tekrar deneyin veya Pixebot Browser'yi yeniden başlatın."
     },
     "pendingSlow": {
       "title": "Başlatılıyor",
@@ -157,27 +131,15 @@
     },
     "exited": {
       "title": "Başlatma tamamlanmadı",
-      "description": "Pixebot Core başlatmayı tamamlayamadı ve kapandı. Lütfen uygulamayı yeniden başlatın; sorun devam ederse Pixebot Core arka ucunun kurulu olduğundan emin olun.",
-      "sendDiagnostics": "Tanılama gönder",
-      "diagnosticsSent": "Tanılama gönderildi",
-      "diagnosticsReportSuccess": "Tanılama bildirildi",
-      "diagnosticsReportFailed": "Tanılama gönderilemedi, lütfen tekrar deneyin"
+      "description": "Pixebot Core başlatmayı tamamlayamadı ve kapandı. Lütfen uygulamayı yeniden başlatın; sorun devam ederse Pixebot Core arka ucunun kurulu olduğundan emin olun."
     },
     "portReportTimeout": {
       "title": "Başlatma zaman aşımına uğradı",
-      "description": "Pixebot Core beklenen süre içinde başlatmayı tamamlayamadı. Lütfen uygulamayı yeniden başlatın; sorun devam ederse Pixebot Core arka ucunun kurulu olduğundan emin olun.",
-      "sendDiagnostics": "Tanılama gönder",
-      "diagnosticsSent": "Tanılama gönderildi",
-      "diagnosticsReportSuccess": "Tanılama bildirildi",
-      "diagnosticsReportFailed": "Tanılama gönderilemedi, lütfen tekrar deneyin"
+      "description": "Pixebot Core beklenen süre içinde başlatmayı tamamlayamadı. Lütfen uygulamayı yeniden başlatın; sorun devam ederse Pixebot Core arka ucunun kurulu olduğundan emin olun."
     },
     "startupFailed": {
       "title": "Başlatma başarısız oldu",
-      "description": "Pixebot Core başlatılamadı. Lütfen uygulamayı yeniden başlatın; sorun devam ederse Pixebot Core arka ucunun kurulu olduğundan emin olun.",
-      "sendDiagnostics": "Tanılama gönder",
-      "diagnosticsSent": "Tanılama gönderildi",
-      "diagnosticsReportSuccess": "Tanılama bildirildi",
-      "diagnosticsReportFailed": "Tanılama gönderilemedi, lütfen tekrar deneyin"
+      "description": "Pixebot Core başlatılamadı. Lütfen uygulamayı yeniden başlatın; sorun devam ederse Pixebot Core arka ucunun kurulu olduğundan emin olun."
     }
   },
   "fileAttach.addFiles": "Dosya ekle",

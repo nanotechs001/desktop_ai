@@ -124,9 +124,6 @@ export default defineConfig(({ mode }) => {
       define: {
         'process.env.NODE_ENV': JSON.stringify(mode),
         'process.env.env': JSON.stringify(process.env.env),
-        // Discontinued-build fork flag (see discontinuedBuild.ts). Only AionUi's
-        // final `-final` tag build sets IS_DISCONTINUED_BUILD=true in CI.
-        'process.env.IS_DISCONTINUED_BUILD': JSON.stringify(process.env.IS_DISCONTINUED_BUILD === 'true'),
       },
     },
 
@@ -149,9 +146,6 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           input: {
             index: resolve('packages/desktop/src/preload/main.ts'),
-            petPreload: resolve('packages/desktop/src/preload/petPreload.ts'),
-            petHitPreload: resolve('packages/desktop/src/preload/petHitPreload.ts'),
-            petConfirmPreload: resolve('packages/desktop/src/preload/petConfirmPreload.ts'),
           },
         },
       },
@@ -218,9 +212,6 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           input: {
             index: resolve(rendererRoot, 'index.html'),
-            pet: resolve(rendererRoot, 'pet/pet.html'),
-            'pet-hit': resolve(rendererRoot, 'pet/pet-hit.html'),
-            'pet-confirm': resolve(rendererRoot, 'pet/pet-confirm.html'),
           },
           external: ['node:crypto', 'crypto'],
           onwarn(warning, warn) {
@@ -285,8 +276,6 @@ export default defineConfig(({ mode }) => {
         // can show it without importing packages/desktop/package.json, which is
         // a workspace-internal placeholder frozen at "0.0.0".
         __APP_VERSION__: JSON.stringify(rootPackageJson.version),
-        // Renderer-side discontinued-build flag; consumed via discontinuedBuild.ts.
-        __IS_DISCONTINUED_BUILD__: JSON.stringify(process.env.IS_DISCONTINUED_BUILD === 'true'),
         global: 'globalThis',
       },
       optimizeDeps: {

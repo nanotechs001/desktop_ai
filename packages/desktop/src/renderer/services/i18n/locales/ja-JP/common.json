@@ -86,10 +86,6 @@
       "title": "Pixebot Browser のインストールが不完全です",
       "description": "このインストールには必要なローカルリソースが不足しているため、Pixebot Core を起動できません。最新の Pixebot Browser をダウンロードして再インストールしてください。再インストール後も問題が再発する場合は、セキュリティソフトまたはウイルス対策ソフトが Pixebot Core を隔離していないか確認してください。",
       "downloadLatest": "最新版をダウンロード",
-      "sendDiagnostics": "診断レポートを送信",
-      "diagnosticsSent": "診断レポートを送信済み",
-      "diagnosticsReportSuccess": "診断レポートを送信しました",
-      "diagnosticsReportFailed": "診断レポートの送信に失敗しました",
       "runtimeComponentDescription": "このインストールには必要な組み込み実行コンポーネントが不足しているため、{{resource}} を起動できません。最新版の Pixebot Browser パッケージを再インストールしてください。再インストール後も続く場合は、セキュリティソフトまたはウイルス対策ソフトが Pixebot Browser コンポーネントを隔離していないか確認してください。"
     },
     "packageArchitectureMismatch": {
@@ -98,11 +94,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "Pixebot Browser は開きましたが、Pixebot Core はローカルデータの初期化中に停止しました。Pixebot Browser を再インストールしても解決しない可能性があります。アプリを再起動してください。繰り返し発生する場合は、ローカルデータベースの確認が必要になることがあります。",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser は開きましたが、Pixebot Core はローカルデータの初期化中に停止しました。Pixebot Browser を再インストールしても解決しない可能性があります。アプリを再起動してください。繰り返し発生する場合は、ローカルデータベースの確認が必要になることがあります。"
     },
     "databaseNewerThanApp": {
       "title": "新しいバージョンの Pixebot Browser が必要です",
@@ -111,29 +103,16 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "Pixebot Browser は開きましたが、Pixebot Core は エージェントまたはエンジンのレコードなどのローカル起動データを準備中に停止しました。Pixebot Browser を再インストールしても解決しない可能性があります。アプリを再起動してください。繰り返し発生する場合は、ローカルデータベースの確認が必要になることがあります。",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser は開きましたが、Pixebot Core は エージェントまたはエンジンのレコードなどのローカル起動データを準備中に停止しました。Pixebot Browser を再インストールしても解決しない可能性があります。アプリを再起動してください。繰り返し発生する場合は、ローカルデータベースの確認が必要になることがあります。"
     },
     "startupDirectory": {
       "title": "Startup directory is unavailable",
-      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser."
     },
     "recoverableDatabaseCorruption": {
       "title": "ローカルデータが破損しています",
       "description": "ローカルデータベースの破損を検出したため、Pixebot Browser は起動を続行できません。確認後、古いデータベースをバックアップし、新しいローカルデータベースを作成して起動を続行します。過去の会話は表示されなくなり、古いデータベースはバックアップファイルとして保持されます。",
       "confirmRebuild": "古いDBをバックアップして新しいDBを再作成",
-      "sendDiagnostics": "診断レポートを送信",
-      "diagnosticsHint": "診断レポートの送信ではローカルデータベースは変更されません。",
-      "diagnosticsSent": "診断レポートを送信しました",
-      "diagnosticsReportSuccess": "診断レポートを送信しました",
-      "diagnosticsReportFailed": "診断レポートの送信に失敗しました",
       "rebuildFailed": "古いDBのバックアップと新しいDBの再作成に失敗しました",
       "confirmDialog": {
         "title": "データベースを再構築しますか？",
@@ -144,12 +123,7 @@
     },
     "transientConcurrentStartup": {
       "title": "Pixebot Browser を起動しています",
-      "description": "このウィンドウを開いたとき、別の Pixebot Browser の起動処理がまだローカルデータを使用していました。これは一時的なもので、データは安全です。再インストールの必要はありません。少し待ってから再試行するか、Pixebot Browser を再起動してください。",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report",
-      "diagnosticsHint": "この現象が繰り返し発生する場合は、診断レポートを送信できます。"
+      "description": "このウィンドウを開いたとき、別の Pixebot Browser の起動処理がまだローカルデータを使用していました。これは一時的なもので、データは安全です。再インストールの必要はありません。少し待ってから再試行するか、Pixebot Browser を再起動してください。"
     },
     "pendingSlow": {
       "title": "起動中",
@@ -157,27 +131,15 @@
     },
     "exited": {
       "title": "起動が完了しませんでした",
-      "description": "Pixebot Core は起動を完了できずに終了しました。アプリを再起動してください。繰り返し発生する場合は、Pixebot Core バックエンドがインストールされているか確認してください。",
-      "sendDiagnostics": "診断を送信",
-      "diagnosticsSent": "診断を送信しました",
-      "diagnosticsReportSuccess": "診断情報を送信しました",
-      "diagnosticsReportFailed": "診断の送信に失敗しました。しばらくしてから再試行してください。"
+      "description": "Pixebot Core は起動を完了できずに終了しました。アプリを再起動してください。繰り返し発生する場合は、Pixebot Core バックエンドがインストールされているか確認してください。"
     },
     "portReportTimeout": {
       "title": "起動がタイムアウトしました",
-      "description": "Pixebot Core は想定時間内に起動を完了できませんでした。アプリを再起動してください。繰り返し発生する場合は、Pixebot Core バックエンドがインストールされているか確認してください。",
-      "sendDiagnostics": "診断を送信",
-      "diagnosticsSent": "診断を送信しました",
-      "diagnosticsReportSuccess": "診断情報を送信しました",
-      "diagnosticsReportFailed": "診断の送信に失敗しました。しばらくしてから再試行してください。"
+      "description": "Pixebot Core は想定時間内に起動を完了できませんでした。アプリを再起動してください。繰り返し発生する場合は、Pixebot Core バックエンドがインストールされているか確認してください。"
     },
     "startupFailed": {
       "title": "起動に失敗しました",
-      "description": "Pixebot Core を起動できませんでした。アプリを再起動してください。繰り返し発生する場合は、Pixebot Core バックエンドがインストールされているか確認してください。",
-      "sendDiagnostics": "診断を送信",
-      "diagnosticsSent": "診断を送信しました",
-      "diagnosticsReportSuccess": "診断情報を送信しました",
-      "diagnosticsReportFailed": "診断の送信に失敗しました。しばらくしてから再試行してください。"
+      "description": "Pixebot Core を起動できませんでした。アプリを再起動してください。繰り返し発生する場合は、Pixebot Core バックエンドがインストールされているか確認してください。"
     }
   },
   "fileAttach.addFiles": "ファイルを追加",

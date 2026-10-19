@@ -816,10 +816,8 @@
   "appDescription": "Один рабочий стол. Ваши AI-агенты действительно работают вместе.",
   "helpDocumentation": "Справочная документация",
   "updateLog": "Журнал обновлений",
-  "feedback": "Обратная связь",
   "bugReport": "Сообщить о проблеме",
   "bugReportTitle": "Сообщить о проблеме",
-  "oneClickFeedback": "Сообщить о проблеме",
   "bugReportModuleLabel": "Модуль",
   "bugReportModulePlaceholder": "Выберите модуль, связанный с проблемой",
   "bugReportDescriptionLabel": "Описание",
@@ -1351,26 +1349,6 @@
   "assistantAgentUnchecked": "Требуемый движок ещё не проверялся.",
   "assistantAgentMissing": "Требуемый движок не установлен.",
   "assistantTeamUnsupported": "Этот агент сейчас нельзя использовать в командном режиме.",
-  "webui.letButlerSetup": "Пусть дворецкий настроит",
-  "talkToButler": {
-    "createViaChat": "Создать через чат",
-    "createManually": "Создать вручную",
-    "addViaChat": "Добавить через чат",
-    "addManually": "Добавить вручную",
-    "solveViaChat": "Решить через чат",
-    "enabledToast": "Дворецкий Pixebot Browser включён для вас",
-    "prompt": {
-      "createAssistant": "Помоги создать нового агента и проведи меня по его настройке.",
-      "addCustomAgent": "Помоги добавить пользовательский Agent.",
-      "addModel": "Помоги добавить нового провайдера LLM и API-ключ, затем сделай его моделью по умолчанию.",
-      "addMcp": "Помоги настроить сервер MCP.",
-      "addSkill": "Помоги импортировать навык и привязать его к агенту.",
-      "setupRemote": "Помоги настроить удалённый доступ, чтобы открывать Pixebot Browser с телефона или через интернет.",
-      "diagnose": "У меня возникла проблема с Pixebot Browser, помоги её диагностировать.\n\n[Модуль] {{module}}\n[Описание] {{description}}\n[Вложения] см. скриншоты в поле ввода.\n\nПожалуйста, определи причину и подскажи, как исправить.",
-      "diagnoseChatError": "Во время разговора в Pixebot Browser возникла ошибка, помоги её диагностировать.\n\n[Ошибка] {{error}}\n\nПожалуйста, определи причину и подскажи, как исправить."
-    },
-    "solveWithButler": "Спросить дворецкого"
-  },
   "providerIdConflict": "Provider ID уже существует. Повторите попытку.",
   "autoInjectedSkillsHint": "Автоматически загружаются в каждый диалог — включать не нужно; агент сам решает, когда их использовать.",
   "browserData": {

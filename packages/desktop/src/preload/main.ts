@@ -42,13 +42,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // 获取拖拽文件/目录的绝对路径 / Get absolute path for dragged file/directory
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
-  // Feedback: collect and compress recent log files
-  collectFeedbackLogs: () => ipcRenderer.invoke('feedback:collect-logs'),
-  // Feedback: capture a screenshot of the current window
-  captureFeedbackScreenshot: () => ipcRenderer.invoke('feedback:capture-screenshot'),
-  // Feedback: forward diagnostics logs to the main process console
-  logFeedbackEvent: (payload: { details?: unknown; level: 'info' | 'warn' | 'error'; message: string }) =>
-    ipcRenderer.send('feedback:renderer-log', payload),
   recoverCorruptedDatabase: () => ipcRenderer.invoke('backend:recover-corrupted-database'),
 });
 

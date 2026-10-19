@@ -22,14 +22,7 @@ const listSourceFiles = (dir: string): string[] =>
     return entry.name.endsWith('.tsx') ? [full] : [];
   });
 
-const HIDDEN_JSX = [
-  '<FeedbackButton',
-  '<ButlerDiagnoseButton',
-  '<TeamSiderSection',
-  '<FeedbackReportModal',
-  '<FeedbackProvider',
-  '<PetSettings',
-];
+const HIDDEN_JSX = ['<FeedbackButton', '<TeamSiderSection', '<FeedbackReportModal', '<FeedbackProvider'];
 
 describe('hidden entry points stay unmounted', () => {
   const files = listSourceFiles(rendererRoot);

@@ -814,10 +814,8 @@
   "appDescription": "Kostenlose, lokale, Open-Source-GUI-App für Gemini CLI",
   "helpDocumentation": "Hilfedokumentation",
   "updateLog": "Update-Protokoll",
-  "feedback": "Feedback",
   "bugReport": "Fehlerbericht",
   "bugReportTitle": "Fehlerbericht",
-  "oneClickFeedback": "Problem melden",
   "bugReportModuleLabel": "Modul",
   "bugReportModulePlaceholder": "Das mit dem Problem zusammenhängende Modul auswählen",
   "bugReportDescriptionLabel": "Beschreibung",
@@ -1303,26 +1301,6 @@
   "assistantAgentUnchecked": "Die benötigte Engine wurde noch nicht geprüft.",
   "assistantAgentMissing": "Die benötigte Engine ist nicht installiert.",
   "assistantTeamUnsupported": "Dieser Agent kann derzeit nicht im Teammodus verwendet werden.",
-  "webui.letButlerSetup": "Vom Butler einrichten lassen",
-  "talkToButler": {
-    "createViaChat": "Per Chat erstellen",
-    "createManually": "Manuell erstellen",
-    "addViaChat": "Per Chat hinzufügen",
-    "addManually": "Manuell hinzufügen",
-    "solveViaChat": "Per Chat lösen",
-    "enabledToast": "Pixebot Browser-Butler für dich aktiviert",
-    "prompt": {
-      "createAssistant": "Hilf mir, einen neuen Agent zu erstellen, und führe mich durch die Einrichtung.",
-      "addCustomAgent": "Hilf mir, einen benutzerdefinierten Agent hinzuzufügen.",
-      "addModel": "Hilf mir, einen neuen LLM-Anbieter und API-Schlüssel hinzuzufügen, und lege ihn als Standardmodell fest.",
-      "addMcp": "Hilf mir, einen MCP-Server einzurichten.",
-      "addSkill": "Hilf mir, einen Skill zu importieren und einem Agent zuzuordnen.",
-      "setupRemote": "Hilf mir, den Fernzugriff einzurichten, damit ich Pixebot Browser vom Handy oder über das Internet öffnen kann.",
-      "diagnose": "Ich habe ein Problem mit Pixebot Browser, hilf mir bei der Diagnose.\n\n[Modul] {{module}}\n[Beschreibung] {{description}}\n[Anhänge] siehe die Screenshots im Eingabefeld.\n\nBitte diagnostiziere die Ursache und sag mir, wie ich es behebe.",
-      "diagnoseChatError": "Während einer Unterhaltung in Pixebot Browser ist ein Fehler aufgetreten, hilf mir bei der Diagnose.\n\n[Fehler] {{error}}\n\nBitte diagnostiziere die Ursache und sag mir, wie ich es behebe."
-    },
-    "solveWithButler": "Butler fragen"
-  },
   "browserNotification": {
     "enable": "Enable browser notifications",
     "granted": "Browser notifications enabled",

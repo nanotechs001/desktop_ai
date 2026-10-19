@@ -70,7 +70,7 @@ describe('configMigration', () => {
       const configFile: ConfigFile = {
         get: vi.fn((key: string) => {
           if (key === 'language') return Promise.resolve('zh-CN');
-          if (key === 'pet.enabled') return Promise.resolve(true);
+          if (key === 'ui.zoomFactor') return Promise.resolve(1.2);
           return Promise.reject(new Error('not found'));
         }),
         set: vi.fn(),
@@ -85,7 +85,7 @@ describe('configMigration', () => {
 
       expect(httpRequest).toHaveBeenCalledWith('PUT', '/api/settings/client', {
         language: 'zh-CN',
-        'pet.enabled': true,
+        'ui.zoomFactor': 1.2,
       });
       expect(configFile.set).not.toHaveBeenCalled();
     });

@@ -824,10 +824,8 @@
   "appDescription": "Um desktop. Seus agentes de IA, realmente trabalhando juntos.",
   "helpDocumentation": "Documentação de Ajuda",
   "updateLog": "Registro de Atualizações",
-  "feedback": "Comentários",
   "bugReport": "Reportar Problema",
   "bugReportTitle": "Reportar Problema",
-  "oneClickFeedback": "Reportar Problema",
   "bugReportModuleLabel": "Módulo",
   "bugReportModulePlaceholder": "Selecione o módulo relacionado ao problema",
   "bugReportDescriptionLabel": "Descrição",
@@ -1340,26 +1338,6 @@
   "assistantAgentUnchecked": "O motor necessário ainda não foi verificado.",
   "assistantAgentMissing": "O motor necessário não está instalado.",
   "assistantTeamUnsupported": "Este agente não pode ser usado no modo de equipe no momento.",
-  "webui.letButlerSetup": "Deixe o mordomo configurar",
-  "talkToButler": {
-    "createViaChat": "Criar via chat",
-    "createManually": "Criar manualmente",
-    "addViaChat": "Adicionar via chat",
-    "addManually": "Adicionar manualmente",
-    "solveViaChat": "Resolver via chat",
-    "enabledToast": "Mordomo do Pixebot Browser ativado para você",
-    "prompt": {
-      "createAssistant": "Ajude-me a criar um novo agente e me oriente na configuração.",
-      "addCustomAgent": "Ajude-me a adicionar um Agent personalizado.",
-      "addModel": "Ajude-me a adicionar um novo provedor de LLM e chave de API e defina-o como modelo padrão.",
-      "addMcp": "Ajude-me a configurar um servidor MCP.",
-      "addSkill": "Ajude-me a importar uma skill e vinculá-la a um agente.",
-      "setupRemote": "Ajude-me a configurar o acesso remoto para abrir o Pixebot Browser do celular ou pela internet.",
-      "diagnose": "Tive um problema com o Pixebot Browser, ajude-me a diagnosticá-lo.\n\n[Módulo] {{module}}\n[Descrição] {{description}}\n[Anexos] veja as capturas de tela na entrada.\n\nDiagnostique a causa e me diga como corrigir.",
-      "diagnoseChatError": "Ocorreu um erro durante uma conversa no Pixebot Browser, ajude-me a diagnosticá-lo.\n\n[Erro] {{error}}\n\nDiagnostique a causa e me diga como corrigir."
-    },
-    "solveWithButler": "Perguntar ao Mordomo"
-  },
   "providerIdConflict": "O Provider ID já existe. Tente novamente.",
   "autoInjectedSkillsHint": "Carregadas automaticamente em cada conversa — não é preciso ativá-las; o agente decide quando usá-las.",
   "browserData": {

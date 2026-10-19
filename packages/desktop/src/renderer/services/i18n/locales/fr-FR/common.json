@@ -86,10 +86,6 @@
       "title": "L'installation d'Pixebot Browser est incomplète",
       "description": "Cette installation ne dispose pas des ressources locales requises, Pixebot Core ne peut donc pas démarrer. Veuillez télécharger et réinstaller la dernière version d'Pixebot Browser. Si le problème réapparaît après la réinstallation, vérifiez si un logiciel de sécurité ou antivirus a mis Pixebot Core en quarantaine.",
       "downloadLatest": "Télécharger le dernier",
-      "sendDiagnostics": "Envoyer des diagnostics",
-      "diagnosticsSent": "Diagnostics envoyés",
-      "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du rapport de diagnostic",
       "runtimeComponentDescription": "Il manque les composants d'exécution groupés requis dans cette installation, donc {{resource}} ne peut pas démarrer. Réinstallez le dernier package Pixebot Browser. Si cela se produit toujours après la réinstallation, vérifiez si un logiciel de sécurité ou un antivirus a mis en quarantaine les composants Pixebot Browser."
     },
     "packageArchitectureMismatch": {
@@ -98,11 +94,7 @@
     },
     "dataMigration": {
       "title": "Échec de la migration des données locales",
-      "description": "Pixebot Browser s'est ouvert, mais Pixebot Core s'est arrêté lors de l'initialisation des données locales. La réinstallation d'Pixebot Browser ne résoudra peut-être pas ce problème. Veuillez redémarrer l'application ; si le problème persiste, la base de données locale devra peut-être être inspectée.",
-      "sendDiagnostics": "Envoyer des diagnostics",
-      "diagnosticsSent": "Diagnostics envoyés",
-      "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du rapport de diagnostic"
+      "description": "Pixebot Browser s'est ouvert, mais Pixebot Core s'est arrêté lors de l'initialisation des données locales. La réinstallation d'Pixebot Browser ne résoudra peut-être pas ce problème. Veuillez redémarrer l'application ; si le problème persiste, la base de données locale devra peut-être être inspectée."
     },
     "databaseNewerThanApp": {
       "title": "Une version plus récente d'Pixebot Browser est requise",
@@ -111,29 +103,16 @@
     },
     "localDataRepair": {
       "title": "La réparation des données locales a échoué",
-      "description": "Pixebot Browser s'est ouvert, mais Pixebot Core s'est arrêté lors de la préparation des données locales de démarrage, comme les enregistrements d'agents ou de moteurs. La réinstallation d'Pixebot Browser ne résoudra peut-être pas ce problème. Veuillez redémarrer l'application ; si le problème persiste, la base de données locale devra peut-être être inspectée.",
-      "sendDiagnostics": "Envoyer des diagnostics",
-      "diagnosticsSent": "Diagnostics envoyés",
-      "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du rapport de diagnostic"
+      "description": "Pixebot Browser s'est ouvert, mais Pixebot Core s'est arrêté lors de la préparation des données locales de démarrage, comme les enregistrements d'agents ou de moteurs. La réinstallation d'Pixebot Browser ne résoudra peut-être pas ce problème. Veuillez redémarrer l'application ; si le problème persiste, la base de données locale devra peut-être être inspectée."
     },
     "startupDirectory": {
       "title": "Le répertoire de démarrage n'est pas disponible",
-      "description": "Pixebot Browser s'est ouvert, mais Pixebot Core n'a pas pu démarrer car le répertoire de travail ou de journal configuré est manquant, indisponible ou bloqué par les autorisations. Vérifiez que les répertoires configurés existent et sont accessibles en écriture, puis redémarrez Pixebot Browser.",
-      "sendDiagnostics": "Envoyer des diagnostics",
-      "diagnosticsSent": "Diagnostics envoyés",
-      "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du rapport de diagnostic"
+      "description": "Pixebot Browser s'est ouvert, mais Pixebot Core n'a pas pu démarrer car le répertoire de travail ou de journal configuré est manquant, indisponible ou bloqué par les autorisations. Vérifiez que les répertoires configurés existent et sont accessibles en écriture, puis redémarrez Pixebot Browser."
     },
     "recoverableDatabaseCorruption": {
       "title": "Les données locales sont corrompues",
       "description": "Pixebot Browser a détecté que la base de données locale est corrompue et ne peut pas continuer le démarrage. Après confirmation, Pixebot Browser sauvegardera l'ancienne base de données et créera une nouvelle base de données locale pour continuer le démarrage. Les conversations passées ne seront plus affichées et l'ancienne base de données sera conservée comme fichier de sauvegarde.",
       "confirmRebuild": "Sauvegarder l'ancienne base de données et reconstruire la nouvelle base de données",
-      "sendDiagnostics": "Envoyer des diagnostics",
-      "diagnosticsHint": "L'envoi de diagnostics ne modifiera pas la base de données locale.",
-      "diagnosticsSent": "Diagnostics envoyés",
-      "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du rapport de diagnostic",
       "rebuildFailed": "Échec de la sauvegarde de l'ancienne base de données et de la reconstruction de la nouvelle base de données",
       "confirmDialog": {
         "title": "Reconstruire la base de données ?",
@@ -144,12 +123,7 @@
     },
     "transientConcurrentStartup": {
       "title": "Pixebot Browser démarre",
-      "description": "À l'ouverture de cette fenêtre, un autre démarrage d'Pixebot Browser utilisait encore les données locales. C'est temporaire et vos données sont en sécurité — aucune réinstallation n'est nécessaire. Veuillez patienter un instant et réessayer, ou redémarrer Pixebot Browser.",
-      "sendDiagnostics": "Envoyer des diagnostics",
-      "diagnosticsSent": "Diagnostics envoyés",
-      "diagnosticsReportSuccess": "Rapport de diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du rapport de diagnostic",
-      "diagnosticsHint": "Si cela se reproduit, vous pouvez envoyer un rapport de diagnostic."
+      "description": "À l'ouverture de cette fenêtre, un autre démarrage d'Pixebot Browser utilisait encore les données locales. C'est temporaire et vos données sont en sécurité — aucune réinstallation n'est nécessaire. Veuillez patienter un instant et réessayer, ou redémarrer Pixebot Browser."
     },
     "pendingSlow": {
       "title": "Démarrage",
@@ -157,27 +131,15 @@
     },
     "exited": {
       "title": "Le démarrage ne s'est pas terminé",
-      "description": "Pixebot Core n'a pas pu terminer son démarrage et s'est fermé. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend Pixebot Core est installé.",
-      "sendDiagnostics": "Envoyer le diagnostic",
-      "diagnosticsSent": "Diagnostic envoyé",
-      "diagnosticsReportSuccess": "Diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du diagnostic, veuillez réessayer"
+      "description": "Pixebot Core n'a pas pu terminer son démarrage et s'est fermé. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend Pixebot Core est installé."
     },
     "portReportTimeout": {
       "title": "Délai de démarrage dépassé",
-      "description": "Pixebot Core n'a pas terminé son démarrage dans le délai prévu. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend Pixebot Core est installé.",
-      "sendDiagnostics": "Envoyer le diagnostic",
-      "diagnosticsSent": "Diagnostic envoyé",
-      "diagnosticsReportSuccess": "Diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du diagnostic, veuillez réessayer"
+      "description": "Pixebot Core n'a pas terminé son démarrage dans le délai prévu. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend Pixebot Core est installé."
     },
     "startupFailed": {
       "title": "Échec du démarrage",
-      "description": "Pixebot Core n'a pas pu démarrer. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend Pixebot Core est installé.",
-      "sendDiagnostics": "Envoyer le diagnostic",
-      "diagnosticsSent": "Diagnostic envoyé",
-      "diagnosticsReportSuccess": "Diagnostic envoyé",
-      "diagnosticsReportFailed": "Échec de l'envoi du diagnostic, veuillez réessayer"
+      "description": "Pixebot Core n'a pas pu démarrer. Veuillez redémarrer l'application ; si le problème persiste, vérifiez que le backend Pixebot Core est installé."
     }
   },
   "fileAttach.addFiles": "Ajouter des fichiers",

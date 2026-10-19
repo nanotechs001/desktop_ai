@@ -86,10 +86,6 @@
       "title": "Pixebot Browser installation is incomplete",
       "description": "This installation is missing required local resources, so Pixebot Core cannot start. Please download and reinstall the latest Pixebot Browser. If the issue returns after reinstalling, check whether security or antivirus software quarantined Pixebot Core.",
       "downloadLatest": "Download latest",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report",
       "runtimeComponentDescription": "This installation is missing required bundled runtime components, so {{resource}} cannot start. Reinstall the latest Pixebot Browser package. If it still happens after reinstalling, check whether security or antivirus software quarantined Pixebot Browser components."
     },
     "packageArchitectureMismatch": {
@@ -98,11 +94,7 @@
     },
     "dataMigration": {
       "title": "Local data migration failed",
-      "description": "Pixebot Browser opened, but Pixebot Core stopped while initializing local data. Reinstalling Pixebot Browser may not fix this. Please restart the app. If it keeps happening, the local database migration may need to be inspected.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser opened, but Pixebot Core stopped while initializing local data. Reinstalling Pixebot Browser may not fix this. Please restart the app. If it keeps happening, the local database migration may need to be inspected."
     },
     "databaseNewerThanApp": {
       "title": "A newer version of Pixebot Browser is required",
@@ -111,29 +103,16 @@
     },
     "localDataRepair": {
       "title": "Local data repair failed",
-      "description": "Pixebot Browser opened, but Pixebot Core stopped while preparing local startup data such as Agent or engine records. Reinstalling Pixebot Browser may not fix this. Please restart the app. If it keeps happening, the local database may need to be inspected.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser opened, but Pixebot Core stopped while preparing local startup data such as Agent or engine records. Reinstalling Pixebot Browser may not fix this. Please restart the app. If it keeps happening, the local database may need to be inspected."
     },
     "startupDirectory": {
       "title": "Startup directory is unavailable",
-      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report"
+      "description": "Pixebot Browser opened, but Pixebot Core could not start because the configured work or log directory is missing, unavailable, or blocked by permissions. Check that the configured directories exist and are writable, then restart Pixebot Browser."
     },
     "recoverableDatabaseCorruption": {
       "title": "Local data is corrupted",
       "description": "Pixebot Browser detected that the local database is corrupted and cannot continue startup. After confirmation, Pixebot Browser will back up the old database and create a new local database to continue startup. Past conversations will no longer be shown, and the old database will be kept as a backup file.",
       "confirmRebuild": "Back up old DB and rebuild new DB",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsHint": "Sending diagnostics will not modify the local database.",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report",
       "rebuildFailed": "Failed to back up old DB and rebuild new DB",
       "confirmDialog": {
         "title": "Rebuild the database?",
@@ -144,12 +123,7 @@
     },
     "transientConcurrentStartup": {
       "title": "Pixebot Browser is starting up",
-      "description": "Another Pixebot Browser startup was still using the local data when this window opened. This is temporary and your data is safe — no reinstall is needed. Please wait a moment and try again, or restart Pixebot Browser.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics report sent",
-      "diagnosticsReportFailed": "Failed to send diagnostics report",
-      "diagnosticsHint": "If this keeps happening, you can send a diagnostics report."
+      "description": "Another Pixebot Browser startup was still using the local data when this window opened. This is temporary and your data is safe — no reinstall is needed. Please wait a moment and try again, or restart Pixebot Browser."
     },
     "pendingSlow": {
       "title": "Starting up",
@@ -157,27 +131,15 @@
     },
     "exited": {
       "title": "Startup didn't complete",
-      "description": "Pixebot Core couldn't finish starting and has exited. Please restart the app. If it keeps happening, check that the Pixebot Core backend is installed.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics reported",
-      "diagnosticsReportFailed": "Failed to send diagnostics, please retry"
+      "description": "Pixebot Core couldn't finish starting and has exited. Please restart the app. If it keeps happening, check that the Pixebot Core backend is installed."
     },
     "portReportTimeout": {
       "title": "Startup timed out",
-      "description": "Pixebot Core didn't finish starting within the expected time. Please restart the app. If it keeps happening, check that the Pixebot Core backend is installed.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics reported",
-      "diagnosticsReportFailed": "Failed to send diagnostics, please retry"
+      "description": "Pixebot Core didn't finish starting within the expected time. Please restart the app. If it keeps happening, check that the Pixebot Core backend is installed."
     },
     "startupFailed": {
       "title": "Startup failed",
-      "description": "Pixebot Core failed to start. Please restart the app. If it keeps happening, check that the Pixebot Core backend is installed.",
-      "sendDiagnostics": "Send diagnostics",
-      "diagnosticsSent": "Diagnostics sent",
-      "diagnosticsReportSuccess": "Diagnostics reported",
-      "diagnosticsReportFailed": "Failed to send diagnostics, please retry"
+      "description": "Pixebot Core failed to start. Please restart the app. If it keeps happening, check that the Pixebot Core backend is installed."
     }
   },
   "fileAttach.addFiles": "Add files",

@@ -24,9 +24,6 @@ const adapterWindowList: Array<BrowserWindow> = [];
 
 export { registerWebSocketBroadcaster, getBridgeEmitter };
 
-/** No-op: the desktop pet is removed from this fork, so nothing listens to bridge events. */
-export const setPetNotifyHook = (_hook: ((name: string, data: unknown) => void) | null): void => {};
-
 /**
  * @description 建立与每一个browserWindow的通信桥梁
  * */

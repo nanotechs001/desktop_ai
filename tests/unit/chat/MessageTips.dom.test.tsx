@@ -3,8 +3,7 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Verifies MessageTips renders no FeedbackButton / ButlerDiagnoseButton on any tip
- * (both are removed from this fork), plus the unchanged copy and locale checks.
+ * Verifies MessageTips copy rendering and the agent error locale copy.
  */
 
 import React from 'react';
@@ -106,44 +105,9 @@ const buildTips = (
     content: { type, content, ...(error ? { error } : {}), ...extra },
   }) as IMessageTips;
 
-describe('MessageTips — no feedback or butler chips', () => {
+describe('MessageTips', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('does not render FeedbackButton on success tips', () => {
-    render(<MessageTips message={buildTips('success')} />);
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-  });
-
-  it('does not render FeedbackButton on warning tips', () => {
-    render(<MessageTips message={buildTips('warning')} />);
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-  });
-
-  it('does not render FeedbackButton on info tips', () => {
-    render(<MessageTips message={buildTips('info')} />);
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-  });
-
-  it.each([
-    ['plain error', buildTips('error')],
-    ['JSON-formatted error', buildTips('error', '{"code":500}')],
-    [
-      'structured error',
-      buildTips('error', 'raw provider 401', {
-        message: 'raw provider 401',
-        code: 'USER_LLM_PROVIDER_AUTH_FAILED',
-        ownership: 'user_llm_provider',
-        detail: 'Provider returned 401.',
-        retryable: false,
-        feedback_recommended: true,
-      }),
-    ],
-  ])('renders neither the feedback link nor the butler chip on a %s', (_label, message) => {
-    render(<MessageTips message={message} />);
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
-    expect(screen.queryByText('settings.talkToButler.solveWithButler')).not.toBeInTheDocument();
   });
 
   it('renders HTML-like error text as literal text', () => {
@@ -153,7 +117,7 @@ describe('MessageTips — no feedback or butler chips', () => {
     expect(screen.getByText('<strong>boom</strong>')).toBeInTheDocument();
   });
 
-  it('renders localized info tips as plain text without icon or feedback', () => {
+  it('renders localized info tips as plain text without icon', () => {
     const { container } = render(
       <MessageTips
         message={buildTips('info', '', undefined, {
@@ -164,7 +128,6 @@ describe('MessageTips — no feedback or butler chips', () => {
     );
 
     expect(screen.getByText('This request produced no visible reply.')).toBeInTheDocument();
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
     expect(container.querySelector('svg')).not.toBeInTheDocument();
   });
 
@@ -194,7 +157,7 @@ describe('MessageTips — no feedback or butler chips', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders classified provider errors with friendly copy and feedback', () => {
+  it('renders classified provider errors with friendly copy', () => {
     render(
       <MessageTips
         message={buildTips('error', 'raw provider 401', {
@@ -212,7 +175,6 @@ describe('MessageTips — no feedback or butler chips', () => {
     expect(screen.getByText(/rejected the API key or account credentials/)).toBeInTheDocument();
     expect(screen.getByText('Model provider')).toBeInTheDocument();
     expect(screen.getByText('Needs configuration')).toBeInTheDocument();
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
   });
 
   it('renders AWS SSO provider auth code as localized user guidance', () => {
@@ -237,7 +199,6 @@ describe('MessageTips — no feedback or butler chips', () => {
         "Your AWS SSO session has expired. Run 'aws sso login' for the matching profile, then send the message again."
       )
     ).toBeInTheDocument();
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
   });
 
   it('renders structured error resolution guidance', () => {
@@ -352,7 +313,6 @@ describe('MessageTips — no feedback or butler chips', () => {
     expect(screen.getByText('Agent reported a protocol parse error')).toBeInTheDocument();
     expect(screen.getByText(/reported that an ACP\/JSON-RPC message could not be parsed/)).toBeInTheDocument();
     expect(screen.queryByText(/Suggestion:/)).not.toBeInTheDocument();
-    expect(screen.queryByText('settings.oneClickFeedback')).not.toBeInTheDocument();
     expect(screen.getByText(/USER_AGENT_PROTOCOL_PARSE_ERROR/)).toBeInTheDocument();
     expect(screen.queryByText('backend protocol fallback')).not.toBeInTheDocument();
   });

@@ -78,15 +78,6 @@ export interface IConfigStorageRefer {
    * still-on-disk legacy field.
    */
   'migration.assistantsMigrated_v1'?: boolean;
-  // Desktop Pet: whether the desktop pet feature is enabled
-  'pet.enabled'?: boolean;
-  // Desktop Pet: size in pixels (200, 280, or 360)
-  'pet.size'?: number;
-  // Desktop Pet: do not disturb mode (pet stays idle, ignores AI events)
-  'pet.dnd'?: boolean;
-  // Desktop Pet: whether tool-call confirmations are routed to the pet's bubble
-  // (true) or remain in the main chat window (false). Default true.
-  'pet.confirmEnabled'?: boolean;
   // Floating agent widgets: settings + per-conversation widget records
   // (position, popup/chat state). Holds no chat content — that stays in aioncore.
   agentWidget?: AgentWidgetPersistedState;

@@ -812,10 +812,8 @@
   "appDescription": "Un escritorio. Tus agentes de IA, trabajando de verdad juntos.",
   "helpDocumentation": "Documentación de ayuda",
   "updateLog": "Registro de actualizaciones",
-  "feedback": "Comentarios",
   "bugReport": "Reportar problema",
   "bugReportTitle": "Reportar problema",
-  "oneClickFeedback": "Reportar problema",
   "bugReportModuleLabel": "Módulo",
   "bugReportModulePlaceholder": "Selecciona el módulo relacionado con el problema",
   "bugReportDescriptionLabel": "Descripción",
@@ -1337,26 +1335,6 @@
   "assistantAgentUnchecked": "El motor necesario aún no se ha comprobado.",
   "assistantAgentMissing": "El motor necesario no está instalado.",
   "assistantTeamUnsupported": "This Agent cannot be used in team mode right now.",
-  "webui.letButlerSetup": "Let the butler set it up",
-  "talkToButler": {
-    "createViaChat": "Create via chat",
-    "createManually": "Create manually",
-    "addViaChat": "Add via chat",
-    "addManually": "Add manually",
-    "solveViaChat": "Solve via chat",
-    "enabledToast": "Enabled the Pixebot Browser Butler for you",
-    "prompt": {
-      "createAssistant": "Help me create a new Agent and walk me through setting it up.",
-      "addCustomAgent": "Help me add a custom Agent.",
-      "addModel": "Help me add a new LLM provider and API key, then set it as the default model.",
-      "addMcp": "Help me set up an MCP server.",
-      "addSkill": "Help me import a skill and attach it to an Agent.",
-      "setupRemote": "Help me set up remote access so I can open Pixebot Browser from my phone or over the internet.",
-      "diagnose": "I ran into a problem with Pixebot Browser, please help me diagnose it.\n\n[Module] {{module}}\n[Description] {{description}}\n[Attachments] see the screenshots in the input.\n\nPlease diagnose the cause and tell me how to fix it.",
-      "diagnoseChatError": "Encontré un error durante una conversación en Pixebot Browser, ayúdame a diagnosticarlo.\n\n[Error] {{error}}\n\nPor favor, diagnostica la causa y dime cómo solucionarlo."
-    },
-    "solveWithButler": "Preguntar al Mayordomo"
-  },
   "providerIdConflict": "El ID del proveedor ya existe. Inténtalo de nuevo.",
   "autoInjectedSkillsHint": "Se cargan automáticamente en cada conversación: no hace falta activarlas; el agente decide cuándo usarlas.",
   "browserData": {

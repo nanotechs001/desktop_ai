@@ -25,14 +25,7 @@ function getBackendStartup(lang: string): Record<string, Record<string, string>>
 }
 
 const PENDING_SLOW_KEYS = ['title', 'description'];
-const EXITED_KEYS = [
-  'title',
-  'description',
-  'sendDiagnostics',
-  'diagnosticsSent',
-  'diagnosticsReportSuccess',
-  'diagnosticsReportFailed',
-];
+const EXITED_KEYS = ['title', 'description'];
 
 describe('backend startup copy — completeness (AC-6)', () => {
   it('every supported language defines the pendingSlow and exited key groups', () => {
