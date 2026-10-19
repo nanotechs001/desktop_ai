@@ -46,16 +46,12 @@
     "switchSuccess": "Nível de raciocínio alterado",
     "switchFailed": "Falha ao alterar o nível de raciocínio"
   },
-  "warmup": {
-    "clickToWake": "Clique para ativar este membro"
-  },
   "runtimeRestart": {
     "tooltip": "Reconectar agente",
     "confirmContent": "Reinicia o processo do agente para adotar alterações externas de configuração da CLI (como troca de canal). O histórico do chat é mantido e a sessão é retomada quando possível.",
     "success": "Agente reconectado",
     "failed": "Falha ao reconectar o agente",
-    "initializingTooltip": "O agente está sendo inicializado. Reconecte quando estiver pronto",
-    "processingTooltip": "Aguarde a resposta atual terminar antes de reconectar"
+    "initializingTooltip": "O agente está sendo inicializado. Reconecte quando estiver pronto"
   },
   "claudeLauncherSkipped": "Você definiu seu próprio comando do Claude, então o Pixebot Browser não adicionou suas proteções de navegador.",
   "engine": {

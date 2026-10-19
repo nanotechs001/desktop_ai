@@ -28,7 +28,6 @@ import type {
 } from '@/common/types/browser';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
-import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
 import type {
   ICssTheme,
@@ -50,7 +49,6 @@ import type {
 } from '../types/agent/assistantTypes';
 import type {
   EnsureConversationRuntimeResponse,
-  GetConfigOptionsResponse,
   SetConfigOptionRequest,
   SetConfigOptionResponse,
 } from '../types/platform/acpTypes';
@@ -62,40 +60,6 @@ import type {
   ProviderHealthCheckResponse,
   UpdateProviderRequest,
 } from '../types/provider/providerApi';
-import type {
-  ITeamAgentRemovedEvent,
-  ITeamAgentRenamedEvent,
-  ITeamAgentRuntimeStatusEvent,
-  ITeamAgentSpawnedEvent,
-  ITeamAgentStatusEvent,
-  ITeamActivityPage,
-  ITeamChildTurnEvent,
-  ITeamCreatedEvent,
-  ITeamListChangedEvent,
-  ITeamMailboxChangedEvent,
-  ITeamMailboxMessage,
-  ITeamRemovedEvent,
-  ITeamRenamedEvent,
-  ITeamRunAck,
-  ITeamRunEvent,
-  ITeamRunStateResponse,
-  ITeamSessionChangedEvent,
-  ITeamSessionStatusChangedEvent,
-  ITeamSlotWorkChangedEvent,
-  ITeamTaskChangedEvent,
-  ITeamTaskItem,
-  ICancelTeamChildTurnParams,
-  ICancelTeamRunParams,
-  IInterruptTeamAgentParams,
-  IPauseTeamSlotParams,
-  ISendTeamAgentMessageParams,
-  ISendTeamMessageParams,
-  ITeamTeammateMessageEvent,
-  ITeamInterruptAgentResponse,
-  TTeam,
-  TeamAssistant,
-  TeamContextResetResponse,
-} from '../types/team/teamTypes';
 import type {
   AutoUpdateReadyResult,
   AutoUpdateStatus,
@@ -141,14 +105,6 @@ import {
 } from './httpBridge';
 import { fromApiSearchResult, type ApiMessageSearchItem } from './searchMapper';
 import { fromApiSidebar, fromApiSidebarItems } from './sidebarMapper';
-import type { IAddTeamAssistantParams, ICreateTeamParams } from './teamMapper';
-import {
-  fromBackendAssistant,
-  fromBackendTeam,
-  fromBackendTeamList,
-  fromBackendTeamOptional,
-  toBackendAssistant,
-} from './teamMapper';
 import {
   absoluteToRelativePath,
   fromBackendSkillFileNodes,
@@ -1991,7 +1947,6 @@ export interface ICreateConversationParams {
     /** Legacy marker for pre-provider-probe health-check conversations. */
     is_health_check?: boolean;
     extra_skill_paths?: string[];
-    team_id?: string;
   };
 }
 
@@ -2347,188 +2302,12 @@ export const channel = {
 
 import type { Note } from '@/common/types/agent/artifacts';
 
-// ---------------------------------------------------------------------------
-// Team Mode API — routed to /api/teams/*
-// ---------------------------------------------------------------------------
-
-export type { IAddTeamAssistantParams, ICreateTeamParams } from './teamMapper';
-
 export type IRealtimeReconnectedEvent = {
   timestamp: number;
 };
 
 export const realtime = {
   reconnected: wsEmitter<IRealtimeReconnectedEvent>('realtime.reconnected'),
-};
-
-export const team = {
-  create: withResponseMap(
-    httpPost<TTeam, ICreateTeamParams>('/api/teams', (p) => ({
-      name: p.name,
-      agents: p.agents.map(toBackendAssistant),
-      ...(p.workspace ? { workspace: p.workspace } : {}),
-    })),
-    fromBackendTeam
-  ),
-  list: withResponseMap(
-    httpGet<TTeam[], { user_id: string }>((p) => `/api/teams?user_id=${encodeURIComponent(p.user_id)}`),
-    fromBackendTeamList
-  ),
-  get: withResponseMap(
-    httpGet<TTeam | null, { id: string }>((p) => `/api/teams/${p.id}`),
-    fromBackendTeamOptional
-  ),
-  remove: httpDelete<void, { id: string }>((p) => `/api/teams/${p.id}`),
-  addAgent: withResponseMap(
-    httpPost<TeamAssistant, IAddTeamAssistantParams>(
-      (p) => `/api/teams/${p.team_id}/agents`,
-      (p) => ({ assistant: toBackendAssistant(p.assistant) })
-    ),
-    fromBackendAssistant
-  ),
-  removeAgent: httpDelete<void, { team_id: string; slot_id: string }>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}`
-  ),
-  stop: httpDelete<void, { team_id: string }>((p) => `/api/teams/${p.team_id}/session`),
-  ensureSession: httpPost<void, { team_id: string }>((p) => `/api/teams/${p.team_id}/session`),
-  getConfigOptions: httpGet<GetConfigOptionsResponse, { team_id: string; conversation_id: string }>(
-    (p) => `/api/teams/${p.team_id}/conversations/${encodeURIComponent(p.conversation_id)}/config-options`
-  ),
-  setConfigOption: httpPut<
-    SetConfigOptionResponse,
-    { team_id: string; conversation_id: string; option_id: string; value: string }
-  >(
-    (p) =>
-      `/api/teams/${p.team_id}/conversations/${encodeURIComponent(p.conversation_id)}/config-options/${encodeURIComponent(p.option_id)}`,
-    (p): SetConfigOptionRequest => ({ value: p.value })
-  ),
-  activeLease: httpPost<void, { team_id: string }>(
-    (p) => `/api/teams/${p.team_id}/active-lease`,
-    () => undefined
-  ),
-  renameAgent: httpPatch<void, { team_id: string; slot_id: string; new_name: string }>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/name`,
-    (p) => ({ name: p.new_name })
-  ),
-  updateAgentModel: httpPatch<void, { team_id: string; slot_id: string; model_id: string }>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/model`,
-    (p) => ({ model_id: p.model_id })
-  ),
-  renameTeam: httpPatch<void, { id: string; name: string }>(
-    (p) => `/api/teams/${p.id}/name`,
-    (p) => ({ name: p.name })
-  ),
-  setSessionMode: httpPost<void, { team_id: string; session_mode: string }>(
-    (p) => `/api/teams/${p.team_id}/session-mode`,
-    (p) => ({ mode: p.session_mode })
-  ),
-  getRunState: httpGet<ITeamRunStateResponse, { team_id: string }>((p) => `/api/teams/${p.team_id}/run-state`),
-  listMailbox: httpGet<ITeamMailboxMessage[], { team_id: string; limit?: number }>(
-    (p) => `/api/teams/${p.team_id}/mailbox?limit=${p.limit ?? 500}`
-  ),
-  listTasks: httpGet<ITeamTaskItem[], { team_id: string; limit?: number; ids?: string[] }>((p) =>
-    buildListTasksPath(p)
-  ),
-  listActivity: httpGet<
-    ITeamActivityPage,
-    {
-      team_id: string;
-      limit?: number;
-      cursor_ts?: number;
-      cursor_id?: string;
-      direction?: 'desc' | 'asc';
-      kind?: 'all' | 'message' | 'task';
-    }
-  >((p) => {
-    const q = new URLSearchParams();
-    if (p.limit != null) q.set('limit', String(p.limit));
-    if (p.cursor_ts != null) q.set('cursor_ts', String(p.cursor_ts));
-    if (p.cursor_id != null) q.set('cursor_id', p.cursor_id);
-    if (p.direction) q.set('direction', p.direction);
-    if (p.kind) q.set('kind', p.kind);
-    return `/api/teams/${p.team_id}/activity?${q.toString()}`;
-  }),
-  sendMessage: httpPost<ITeamRunAck, ISendTeamMessageParams>(
-    (p) => `/api/teams/${p.team_id}/messages`,
-    (p) => ({
-      content: p.input,
-      files: p.files,
-    })
-  ),
-  sendMessageToAgent: httpPost<ITeamRunAck, ISendTeamAgentMessageParams>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/messages`,
-    (p) => ({
-      content: p.input,
-      files: p.files,
-    })
-  ),
-  interruptAgent: httpPost<ITeamInterruptAgentResponse, IInterruptTeamAgentParams>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/interrupt`,
-    (p) => ({
-      message: p.input,
-      files: p.files,
-      reason: p.reason,
-      queued_policy: p.queued_policy ?? 'retain',
-    })
-  ),
-  attachAgent: httpPost<void, { team_id: string; slot_id: string }>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/attach`
-  ),
-  /**
-   * Force-restart a team member's agent runtime (kill the cached CLI process
-   * and rebuild it via the team attach chain, preserving the resume anchor).
-   * Synchronous: resolves once the member is Ready again. Returns HTTP 409
-   * with code TEAM_MEMBER_BUSY while the member is mid-reply.
-   */
-  restartAgentRuntime: httpPost<void, { team_id: string; slot_id: string }>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/runtime/restart`
-  ),
-  resetAgentContext: httpPost<TeamContextResetResponse, { team_id: string; slot_id: string }>(
-    (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/context/reset`
-  ),
-  cancelRun: httpPost<void, ICancelTeamRunParams>(
-    (p) => `/api/teams/${p.team_id}/runs/${p.team_run_id}/cancel`,
-    (p) => ({
-      target_slot_id: p.target_slot_id,
-      reason: p.reason,
-    })
-  ),
-  cancelChildTurn: httpPost<void, ICancelTeamChildTurnParams>(
-    (p) => `/api/teams/${p.team_id}/runs/${p.team_run_id}/agents/${p.slot_id}/cancel`,
-    (p) => ({
-      reason: p.reason,
-    })
-  ),
-  pauseSlotWork: httpPost<void, IPauseTeamSlotParams>(
-    (p) => `/api/teams/${p.team_id}/runs/${p.team_run_id}/agents/${p.slot_id}/pause`,
-    (p) => ({
-      reason: p.reason,
-    })
-  ),
-  agentStatusChanged: wsEmitter<ITeamAgentStatusEvent>('team.agentStatusChanged'),
-  agentSpawned: wsEmitter<ITeamAgentSpawnedEvent>('team.agentSpawned'),
-  agentRemoved: wsEmitter<ITeamAgentRemovedEvent>('team.agentRemoved'),
-  agentRenamed: wsEmitter<ITeamAgentRenamedEvent>('team.agentRenamed'),
-  agentRuntimeStatusChanged: wsEmitter<ITeamAgentRuntimeStatusEvent>('team.agentRuntimeStatusChanged'),
-  listChanged: wsEmitter<ITeamListChangedEvent>('team.listChanged'),
-  created: wsEmitter<ITeamCreatedEvent>('team.created'),
-  removed: wsEmitter<ITeamRemovedEvent>('team.removed'),
-  renamed: wsEmitter<ITeamRenamedEvent>('team.renamed'),
-  teammateMessage: wsEmitter<ITeamTeammateMessageEvent>('team.teammateMessage'),
-  sessionStatusChanged: wsEmitter<ITeamSessionStatusChangedEvent>('team.sessionStatusChanged'),
-  taskChanged: wsEmitter<ITeamTaskChangedEvent>('team.taskChanged'),
-  mailboxChanged: wsEmitter<ITeamMailboxChangedEvent>('team.mailboxChanged'),
-  sessionChanged: wsEmitter<ITeamSessionChangedEvent>('team.sessionChanged'),
-  runAccepted: wsEmitter<ITeamRunEvent>('team.runAccepted'),
-  runStarted: wsEmitter<ITeamRunEvent>('team.runStarted'),
-  runUpdated: wsEmitter<ITeamRunEvent>('team.runUpdated'),
-  runCompleted: wsEmitter<ITeamRunEvent>('team.runCompleted'),
-  runCancelled: wsEmitter<ITeamRunEvent>('team.runCancelled'),
-  runFailed: wsEmitter<ITeamRunEvent>('team.runFailed'),
-  childTurnStarted: wsEmitter<ITeamChildTurnEvent>('team.childTurnStarted'),
-  childTurnCompleted: wsEmitter<ITeamChildTurnEvent>('team.childTurnCompleted'),
-  childTurnCancelled: wsEmitter<ITeamChildTurnEvent>('team.childTurnCancelled'),
-  slotWorkChanged: wsEmitter<ITeamSlotWorkChangedEvent>('team.slotWorkChanged'),
 };
 
 export const sidebar = {

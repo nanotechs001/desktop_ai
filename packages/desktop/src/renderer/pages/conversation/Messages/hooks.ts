@@ -301,10 +301,6 @@ export function composeMessageWithIndex(
         if (message.position === 'right') {
           return list;
         }
-        // Complete teammate messages are not streaming chunks — skip if already exists
-        if ((message.content as { teammateMessage?: boolean })?.teammateMessage) {
-          return list;
-        }
       }
     }
 
@@ -584,8 +580,7 @@ const classifyPersistedSendFailure = (
     effectiveCode === 'MCP_HTTP_RESPONSE_READ_FAILED' ||
     effectiveCode === 'MCP_TOOL_REMOTE_ERROR' ||
     effectiveCode === 'MCP_TOOL_RESPONSE_UNEXPECTED' ||
-    effectiveCode === 'MCP_TCP_READ_FAILED' ||
-    effectiveCode === 'TEAM_SERVICE_UNAVAILABLE'
+    effectiveCode === 'MCP_TCP_READ_FAILED'
   ) {
     return {
       message,
@@ -594,21 +589,6 @@ const classifyPersistedSendFailure = (
       detail: message,
       retryable: true,
       feedback_recommended: true,
-    };
-  }
-
-  if (
-    effectiveCode === 'TEAM_ASSISTANT_ID_REQUIRED' ||
-    effectiveCode === 'TEAM_ASSISTANT_NOT_FOUND' ||
-    effectiveCode === 'TEAM_ASSISTANT_FIELD_UNSUPPORTED'
-  ) {
-    return {
-      message,
-      code: effectiveCode,
-      ownership: 'aionui',
-      detail: message,
-      retryable: false,
-      feedback_recommended: false,
     };
   }
 

@@ -110,8 +110,7 @@
       "model": "Modèle",
       "aionrsModelRequired": "Veuillez sélectionner un modèle pour Pixebot CLI",
       "aionrsNoProvider": "Aucun modèle disponible",
-      "assistantLockedExistingConversation": "Les tâches de conversation en cours doivent conserver leur agent d'origine. Créez une nouvelle tâche pour utiliser un autre agent.",
-      "teamTaskExecutionModeLockedReason": "Les tâches planifiées par l'équipe doivent continuer à s'exécuter dans la conversation de l'équipe propriétaire, le mode d'exécution ne peut donc pas être modifié."
+      "assistantLockedExistingConversation": "Les tâches de conversation en cours doivent conserver leur agent d'origine. Créez une nouvelle tâche pour utiliser un autre agent."
     },
     "freq": {
       "manual": "Manuel",

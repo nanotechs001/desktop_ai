@@ -5,8 +5,8 @@
  */
 
 import { ipcBridge } from '@/common';
-import { isErrorTipMessage, normalizeTextMessageContent, transformMessage } from '@/common/chat/chatLib';
-import type { AvailableCommand, TMessage } from '@/common/chat/chatLib';
+import { isErrorTipMessage, transformMessage } from '@/common/chat/chatLib';
+import type { AvailableCommand } from '@/common/chat/chatLib';
 import { mapAcpCommandsToSlashCommands } from '@/common/chat/slash/acpMapping';
 import type { SlashCommandItem } from '@/common/chat/slash/types';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
@@ -100,10 +100,7 @@ function fetchAcpSlashCommands(conversation_id: string): Promise<SlashCommandIte
   return promise;
 }
 
-export const useAcpMessage = (
-  conversation_id: string,
-  options?: { skipWarmup?: boolean; prepareRuntime?: () => Promise<void> }
-): UseAcpMessageReturn => {
+export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
   const mergeLiveMessage = useMergeLiveMessage();
   const [running, setRunning] = useState(false);
   const [hasHydratedRunningState, setHasHydratedRunningState] = useState(false);
@@ -295,7 +292,6 @@ export const useAcpMessage = (
           'slash_commands_updated',
           'agent_status',
           'user_content',
-          'teammate_message',
         ].includes(message.type);
 
       if (shouldCompleteThinking) {
@@ -434,20 +430,9 @@ export const useAcpMessage = (
         case 'user_content':
           mergeLiveMessage(transformedMessage);
           break;
-        case 'teammate_message': {
-          const tmMsg = message.data as TMessage;
-          if (tmMsg && tmMsg.conversation_id === conversation_id) {
-            mergeLiveMessage(
-              tmMsg.type === 'text'
-                ? {
-                    ...tmMsg,
-                    content: normalizeTextMessageContent(tmMsg.content),
-                  }
-                : tmMsg
-            );
-          }
+        case 'teammate_message':
+          // Team wire event the backend may still emit; teams are gone from this app.
           break;
-        }
         case 'acp_permission':
           // Auto-recover running state only if turn hasn't finished
           if (!runningRef.current && !turnFinishedRef.current) {
@@ -680,11 +665,9 @@ export const useAcpMessage = (
   // Fetch slash commands via HTTP after runtime ensure completes.
   // WebSocket push of available_commands arrives during warmup when no
   // StreamRelay is listening, so the initial load must come from HTTP.
-  // In team mode, runtime preparation is coordinated by the team send box.
   useEffect(() => {
-    if (options?.skipWarmup && !options.prepareRuntime) return;
     let cancelled = false;
-    const runtimeReady = options?.prepareRuntime?.() ?? ensureConversationRuntime(conversation_id);
+    const runtimeReady = ensureConversationRuntime(conversation_id);
     void runtimeReady
       .then(() => {
         if (cancelled) return;
@@ -712,7 +695,7 @@ export const useAcpMessage = (
     return () => {
       cancelled = true;
     };
-  }, [conversation_id, options?.prepareRuntime, options?.skipWarmup]);
+  }, [conversation_id]);
 
   const resetState = useCallback(() => {
     turnFinishedRef.current = true;
@@ -729,7 +712,7 @@ export const useAcpMessage = (
   }, [markTurnEnded]);
 
   const fetchSlashCommands = useCallback(() => {
-    const runtimeReady = options?.prepareRuntime?.() ?? ensureConversationRuntime(conversation_id);
+    const runtimeReady = ensureConversationRuntime(conversation_id);
     void runtimeReady
       .then(() => fetchAcpSlashCommands(conversation_id))
       .then((commands) => {
@@ -737,7 +720,7 @@ export const useAcpMessage = (
         setSlashCommands(commands);
       })
       .catch(() => {});
-  }, [conversation_id, options?.prepareRuntime]);
+  }, [conversation_id]);
 
   return {
     thought,

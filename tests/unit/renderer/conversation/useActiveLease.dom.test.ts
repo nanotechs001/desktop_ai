@@ -10,16 +10,10 @@ vi.mock('@/common', () => ({
         invoke: vi.fn().mockResolvedValue(undefined),
       },
     },
-    team: {
-      activeLease: {
-        invoke: vi.fn().mockResolvedValue(undefined),
-      },
-    },
   },
 }));
 
 const conversationActiveLease = vi.mocked(ipcBridge.conversation.activeLease.invoke);
-const teamActiveLease = vi.mocked(ipcBridge.team.activeLease.invoke);
 
 function setVisibilityState(value: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', {
@@ -46,15 +40,6 @@ describe('useActiveLease', () => {
     });
 
     expect(conversationActiveLease).toHaveBeenCalledTimes(2);
-    expect(teamActiveLease).not.toHaveBeenCalled();
-  });
-
-  it('renews team lease with the team endpoint', () => {
-    renderHook(() => useActiveLease({ type: 'team', id: 'team-1' }));
-
-    expect(teamActiveLease).toHaveBeenCalledTimes(1);
-    expect(teamActiveLease).toHaveBeenCalledWith({ team_id: 'team-1' });
-    expect(conversationActiveLease).not.toHaveBeenCalled();
   });
 
   it('does not renew while hidden until the page becomes visible', () => {

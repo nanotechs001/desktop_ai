@@ -382,7 +382,6 @@ describe('LocalAgents', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: true,
       },
       {
@@ -403,7 +402,6 @@ describe('LocalAgents', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: true,
       },
     ];

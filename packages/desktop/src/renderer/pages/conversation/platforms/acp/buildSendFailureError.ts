@@ -15,13 +15,6 @@ const AIONUI_TRANSPORT_ERROR_CODES = new Set([
   'MCP_TOOL_REMOTE_ERROR',
   'MCP_TOOL_RESPONSE_UNEXPECTED',
   'MCP_TCP_READ_FAILED',
-  'TEAM_SERVICE_UNAVAILABLE',
-]);
-
-const TEAM_ASSISTANT_ERROR_CODES = new Set([
-  'TEAM_ASSISTANT_ID_REQUIRED',
-  'TEAM_ASSISTANT_NOT_FOUND',
-  'TEAM_ASSISTANT_FIELD_UNSUPPORTED',
 ]);
 
 const isAgentDisconnectedError = (error: unknown): boolean => {
@@ -55,17 +48,6 @@ export const buildSendFailureError = (error: unknown, message: string): AgentStr
       detail: message,
       retryable: true,
       feedback_recommended: true,
-    };
-  }
-
-  if (isBackendHttpError(error) && TEAM_ASSISTANT_ERROR_CODES.has(error.code)) {
-    return {
-      message,
-      code: error.code,
-      ownership: 'aionui',
-      detail: message,
-      retryable: false,
-      feedback_recommended: false,
     };
   }
 

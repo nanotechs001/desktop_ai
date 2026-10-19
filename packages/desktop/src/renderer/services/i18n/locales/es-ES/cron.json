@@ -113,8 +113,7 @@
       "assistant": "Agent",
       "assistantRequired": "Please select an Agent",
       "assistantPlaceholder": "Select the Agent to execute this task",
-      "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original Agent. Create a new task to use another Agent.",
-      "teamTaskExecutionModeLockedReason": "Team scheduled tasks must keep running in the owning team conversation, so the execution mode cannot be changed."
+      "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original Agent. Create a new task to use another Agent."
     },
     "freq": {
       "manual": "Manual",

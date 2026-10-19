@@ -5,7 +5,6 @@
  */
 
 import type { IConversationMcpStatus } from '@/common/config/storage';
-import type { ChatFileRef } from '@/common/types/chatFile';
 import type { ConversationContextValue } from '@/renderer/hooks/context/ConversationContext';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import ConversationPlanBar from '@renderer/pages/conversation/PlanBar/ConversationPlanBar';
@@ -23,7 +22,6 @@ import {
 import { usePendingConfirmationsRecovery } from '@renderer/pages/conversation/Messages/usePendingConfirmationsRecovery';
 import HOC from '@renderer/utils/ui/HOC';
 import React, { useMemo } from 'react';
-import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 import AionrsSendBox from './AionrsSendBox';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
 
@@ -37,8 +35,6 @@ const AionrsChat: React.FC<{
   loadedSkills?: string[];
   loadedMcpServers?: string[];
   loadedMcpStatuses?: IConversationMcpStatus[];
-  teamSendMessage?: (payload: { input: string; files: ChatFileRef[] }) => Promise<void>;
-  teamRuntime?: TeamSendBoxRuntime;
   assistantId?: string;
   forkCapability?: { at_turn: boolean };
 }> = ({
@@ -51,8 +47,6 @@ const AionrsChat: React.FC<{
   loadedSkills,
   loadedMcpServers,
   loadedMcpStatuses,
-  teamSendMessage,
-  teamRuntime,
   assistantId,
   forkCapability,
 }) => {
@@ -94,8 +88,6 @@ const AionrsChat: React.FC<{
             conversation_id={conversation_id}
             modelSelection={modelSelection}
             session_mode={session_mode}
-            teamSendMessage={teamSendMessage}
-            teamRuntime={teamRuntime}
           />
         </div>
       </ConversationArtifactProvider>

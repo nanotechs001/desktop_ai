@@ -20,10 +20,6 @@ vi.mock('react-router-dom', () => ({
 vi.mock('@/common', () => ({
   ipcBridge: { conversation: { get: { invoke: vi.fn().mockResolvedValue(null) } } },
 }));
-vi.mock('@/common/config/constants', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/common/config/constants')>()),
-  TEAM_MODE_ENABLED: false,
-}));
 vi.mock('@/renderer/components/layout/Titlebar/HistoryPanel', () => ({
   default: ({ open, onSearchMessages }: { open: boolean; onSearchMessages?: () => void }) =>
     open ? (

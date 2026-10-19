@@ -33,7 +33,6 @@ function assistant(overrides: Partial<Assistant> & Pick<Assistant, 'id' | 'name'
     prompts_i18n: {},
     models: [],
     agent_status: 'online',
-    team_selectable: true,
     deletable: true,
     ...overrides,
   };

@@ -112,8 +112,7 @@
       "model": "Model",
       "aionrsModelRequired": "Please select a model for Pixebot CLI",
       "aionrsNoProvider": "No available models",
-      "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original Agent. Create a new task to use another Agent.",
-      "teamTaskExecutionModeLockedReason": "Team scheduled tasks must keep running in the owning team conversation, so the execution mode cannot be changed."
+      "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original Agent. Create a new task to use another Agent."
     },
     "freq": {
       "manual": "Manual",

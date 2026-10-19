@@ -108,7 +108,6 @@
       "aionrsModelRequired": "Bitte wähle ein Modell für Pixebot CLI",
       "aionrsNoProvider": "Keine verfügbaren Modelle",
       "assistantLockedExistingConversation": "Aufgaben mit laufendem Gespräch müssen den ursprünglichen Agent behalten. Erstelle eine neue Aufgabe, um einen anderen Agent zu verwenden.",
-      "teamTaskExecutionModeLockedReason": "Geplante Team-Aufgaben müssen im zugehörigen Team-Gespräch weiterlaufen, deshalb kann der Ausführungsmodus nicht geändert werden.",
       "assistant": "Agent",
       "assistantRequired": "Please select an Agent",
       "assistantPlaceholder": "Select the Agent to execute this task"

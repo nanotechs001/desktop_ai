@@ -226,7 +226,7 @@ const RuntimeFailureDialogs: React.FC = () => {
 // refetch (SWR's default) made the app re-hit /api/assistants, /api/skills,
 // /api/conversations, etc. on every window focus — often twice (same endpoint
 // under different SWR keys) — even though those are kept fresh by WebSocket
-// events (conversation.listChanged, team events, extensions.state-changed) or
+// events (conversation.listChanged, extensions.state-changed) or
 // in-app `mutate` after edits. Queries that genuinely need focus refresh (e.g.
 // Google auth/subscription status, which change in an external browser) opt back
 // in per-hook with `revalidateOnFocus: true`.

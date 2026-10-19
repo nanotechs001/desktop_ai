@@ -6,10 +6,10 @@
 
 import { ipcBridge } from '@/common';
 import { scopeToToken } from '@/common/adapter/sidebarMapper';
-import type { SidebarItem } from '@/common/types/sidebar';
+import type { OrderItemType, SidebarItem } from '@/common/types/sidebar';
 import { emitter } from '@/renderer/utils/emitter';
 import { Button, Checkbox, Empty, Message, Modal, Spin } from '@arco-design/web-react';
-import { DeleteOne, FolderClose, ListCheckbox, MessageOne, Peoples, Robot } from '@icon-park/react';
+import { DeleteOne, FolderClose, ListCheckbox, MessageOne, Robot } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -40,7 +40,7 @@ type ExtraPage = {
 type ArchivedRow = {
   /** `${item_type}:${item_id}` — unique across the grouped read model. */
   key: string;
-  item_type: 'conversation' | 'team';
+  item_type: OrderItemType;
   item_id: string;
   name: string;
   icon: React.ReactElement;
@@ -137,29 +137,16 @@ const ArchivedSettings: React.FC = () => {
     // the item was already emitted (defensive — archived items are unpinned so a
     // double-render across groups is not expected).
     const toRow = (item: SidebarItem): ArchivedRow | null => {
-      if (item.type === 'conversation') {
-        const key = `conversation:${item.conversation.id}`;
-        if (seen.has(key)) return null;
-        seen.add(key);
-        return {
-          key,
-          item_type: 'conversation',
-          item_id: item.conversation.id,
-          name: item.conversation.name || t('conversation.welcome.newConversation'),
-          icon: renderConversationIcon(item),
-          updatedAt: item.conversation.created_at,
-        };
-      }
-      const key = `team:${item.team_id}`;
+      const key = `conversation:${item.conversation.id}`;
       if (seen.has(key)) return null;
       seen.add(key);
       return {
         key,
-        item_type: 'team',
-        item_id: item.team_id,
-        name: item.name,
-        icon: <Peoples theme='outline' size='16' className='block leading-none text-t-secondary' />,
-        updatedAt: item.updated_at,
+        item_type: 'conversation',
+        item_id: item.conversation.id,
+        name: item.conversation.name || t('conversation.welcome.newConversation'),
+        icon: renderConversationIcon(item),
+        updatedAt: item.conversation.created_at,
       };
     };
 

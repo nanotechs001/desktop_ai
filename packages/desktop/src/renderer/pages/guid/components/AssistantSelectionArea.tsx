@@ -276,7 +276,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
             className='w-full'
             value={search}
             onChange={setSearch}
-            placeholder={t('team.create.searchPlaceholder', { defaultValue: 'Search' })}
+            placeholder={t('common.searchPlaceholder', { defaultValue: 'Search' })}
           />
         </div>
       ) : null}

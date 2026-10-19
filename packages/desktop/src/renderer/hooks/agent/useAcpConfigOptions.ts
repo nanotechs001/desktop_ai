@@ -98,15 +98,10 @@ export function classifyConfigSetError(error: unknown): AcpConfigSetErrorKind {
   }
   if (isBackendHttpError(error)) {
     if (error.code === 'confirmation_timeout') return 'confirmation_timeout';
-    // All three mean "the runtime cannot take this change yet, try again":
-    // a config update already in flight, a member runtime still starting, or a
-    // runtime mid-restart. Matched by CODE only — never by message text, which
+    // Both mean "the runtime cannot take this change yet, try again":
+    // a config update already in flight, or a runtime mid-restart. Matched by CODE only — never by message text, which
     // is free to be reworded or localized.
-    if (
-      error.code === 'config_update_in_progress' ||
-      error.code === 'TEAM_MEMBER_RUNTIME_STARTING' ||
-      error.code === 'runtime_restarting'
-    ) {
+    if (error.code === 'config_update_in_progress' || error.code === 'runtime_restarting') {
       return 'config_update_in_progress';
     }
   }
@@ -137,13 +132,11 @@ export type AcpConfigOptionBlocker = (conversation_id: string, option_id: string
  *
  * An object rather than a callable with properties bolted on: this carries a
  * write (`setConfigOption`) and a policy decision (`isConfigOptionBlocked`), not
- * just a load, so a bare "loader" function was the wrong shape for it. Team
- * members supply their own implementation so their config traffic goes through
- * the team API instead of the per-conversation one.
+ * just a load, so a bare "loader" function was the wrong shape for it.
  */
 export type AcpConfigOptionsPort = {
   load: AcpConfigOptionLoad;
-  /** Overrides the per-conversation setter. Team members route through the team API. */
+  /** Overrides the per-conversation setter. */
   setConfigOption?: AcpConfigOptionSetter;
   /** Reports an option as temporarily not settable (e.g. runtime still starting). */
   isConfigOptionBlocked?: AcpConfigOptionBlocker;

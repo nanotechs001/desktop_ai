@@ -115,11 +115,6 @@
   "createError": {
     "pathVariants": {
       "WORKSPACE_PATH_UNAVAILABLE": "Le chemin de l'espace de travail sélectionné n'est pas disponible. Assurez-vous que le chemin de l'espace de travail « {{workspacePath}} » existe et est accessible."
-    },
-    "codes": {
-      "TEAM_ASSISTANT_ID_REQUIRED": "Veuillez sélectionner un agent avant de créer l'équipe.",
-      "TEAM_ASSISTANT_NOT_FOUND": "L'agent {{assistantId}} n'est plus disponible. Actualisez la liste des agents et choisissez-en une autre.",
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "Utilisez assistant_id au lieu de {{field}}."
     }
   },
   "agentError": {
@@ -332,21 +327,9 @@
         "title": "Échec de la lecture de l'agent de l'équipe locale",
         "body": "Pixebot Browser n'a pas pu lire la réponse TCP de l'agent de l'équipe locale. Réessayez une fois et redémarrez l'application si elle continue d'échouer."
       },
-      "TEAM_SERVICE_UNAVAILABLE": {
-        "title": "Le service d'équipe n'est pas encore prêt",
-        "body": "La session de l'équipe locale démarre toujours ou a été interrompue. Attendez un moment et réessayez."
-      },
-      "TEAM_ASSISTANT_ID_REQUIRED": {
-        "title": "Un agent coéquipier doit être sélectionné",
-        "body": "Choisissez un véritable agent dans le catalogue d'agents disponible avant de créer ou de générer un coéquipier."
-      },
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "L'agent sélectionné n'est plus disponible",
         "body": "Actualisez le catalogue des agents, puis choisissez un autre agent pour ce coéquipier."
-      },
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
-        "title": "La demande utilisait un ancien champ d'identité d'équipe",
-        "body": "Cette action d'équipe doit utiliser assistant_id au lieu des anciens champs backend ou agent."
       }
     }
   },

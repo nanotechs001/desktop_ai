@@ -62,7 +62,7 @@ export type ExplorerPanelProps = {
    * flow as `onNewFile`. Omit to hide the item. */
   onNewDir?: (peId: string, dirRelativePath: string) => void;
   /** Add a file/folder node to the active conversation's send box. Omit to hide
-   * the item (e.g. no single active conversation, as on the team route). */
+   * the item (e.g. no single active conversation). */
   onAddToChat?: (peId: string, relativePath: string, name: string, isFile: boolean) => void;
   /** Reveal the node in the OS file manager (Finder/Explorer). The handler
    * resolves the pe-ref to an absolute path backend-side; the item is only shown

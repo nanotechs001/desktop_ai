@@ -3,7 +3,7 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Teams, Pet and Butler are removed from this fork by hiding their entry
+ * Pet and Butler are removed from this fork by hiding their entry
  * points; their source stays. The Feedback report UI is deleted outright (it
  * only existed to upload reports). This guard fails when any renderer file
  * mounts one of these UI pieces again.
@@ -22,7 +22,7 @@ const listSourceFiles = (dir: string): string[] =>
     return entry.name.endsWith('.tsx') ? [full] : [];
   });
 
-const HIDDEN_JSX = ['<FeedbackButton', '<TeamSiderSection', '<FeedbackReportModal', '<FeedbackProvider'];
+const HIDDEN_JSX = ['<FeedbackButton', '<FeedbackReportModal', '<FeedbackProvider'];
 
 describe('hidden entry points stay unmounted', () => {
   const files = listSourceFiles(rendererRoot);

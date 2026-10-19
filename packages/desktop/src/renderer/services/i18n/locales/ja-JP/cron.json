@@ -123,8 +123,7 @@
       "model": "モデル",
       "aionrsModelRequired": "Pixebot CLI のモデルを選択してください",
       "aionrsNoProvider": "利用可能なモデルがありません",
-      "assistantLockedExistingConversation": "同じ会話で実行するタスクは元のエージェントを維持する必要があります。別のエージェントを使うには新しいタスクを作成してください。",
-      "teamTaskExecutionModeLockedReason": "Team のスケジュールタスクは所属する Team 会話で継続実行する必要があるため、実行モードは変更できません。"
+      "assistantLockedExistingConversation": "同じ会話で実行するタスクは元のエージェントを維持する必要があります。別のエージェントを使うには新しいタスクを作成してください。"
     },
     "freq": {
       "manual": "手動",

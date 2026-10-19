@@ -58,7 +58,6 @@ const {
       prompts_i18n: {},
       models: [],
       agent_status: 'online',
-      team_selectable: true,
       deletable: false,
     },
     assistants: [
@@ -79,7 +78,6 @@ const {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       },
     ],
@@ -359,7 +357,6 @@ describe('GuidPage', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       },
     ];
@@ -507,7 +504,6 @@ describe('GuidPage', () => {
         },
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       },
     ];
@@ -558,7 +554,6 @@ describe('GuidPage', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       },
     ];

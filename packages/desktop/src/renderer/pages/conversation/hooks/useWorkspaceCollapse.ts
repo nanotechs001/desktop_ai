@@ -12,13 +12,12 @@ type UseWorkspaceCollapseParams = {
   isMobile: boolean;
   /**
    * Identifier whose change forces a mobile collapse (typically the active
-   * conversation id; in team mode, the active agent's conversation id).
+   * conversation id).
    */
   conversation_id?: string;
   /**
-   * Stable key used to persist the user's manual toggle preference. Single-chat
-   * uses `conversation_id`; team mode passes `team_id` so the preference
-   * survives agent-tab switches and follows the team as a whole.
+   * Stable key used to persist the user's manual toggle preference (e.g. the
+   * conversation's `project_id`).
    */
   preferenceKey?: string;
 };
@@ -36,8 +35,7 @@ type UseWorkspaceCollapseReturn = {
  * preference and collapses the panel when the workspace has no files.
  *
  * Manual toggle is persisted under `workspace-preference-${preferenceKey}`. The
- * caller decides what `preferenceKey` is — single chats use `conversation_id`,
- * teams use `team_id`.
+ * caller decides what `preferenceKey` is.
  */
 export function useWorkspaceCollapse({
   workspaceEnabled,

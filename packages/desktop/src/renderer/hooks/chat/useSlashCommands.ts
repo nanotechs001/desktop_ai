@@ -42,12 +42,10 @@ interface UseSlashCommandsOptions {
   /** When provided, changes to this value trigger a re-fetch. Used by ACP to
    *  re-fetch commands after the agent becomes active. */
   agentStatus?: string | null;
-  /** Optional runtime preparation hook for team-owned conversations. */
-  prepareRuntime?: () => Promise<void>;
 }
 
 export function useSlashCommands(conversation_id: string, options: UseSlashCommandsOptions = {}) {
-  const { conversation_type, codexStatus, agentStatus, prepareRuntime } = options;
+  const { conversation_type, codexStatus, agentStatus } = options;
   const canUseCachedCommands = isSlashCommandListEnabled({ conversation_type, codexStatus });
   const requestIdRef = useRef(0);
   const [commands, setCommands] = useState<SlashCommandItem[]>(() => {
@@ -81,7 +79,7 @@ export function useSlashCommands(conversation_id: string, options: UseSlashComma
       setCommands(cached);
     }
 
-    const runtimeReady = prepareRuntime ? prepareRuntime() : ensureConversationRuntime(conversation_id);
+    const runtimeReady = ensureConversationRuntime(conversation_id);
 
     void runtimeReady
       .then(() => ipcBridge.conversation.getSlashCommands.invoke({ conversation_id: conversation_id }))
@@ -108,7 +106,7 @@ export function useSlashCommands(conversation_id: string, options: UseSlashComma
     return () => {
       isCancelled = true;
     };
-  }, [conversation_id, canUseCachedCommands, codexStatus, conversation_type, agentStatus, prepareRuntime]);
+  }, [conversation_id, canUseCachedCommands, codexStatus, conversation_type, agentStatus]);
 
   return commands;
 }

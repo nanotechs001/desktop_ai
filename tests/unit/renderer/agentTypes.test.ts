@@ -27,7 +27,6 @@ function managedAgent(overrides: Partial<ManagedAgent>): ManagedAgent {
     args: [],
     env: [],
     behavior_policy: {},
-    team_capable: true,
     ...overrides,
   } as ManagedAgent;
 }

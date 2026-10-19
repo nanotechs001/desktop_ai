@@ -208,7 +208,6 @@ asarUnpack:
   - 'out/main/builtin-mcp-browser.js'
   - 'out/main/builtin-mcp-artifacts.js'
   - 'out/main/builtin-mcp-notes.js'
-  - 'out/main/team-mcp-stdio.js'
 
 # Compression level: normal for faster builds, maximum for smallest size
 # Note: electron-builder doesn't support YAML template syntax for env vars

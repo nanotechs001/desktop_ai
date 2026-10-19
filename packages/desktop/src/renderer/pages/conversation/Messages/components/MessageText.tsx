@@ -52,32 +52,8 @@ export const formatMessageTime = (timestamp: number): string => {
   return time;
 };
 import MessageCronBadge from './MessageCronBadge';
-import TeammateMessageAvatar from './TeammateMessageAvatar';
-import { useTeammateColor } from '@/renderer/pages/team/identity/TeamIdentityContext';
 
 const CODE_STYLE = { marginTop: 4, marginBlock: 4 };
-
-type TeamContextResetNotice = {
-  kind: 'context_reset';
-  member_name: string;
-  runtime_status: 'ready' | 'failed';
-};
-
-export const parseTeamContextResetNotice = (content: string): TeamContextResetNotice | null => {
-  try {
-    const value = JSON.parse(content) as Record<string, unknown>;
-    if (
-      value.kind === 'context_reset' &&
-      typeof value.member_name === 'string' &&
-      (value.runtime_status === 'ready' || value.runtime_status === 'failed')
-    ) {
-      return value as TeamContextResetNotice;
-    }
-  } catch {
-    // Ordinary teammate/system text is not a semantic notice.
-  }
-  return null;
-};
 
 const useFormatContent = (content: string) => {
   return useMemo(() => {
@@ -128,9 +104,6 @@ const MessageText: React.FC<{
   // server (it's rendered); this only answers "has the agent picked it up
   // yet" — an IM delivered/read style badge, never a ghost/dashed bubble.
   const isPendingDelivery = isUserMessage && message.status === 'pending';
-  const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
-  const senderName = message.content.senderName;
-  const senderConversationId = message.content.senderConversationId;
   const { text, files } = useMemo(
     () => parseFileMarker(contentToRender, isUserMessage),
     [contentToRender, isUserMessage]
@@ -147,20 +120,8 @@ const MessageText: React.FC<{
     () => (isUserMessage ? parseSessionMessageBlock(textWithoutMentions) : { text: textWithoutMentions, source: null }),
     [isUserMessage, textWithoutMentions]
   );
-  const contextResetNotice = useMemo(
-    () => (isTeammateMessage && senderName === 'team_system' ? parseTeamContextResetNotice(text) : null),
-    [isTeammateMessage, senderName, text]
-  );
-  const renderedText = contextResetNotice
-    ? t(
-        contextResetNotice.runtime_status === 'ready'
-          ? 'team.systemNotice.contextResetSuccess'
-          : 'team.systemNotice.contextResetRuntimeFailed',
-        { memberName: contextResetNotice.member_name }
-      )
-    : visibleText;
-  const { data, json } = useFormatContent(renderedText);
-  const shouldRenderPlainText = isUserMessage || Boolean(contextResetNotice);
+  const { data, json } = useFormatContent(visibleText);
+  const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
   const forkConversation = useForkConversation(conversationContext?.conversation_id);
   const layout = useLayoutContext();
@@ -177,7 +138,7 @@ const MessageText: React.FC<{
   }
 
   const handleCopy = () => {
-    const baseText = shouldRenderPlainText ? renderedText : json ? JSON.stringify(data, null, 2) : renderedText;
+    const baseText = shouldRenderPlainText ? visibleText : json ? JSON.stringify(data, null, 2) : visibleText;
     const fileList = files.length ? `Files:\n${files.map((path) => `- ${path}`).join('\n')}\n\n` : '';
     // An AI turn split by tool calls / thinking stores several text messages;
     // the row sits on the last one but must copy the whole reply.
@@ -225,25 +186,11 @@ const MessageText: React.FC<{
   ) : null;
 
   const cronMeta = message.content.cronMeta;
-  const displaySenderName = senderName === 'team_system' ? t('team.systemNotice.sender') : senderName;
-  // 团队 teammate 消息：按发送者会话取身份色，做气泡左色条 + 彩色发送者名；非团队场景为 undefined。
-  const teammateColor = useTeammateColor(isTeammateMessage ? senderConversationId : undefined);
 
   return (
     <>
       <div className={classNames('min-w-0 flex flex-col group', isUserMessage ? 'items-end' : 'items-start')}>
         {cronMeta && <MessageCronBadge meta={cronMeta} />}
-        {isTeammateMessage && displaySenderName && (
-          <div className='flex items-center gap-6px mb-4px'>
-            <TeammateMessageAvatar senderName={displaySenderName} senderConversationId={senderConversationId} />
-            <span
-              className='text-12px'
-              style={teammateColor ? { color: teammateColor } : { color: 'var(--text-secondary)' }}
-            >
-              {displaySenderName}
-            </span>
-          </div>
-        )}
         {deliverySource && (
           <div
             className={classNames('mb-4px flex items-center gap-4px text-12px text-t-secondary', {
@@ -301,24 +248,18 @@ const MessageText: React.FC<{
         <div
           className={classNames('min-w-0 [&>p:first-child]:mt-0px [&>p:last-child]:mb-0px', {
             'bg-aou-2 p-6px md:p-8px': isUserMessage || cronMeta,
-            'bg-3 p-6px md:p-8px': isTeammateMessage,
-            'w-full': !(isUserMessage || cronMeta || isTeammateMessage),
+            'w-full': !(isUserMessage || cronMeta),
           })}
           style={{
             ...(isUserMessage || cronMeta
               ? { borderRadius: '8px 0 8px 8px', color: 'var(--text-primary)' }
-              : isTeammateMessage
-                ? {
-                    borderRadius: '0 8px 8px 8px',
-                    ...(teammateColor ? { borderLeft: `3px solid ${teammateColor}` } : {}),
-                  }
-                : undefined),
+              : undefined),
           }}
         >
           {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
           {shouldRenderPlainText ? (
             <div className='whitespace-pre-wrap [overflow-wrap:anywhere]' data-testid='message-text-content'>
-              {renderedText}
+              {visibleText}
             </div>
           ) : json ? (
             <CollapsibleContent maxHeight={200} defaultCollapsed={true}>

@@ -5,11 +5,11 @@
  */
 
 /**
- * Tripwire for team-a no-leak: the send box's file-selection listeners
+ * Tripwire for no-leak: the send box's file-selection listeners
  * (`X.selected.file` set + `X.selected.file.append`) must accept an event ONLY
- * when it targets this box's conversation (or is untargeted). On the multi-column
- * team route, same-type peers share the type prefix, so without the id guard an
- * @mention / add-to-chat in one column would leak into the others.
+ * when it targets this box's conversation (or is untargeted). Same-type send
+ * boxes share the type prefix, so without the id guard an @mention /
+ * add-to-chat in one box would leak into the others.
  *
  * These tests use the REAL emitter + REAL useAddEventListener and observe the
  * atPath mutation (setAtPath → draft `mutate`): a mismatched-target event must
@@ -98,7 +98,6 @@ vi.mock('@/renderer/pages/conversation/platforms/aionrs/useAionrsMessage', () =>
     resetState: vi.fn(),
   }),
 }));
-vi.mock('@/renderer/pages/team/hooks/TeamPermissionContext', () => ({ useTeamPermission: () => null }));
 vi.mock('@/renderer/pages/conversation/runtime/useConversationRuntimeView', () => ({
   useConversationRuntimeView: () => ({
     markSendStarted: vi.fn(),

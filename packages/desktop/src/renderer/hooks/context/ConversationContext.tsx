@@ -36,7 +36,7 @@ export interface ConversationContextValue {
   cron_job_id?: string;
 
   /**
-   * When true, platform chat components should hide the SendBox (e.g. sub-agents in team mode)
+   * When true, platform chat components should hide the SendBox
    */
   hideSendBox?: boolean;
 

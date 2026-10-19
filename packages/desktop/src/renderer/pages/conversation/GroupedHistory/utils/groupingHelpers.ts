@@ -88,7 +88,7 @@ export const groupConversationsByWorkspace = (
   ];
 };
 
-/** Check whether a conversation belongs to a team (should be hidden from sidebar). */
+/** Leftover rows of the removed Teams feature: the backend may still send them; keep them hidden. */
 const isTeamConversation = (conversation: TChatConversation): boolean => {
   const extra = conversation.extra as { team_id?: string; teamId?: string } | undefined;
   return Boolean(extra?.team_id || extra?.teamId);
@@ -98,7 +98,6 @@ export const buildGroupedHistory = (
   conversations: TChatConversation[],
   t: (key: string) => string
 ): GroupedHistoryResult => {
-  // Filter out team-owned conversations; they are only visible via the Teams panel
   const visibleConversations = conversations.filter((conv) => !isTeamConversation(conv));
 
   const pinnedConversations = visibleConversations

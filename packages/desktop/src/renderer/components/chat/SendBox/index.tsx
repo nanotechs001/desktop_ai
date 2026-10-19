@@ -273,9 +273,6 @@ const SendBox: React.FC<{
   /** Master switch (spec §5.7). When off, `@@` must not trigger at all —
    *  otherwise the user picks a target the agent cannot deliver to. */
   crossSessionEnabled?: boolean;
-  /** Team conversations must not be senders (spec §9.2), so `@@` is unavailable
-   *  there. Both conditions gate the trigger. */
-  isTeamConversation?: boolean;
   onSelectedWorkspaceItemsChange?: (items: FileSelectionItem[]) => void;
   bottomHint?: React.ReactNode;
   /**
@@ -284,10 +281,6 @@ const SendBox: React.FC<{
    * `tools` and `rightTools` are not rendered inline on mobile.
    */
   onMobilePlusClick?: () => void;
-  /** Team multi-column focus coordination: whether this box owns focus (default true). */
-  active?: boolean;
-  /** Called when the textarea gains focus, so the team layer can sync tab selection. */
-  onFocused?: () => void;
   /**
    * Floats at the send box's top-right corner with zero flow impact (rendered
    * inside the box's own root, absolutely positioned, so it never reflows the
@@ -332,12 +325,9 @@ const SendBox: React.FC<{
   // the wire must not offer `@@`, or the user picks a target that silently
   // never reaches the agent. Opt in explicitly.
   crossSessionEnabled = false,
-  isTeamConversation = false,
   onSelectedWorkspaceItemsChange,
   bottomHint,
   onMobilePlusClick,
-  active = true,
-  onFocused,
   topRightOverlay,
 }) => {
   const layout = useLayoutContext();
@@ -544,9 +534,9 @@ const SendBox: React.FC<{
     return `${conversationContext.workspace}:${activeAtFileQuery.start}`;
   }, [activeAtFileQuery, conversationContext?.workspace]);
   const allAtFileQueries = useMemo(() => getAllAtFileQueries(input), [input]);
-  // `@@` lane. Gated on BOTH the master switch and "not a team conversation"
-  // (spec §5.7 rule 4): a picker the agent cannot act on is worse than none.
-  const canMentionSessions = crossSessionEnabled && !isTeamConversation;
+  // `@@` lane. Gated on the master switch (spec §5.7 rule 4): a picker the
+  // agent cannot act on is worse than none.
+  const canMentionSessions = crossSessionEnabled;
   const activeAtSessionQuery = useMemo(() => {
     if (!canMentionSessions) {
       return null;
@@ -758,31 +748,24 @@ const SendBox: React.FC<{
     setCaretPosition(end);
   }, [getTextareaElement, input, isMobile, prefillFocusRequest]);
 
-  // Selection→focus latch: whether we've already granted focus for the current
-  // active session. Reset when this box goes inactive so the next activation
-  // re-focuses. Prevents stealing focus back after the user moves elsewhere.
+  // Focus latch: whether we've already granted initial focus. Prevents stealing
+  // focus back after the user moves elsewhere.
   const activeFocusGrantedRef = useRef(false);
 
   useEffect(() => {
-    if (!active) {
-      activeFocusGrantedRef.current = false;
-    }
-  }, [active]);
-
-  useEffect(() => {
-    if (!active || isMobile || disabled) return;
+    if (isMobile || disabled) return;
     if (activeFocusGrantedRef.current) return;
     const textarea = getTextareaElement();
     if (!textarea) return;
     activeFocusGrantedRef.current = true;
-    // Already focused (e.g. user clicked into this box, which drove selection
-    // here via onFocused): latch it but leave the caret where the user put it.
+    // Already focused (e.g. the user clicked into this box): latch it but leave
+    // the caret where the user put it.
     if (document.activeElement === textarea) return;
     textarea.focus();
     const end = textarea.value.length;
     textarea.setSelectionRange(end, end);
     setCaretPosition(end);
-  }, [active, disabled, isMobile, getTextareaElement]);
+  }, [disabled, isMobile, getTextareaElement]);
 
   const syncCaretPosition = useCallback(
     (target?: EventTarget | null) => {
@@ -1089,7 +1072,7 @@ const SendBox: React.FC<{
 
   // Accept an append/set event only when it targets this box's conversation
   // (undefined target = broadcast, back-compat). Prevents leaks across same-type
-  // send boxes on the multi-column team route.
+  // send boxes.
   const acceptsTarget = (targetConversationId: string | undefined): boolean =>
     targetConversationId === undefined || targetConversationId === conversationContext?.conversation_id;
 
@@ -1124,7 +1107,7 @@ const SendBox: React.FC<{
   const emitSelectedFileAppend = useCallback(
     (item: FileOrFolderItem) => {
       // Target this box's own conversation so an `@` mention adds the file only
-      // here, not to same-type peers on the team route.
+      // here, not to same-type peers.
       const targetId = conversationContext?.conversation_id;
       switch (conversationContext?.type) {
         case 'aionrs':
@@ -1355,8 +1338,7 @@ const SendBox: React.FC<{
     mobileUserFocusIntentUntilRef.current = 0;
     handlePasteFocus();
     setIsInputFocused(true);
-    onFocused?.();
-  }, [handlePasteFocus, isMobile, onFocused]);
+  }, [handlePasteFocus, isMobile]);
   const handleInputBlur = useCallback(() => {
     setIsInputFocused(false);
   }, []);
@@ -1837,7 +1819,6 @@ const SendBox: React.FC<{
    * The switch's own description promises that turning it off disables the `@@`
    * mention, and the disabled banner exists to explain why `@@` does nothing — a
    * placeholder teaching a syntax the conversation has no use for would
-   * contradict both. Team conversations are excluded for the same reason.
    *
    * The two variants are separate strings rather than one string plus a clause
    * because the existing wording is already 94 characters in fr-FR before the
@@ -2149,7 +2130,7 @@ const SendBox: React.FC<{
               {renderHighlightedInputValue()}
             </div>
             <Input.TextArea
-              autoFocus={active && !isMobile}
+              autoFocus={!isMobile}
               disabled={disabled}
               spellCheck={false}
               value={input}

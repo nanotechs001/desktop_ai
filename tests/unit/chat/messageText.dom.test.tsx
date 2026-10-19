@@ -10,9 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMessageText } from '@/common/chat/chatLib';
 import { ipcBridge } from '@/common';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
-import MessageText, {
-  parseTeamContextResetNotice,
-} from '@/renderer/pages/conversation/Messages/components/MessageText';
+import MessageText from '@/renderer/pages/conversation/Messages/components/MessageText';
 import { copyText } from '@/renderer/utils/ui/clipboard';
 
 const previewMocks = vi.hoisted(() => ({
@@ -128,11 +126,6 @@ vi.mock('@/renderer/utils/chat/thinkTagFilter', () => ({
 vi.mock('@/renderer/utils/model/agentLogo', () => ({
   useAgentLogos: () => ({}),
   resolveAgentLogo: () => null,
-}));
-
-vi.mock('@/renderer/pages/conversation/Messages/components/TeammateMessageAvatar', () => ({
-  __esModule: true,
-  default: ({ senderName }: { senderName?: string }) => <span data-testid='teammate-avatar'>{senderName}</span>,
 }));
 
 vi.mock('@/renderer/utils/ui/clipboard', () => ({
@@ -375,25 +368,6 @@ describe('MessageText attachment paths', () => {
     expect(ipcBridge.fs.getFileMetadata.invoke).not.toHaveBeenCalled();
   });
 
-  it('keeps teammate marker text visible without file previews', () => {
-    const content = '请不要使用 [[AION_FILES]] 这种格式';
-
-    renderMessageText(
-      content,
-      {},
-      {
-        teammateMessage: true,
-        senderName: 'Agent A',
-        senderConversationId: 'agent-a',
-      }
-    );
-
-    expect(screen.getByTestId('message-text-content')).toHaveTextContent(content);
-    expect(screen.queryByTestId('file-preview')).not.toBeInTheDocument();
-    expect(mockFilePreview).not.toHaveBeenCalled();
-    expect(ipcBridge.fs.getFileMetadata.invoke).not.toHaveBeenCalled();
-  });
-
   it.each([
     {
       name: 'markdown heading and list',
@@ -427,28 +401,6 @@ describe('MessageText attachment paths', () => {
     const content = '请不要使用 [[AION_FILES]] 这种格式';
 
     renderMessageText(content);
-
-    const copyControl = screen.getByTestId('copy-icon').parentElement;
-    expect(copyControl).not.toBeNull();
-    fireEvent.click(copyControl as HTMLElement);
-
-    await waitFor(() => {
-      expect(copyText).toHaveBeenCalledWith(content);
-    });
-  });
-
-  it('copies complete teammate marker text', async () => {
-    const content = '请不要使用 [[AION_FILES]] 这种格式';
-
-    renderMessageText(
-      content,
-      {},
-      {
-        teammateMessage: true,
-        senderName: 'Agent A',
-        senderConversationId: 'agent-a',
-      }
-    );
 
     const copyControl = screen.getByTestId('copy-icon').parentElement;
     expect(copyControl).not.toBeNull();
@@ -668,41 +620,6 @@ describe('MessageText attachment paths', () => {
     });
     // The whole point: the content endpoint is never hit for an oversized file.
     expect(ipcBridge.fs.readContent.invoke).not.toHaveBeenCalled();
-  });
-});
-
-describe('MessageText team system notices', () => {
-  it('renders a context-reset notice through i18n instead of exposing the wire payload', () => {
-    const content = JSON.stringify({
-      kind: 'context_reset',
-      member_name: 'Writer',
-      runtime_status: 'ready',
-    });
-    render(
-      <MessageText
-        message={{
-          id: 'notice-1',
-          msg_id: 'notice-1',
-          conversation_id: 'conv-1',
-          type: 'text',
-          position: 'left',
-          createdAt: Date.now(),
-          content: {
-            content,
-            teammateMessage: true,
-            senderName: 'team_system',
-          },
-        }}
-      />
-    );
-
-    expect(screen.getAllByText('team.systemNotice.sender')).toHaveLength(2);
-    expect(screen.getByTestId('message-text-content')).toHaveTextContent('team.systemNotice.contextResetSuccess');
-    expect(screen.queryByText(content)).not.toBeInTheDocument();
-  });
-
-  it('rejects malformed context-reset notice payloads', () => {
-    expect(parseTeamContextResetNotice('{"kind":"context_reset","runtime_status":"ready"}')).toBeNull();
   });
 });
 

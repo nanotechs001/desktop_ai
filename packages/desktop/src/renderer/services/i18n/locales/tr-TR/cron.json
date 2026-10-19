@@ -123,8 +123,7 @@
       "model": "Model",
       "aionrsModelRequired": "Pixebot CLI için bir model seçin",
       "aionrsNoProvider": "Kullanılabilir model yok",
-      "assistantLockedExistingConversation": "Aynı konuşma görevleri özgün yürütme Agent'ını korumalıdır. Başka bir Agent kullanmak için yeni bir görev oluşturun.",
-      "teamTaskExecutionModeLockedReason": "Team zamanlanmış görevleri ait oldukları Team konuşmasında çalışmaya devam etmelidir, bu nedenle yürütme modu değiştirilemez."
+      "assistantLockedExistingConversation": "Aynı konuşma görevleri özgün yürütme Agent'ını korumalıdır. Başka bir Agent kullanmak için yeni bir görev oluşturun."
     },
     "freq": {
       "manual": "Manuel",

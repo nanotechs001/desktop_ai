@@ -46,16 +46,12 @@
     "switchSuccess": "Niveau de réflexion changé",
     "switchFailed": "Échec du changement de niveau de réflexion"
   },
-  "warmup": {
-    "clickToWake": "Cliquez pour réveiller ce membre"
-  },
   "runtimeRestart": {
     "tooltip": "Reconnecter l'agent",
     "confirmContent": "Redémarre le processus de l'agent pour qu'il prenne en compte les changements externes de configuration CLI (comme un changement de canal). L'historique du chat est conservé et la session est reprise si possible.",
     "success": "Agent reconnecté",
     "failed": "Échec de la reconnexion de l'agent",
-    "initializingTooltip": "L'agent est en cours d'initialisation. Reconnectez-le lorsqu'il sera prêt",
-    "processingTooltip": "Attendez la fin de la réponse en cours avant de reconnecter"
+    "initializingTooltip": "L'agent est en cours d'initialisation. Reconnectez-le lorsqu'il sera prêt"
   },
   "claudeLauncherSkipped": "Vous avez défini votre propre commande Claude, Pixebot Browser n'a donc pas ajouté ses protections de navigateur.",
   "engine": {

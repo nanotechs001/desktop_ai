@@ -31,7 +31,7 @@ export const useConversationAssistants = (): UseConversationAssistantsResult => 
   // Memoize the selectable list so effects depending on `presetAssistants`
   // don't re-fire on every render. SWR returns the same `assistants`
   // reference between renders, so the memo only recomputes on real updates.
-  // The enabled-order preference is shared with settings, Guid, teams, and
+  // The enabled-order preference is shared with settings, Guid, and
   // scheduled tasks. Without one, `selectableAssistants` preserves the legacy
   // CLI → user → official ordering.
   const presetAssistants = useMemo(

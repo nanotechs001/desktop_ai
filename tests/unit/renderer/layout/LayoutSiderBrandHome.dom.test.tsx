@@ -22,9 +22,6 @@ const platformMocks = vi.hoisted(() => ({
 const shortcutMocks = vi.hoisted(() => ({
   params: undefined as undefined | { toggleSider: () => void },
 }));
-const featureMocks = vi.hoisted(() => ({
-  teamModeEnabled: false,
-}));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
   useLocation: () => ({ pathname: currentPathname, search: '', hash: '' }),
@@ -45,12 +42,6 @@ vi.mock('@/common', () => ({
 }));
 
 // Trim Layout's collaborators to keep this a focused brand-behaviour test.
-vi.mock('@/common/config/constants', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/common/config/constants')>()),
-  get TEAM_MODE_ENABLED() {
-    return featureMocks.teamModeEnabled;
-  },
-}));
 vi.mock('@/renderer/components/layout/PwaPullToRefresh', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar', () => ({ default: () => null }));
 vi.mock('@/renderer/components/settings/UpdateModal', () => ({ default: () => null }));
@@ -102,7 +93,6 @@ describe('Layout sider brand Home button', () => {
     openDevTools.mockClear();
     platformMocks.isElectronDesktopMock.mockReturnValue(false);
     shortcutMocks.params = undefined;
-    featureMocks.teamModeEnabled = false;
     sessionStorage.clear();
     localStorage.clear();
     currentPathname = '/guid';
@@ -184,15 +174,6 @@ describe('Layout sider brand Home button', () => {
 
     act(() => shortcutMocks.params?.toggleSider());
     expect(sider).not.toHaveClass('collapsed');
-  });
-
-  it('keeps the common shortcut owner mounted on team routes', () => {
-    currentPathname = '/team/team-1';
-    featureMocks.teamModeEnabled = true;
-
-    renderLayout();
-
-    expect(shortcutMocks.params?.toggleSider).toEqual(expect.any(Function));
   });
 
   it('clicking the logo icon counts toward the devtools easter-egg and never navigates', () => {

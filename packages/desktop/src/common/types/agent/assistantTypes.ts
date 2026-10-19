@@ -48,8 +48,6 @@ export interface Assistant {
   last_used_at?: number;
   agent_status: AssistantAgentStatus;
   agent_status_message?: string;
-  team_selectable: boolean;
-  team_block_reason?: string;
   deletable: boolean;
 }
 
@@ -128,8 +126,6 @@ export interface AssistantDetail {
   source: AssistantSource;
   agent_status: AssistantAgentStatus;
   agent_status_message?: string;
-  team_selectable: boolean;
-  team_block_reason?: string;
   deletable: boolean;
   profile: AssistantProfile;
   state: AssistantState;

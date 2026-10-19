@@ -164,5 +164,8 @@
   "goBack": "Back",
   "selectedCount": "{{count}} seleccionado(s)",
   "selectedSkills": "Habilidades seleccionadas",
-  "aiAssistant": "Agente de IA"
+  "aiAssistant": "Agente de IA",
+  "searchPlaceholder": "Search",
+  "recentFolders": "Recientes",
+  "chooseDifferentFolder": "Elegir otra carpeta"
 }

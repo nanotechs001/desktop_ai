@@ -46,16 +46,12 @@
     "switchSuccess": "思考強度切換成功",
     "switchFailed": "思考強度切換失敗"
   },
-  "warmup": {
-    "clickToWake": "點擊喚醒該成員"
-  },
   "runtimeRestart": {
     "tooltip": "重新連接代理",
     "confirmContent": "重新啟動代理進程,使其讀取最新的 CLI 設定(例如切換渠道後)。聊天記錄會保留,並盡可能恢復原會話。",
     "success": "代理已重新連接",
     "failed": "代理重新連接失敗",
-    "initializingTooltip": "代理正在初始化，請稍後再重新連接",
-    "processingTooltip": "請等目前回覆結束後再重新連接"
+    "initializingTooltip": "代理正在初始化，請稍後再重新連接"
   },
   "claudeLauncherSkipped": "你已設定自己的 Claude 指令，因此 Pixebot Browser 未加入瀏覽器防護措施。",
   "engine": {

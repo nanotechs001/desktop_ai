@@ -289,16 +289,6 @@ describe('AgentModeSelector', () => {
     });
   });
 
-  it('passes set-only runtime preparation to runtime config options', () => {
-    const beforeRuntimeSet = vi.fn().mockResolvedValue(undefined);
-
-    render(<AgentModeSelector backend='claude' conversation_id='conv-1' beforeRuntimeSet={beforeRuntimeSet} />);
-
-    expect(useAcpConfigOptionsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ prepareSetRuntime: beforeRuntimeSet })
-    );
-  });
-
   it('falls back to the raw mode value when the current value matches no option', async () => {
     // Regression: an out-of-catalog current value (e.g. backend mode-vocabulary
     // drift such as codex "agent-full-access" vs catalog "full-access") used to

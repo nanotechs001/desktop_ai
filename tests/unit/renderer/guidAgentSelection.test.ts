@@ -69,7 +69,6 @@ function assistant(
     prompts_i18n: {},
     models: [],
     agent_status: 'online',
-    team_selectable: true,
     deletable: overrides.source === 'user',
     ...overrides,
   };

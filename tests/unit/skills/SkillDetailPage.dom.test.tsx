@@ -113,7 +113,6 @@ const makeAssistant = (overrides: Record<string, unknown>) => ({
   prompts_i18n: {},
   models: [],
   agent_status: 'ready',
-  team_selectable: true,
   deletable: true,
   ...overrides,
 });

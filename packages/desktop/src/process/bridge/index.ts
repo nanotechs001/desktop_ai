@@ -40,4 +40,3 @@ export {
   initWebuiBridge,
 };
 export { registerWindowMaximizeListeners } from './windowControlsBridge';
-export const disposeAllTeamSessions = (): Promise<void> => Promise.resolve();

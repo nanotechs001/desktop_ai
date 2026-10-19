@@ -9,7 +9,8 @@
  * the front-end sidebar types. The only transform is on conversation items: the
  * wire `ConversationResponse` is run through `fromApiConversation` (same mapping
  * as `getUserConversations`) so downstream code sees a `TChatConversation`.
- * Team items and group/scope metadata pass through unchanged.
+ * Group/scope metadata pass through unchanged. The backend may still send
+ * `team` rows (leftovers of the removed Teams feature); they are dropped.
  */
 
 import type {
@@ -43,15 +44,14 @@ export const scopeToToken = (scope: SidebarScope): string => {
 /**
  * Flatten every conversation row across all groups into a single list (order
  * preserved). Used for the flat-list consumers (batch selection, fork-lineage
- * name resolution) that predate the grouped read model. Team rows are folded
- * server-side and carry no independent conversation here, so they are skipped.
+ * name resolution) that predate the grouped read model.
  */
 export const flattenSidebarConversations = (response: SidebarResponse): TChatConversation[] => {
   const out: TChatConversation[] = [];
   const seen = new Set<string>();
   for (const group of response.groups) {
     for (const item of group.items) {
-      if (item.type === 'conversation' && !seen.has(item.conversation.id)) {
+      if (!seen.has(item.conversation.id)) {
         seen.add(item.conversation.id);
         out.push(item.conversation);
       }
@@ -61,24 +61,25 @@ export const flattenSidebarConversations = (response: SidebarResponse): TChatCon
 };
 
 const mapItem = (raw: SidebarItem): SidebarItem => {
-  if (raw.type === 'conversation') {
-    // The backend derives pin truth from a `user_order` row and sends it as a
-    // top-level `pinned` flag on the wire `ConversationResponse`. The renderer
-    // reads pin state from `extra.pinned`, so fold it in there after mapping.
-    const wire = raw.conversation as TChatConversation & { pinned?: boolean; pinned_at?: number };
-    const mapped = fromApiConversation(raw.conversation);
-    const conversation = {
-      ...mapped,
-      extra: { ...mapped.extra, pinned: wire.pinned ?? false, pinned_at: wire.pinned_at },
-    } as TChatConversation;
-    return { type: 'conversation', conversation };
-  }
-  return raw;
+  // The backend derives pin truth from a `user_order` row and sends it as a
+  // top-level `pinned` flag on the wire `ConversationResponse`. The renderer
+  // reads pin state from `extra.pinned`, so fold it in there after mapping.
+  const wire = raw.conversation as TChatConversation & { pinned?: boolean; pinned_at?: number };
+  const mapped = fromApiConversation(raw.conversation);
+  const conversation = {
+    ...mapped,
+    extra: { ...mapped.extra, pinned: wire.pinned ?? false, pinned_at: wire.pinned_at },
+  } as TChatConversation;
+  return { type: 'conversation', conversation };
 };
+
+// Wire items are typed loosely: anything but a conversation row (e.g. a leftover `team` row) is dropped.
+const mapItems = (raw: ReadonlyArray<{ type: string }>): SidebarItem[] =>
+  raw.filter((item): item is SidebarItem => item.type === 'conversation').map(mapItem);
 
 const mapGroup = (raw: SidebarGroup): SidebarGroup => ({
   ...raw,
-  items: raw.items.map(mapItem),
+  items: mapItems(raw.items),
 });
 
 export const fromApiSidebar = (raw: SidebarResponse): SidebarResponse => ({
@@ -88,5 +89,5 @@ export const fromApiSidebar = (raw: SidebarResponse): SidebarResponse => ({
 
 export const fromApiSidebarItems = (raw: SidebarItemsResponse): SidebarItemsResponse => ({
   ...raw,
-  items: raw.items.map(mapItem),
+  items: mapItems(raw.items),
 });

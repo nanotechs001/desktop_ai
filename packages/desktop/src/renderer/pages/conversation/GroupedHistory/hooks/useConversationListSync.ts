@@ -226,7 +226,7 @@ type ConversationListSyncSnapshot = {
  * completion-unread set (session-only, auto-cleared on open), this survives app
  * restarts so a user can deliberately flag a conversation to return to later.
  * Stored in localStorage, matching the existing collapsed-sections / workspace
- * expansion / team-pinned persistence pattern.
+ * expansion persistence pattern.
  */
 const MANUAL_UNREAD_STORAGE_KEY = 'conversation-manual-unread-ids';
 
@@ -264,8 +264,8 @@ let completionUnreadConversationIdsState = new Set<string>();
 let manualUnreadConversationIdsState = readStoredManualUnread();
 let completedConversationIdsState = new Set<string>();
 let conversation_idsState = new Set<string>();
-// Full id → owning project_id map over ALL loaded conversations (incl. the team
-// member rows filtered out of `conversationsState`). Every row from
+// Full id → owning project_id map over ALL loaded conversations (incl. the
+// rows filtered out of `conversationsState`). Every row from
 // GET /api/conversations carries project_id, so this lets the route publish the
 // active project synchronously on switch — no waiting for the per-conversation
 // `conversation.get` to resolve (that async lag painted the previous project's
@@ -341,16 +341,16 @@ const refreshConversations = () => {
         const filteredData = items.filter((conv) => {
           // Legacy rows from the pre-provider-probe health check flow are hidden
           // from normal history. New health checks must not create conversations.
+          // Rows the backend tags with a team id are leftovers of the removed
+          // Teams feature and stay hidden too.
           const extra = conv.extra as { is_health_check?: boolean; team_id?: string; teamId?: string } | undefined;
           return extra?.is_health_check !== true && !extra?.team_id && !extra?.teamId;
         });
         conversationsState = filteredData;
-        // Use ALL conversation IDs (including team/legacy health-check rows) so the
+        // Use ALL conversation IDs (including hidden rows) so the
         // responseStream listener recognises them as known and doesn't
         // trigger an infinite refreshConversations loop.
         conversation_idsState = new Set(items.map((conversation) => conversation.id));
-        // Map ALL rows (unfiltered) so a team member conversation's project_id is
-        // resolvable too — the team route looks up its leader conversation here.
         projectIdByIdState = new Map(items.map((conversation) => [conversation.id, conversation.project_id ?? null]));
         emitStoreChange();
         return;

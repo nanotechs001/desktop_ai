@@ -6,7 +6,7 @@
 
 import type { TMessage } from '../chat/chatLib';
 import type { TChatConversation } from '../config/storage';
-import type { IMessageSearchItem } from '../types/team/database';
+import type { IMessageSearchItem } from '../types/messageSearch';
 import type { PaginatedResult } from './ipcBridge';
 import { fromApiConversation } from './apiModelMapper';
 

@@ -5,7 +5,6 @@
  */
 
 import { ipcBridge } from '@/common';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import { Layout as ArcoLayout, Tooltip } from '@arco-design/web-react';
@@ -146,8 +145,7 @@ const Layout: React.FC<{
   useDefaultAgentSync();
   const navigate = useNavigate();
   const location = useLocation();
-  const workspaceAvailable =
-    location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
+  const workspaceAvailable = location.pathname.startsWith('/conversation/');
   const toggleSider = useCallback(() => {
     setCollapsed((previous) => !previous);
   }, []);
@@ -181,12 +179,12 @@ const Layout: React.FC<{
     void navigate('/guid');
   }, [navigate]);
   // Close preview whenever the user leaves the conversation route entirely
-  // (e.g. switches to a team, /guid, or settings). Within /conversation/:id
+  // (e.g. switches to /guid or settings). Within /conversation/:id
   // the finer-grained closePreviewIfScopeChanged in conversation/index.tsx
   // handles scope changes, so we only need to act here on route-type changes.
   // Use closePreview directly — closePreviewIfScopeChanged skips the call
-  // when lastScopeRef is already null (e.g. on team routes where it was
-  // never updated), which would leave the panel open.
+  // when lastScopeRef is already null (never updated), which would leave the
+  // panel open.
   const {
     closePreview: closePreviewOnRouteChange,
     isOpen: isPreviewOpen,
@@ -255,14 +253,14 @@ const Layout: React.FC<{
     }
     if (!workspaceAvailable) {
       closePreviewOnRouteChange();
-      // Leaving every project-bearing route (conversation + team) → no active
-      // project → hide the Explorer host. Within /conversation/* and /team/* the
-      // route itself publishes project_id, so we only clear when leaving both.
+      // Leaving the project-bearing conversation route → no active project →
+      // hide the Explorer host. Within /conversation/* the route itself
+      // publishes project_id, so we only clear when leaving it.
       setCurrentProject(null);
     }
     // The active-conversation target is published by the conversation route
-    // (mounted conversation) and the team route (active member column). Clear it
-    // only when leaving both, so a stale target can't leak to a non-chat route.
+    // (mounted conversation). Clear it when leaving, so a stale target can't
+    // leak to a non-chat route.
     if (!workspaceAvailable) {
       setCurrentConversation(null);
     }

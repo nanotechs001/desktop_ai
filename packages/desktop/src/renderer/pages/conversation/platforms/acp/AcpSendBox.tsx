@@ -35,8 +35,6 @@ import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
 import { getConversationRuntimeWorkspaceErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
-import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
-import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 import { allSupportedExts } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
 import type { SessionRef } from '@/common/adapter/ipcBridge';
@@ -45,9 +43,8 @@ import { useCrossSessionMessageEnabled } from '@/renderer/hooks/chat/useCrossSes
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
-import type { ChatFileRef } from '@/common/types/chatFile';
-import { Button, Message, Tag } from '@arco-design/web-react';
-import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
+import { Message, Tag } from '@arco-design/web-react';
+import { Brain, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
@@ -110,9 +107,7 @@ const AcpSendBox: React.FC<{
   backend: string;
   session_mode?: string;
   messageState: UseAcpMessageReturn;
-  teamSendMessage?: (payload: { input: string; files: ChatFileRef[] }) => Promise<void>;
-  teamRuntime?: TeamSendBoxRuntime;
-}> = ({ conversation_id, backend, session_mode, messageState, teamSendMessage, teamRuntime }) => {
+}> = ({ conversation_id, backend, session_mode, messageState }) => {
   const {
     aiProcessing,
     setAiProcessing,
@@ -124,10 +119,6 @@ const AcpSendBox: React.FC<{
     context_limit,
   } = messageState;
   const { t } = useTranslation();
-  const teamPermission = useTeamPermission();
-  // In team mode, all agents show the permission mode selector (members don't propagate)
-  const showModeSelector = true;
-  const isLeaderInTeam = teamPermission && conversation_id === teamPermission.leaderConversationId;
   const { checkAndUpdateTitle } = useAutoTitle();
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
   const layout = useLayoutContext();
@@ -161,14 +152,8 @@ const AcpSendBox: React.FC<{
   );
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const [currentMode, setCurrentMode] = useState<string | undefined>(session_mode);
-  const prepareRuntimeConfig = useCallback(async () => {
-    if (teamPermission) return;
-  }, [teamPermission]);
   const runtimeConfig = useAcpConfigOptions({
     conversation_id,
-    prepareRuntime: prepareRuntimeConfig,
-    prepareSetRuntime: teamPermission?.warmupSession,
-    configOptionsPort: teamPermission?.configOptionsPort,
     enabled: true,
   });
   const runtimeMode = runtimeConfig.mode;
@@ -186,9 +171,6 @@ const AcpSendBox: React.FC<{
   } = useAcpModelInfo({
     conversation_id,
     backend,
-    prepareRuntime: prepareRuntimeConfig,
-    prepareSetRuntime: teamPermission?.warmupSession,
-    configOptionsPort: teamPermission?.configOptionsPort,
     enabled: isMobile,
     onSelectModelSuccess: () => Message.success(t('agent.model.switchSuccess')),
     onSelectModelFailed: (_modelId, error) => Message.error(t(configErrorMessageKey(error))),
@@ -204,14 +186,13 @@ const AcpSendBox: React.FC<{
       try {
         await runtimeConfig.setConfigOption(runtimeMode.id, mode);
         setCurrentMode(mode);
-        if (isLeaderInTeam) teamPermission?.propagateMode?.(mode);
         Message.success(t('agentMode.switchSuccess'));
       } catch (error) {
         console.error('[AcpSendBox] Failed to switch mode via sheet:', error);
         Message.error(t(configErrorMessageKey(error)));
       }
     },
-    [isLeaderInTeam, runtimeConfig, runtimeMode, t, teamPermission]
+    [runtimeConfig, runtimeMode, t]
   );
 
   const handleContentChange = useCallback(
@@ -239,7 +220,7 @@ const AcpSendBox: React.FC<{
     setAtPath,
     setUploadFile,
   });
-  const commandQueueRuntimeGate = teamRuntime?.runtimeGate ?? {
+  const commandQueueRuntimeGate = {
     hydrated: runtimeView.hydrated,
     canSendMessage: runtimeView.canSendMessage,
     isProcessing: runtimeView.isProcessing,
@@ -285,17 +266,7 @@ const AcpSendBox: React.FC<{
       // Plain user text; the backend resolves each ChatFileRef and injects the
       // [[AION_FILES]] marker at the send edge (no front-end path/marker building).
       try {
-        if (teamPermission) await teamPermission.warmupSession();
         void checkAndUpdateTitle(conversation_id, input);
-        if (teamSendMessage) {
-          await teamSendMessage({ input, files });
-          emitter.emit('chat.history.refresh');
-          if (files.length > 0) {
-            emitter.emit('acp.workspace.refresh');
-          }
-          return;
-        }
-
         markSendStarted();
         setAiProcessing(true);
         const result = await ipcBridge.acpConversation.sendMessage.invoke({
@@ -397,8 +368,6 @@ Check Settings → Engine.`,
       resetState,
       setAiProcessing,
       t,
-      teamPermission,
-      teamSendMessage,
     ]
   );
 
@@ -456,27 +425,6 @@ Check Settings → Engine.`,
     setSelectedSessions([]);
     emitter.emit('acp.selected.file.clear');
     await executeCommand({ input: message, files: allFiles, sessions });
-  };
-
-  const [interrupting, setInterrupting] = useState(false);
-  const handleInterruptSend = async () => {
-    if (!teamRuntime?.onInterruptSend || !content.trim() || interrupting) return;
-    const files = collectChatFileRefs(uploadFile, atPath);
-    const input = content;
-    setContent('');
-    clearFiles();
-    // `onInterruptSend` is the TEAM interrupt path, and `@@` is disabled in team
-    // conversations (`isTeamConversation` below), so `selectedSessions` is
-    // always empty here. Cleared anyway so the state cannot leak if that
-    // relationship ever changes.
-    setSelectedSessions([]);
-    emitter.emit('acp.selected.file.clear');
-    setInterrupting(true);
-    try {
-      await teamRuntime.onInterruptSend({ input, files });
-    } finally {
-      setInterrupting(false);
-    }
   };
 
   // Explicit "add to queue" entry — visibility is keyed only to the user's
@@ -693,8 +641,8 @@ Check Settings → Engine.`,
   ]);
 
   // Accept file-selection events only when targeted at this conversation (or
-  // untargeted); on the multi-column team route this stops same-type peers from
-  // receiving each other's selections. See emitter EventTypes comment.
+  // untargeted), so same-type peers don't receive each other's selections.
+  // See emitter EventTypes comment.
   useAddEventListener(
     'acp.selected.file',
     (items: Array<string | FileOrFolderItem>, targetConversationId: string | undefined) => {
@@ -737,7 +685,6 @@ Check Settings → Engine.`,
       resetActiveExecution('stop');
     }
   };
-  const effectiveHandleStop = teamRuntime?.onStop ?? handleStop;
   const handleSendNowQueued = useCallback(
     async (item: ConversationCommandQueueItem) => {
       if (supportsMidturnDelivery) {
@@ -769,10 +716,10 @@ Check Settings → Engine.`,
       // once the execution gate shows canExecute — avoiding the 409 race that
       // occurs when sendNow() calls onExecute() directly before the backend
       // has finished processing the stop.
-      await effectiveHandleStop();
+      await handleStop();
       prioritize(item.id);
     },
-    [effectiveHandleStop, enqueue, executeCommand, prioritize, remove, supportsMidturnDelivery]
+    [handleStop, enqueue, executeCommand, prioritize, remove, supportsMidturnDelivery]
   );
   const sendBoxWidthClass = getChatSurfaceWidthClass();
 
@@ -793,12 +740,10 @@ Check Settings → Engine.`,
         onClear={clear}
       />
       <ThoughtDisplay
-        running={teamRuntime?.loading ?? (aiProcessing && !hasThinkingMessage)}
-        statusText={teamRuntime?.statusText}
-        externalElapsedSource={Boolean(teamRuntime) || turnStartedAtMs != null}
-        startedAtMs={teamRuntime ? (teamRuntime.startedAtMs ?? null) : turnStartedAtMs}
-        onStop={effectiveHandleStop}
-        onRetryStart={teamRuntime?.onRetryStart ? () => void teamRuntime.onRetryStart?.() : undefined}
+        running={aiProcessing && !hasThinkingMessage}
+        externalElapsedSource={turnStartedAtMs != null}
+        startedAtMs={turnStartedAtMs}
+        onStop={handleStop}
       />
       <CrossSessionDisabledBanner />
       <SendBox
@@ -813,10 +758,7 @@ Check Settings → Engine.`,
         selectedSessions={selectedSessions}
         onSelectedSessionsChange={setSelectedSessions}
         crossSessionEnabled={crossSessionEnabled}
-        isTeamConversation={Boolean(teamRuntime)}
-        loading={teamRuntime?.loading ?? isBusy}
-        active={teamRuntime?.isActive}
-        onFocused={teamRuntime?.onFocus}
+        loading={isBusy}
         disabled={false}
         sendDisabled={!supportsMidturnDelivery && isBusy}
         sendDisabledTooltip={
@@ -828,7 +770,7 @@ Check Settings → Engine.`,
             : undefined
         }
         placeholder={t('acp.sendbox.placeholder', { defaultValue: 'Message the agent…' })}
-        onStop={effectiveHandleStop}
+        onStop={handleStop}
         className='z-10'
         onFilesAdded={handleFilesAdded}
         hasPendingAttachments={uploadFile.length > 0 || atPath.length > 0}
@@ -845,22 +787,16 @@ Check Settings → Engine.`,
         }
         rightTools={
           <div className='flex items-center gap-8px min-w-0'>
-            {showModeSelector && (
-              <AgentModeSelector
-                backend={backend}
-                conversation_id={conversation_id}
-                compact
-                initialMode={session_mode}
-                compactLeadingIcon={<Shield theme='outline' size='14' fill={iconColors.secondary} />}
-                modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
-                compactLabelPrefix={t('agentMode.permission')}
-                hideCompactLabelPrefixOnMobile
-                onModeChanged={isLeaderInTeam ? teamPermission?.propagateMode : undefined}
-                beforeRuntimeSync={prepareRuntimeConfig}
-                beforeRuntimeSet={teamPermission?.warmupSession}
-                configOptionsPort={teamPermission?.configOptionsPort}
-              />
-            )}
+            <AgentModeSelector
+              backend={backend}
+              conversation_id={conversation_id}
+              compact
+              initialMode={session_mode}
+              compactLeadingIcon={<Shield theme='outline' size='14' fill={iconColors.secondary} />}
+              modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
+              compactLabelPrefix={t('agentMode.permission')}
+              hideCompactLabelPrefixOnMobile
+            />
           </div>
         }
         prefix={
@@ -914,17 +850,6 @@ Check Settings → Engine.`,
           // popover shows the raw count — never a percentage against a
           // guessed denominator. No usage report at all → nothing.
           <>
-            {teamRuntime?.onInterruptSend && content.trim() && (
-              <Button
-                size='mini'
-                type='secondary'
-                icon={<Lightning />}
-                loading={interrupting}
-                onClick={() => void handleInterruptSend()}
-              >
-                {t('team.interruptAndSend')}
-              </Button>
-            )}
             {tokenUsage ? <ContextUsageIndicator tokenUsage={tokenUsage} context_limit={context_limit} /> : undefined}
           </>
         }

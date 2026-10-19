@@ -17,9 +17,8 @@ import {
 } from '@/renderer/pages/conversation/Messages/hooks';
 import MessageList from '@/renderer/pages/conversation/Messages/MessageList';
 
-const { parseDiffMock, useTeamPermissionMock } = vi.hoisted(() => ({
+const { parseDiffMock } = vi.hoisted(() => ({
   parseDiffMock: vi.fn(),
-  useTeamPermissionMock: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -43,10 +42,6 @@ vi.mock('@arco-design/web-react', () => ({
 
 vi.mock('@/renderer/hooks/context/ConversationContext', () => ({
   useConversationContextSafe: () => ({ conversation_id: 'conversation-1', type: 'aionrs' }),
-}));
-
-vi.mock('@/renderer/pages/team/hooks/TeamPermissionContext', () => ({
-  useTeamPermission: useTeamPermissionMock,
 }));
 
 let mockIsProcessing = false;
@@ -267,7 +262,6 @@ describe('MessageList', () => {
       deletions: 1,
       diff: 'diff',
     });
-    useTeamPermissionMock.mockReturnValue(null);
   });
 
   it('never renders a plan as a stream row (it belongs to ConversationPlanBar)', () => {
@@ -346,33 +340,6 @@ describe('MessageList', () => {
     expect(messageRow.className).not.toContain('w-[calc(100%-24px)]');
     expect(messageRow.className).not.toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
     expect(messageRow.className).not.toContain('max-w-780px');
-  });
-
-  it('uses the same container-responsive width in team mode', () => {
-    // Team and standalone rows share one class. Width is decided by the column the
-    // rows are given, not by the mode: `.chat-surface-fluid` is full-width until
-    // its container passes the gutter threshold. A team parallel column (~400px)
-    // therefore still renders full width, while team single view — which fills the
-    // chat area — gets the same gutters as a standalone conversation, leaving room
-    // for the anchor rail instead of crowding the text.
-    useTeamPermissionMock.mockReturnValue({
-      isTeamMode: true,
-      isLeaderAgent: true,
-      leaderConversationId: 'conversation-1',
-      allConversationIds: ['conversation-1'],
-      propagateMode: vi.fn(),
-      warmupSession: vi.fn().mockResolvedValue(undefined),
-    });
-
-    render(<MessageList />, {
-      wrapper: ({ children }) => <Wrapper>{children}</Wrapper>,
-    });
-
-    const messageRow = screen.getByTestId('message-text-left');
-    expect(messageRow.className).toContain('chat-surface-fluid');
-    // No hardcoded viewport-based widths: the container query owns the breakpoint.
-    expect(messageRow.className).not.toContain('w-[calc(100%-24px)]');
-    expect(messageRow.className).not.toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
   });
 
   it('shows the copy row only on the last AI text of each turn', () => {

@@ -280,34 +280,6 @@ describe('useAcpMessage', () => {
     });
   });
 
-  it('uses injected runtime preparation for initial slash commands in team mode', async () => {
-    vi.mocked(getConversationOrNull).mockResolvedValue(null);
-    const prepareRuntime = vi.fn().mockResolvedValue(undefined);
-    getSlashCommandsInvokeMock.mockResolvedValue([
-      {
-        command: 'review',
-        description: 'Review the current diff',
-      },
-    ]);
-
-    const { result } = renderHook(() => useAcpMessage('conv-1', { prepareRuntime }));
-
-    await waitFor(() => {
-      expect(prepareRuntime).toHaveBeenCalled();
-      expect(getSlashCommandsInvokeMock).toHaveBeenCalledWith({ conversation_id: 'conv-1' });
-    });
-    expect(ensureRuntimeInvokeMock).not.toHaveBeenCalled();
-
-    act(() => {
-      result.current.fetchSlashCommands();
-    });
-
-    await waitFor(() => {
-      expect(prepareRuntime).toHaveBeenCalledTimes(2);
-    });
-    expect(ensureRuntimeInvokeMock).not.toHaveBeenCalled();
-  });
-
   it('deduplicates slash command fetches while a request is in flight', async () => {
     vi.mocked(getConversationOrNull).mockResolvedValue(null);
     const slashCommandsDeferred = deferred<
@@ -353,50 +325,6 @@ describe('useAcpMessage', () => {
         },
       ]);
     });
-  });
-
-  it('normalizes team teammate messages before inserting them into the message list', async () => {
-    vi.mocked(getConversationOrNull).mockResolvedValue(null);
-
-    renderHook(() => useAcpMessage('leader-conversation-1'));
-
-    act(() => {
-      responseStreamHandlerRef.current?.({
-        type: 'teammate_message',
-        data: {
-          id: 'projected-message-1',
-          type: 'text',
-          msg_id: 'projected-message-1',
-          conversation_id: 'leader-conversation-1',
-          position: 'left',
-          status: 'finish',
-          content: {
-            content: '[Codex Assistant] idle',
-            teammate_message: true,
-            sender_name: 'Codex Assistant',
-            sender_backend: 'codex',
-            sender_conversation_id: 'teammate-conversation-1',
-          },
-        },
-        msg_id: 'projected-message-1',
-        conversation_id: 'leader-conversation-1',
-      } as unknown as IResponseMessage);
-    });
-
-    expect(addOrUpdateMessageMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'text',
-        msg_id: 'projected-message-1',
-        conversation_id: 'leader-conversation-1',
-        content: {
-          content: '[Codex Assistant] idle',
-          teammateMessage: true,
-          senderName: 'Codex Assistant',
-          senderAgentType: 'codex',
-          senderConversationId: 'teammate-conversation-1',
-        },
-      })
-    );
   });
 
   it('renders an advisory tips notice without lighting the running timer', async () => {

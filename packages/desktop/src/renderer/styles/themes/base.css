@@ -53,22 +53,6 @@ body,
   }
 }
 
-@keyframes team-tab-breathe {
-  0%,
-  100% {
-    opacity: 1;
-    background-color: transparent;
-    box-shadow: none;
-  }
-  50% {
-    opacity: 0.85;
-    background-color: color-mix(in srgb, var(--color-primary-6) 18%, transparent);
-    box-shadow:
-      0 0 8px 2px color-mix(in srgb, var(--color-primary-6) 30%, transparent),
-      inset 0 0 6px 0 color-mix(in srgb, var(--color-primary-6) 15%, transparent);
-  }
-}
-
 @keyframes loading {
   0% {
     transform: rotate(0deg);
@@ -76,41 +60,6 @@ body,
   100% {
     transform: rotate(360deg);
   }
-}
-
-/* 团队 warmup 进度条：无确定进度时来回扫动 */
-@keyframes team-warmup-sweep {
-  0% {
-    width: 20%;
-    margin-inline-start: 0;
-  }
-  50% {
-    width: 60%;
-    margin-inline-start: 40%;
-  }
-  100% {
-    width: 20%;
-    margin-inline-start: 0;
-  }
-}
-
-.team-warmup-sweep {
-  animation: team-warmup-sweep 1.4s ease-in-out infinite;
-}
-
-/* 团队 warmup 头像「唤醒中」：pending 成员轻柔呼吸 */
-@keyframes team-warmup-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 0.9;
-  }
-}
-
-.team-warmup-breathe {
-  animation: team-warmup-breathe 1.6s ease-in-out infinite;
 }
 
 .collapsed {

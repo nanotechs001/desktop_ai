@@ -5,13 +5,10 @@
  */
 
 import type { IConversationMcpStatus } from '@/common/config/storage';
-import type { ChatFileRef } from '@/common/types/chatFile';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import ConversationPlanBar from '@renderer/pages/conversation/PlanBar/ConversationPlanBar';
 import { usePlanRecovery } from '@renderer/pages/conversation/PlanBar/usePlanRecovery';
 import { CHAT_SURFACE_CONTAINER_CLASS } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
-import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
-import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 import FlexFullContainer from '@renderer/components/layout/FlexFullContainer';
 import MessageList from '@renderer/pages/conversation/Messages/MessageList';
 import { ConversationArtifactProvider } from '@renderer/pages/conversation/Messages/artifacts';
@@ -39,8 +36,6 @@ const AcpChat: React.FC<{
   loadedSkills?: string[];
   loadedMcpServers?: string[];
   loadedMcpStatuses?: IConversationMcpStatus[];
-  teamSendMessage?: (payload: { input: string; files: ChatFileRef[] }) => Promise<void>;
-  teamRuntime?: TeamSendBoxRuntime;
   assistantId?: string;
   forkCapability?: { at_turn: boolean };
   promptCapability?: { image: boolean; audio: boolean };
@@ -55,8 +50,6 @@ const AcpChat: React.FC<{
   loadedSkills,
   loadedMcpServers,
   loadedMcpStatuses,
-  teamSendMessage,
-  teamRuntime,
   assistantId,
   forkCapability,
   promptCapability,
@@ -64,11 +57,7 @@ const AcpChat: React.FC<{
   useMessageLstCache(conversation_id);
   usePendingConfirmationsRecovery(conversation_id);
   usePlanRecovery(conversation_id);
-  const teamPermission = useTeamPermission();
-  const messageState = useAcpMessage(conversation_id, {
-    skipWarmup: Boolean(teamPermission),
-    prepareRuntime: teamPermission?.warmupSession,
-  });
+  const messageState = useAcpMessage(conversation_id);
 
   return (
     <ConversationProvider
@@ -99,8 +88,6 @@ const AcpChat: React.FC<{
               backend={backend}
               session_mode={session_mode}
               messageState={messageState}
-              teamSendMessage={teamSendMessage}
-              teamRuntime={teamRuntime}
             ></AcpSendBox>
           )}
         </div>

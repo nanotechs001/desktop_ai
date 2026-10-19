@@ -18,8 +18,8 @@ export type ReplyQuote = {
 
 interface EventTypes {
   // The 2nd arg is the target conversation id: only the send box whose
-  // conversation matches consumes the event (team renders one send box per
-  // member column, so a bare type prefix alone would leak to same-type peers).
+  // conversation matches consumes the event (a bare type prefix alone would
+  // leak to other mounted same-type send boxes).
   // `undefined` = no target = any same-type box accepts (back-compat).
   'aionrs.selected.file': [Array<string | FileOrFolderItem>, string | undefined];
   'aionrs.selected.file.append': [Array<string | FileOrFolderItem>, string | undefined];

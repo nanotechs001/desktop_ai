@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Tag, Spin, Button } from '@arco-design/web-react';
+import { Tag, Spin } from '@arco-design/web-react';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,11 +19,9 @@ type ThoughtDisplayProps = {
   running?: boolean;
   statusText?: string;
   onStop?: () => void;
-  // Directed per-member attach retry, shown next to a runtime-failed status text.
-  onRetryStart?: () => void;
-  // Absolute start timestamp (ms) supplied by an external source (e.g. team slot work).
+  // Absolute start timestamp (ms) supplied by an external source (the backend turn start).
   startedAtMs?: number | null;
-  // Explicit flag declaring elapsed time is driven by an external timestamp (team chain).
+  // Explicit flag declaring elapsed time is driven by an external timestamp.
   externalElapsedSource?: boolean;
 };
 
@@ -33,7 +31,6 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
   running = false,
   statusText,
   onStop: _onStop,
-  onRetryStart,
   startedAtMs,
   externalElapsedSource,
 }) => {
@@ -90,7 +87,7 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
       return;
     }
 
-    // Branch C: non-external mode (non-team). Preserve the original local timer behavior.
+    // Branch C: non-external mode. Preserve the original local timer behavior.
     if (!running && !thought?.subject) {
       setElapsedTime(0);
       return;
@@ -140,19 +137,11 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
         style={containerStyle}
       >
         {running && <Spin size={14} />}
-        {/* Left block fills the row and truncates long text (tooltip shows the
-            full message); the retry button stays pinned on the right and never
-            shrinks, so a long/localized status can't push it out of a narrow
-            parallel-view column. */}
+        {/* Fills the row and truncates long text; the tooltip shows the full message. */}
         <span className='text-t-secondary min-w-0 flex-1 truncate' title={statusText}>
           {statusText ?? t('conversation.chat.processing')}
           {showElapsed && <span className='ms-8px opacity-60'>({formatElapsedTime(elapsedTime)})</span>}
         </span>
-        {onRetryStart && (
-          <Button className='flex-shrink-0' size='mini' type='text' onClick={onRetryStart}>
-            {t('team.work.retryStart', { defaultValue: 'Retry start' })}
-          </Button>
-        )}
       </div>
     );
   }

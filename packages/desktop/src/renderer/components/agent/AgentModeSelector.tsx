@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  classifyConfigSetError,
-  type AcpConfigOptionsPort,
-  useAcpConfigOptions,
-} from '@/renderer/hooks/agent/useAcpConfigOptions';
+import { classifyConfigSetError, useAcpConfigOptions } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { getAgentPresentation } from '@/renderer/utils/ui/agentPresentation';
@@ -52,16 +48,8 @@ export interface AgentModeSelectorProps {
   compactLabelPrefix?: string;
   /** Hide compact prefix on mobile */
   hideCompactLabelPrefixOnMobile?: boolean;
-  /** Callback fired after a successful mode change (for team-mode propagation) */
-  onModeChanged?: (mode: string) => void;
   /** Dynamic modes from capabilities (overrides static list when non-empty) */
   dynamicModes?: AgentModeOption[];
-  /** Optional runtime preparation before reading active-session mode. */
-  beforeRuntimeSync?: () => Promise<void>;
-  /** Optional runtime preparation only before applying a runtime mode change. */
-  beforeRuntimeSet?: () => Promise<void>;
-  /** Optional config option loader for runtime owners such as team sessions. */
-  configOptionsPort?: AcpConfigOptionsPort;
 }
 
 /**
@@ -84,11 +72,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   modeLabelFormatter,
   compactLabelPrefix,
   hideCompactLabelPrefixOnMobile = false,
-  onModeChanged,
   dynamicModes,
-  beforeRuntimeSync,
-  beforeRuntimeSet,
-  configOptionsPort,
 }) => {
   const { t } = useTranslation();
   const agentName = getAgentPresentation(null, t).name;
@@ -96,9 +80,6 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   const isMobile = Boolean(layout?.isMobile);
   const runtimeConfig = useAcpConfigOptions({
     conversation_id: conversation_id ?? '',
-    prepareRuntime: beforeRuntimeSync,
-    prepareSetRuntime: beforeRuntimeSet ?? beforeRuntimeSync,
-    configOptionsPort,
     enabled: Boolean(conversation_id),
   });
   const runtimeMode = runtimeConfig.mode;
@@ -171,7 +152,6 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
       if (!conversation_id && onModeSelect) {
         setCurrentMode(mode);
         onModeSelect(mode);
-        onModeChanged?.(mode);
         return;
       }
 
@@ -198,7 +178,6 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
           return;
         }
         setCurrentMode(mode);
-        onModeChanged?.(mode);
         Message.success(t('agentMode.switchSuccess'));
       } catch (error) {
         console.error('[AgentModeSelector] Failed to switch mode:', error);
@@ -207,7 +186,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
         setIsLoading(false);
       }
     },
-    [conversation_id, current_mode, onModeChanged, onModeSelect, runtimeConfig, runtimeMode, t]
+    [conversation_id, current_mode, onModeSelect, runtimeConfig, runtimeMode, t]
   );
 
   // Get display label for current mode. When the current value matches no option

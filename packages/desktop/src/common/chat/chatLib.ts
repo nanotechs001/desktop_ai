@@ -130,11 +130,6 @@ export type IMessageText = IMessage<
     /** Backend explicitly replaced the accumulated text for this msg_id. */
     replace?: boolean;
     cronMeta?: CronMessageMeta;
-    teammateMessage?: boolean;
-    senderName?: string;
-    senderAgentType?: string;
-    /** Sender teammate's conversation id — lets the renderer resolve preset avatars via their conversation extras. */
-    senderConversationId?: string;
   }
 >;
 
@@ -461,17 +456,6 @@ type RawTextMessageContent = {
   content?: unknown;
   replace?: unknown;
   cronMeta?: unknown;
-  teammateMessage?: unknown;
-  teammate_message?: unknown;
-  senderName?: unknown;
-  sender_name?: unknown;
-  from_name?: unknown;
-  senderAgentType?: unknown;
-  sender_backend?: unknown;
-  senderBackend?: unknown;
-  senderConversationId?: unknown;
-  sender_conversation_id?: unknown;
-  senderConversationID?: unknown;
 };
 
 type NormalizeTextMessageContentOptions = {
@@ -485,43 +469,18 @@ const isCronMessageMeta = (value: unknown): value is CronMessageMeta =>
   typeof value.cron_job_name === 'string' &&
   typeof value.triggered_at === 'number';
 
-const firstStringField = (
-  data: RawTextMessageContent,
-  keys: Array<keyof RawTextMessageContent>
-): string | undefined => {
-  for (const key of keys) {
-    const value = data[key];
-    if (typeof value === 'string' && value.length > 0) {
-      return value;
-    }
-  }
-  return undefined;
-};
-
 const normalizeTextMessageContentObject = (
   data: RawTextMessageContent,
   options?: NormalizeTextMessageContentOptions
 ): IMessageText['content'] => {
   const content = typeof data.content === 'string' ? data.content : String(data.content ?? '');
-  const senderName = firstStringField(data, ['senderName', 'sender_name', 'from_name']);
-  const senderAgentType = firstStringField(data, ['senderAgentType', 'sender_backend', 'senderBackend']);
-  const senderConversationId = firstStringField(data, [
-    'senderConversationId',
-    'sender_conversation_id',
-    'senderConversationID',
-  ]);
   const cronMeta = isCronMessageMeta(data.cronMeta) ? data.cronMeta : undefined;
   const replace = options?.replace === true || data.replace === true;
-  const teammateMessage = Boolean(data.teammateMessage) || Boolean(data.teammate_message);
 
   return {
     content,
     ...(replace ? { replace: true } : {}),
     ...(cronMeta ? { cronMeta } : {}),
-    ...(teammateMessage ? { teammateMessage: true } : {}),
-    ...(senderName ? { senderName } : {}),
-    ...(senderAgentType ? { senderAgentType } : {}),
-    ...(senderConversationId ? { senderConversationId } : {}),
   };
 };
 

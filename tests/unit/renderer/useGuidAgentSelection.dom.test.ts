@@ -67,7 +67,6 @@ describe('useGuidAssistantSelection', () => {
         prompts_i18n: {},
         models: ['claude-opus', 'claude-sonnet'],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       } satisfies Assistant,
     ];
@@ -256,7 +255,6 @@ describe('useGuidAssistantSelection', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: true,
       } satisfies Assistant,
     ];
@@ -337,7 +335,6 @@ describe('useGuidAssistantSelection', () => {
         prompts_i18n: {},
         models: ['default'],
         agent_status: 'online',
-        team_selectable: true,
         deletable: true,
       } satisfies Assistant,
     ];
@@ -398,7 +395,6 @@ describe('useGuidAssistantSelection', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: true,
       } satisfies Assistant,
     ];
@@ -463,7 +459,6 @@ describe('useGuidAssistantSelection', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       } satisfies Assistant,
     ];
@@ -503,7 +498,6 @@ describe('useGuidAssistantSelection', () => {
         prompts_i18n: {},
         models: [],
         agent_status: 'online',
-        team_selectable: true,
         deletable: false,
       } satisfies Assistant,
     ];
@@ -570,7 +564,6 @@ function assistantFixture({
     prompts_i18n: {},
     models: [],
     agent_status: 'online',
-    team_selectable: true,
     deletable: source === 'user',
   };
 }

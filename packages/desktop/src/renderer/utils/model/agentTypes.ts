@@ -112,8 +112,6 @@ export type AgentMetadata = {
   /** True when the management view resolved the agent command on `$PATH`. */
   installed?: boolean;
   isExtension?: boolean;
-  /** True when the agent supports team mode (MCP stdio capable). Computed by backend. */
-  team_capable?: boolean;
   /** Derived status used by the Agent settings management view. */
   status?: AgentManagementStatus;
   /** True when the agent has a command_override set (requires auth). */

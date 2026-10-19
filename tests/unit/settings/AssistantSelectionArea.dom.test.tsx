@@ -93,7 +93,6 @@ describe('AssistantSelectionArea', () => {
               },
               models: [],
               agent_status: 'online',
-              team_selectable: true,
               deletable: false,
             },
           ]}
@@ -153,7 +152,6 @@ function overflowAssistant(id: string, name: string, sortOrder: number): Assista
     prompts_i18n: {},
     models: [],
     agent_status: 'online',
-    team_selectable: true,
     deletable: false,
   } as Assistant;
 }
@@ -177,7 +175,6 @@ function assistants(): Assistant[] {
       prompts_i18n: {},
       models: [],
       agent_status: 'online',
-      team_selectable: true,
       deletable: false,
     },
     {
@@ -197,7 +194,6 @@ function assistants(): Assistant[] {
       prompts_i18n: {},
       models: [],
       agent_status: 'online',
-      team_selectable: true,
       deletable: true,
     },
   ];

@@ -36,8 +36,6 @@ import { getConversationRuntimeWorkspaceErrorMessage } from '@/renderer/pages/co
 import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
 import { ensureConversationRuntime } from '@/renderer/pages/conversation/utils/ensureConversationRuntime';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
-import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
-import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 import { allSupportedExts } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
 import type { SessionRef } from '@/common/adapter/ipcBridge';
@@ -48,8 +46,8 @@ import { type ChatFileRef, isChatFileRef, uploadFileRef } from '@/common/types/c
 import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
-import { Button, Message, Tag } from '@arco-design/web-react';
-import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
+import { Message, Tag } from '@arco-design/web-react';
+import { Brain, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
@@ -120,9 +118,7 @@ const AionrsSendBox: React.FC<{
   conversation_id: string;
   modelSelection: AionrsModelSelection;
   session_mode?: string;
-  teamSendMessage?: (payload: { input: string; files: ChatFileRef[] }) => Promise<void>;
-  teamRuntime?: TeamSendBoxRuntime;
-}> = ({ conversation_id, modelSelection, session_mode, teamSendMessage, teamRuntime }) => {
+}> = ({ conversation_id, modelSelection, session_mode }) => {
   const [dynamicModes, setDynamicModes] = useState<AgentModeOption[]>([]);
   const [currentMode, setCurrentMode] = useState<string | undefined>(session_mode);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
@@ -140,8 +136,6 @@ const AionrsSendBox: React.FC<{
   const { t } = useTranslation();
   const { checkAndUpdateTitle } = useAutoTitle();
   const { current_model } = modelSelection;
-  const teamPermission = useTeamPermission();
-  const propagateMode = teamPermission?.propagateMode;
 
   const { thought, running, turnStartedAtMs, setActiveMsgId, setWaitingResponse, resetState } = useAionrsMessage(
     conversation_id,
@@ -167,21 +161,11 @@ const AionrsSendBox: React.FC<{
   );
 
   const [agentWarmed, setAgentWarmed] = useState(false);
-  const prepareRuntimeConfig = useCallback(async () => {
-    if (teamPermission) return;
-  }, [teamPermission]);
   const prepareRuntimeSync = useCallback(async () => {
-    if (teamPermission) {
-      await teamPermission.warmupSession();
-      return;
-    }
     await ensureConversationRuntime(conversation_id);
-  }, [conversation_id, teamPermission]);
+  }, [conversation_id]);
   const runtimeConfig = useAcpConfigOptions({
     conversation_id,
-    prepareRuntime: prepareRuntimeConfig,
-    prepareSetRuntime: teamPermission?.warmupSession,
-    configOptionsPort: teamPermission?.configOptionsPort,
     enabled: Boolean(conversation_id),
   });
   const runtimeMode = runtimeConfig.mode;
@@ -207,11 +191,10 @@ const AionrsSendBox: React.FC<{
   const slash_commands = useSlashCommands(conversation_id, {
     conversation_type: 'aionrs',
     agentStatus: agentWarmed ? 'active' : null,
-    prepareRuntime: teamPermission ? prepareRuntimeSync : undefined,
   });
 
   const { setSendBoxHandler } = usePreviewContext();
-  const commandQueueRuntimeGate = teamRuntime?.runtimeGate ?? {
+  const commandQueueRuntimeGate = {
     hydrated: runtimeView.hydrated,
     canSendMessage: runtimeView.canSendMessage,
     isProcessing: runtimeView.isProcessing,
@@ -252,7 +235,6 @@ const AionrsSendBox: React.FC<{
 
   const executeCommand = useCallback(
     async ({ input, files, sessions }: Pick<ConversationCommandQueueItem, 'input' | 'files' | 'sessions'>) => {
-      if (teamPermission) await teamPermission.warmupSession();
       if (!current_model?.use_model) {
         Message.warning(t('conversation.chat.noModelSelected'));
         throw new Error('No model selected');
@@ -263,15 +245,6 @@ const AionrsSendBox: React.FC<{
       // the send edge — the front-end no longer builds paths nor the marker.
       try {
         void checkAndUpdateTitle(conversation_id, input);
-        if (teamSendMessage) {
-          await teamSendMessage({ input, files });
-          emitter.emit('chat.history.refresh');
-          if (files.length > 0) {
-            emitter.emit('aionrs.workspace.refresh');
-          }
-          return;
-        }
-
         markSendStarted();
         setWaitingResponse(true);
         const res = await ipcBridge.conversation.sendMessage.invoke({
@@ -319,8 +292,6 @@ const AionrsSendBox: React.FC<{
       setActiveMsgId,
       setWaitingResponse,
       t,
-      teamPermission,
-      teamSendMessage,
     ]
   );
 
@@ -407,22 +378,6 @@ const AionrsSendBox: React.FC<{
     await executeCommand({ input: message, files: filesToSend, sessions });
   };
 
-  const [interrupting, setInterrupting] = useState(false);
-  const handleInterruptSend = async () => {
-    if (!teamRuntime?.onInterruptSend || !content.trim() || interrupting) return;
-    const files = collectChatFileRefs(uploadFile, atPath);
-    const input = content;
-    setContent('');
-    clearFiles();
-    emitter.emit('aionrs.selected.file.clear');
-    setInterrupting(true);
-    try {
-      await teamRuntime.onInterruptSend({ input, files });
-    } finally {
-      setInterrupting(false);
-    }
-  };
-
   // Explicit "add to queue" entry — visibility is keyed only to the user's
   // own input (non-empty draft), never to the agent's busy/replying state:
   // tying it to that racy, async signal made the entry appear/disappear
@@ -489,14 +444,13 @@ const AionrsSendBox: React.FC<{
       try {
         await runtimeConfig.setConfigOption(runtimeMode.id, mode);
         setCurrentMode(mode);
-        propagateMode?.(mode);
         Message.success(t('agentMode.switchSuccess'));
       } catch (error) {
         console.error('[AionrsSendBox] Failed to switch mode via sheet:', error);
         Message.error(t(configErrorMessageKey(error)));
       }
     },
-    [propagateMode, runtimeConfig, runtimeMode, t]
+    [runtimeConfig, runtimeMode, t]
   );
 
   const handleSheetModelSelect = useCallback(
@@ -666,8 +620,7 @@ const AionrsSendBox: React.FC<{
   ]);
 
   // Accept file-selection events only when targeted at this conversation (or
-  // untargeted); stops same-type peers on the team route from receiving each
-  // other's selections. See emitter EventTypes comment.
+  // untargeted), so same-type peers don't receive each other's selections. See emitter EventTypes comment.
   useAddEventListener(
     'aionrs.selected.file',
     (items: Array<string | FileOrFolderItem>, targetConversationId: string | undefined) => {
@@ -709,7 +662,6 @@ const AionrsSendBox: React.FC<{
       resetActiveExecution('stop');
     }
   };
-  const effectiveHandleStop = teamRuntime?.onStop ?? handleStop;
   const handleSendNowQueued = useCallback(
     async (item: ConversationCommandQueueItem) => {
       // Stop the current reply (best-effort), then promote the chosen command
@@ -717,10 +669,10 @@ const AionrsSendBox: React.FC<{
       // once the execution gate shows canExecute — avoiding the 409 race that
       // occurs when sendNow() calls onExecute() directly before the backend
       // has finished processing the stop.
-      await effectiveHandleStop();
+      await handleStop();
       prioritize(item.id);
     },
-    [effectiveHandleStop, prioritize]
+    [handleStop, prioritize]
   );
   const sendBoxWidthClass = getChatSurfaceWidthClass();
 
@@ -742,12 +694,10 @@ const AionrsSendBox: React.FC<{
       />
       <ThoughtDisplay
         thought={thought}
-        running={teamRuntime?.loading ?? running}
-        statusText={teamRuntime?.statusText}
-        externalElapsedSource={Boolean(teamRuntime) || turnStartedAtMs != null}
-        startedAtMs={teamRuntime ? (teamRuntime.startedAtMs ?? null) : turnStartedAtMs}
-        onStop={effectiveHandleStop}
-        onRetryStart={teamRuntime?.onRetryStart ? () => void teamRuntime.onRetryStart?.() : undefined}
+        running={running}
+        externalElapsedSource={turnStartedAtMs != null}
+        startedAtMs={turnStartedAtMs}
+        onStop={handleStop}
       />
       <CrossSessionDisabledBanner />
       <SendBox
@@ -763,10 +713,7 @@ const AionrsSendBox: React.FC<{
         selectedSessions={selectedSessions}
         onSelectedSessionsChange={setSelectedSessions}
         crossSessionEnabled={crossSessionEnabled}
-        isTeamConversation={Boolean(teamRuntime)}
-        loading={teamRuntime?.loading ?? isBusy}
-        active={teamRuntime?.isActive}
-        onFocused={teamRuntime?.onFocus}
+        loading={isBusy}
         disabled={!current_model?.use_model}
         sendDisabled={isBusy}
         sendDisabledTooltip={
@@ -782,7 +729,7 @@ const AionrsSendBox: React.FC<{
             ? t('acp.sendbox.placeholder', { defaultValue: 'Message the agent…' })
             : t('conversation.chat.noModelSelected')
         }
-        onStop={effectiveHandleStop}
+        onStop={handleStop}
         className='z-10'
         onFilesAdded={handleFilesAdded}
         hasPendingAttachments={uploadFile.length > 0 || atPath.length > 0}
@@ -808,10 +755,6 @@ const AionrsSendBox: React.FC<{
               modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
               compactLabelPrefix={t('agentMode.permission')}
               hideCompactLabelPrefixOnMobile
-              onModeChanged={propagateMode}
-              beforeRuntimeSync={prepareRuntimeConfig}
-              beforeRuntimeSet={teamPermission?.warmupSession}
-              configOptionsPort={teamPermission?.configOptionsPort}
             />
           </div>
         }
@@ -870,19 +813,6 @@ const AionrsSendBox: React.FC<{
             : t('conversation.commandQueue.addToQueue', { defaultValue: 'Save to Draft box' })
         }
         allowSendWhileLoading
-        sendButtonPrefix={
-          teamRuntime?.onInterruptSend && content.trim() ? (
-            <Button
-              size='mini'
-              type='secondary'
-              icon={<Lightning />}
-              loading={interrupting}
-              onClick={() => void handleInterruptSend()}
-            >
-              {t('team.interruptAndSend')}
-            </Button>
-          ) : undefined
-        }
       />
       {isMobile && (
         <>

@@ -8,13 +8,13 @@
  * Sidebar read-model types (`GET /api/sidebar`, `GET /api/sidebar/items`).
  *
  * One request renders the whole left panel: the backend classifies every
- * conversation/team into its group (pinned / project / pseudo-dir / chats),
+ * conversation into its group (pinned / project / pseudo-dir / chats),
  * windows each group, and hydrates items. The front-end renders in the given
  * order and runs no classification. These shapes mirror the backend
- * `aionui-api-types/sidebar` DTOs 1:1 (including the flat team variant, see
- * `SidebarItem` below), except conversation items carry the mapped
+ * `aionui-api-types/sidebar` DTOs, except conversation items carry the mapped
  * `TChatConversation` (the wire `ConversationResponse` is mapped by the
- * ipcBridge response mapper, matching `getUserConversations`).
+ * ipcBridge response mapper, matching `getUserConversations`). The backend may
+ * still send `team` rows; the sidebar mapper drops them.
  *
  * See `feat-project-design/temp/left-panel/api-contract-sidebar.md` §4.
  */
@@ -37,32 +37,12 @@ export type SidebarScope =
   /** The flat "chats" group. */
   | { type: 'chats' };
 
-/** An aggregated team row for the sidebar (server-side aggregate). */
-export type SidebarTeamItem = {
-  team_id: string;
-  name: string;
-  /** `MAX(updated_at)` across active member conversations. */
-  updated_at: number;
-  /** Derived from a `user_order` scene=`pinned` row existing for this team. */
-  pinned: boolean;
-  /** Active member conversation ids, `created_at` ascending. */
-  member_conversation_ids: string[];
-};
-
 /**
- * One row in a group: either a full conversation (mapped to `TChatConversation`)
- * or an aggregated team row. A conversation's `pinned` flag is derived from
- * `user_order` row existence, not any table column.
- *
- * The team variant is **flat** on the wire: the backend `SidebarItem::Team`
- * is a newtype variant on an internally-tagged (`#[serde(tag = "type")]`) enum,
- * so `SidebarTeamItem`'s fields sit alongside `type` rather than nested under a
- * `team` key (contract §4 example: `{ "type": "team", "team_id": …, … }`). The
- * conversation variant stays nested because its inner DTO is mapped separately.
+ * One row in a group: a full conversation (mapped to `TChatConversation`).
+ * A conversation's `pinned` flag is derived from `user_order` row existence,
+ * not any table column.
  */
-export type SidebarItem =
-  | { type: 'conversation'; conversation: TChatConversation }
-  | ({ type: 'team' } & SidebarTeamItem);
+export type SidebarItem = { type: 'conversation'; conversation: TChatConversation };
 
 /** One group (a section's window) in the sidebar. */
 export type SidebarGroup = {
@@ -92,7 +72,7 @@ export type SidebarItemsResponse = {
 export type OrderScene = 'pinned';
 
 /** Item kinds that can be ordered. */
-export type OrderItemType = 'conversation' | 'team';
+export type OrderItemType = 'conversation';
 
 /**
  * `DELETE /api/sidebar/project/{project_id}` result (BR-19 "所见即所删").
@@ -120,7 +100,8 @@ export type RemoveProjectItem = {
   name: string;
   /** Whether the unit is currently pinned (hoisted into the top pinned group). */
   pinned: boolean;
-  kind: OrderItemType;
+  /** Wire value; the backend may still report leftover `team` units. */
+  kind: 'conversation' | 'team';
 };
 
 /**

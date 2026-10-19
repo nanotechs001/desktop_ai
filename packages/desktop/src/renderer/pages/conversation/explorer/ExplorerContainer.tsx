@@ -343,8 +343,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // The item carries a `chatRef` so a send collects it as a project ref (backend
   // resolves pe → absolute path). We emit on all agent prefixes carrying the
   // active conversation id; each send box accepts only when the id matches its
-  // own conversation (ids are unique), so on the multi-column team route only the
-  // focused member's box receives it — no leak to same-type peers.
+  // own conversation (ids are unique) — no leak to same-type peers.
   const handleAddToChat = (peId: string, rel: string, name: string, isFile: boolean): void => {
     if (!activeConversationId) return;
     const item: FileOrFolderItem = { path: rel, name, isFile, chatRef: projectFileRef(peId, rel) };

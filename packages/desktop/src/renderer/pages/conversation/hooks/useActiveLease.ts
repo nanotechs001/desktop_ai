@@ -3,7 +3,7 @@ import { ipcBridge } from '@/common';
 
 export const ACTIVE_LEASE_RENEW_INTERVAL_MS = 30_000;
 
-export type ActiveLeaseTarget = { type: 'conversation'; id?: string | null } | { type: 'team'; id?: string | null };
+export type ActiveLeaseTarget = { type: 'conversation'; id?: string | null };
 
 export function useActiveLease(target: ActiveLeaseTarget): void {
   useEffect(() => {
@@ -13,11 +13,7 @@ export function useActiveLease(target: ActiveLeaseTarget): void {
     let intervalId: ReturnType<typeof setInterval> | undefined;
 
     const renew = () => {
-      if (target.type === 'conversation') {
-        void ipcBridge.conversation.activeLease.invoke({ conversation_id: id }).catch(() => {});
-      } else {
-        void ipcBridge.team.activeLease.invoke({ team_id: id }).catch(() => {});
-      }
+      void ipcBridge.conversation.activeLease.invoke({ conversation_id: id }).catch(() => {});
     };
 
     const stop = () => {
@@ -52,5 +48,5 @@ export function useActiveLease(target: ActiveLeaseTarget): void {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stop();
     };
-  }, [target.id, target.type]);
+  }, [target.id]);
 }

@@ -117,9 +117,8 @@ function managedAgent(overrides: Partial<ManagedAgent> & { id: string; name: str
     command: overrides.command ?? overrides.backend ?? 'claude',
     args: [],
     env: [],
-    behavior_policy: { supports_team: true },
+    behavior_policy: {},
     sort_order: overrides.sort_order ?? 0,
-    team_capable: overrides.team_capable ?? true,
     status: overrides.status ?? 'online',
     ...overrides,
   } as ManagedAgent;

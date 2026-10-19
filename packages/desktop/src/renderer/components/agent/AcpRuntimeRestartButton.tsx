@@ -5,7 +5,6 @@
  */
 
 import { ipcBridge } from '@/common';
-import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { parseError } from '@/common/utils';
 import { revalidateAcpConfigOptions } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
@@ -18,13 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 export type RuntimeRestartAvailability = 'ready' | 'initializing' | 'unavailable';
 
-export const useAcpRuntimeRestart = ({
-  conversation_id,
-  team,
-}: {
-  conversation_id: string;
-  team?: { team_id: string; slot_id: string };
-}) => {
+export const useAcpRuntimeRestart = ({ conversation_id }: { conversation_id: string }) => {
   const { t } = useTranslation();
   const [restarting, setRestarting] = useState(false);
   const restartingRef = useRef(false);
@@ -34,37 +27,27 @@ export const useAcpRuntimeRestart = ({
     if (restartingRef.current) return;
     restartingRef.current = true;
     setRestarting(true);
-    if (!team) runtimeView.markRestartStarted();
+    runtimeView.markRestartStarted();
     try {
-      if (team) {
-        await ipcBridge.team.restartAgentRuntime.invoke({ team_id: team.team_id, slot_id: team.slot_id });
-      } else {
-        const response = await ipcBridge.conversation.restartRuntime.invoke({ conversation_id });
-        runtimeView.markRestartSucceeded(response.runtime);
-      }
+      const response = await ipcBridge.conversation.restartRuntime.invoke({ conversation_id });
+      runtimeView.markRestartSucceeded(response.runtime);
       await revalidateAcpConfigOptions(conversation_id);
       Message.success(t('agent.runtimeRestart.success'));
     } catch (error) {
-      if (!team) {
-        let runtime = null;
-        try {
-          runtime = (await getConversationOrNull(conversation_id))?.runtime ?? null;
-        } catch {
-          // The local gate still needs to recover if the follow-up refresh also fails.
-        }
-        runtimeView.markRestartFailed(runtime, parseError(error) || 'runtime restart failed');
+      let runtime = null;
+      try {
+        runtime = (await getConversationOrNull(conversation_id))?.runtime ?? null;
+      } catch {
+        // The local gate still needs to recover if the follow-up refresh also fails.
       }
-      if (isBackendHttpError(error) && error.code === 'TEAM_MEMBER_BUSY') {
-        Message.error(t('agent.runtimeRestart.processingTooltip'));
-      } else {
-        Message.error(t('agent.runtimeRestart.failed'));
-      }
+      runtimeView.markRestartFailed(runtime, parseError(error) || 'runtime restart failed');
+      Message.error(t('agent.runtimeRestart.failed'));
       throw error;
     } finally {
       restartingRef.current = false;
       setRestarting(false);
     }
-  }, [conversation_id, runtimeView, team, t]);
+  }, [conversation_id, runtimeView, t]);
 
   return { restart, restarting };
 };
@@ -75,20 +58,15 @@ export const useAcpRuntimeRestart = ({
  * turn) and respawns it, resuming the session when possible. Chat history is
  * preserved. Use after external CLI config changes — e.g. switching the
  * Codex channel via ccswitch — which a running process cannot pick up.
- *
- * In team mode pass `team`; the restart then goes through the team runtime
- * endpoint (the standalone endpoint rejects team-owned conversations).
  */
 const AcpRuntimeRestartButton: React.FC<{
   conversation_id: string;
-  /** Team context for team member conversations. */
-  team?: { team_id: string; slot_id: string };
   availability?: RuntimeRestartAvailability;
   disabled?: boolean;
   disabledReason?: string;
-}> = ({ conversation_id, team, availability = 'ready', disabled, disabledReason }) => {
+}> = ({ conversation_id, availability = 'ready', disabled, disabledReason }) => {
   const { t } = useTranslation();
-  const { restart, restarting } = useAcpRuntimeRestart({ conversation_id, team });
+  const { restart, restarting } = useAcpRuntimeRestart({ conversation_id });
 
   if (availability === 'unavailable') {
     return null;

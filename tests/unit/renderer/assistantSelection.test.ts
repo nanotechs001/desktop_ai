@@ -25,7 +25,6 @@ const mk = (id: string, source: Assistant['source'], sort_order: number, enabled
     prompts_i18n: {},
     models: [],
     agent_status: 'online',
-    team_selectable: true,
     deletable: source === 'user',
   }) as Assistant;
 

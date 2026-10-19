@@ -116,11 +116,6 @@
     "pathVariants": {
       "WORKSPACE_PATH_UNAVAILABLE": "O caminho do projeto selecionado não está disponível. Verifique se o caminho do projeto \"{{workspacePath}}\" existe e está acessível.",
       "WORKSPACE_PATH_CONTAINS_WHITESPACE_UNSUPPORTED": "O caminho do projeto selecionado \"{{workspacePath}}\" contém um nome de pasta com espaços ou outros caracteres de espaço em branco. Renomeie a pasta afetada ou escolha um caminho de projeto em que nenhum nome de diretório contenha espaços."
-    },
-    "codes": {
-      "TEAM_ASSISTANT_ID_REQUIRED": "Please select an agente before creating the team.",
-      "TEAM_ASSISTANT_NOT_FOUND": "Agente {{assistantId}} is no longer available. Refresh the agente list and choose another one.",
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "Use assistant_id instead of {{field}}."
     }
   },
   "agentError": {
@@ -338,21 +333,9 @@
         "title": "Failed to read from the local team helper",
         "body": "Pixebot Browser could not read the local team helper TCP response. Retry once, and restart the app if it keeps failing."
       },
-      "TEAM_SERVICE_UNAVAILABLE": {
-        "title": "Team service is not ready yet",
-        "body": "The local team session is still starting or has been interrupted. Wait a moment and retry."
-      },
-      "TEAM_ASSISTANT_ID_REQUIRED": {
-        "title": "A teammate agente must be selected",
-        "body": "Choose a real agente from the available agente catalog before creating or spawning a teammate."
-      },
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected agente is no longer available",
         "body": "Refresh the agente catalog, then choose another agente for this teammate."
-      },
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
-        "title": "The request used a legacy team identity field",
-        "body": "This team action must use assistant_id instead of legacy backend or agent fields."
       }
     }
   },

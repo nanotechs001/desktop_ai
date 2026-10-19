@@ -195,20 +195,14 @@ const engineDerivedInfo = (backend: Backend): PresetAssistantInfo => ({
   backend,
 });
 
-const teammateMessage = (backend: Backend): IMessageText => ({
+const agentMessage = (): IMessageText => ({
   id: 'm1',
   msg_id: 'm1',
   conversation_id: 'conv-1',
   type: 'text',
   position: 'left',
   createdAt: Date.now(),
-  content: {
-    content: 'Done.',
-    teammateMessage: true,
-    senderName: 'Writer',
-    senderConversationId: 'writer-conv',
-    senderAgentType: backend,
-  },
+  content: { content: 'Done.' },
 });
 
 /** Text a user can read or hear: visible text plus alt, title, aria-label and logo URLs (not test ids). */
@@ -241,7 +235,7 @@ const renderChat = (backend: Backend) =>
         backend={backend}
         presetAssistant={mocks.presetInfo.current as PresetAssistantInfo}
       >
-        <MessageText message={teammateMessage(backend)} />
+        <MessageText message={agentMessage()} />
       </ChatLayout>
     </ConversationProvider>
   );
@@ -355,17 +349,7 @@ describe('neutral Agent branding', () => {
       expect(container.querySelector('.i-icon-robot')).toBeNull();
     });
 
-    it('shows the robot for the sender while the Agent loads', () => {
-      mocks.presetInfo.current = null;
-      mocks.loading.current = true;
-
-      const { container } = render(<MessageText message={teammateMessage('claude')} />);
-
-      expect(container.querySelector('.i-icon-robot')).not.toBeNull();
-      expect(userFacingText(container)).not.toMatch(VENDOR_NAMES);
-    });
-
-    it("shows the named Agent's avatar in the header and for the sender", () => {
+    it("shows the named Agent's avatar in the header", () => {
       mocks.presetInfo.current = named;
 
       const header = render(
@@ -380,10 +364,6 @@ describe('neutral Agent branding', () => {
         </ChatLayout>
       );
       expect(header.getByText('🔬')).toBeInTheDocument();
-      header.unmount();
-
-      const sender = render(<MessageText message={teammateMessage('claude')} />);
-      expect(sender.getByText('🔬')).toBeInTheDocument();
     });
 
     it("names the chat's Agent on the status line", () => {

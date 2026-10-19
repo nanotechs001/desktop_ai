@@ -164,5 +164,8 @@
   },
   "selectedCount": "{{count}} selecionado(s)",
   "selectedSkills": "Habilidades selecionadas",
-  "aiAssistant": "Agente de IA"
+  "aiAssistant": "Agente de IA",
+  "searchPlaceholder": "Search",
+  "recentFolders": "Recente",
+  "chooseDifferentFolder": "Escolher uma pasta diferente"
 }

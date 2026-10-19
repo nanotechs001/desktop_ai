@@ -5,13 +5,11 @@ import { Message } from '@arco-design/web-react';
 import { BackendHttpError } from '@/common/adapter/httpBridge';
 import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/AionrsSendBox';
 import type { AionrsModelSelection } from '@/renderer/pages/conversation/platforms/aionrs/useAionrsModelSelection';
-import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 
 const {
   ensureConversationRuntimeMock,
   sendMessageInvokeMock,
   translateMock,
-  useTeamPermissionMock,
   setSendBoxHandlerMock,
   markSendFailedMock,
   markSendStartedMock,
@@ -26,7 +24,6 @@ const {
   ensureConversationRuntimeMock: vi.fn().mockResolvedValue({ recovered: false, config_options: [], runtime: null }),
   sendMessageInvokeMock: vi.fn().mockResolvedValue(undefined),
   translateMock: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
-  useTeamPermissionMock: vi.fn(),
   setSendBoxHandlerMock: vi.fn(),
   markSendFailedMock: vi.fn(),
   markSendStartedMock: vi.fn(),
@@ -58,8 +55,6 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
   default: ({
     onSend,
     onChange,
-    active,
-    onFocused,
     disabled,
     sendDisabled,
     rightTools,
@@ -70,12 +65,9 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
     selectedSessions,
     onSelectedSessionsChange,
     crossSessionEnabled,
-    isTeamConversation,
   }: {
     onSend: (message: string) => Promise<void>;
     onChange?: (value: string) => void;
-    active?: boolean;
-    onFocused?: () => void;
     disabled?: boolean;
     sendDisabled?: boolean;
     rightTools?: React.ReactNode;
@@ -86,11 +78,8 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
     selectedSessions?: Array<{ id: string }>;
     onSelectedSessionsChange?: (sessions: Array<{ id: string }>) => void;
     crossSessionEnabled?: boolean;
-    isTeamConversation?: boolean;
   }) => {
     sendBoxPropsSpy({
-      active,
-      onFocused,
       disabled,
       sendDisabled,
       onAddToDraft,
@@ -98,7 +87,6 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
       selectedSessions,
       onSelectedSessionsChange,
       crossSessionEnabled,
-      isTeamConversation,
     });
     return (
       <div>
@@ -241,9 +229,6 @@ vi.mock('@/renderer/pages/conversation/Preview', () => ({
     setSendBoxHandler: setSendBoxHandlerMock,
   }),
 }));
-vi.mock('@/renderer/pages/team/hooks/TeamPermissionContext', () => ({
-  useTeamPermission: useTeamPermissionMock,
-}));
 vi.mock('@/renderer/services/FileService', () => ({
   allSupportedExts: [],
 }));
@@ -311,7 +296,6 @@ describe('AionrsSendBox', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ensureConversationRuntimeMock.mockResolvedValue({ recovered: false, config_options: [], runtime: null });
-    useTeamPermissionMock.mockReturnValue(null);
     draftContentRef.current = '';
     runtimeViewIsProcessingRef.current = false;
   });
@@ -341,75 +325,6 @@ describe('AionrsSendBox', () => {
     ).find((entry) => entry.key === 'model');
     expect(modelEntry?.submenu?.options).toEqual([expect.objectContaining({ label: 'claude-sonnet-4' })]);
     expect(modelEntry?.submenu?.options[0].description).toBeUndefined();
-  });
-
-  it('does not warm up team session when draft content changes', async () => {
-    const warmupSession = vi.fn().mockResolvedValue(undefined);
-    useTeamPermissionMock.mockReturnValue({
-      isTeamMode: true,
-      isLeaderAgent: true,
-      leaderConversationId: 'conv-1',
-      allConversationIds: ['conv-1'],
-      propagateMode: vi.fn(),
-      warmupSession,
-    });
-
-    render(<AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} />);
-    await waitFor(() => {
-      expect(warmupSession).toHaveBeenCalled();
-    });
-    warmupSession.mockClear();
-
-    await act(async () => {
-      screen.getByRole('button', { name: 'change' }).click();
-    });
-
-    expect(warmupSession).not.toHaveBeenCalled();
-  });
-
-  it('still warms up team session before sending', async () => {
-    const warmupSession = vi.fn().mockResolvedValue(undefined);
-    useTeamPermissionMock.mockReturnValue({
-      isTeamMode: true,
-      isLeaderAgent: true,
-      leaderConversationId: 'conv-1',
-      allConversationIds: ['conv-1'],
-      propagateMode: vi.fn(),
-      warmupSession,
-    });
-
-    render(<AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} />);
-    await waitFor(() => {
-      expect(warmupSession).toHaveBeenCalled();
-    });
-    warmupSession.mockClear();
-
-    await act(async () => {
-      screen.getByRole('button', { name: 'send' }).click();
-    });
-
-    await waitFor(() => {
-      expect(warmupSession).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it('does not start standalone runtime while preparing a team conversation', async () => {
-    const warmupSession = vi.fn().mockResolvedValue(undefined);
-    useTeamPermissionMock.mockReturnValue({
-      isTeamMode: true,
-      isLeaderAgent: true,
-      leaderConversationId: 'conv-1',
-      allConversationIds: ['conv-1'],
-      propagateMode: vi.fn(),
-      warmupSession,
-    });
-
-    render(<AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} />);
-
-    await waitFor(() => {
-      expect(warmupSession).toHaveBeenCalled();
-    });
-    expect(ensureConversationRuntimeMock).not.toHaveBeenCalled();
   });
 
   it('uses runtime ensure instead of legacy warmup for standalone runtime preparation', async () => {
@@ -444,21 +359,6 @@ describe('AionrsSendBox', () => {
       expect.objectContaining({ kind: 'busy_conflict', busyKind: 'active_turn' })
     );
     expect(Message.error).not.toHaveBeenCalled();
-  });
-
-  it('passes teamRuntime.isActive and onFocus down to SendBox as active/onFocused', () => {
-    const onFocus = vi.fn();
-    render(
-      <AionrsSendBox
-        conversation_id='conv-1'
-        modelSelection={modelSelection}
-        teamRuntime={{ loading: false, startedAtMs: null, isActive: true, onFocus } as unknown as TeamSendBoxRuntime}
-      />
-    );
-    const props = sendBoxPropsSpy.mock.calls.at(-1)?.[0] as { active?: boolean; onFocused?: () => void };
-    expect(props.active).toBe(true);
-    props.onFocused?.();
-    expect(onFocus).toHaveBeenCalledTimes(1);
   });
 
   describe('mid-turn interjection controls', () => {

@@ -56,13 +56,12 @@ const ChatLayout: React.FC<{
   isTemporaryWorkspace?: boolean;
   /**
    * Stable key for persisting the workspace collapse preference. Defaults to
-   * `conversation_id` for single chats; team mode passes `team_id` so the
-   * preference survives agent-tab switches.
+   * `conversation_id`.
    */
   workspacePreferenceKey?: string;
   /** Custom rename handler; when provided, replaces the default conversation.update rename flow */
   onRenameTitle?: (new_name: string) => Promise<boolean>;
-  /** Optional override for the leading icon shown before the title (e.g. team Peoples icon) */
+  /** Optional override for the leading icon shown before the title */
   headerLeading?: React.ReactNode;
 }> = (props) => {
   const { conversation_id, workspacePath, isTemporaryWorkspace } = props;

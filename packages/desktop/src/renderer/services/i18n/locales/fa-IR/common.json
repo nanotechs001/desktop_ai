@@ -164,5 +164,8 @@
   },
   "selectedCount": "{{count}} انتخاب‌شده",
   "selectedSkills": "مهارت‌های انتخاب‌شده",
-  "aiAssistant": "عامل هوش مصنوعی"
+  "aiAssistant": "عامل هوش مصنوعی",
+  "searchPlaceholder": "Search",
+  "recentFolders": "اخیر",
+  "chooseDifferentFolder": "انتخاب پوشه دیگر"
 }

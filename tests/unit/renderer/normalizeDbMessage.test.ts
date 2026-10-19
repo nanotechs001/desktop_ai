@@ -143,7 +143,7 @@ describe('normalizeDbMessage', () => {
     });
   });
 
-  it('normalizes team metadata when persisted text content is already an object', () => {
+  it('drops leftover team metadata when persisted text content is already an object', () => {
     const normalized = normalizeDbMessage({
       id: 'team-message-object',
       type: 'text',
@@ -159,16 +159,10 @@ describe('normalizeDbMessage', () => {
       },
     } as unknown as IMessageText) as IMessageText;
 
-    expect(normalized.content).toEqual({
-      content: '[Claude Assistant] idle',
-      teammateMessage: true,
-      senderName: 'Claude Assistant',
-      senderAgentType: 'claude',
-      senderConversationId: 'teammate-conversation-1',
-    });
+    expect(normalized.content).toEqual({ content: '[Claude Assistant] idle' });
   });
 
-  it('normalizes team metadata when persisted text content is a JSON string', () => {
+  it('drops leftover team metadata when persisted text content is a JSON string', () => {
     const normalized = normalizeDbMessage({
       id: 'team-message-json',
       type: 'text',
@@ -184,13 +178,7 @@ describe('normalizeDbMessage', () => {
       }),
     } as unknown as IMessageText) as IMessageText;
 
-    expect(normalized.content).toEqual({
-      content: '[Codex Assistant] idle',
-      teammateMessage: true,
-      senderName: 'Codex Assistant',
-      senderAgentType: 'codex',
-      senderConversationId: 'teammate-conversation-2',
-    });
+    expect(normalized.content).toEqual({ content: '[Codex Assistant] idle' });
   });
 
   it('keeps ordinary recovered text messages as plain text content', () => {

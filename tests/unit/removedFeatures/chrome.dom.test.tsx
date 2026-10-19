@@ -3,12 +3,12 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Teams, Butler and Feedback are removed from this fork: the sidebar has no
- * Teams section, the titlebar has no feedback button, and the startup-failure
+ * Butler and Feedback are removed from this fork: the titlebar has no
+ * feedback button, and the startup-failure
  * dialog explains the error without a "send diagnostics" button.
  */
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,31 +56,12 @@ vi.mock('@renderer/components/layout/Sider/SiderNav', () => ({
   SiderAssistantEntry: () => null,
 }));
 vi.mock('@renderer/components/layout/Sider/SiderFooter', () => ({ default: () => <div data-testid='sider-footer' /> }));
-vi.mock('@renderer/components/layout/Sider/TeamSiderSection', () => ({
-  default: () => <div data-testid='teams-section' />,
-}));
 vi.mock('@renderer/pages/settings/components/SettingsSider', () => ({ default: () => null }));
 
 import Titlebar from '@/renderer/components/layout/Titlebar';
-import Sider from '@renderer/components/layout/Sider';
 import { InstallationIntegrityFooter } from '@/renderer/components/layout/InstallationIntegrityDialog';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 
 afterEach(cleanup);
-
-describe('Teams', () => {
-  it('is switched off', () => {
-    expect(TEAM_MODE_ENABLED).toBe(false);
-  });
-
-  it('adds no Teams section to the sidebar', async () => {
-    render(<Sider />);
-
-    expect(await screen.findByTestId('sider-footer')).toBeInTheDocument();
-    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
-    expect(screen.queryByTestId('teams-section')).not.toBeInTheDocument();
-  });
-});
 
 describe('Feedback and Butler', () => {
   it('adds no feedback button to the titlebar', () => {

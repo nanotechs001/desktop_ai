@@ -164,5 +164,8 @@
   },
   "selectedCount": "{{count}} seçili",
   "selectedSkills": "Seçili beceriler",
-  "aiAssistant": "Yapay Zekâ Agent'ı"
+  "aiAssistant": "Yapay Zekâ Agent'ı",
+  "searchPlaceholder": "Search",
+  "recentFolders": "Son kullanılan",
+  "chooseDifferentFolder": "Farklı klasör seç"
 }

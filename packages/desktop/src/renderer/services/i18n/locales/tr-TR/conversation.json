@@ -315,21 +315,9 @@
         "title": "Failed to read from the local team helper",
         "body": "Pixebot Browser could not read the local team helper TCP response. Retry once, and restart the app if it keeps failing."
       },
-      "TEAM_SERVICE_UNAVAILABLE": {
-        "title": "Team service is not ready yet",
-        "body": "The local team session is still starting or has been interrupted. Wait a moment and retry."
-      },
-      "TEAM_ASSISTANT_ID_REQUIRED": {
-        "title": "A teammate Agent must be selected",
-        "body": "Choose a real Agent from the available Agent catalog before creating or spawning a teammate."
-      },
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected Agent is no longer available",
         "body": "Refresh the Agent catalog, then choose another Agent for this teammate."
-      },
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
-        "title": "The request used a legacy team identity field",
-        "body": "This team action must use assistant_id instead of legacy backend or agent fields."
       }
     }
   },
@@ -562,11 +550,6 @@
   "createError": {
     "pathVariants": {
       "WORKSPACE_PATH_UNAVAILABLE": "Seçilen çalışma alanı yolu kullanılamıyor. Çalışma alanı yolu \"{{workspacePath}}\" gerçekten var ve erişilebilir olduğundan emin olun."
-    },
-    "codes": {
-      "TEAM_ASSISTANT_ID_REQUIRED": "Please select an Agent before creating the team.",
-      "TEAM_ASSISTANT_NOT_FOUND": "Agent {{assistantId}} is no longer available. Refresh the Agent list and choose another one.",
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "Use assistant_id instead of {{field}}."
     }
   },
   "thinking": {

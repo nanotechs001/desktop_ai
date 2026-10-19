@@ -115,11 +115,6 @@
   "createError": {
     "pathVariants": {
       "WORKSPACE_PATH_UNAVAILABLE": "所選工作區路徑不可用。請確認工作區路徑「{{workspacePath}}」確實存在且可存取。"
-    },
-    "codes": {
-      "TEAM_ASSISTANT_ID_REQUIRED": "建立團隊前請先選擇 Agent。",
-      "TEAM_ASSISTANT_NOT_FOUND": "Agent {{assistantId}} 已不可用。請重新整理 Agent 列表後再選擇。",
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "請使用 assistant_id，不要再傳 {{field}}。"
     }
   },
   "agentError": {
@@ -332,21 +327,9 @@
         "title": "讀取本地團隊輔助程序失敗",
         "body": "Pixebot Browser 無法讀取本地團隊輔助程序的 TCP 回應。請先重試一次，如仍失敗可重新啟動應用。"
       },
-      "TEAM_SERVICE_UNAVAILABLE": {
-        "title": "團隊服務尚未就緒",
-        "body": "本地團隊對話仍在啟動中，或剛剛被中斷。請稍候再試。"
-      },
-      "TEAM_ASSISTANT_ID_REQUIRED": {
-        "title": "必須先選擇隊友 Agent",
-        "body": "建立或拉起隊友前，請先從可用 Agent 目錄選擇一個真實 Agent。"
-      },
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "所選 Agent 已不可用",
         "body": "請重新整理 Agent 目錄，然後為這位隊友重新選擇一個 Agent。"
-      },
-      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
-        "title": "請求仍在使用舊的團隊身份欄位",
-        "body": "這個團隊操作必須使用 assistant_id，不能再使用舊的 backend 或 agent 欄位。"
       }
     }
   },

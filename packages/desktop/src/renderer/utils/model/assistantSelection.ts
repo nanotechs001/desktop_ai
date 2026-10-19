@@ -8,7 +8,7 @@ import type { Assistant } from '@/common/types/agent/assistantTypes';
 
 /**
  * Single source of truth for which assistants appear in a *selection* list
- * (home pill bar, team creation, scheduled-task dropdown, …) and in what order.
+ * (home pill bar, scheduled-task dropdown, …) and in what order.
  *
  * Rules (see PRD F-AHM-06 / F-AHM-07):
  *  - Only enabled assistants are selectable.

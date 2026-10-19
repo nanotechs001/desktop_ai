@@ -6,8 +6,7 @@
 
 /**
  * Module-level "active conversation id" store, sibling to {@link currentProjectStore}.
- * The conversation route publishes the mounted conversation's id; the team route
- * publishes the active member column's conversation id. The Layout-level Project
+ * The conversation route publishes the mounted conversation's id. The Layout-level Project
  * Explorer reads it so "add to chat" can target that conversation's send box.
  *
  * Only the id is tracked — the Explorer emits the append on all agent prefixes
@@ -15,7 +14,7 @@
  * conversation (ids are unique, so the agent type need not be known here).
  *
  * `null` when there is no active conversation (non-chat route, or after leaving
- * the conversation + team routes).
+ * the conversation route).
  */
 
 import { useSyncExternalStore } from 'react';

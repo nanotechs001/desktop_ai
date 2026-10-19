@@ -300,7 +300,7 @@ describe('normalizeAgentStreamError', () => {
 });
 
 describe('normalizeTextMessageContent', () => {
-  it('normalizes snake_case team metadata from an object payload', () => {
+  it('drops leftover team metadata the backend may still send', () => {
     expect(
       normalizeTextMessageContent({
         content: '已向 Lead Agent 报告就绪状态',
@@ -309,33 +309,7 @@ describe('normalizeTextMessageContent', () => {
         sender_backend: 'codex',
         sender_conversation_id: 'teammate-conversation-1',
       })
-    ).toEqual({
-      content: '已向 Lead Agent 报告就绪状态',
-      teammateMessage: true,
-      senderName: 'Codex Assistant',
-      senderAgentType: 'codex',
-      senderConversationId: 'teammate-conversation-1',
-    });
-  });
-
-  it('preserves camelCase team metadata from an already-normalized object payload', () => {
-    expect(
-      normalizeTextMessageContent({
-        content: 'online and ready',
-        teammateMessage: true,
-        senderName: 'Claude Assistant',
-        senderAgentType: 'claude',
-        senderConversationId: 'teammate-conversation-2',
-        replace: true,
-      })
-    ).toEqual({
-      content: 'online and ready',
-      teammateMessage: true,
-      senderName: 'Claude Assistant',
-      senderAgentType: 'claude',
-      senderConversationId: 'teammate-conversation-2',
-      replace: true,
-    });
+    ).toEqual({ content: '已向 Lead Agent 报告就绪状态' });
   });
 
   it('normalizes JSON string text content from persisted DB payloads', () => {
@@ -349,13 +323,7 @@ describe('normalizeTextMessageContent', () => {
           sender_conversation_id: 'teammate-conversation-3',
         })
       )
-    ).toEqual({
-      content: '[Codex Assistant] idle',
-      teammateMessage: true,
-      senderName: 'Codex Assistant',
-      senderAgentType: 'codex',
-      senderConversationId: 'teammate-conversation-3',
-    });
+    ).toEqual({ content: '[Codex Assistant] idle' });
   });
 
   it('keeps ordinary string text messages as plain content', () => {
@@ -385,7 +353,7 @@ describe('transformMessage', () => {
     expect(transformMessage(message)).toBeUndefined();
   });
 
-  it('uses explicit stream position for team projected user text messages', () => {
+  it('uses explicit stream position for projected user text messages', () => {
     const message: IResponseMessage = {
       type: 'text',
       data: {
@@ -409,7 +377,7 @@ describe('transformMessage', () => {
     });
   });
 
-  it('normalizes team teammate metadata on realtime text messages', () => {
+  it('drops leftover team metadata on realtime text messages', () => {
     const message: IResponseMessage = {
       type: 'text',
       data: {
@@ -430,13 +398,7 @@ describe('transformMessage', () => {
     expect(transformed.type).toBe('text');
     expect(transformed.position).toBe('left');
     expect(transformed.status).toBe('finish');
-    expect(transformed.content).toEqual({
-      content: '[Codex Assistant] idle',
-      teammateMessage: true,
-      senderName: 'Codex Assistant',
-      senderAgentType: 'codex',
-      senderConversationId: 'teammate-conversation-1',
-    });
+    expect(transformed.content).toEqual({ content: '[Codex Assistant] idle' });
   });
 
   it('keeps plain text stream messages left when no explicit position is present', () => {
