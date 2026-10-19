@@ -11,6 +11,9 @@ on:
     branches: [dev]
     tags:
       - '*'
+      # v* tags are built and published by release-windows.yml; running here too would
+      # create a second, source-only draft release for the same tag.
+      - '!v*'
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'

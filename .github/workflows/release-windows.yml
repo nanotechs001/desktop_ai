@@ -1,0 +1,219 @@
+name: Release Windows (preview)
+
+# Builds the Windows x64 NSIS installer (unsigned) from a version tag and publishes it as a
+# GitHub pre-release. Mac and Linux are not built here. build-and-release.yml ignores v* tags
+# so the two workflows never race on the same release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+      # Dev tags come from build-and-release.yml's create-tag job, which publishes them itself.
+      - '!v*-dev-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish (e.g. v2.2.3)'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-windows-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  windows-x64:
+    name: Build and publish Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Check tag matches package.json version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v${VERSION}" != "${RELEASE_TAG}" ]; then
+            echo "::error::Tag ${RELEASE_TAG} does not match package.json version ${VERSION}"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Backend (core/) toolchain, same as core/.github/workflows/release.yml uses for Windows.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+          targets: x86_64-pc-windows-msvc
+
+      - name: Fix MSVC linker (remove Git's link.exe)
+        shell: pwsh
+        run: Remove-Item 'C:\Program Files\Git\usr\bin\link.exe' -Force -ErrorAction SilentlyContinue
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Cache Electron artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/.cache/electron
+            ${{ runner.temp }}/.cache/electron-builder
+          key: electron-cache-windows-x64-${{ hashFiles('package.json', 'bun.lock') }}
+          restore-keys: |
+            electron-cache-windows-x64-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: bun install --frozen-lockfile
+
+      - name: Run postinstall
+        shell: bash
+        run: bun run postinstall || true
+
+      - name: Setup Windows native dependencies
+        run: bun install --global node-gyp
+
+      - name: Setup Windows build environment
+        run: |
+          echo "Setting Windows SDK version for ConPty support"
+          echo "WindowsTargetPlatformVersion=10.0.19041.0" >> $env:GITHUB_ENV
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '17.0'
+
+      - name: Rebuild native modules for Electron
+        shell: pwsh
+        run: |
+          $arch = "x64"
+          $electronVer = (node -p "require('./package.json').devDependencies.electron.replace(/[\^~]/g, '')").Trim()
+          Write-Host "Rebuilding native modules for Electron $electronVer ($arch)"
+
+          # prebuild-install first (prebuilt binaries), electron-rebuild as fallback.
+          try {
+            bun x --yes prebuild-install --runtime=electron --target=$electronVer --platform=win32 --arch=$arch --force 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Host "prebuild-install exited with code $LASTEXITCODE" }
+          } catch {
+            Write-Host "prebuild-install failed: $_"
+          }
+
+          $sqliteNode = "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          if (-not (Test-Path $sqliteNode)) {
+            Write-Host "prebuild-install didn't produce a binary, trying electron-rebuild..."
+            try { bunx electron-rebuild -f -w better-sqlite3 } catch { Write-Host "electron-rebuild failed: $_" }
+          }
+
+          if (-not (Test-Path $sqliteNode)) {
+            Write-Error "better-sqlite3 native module not found at: $sqliteNode"
+            exit 1
+          }
+          Write-Host "better-sqlite3 found: $sqliteNode"
+          exit 0
+        env:
+          npm_config_runtime: electron
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+          npm_config_disturl: https://electronjs.org/headers
+          MSVS_VERSION: 2022
+          GYP_MSVS_VERSION: 2022
+
+      # Builds the backend from core/ (scripts/prepareLocalCore.js), then the NSIS installer.
+      # No signing: no WIN_CSC_LINK/CSC_LINK is set, so electron-builder skips Windows signing.
+      - name: Build with electron-builder
+        shell: pwsh
+        run: node scripts/build-with-builder.js x64 --win --x64
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+          npm_config_runtime: electron
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_build_from_source: true
+          npm_config_cache: ${{ runner.temp }}/.npm
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/.cache/electron-builder
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          MSVS_VERSION: 2022
+          GYP_MSVS_VERSION: 2022
+          WindowsTargetPlatformVersion: 10.0.19041.0
+          _WIN32_WINNT: 0x0A00
+          CI: true
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Locate installer
+        shell: bash
+        run: |
+          ls -lh out/ || true
+          shopt -s nullglob
+          installers=(out/*-win-x64.exe)
+          if [ ${#installers[@]} -ne 1 ]; then
+            echo "::error::Expected exactly one NSIS installer (out/*-win-x64.exe), found ${#installers[@]}"
+            exit 1
+          fi
+          echo "Installer: ${installers[0]}"
+
+      # Uploaded before publishing so a failed release step still leaves the installer on the run.
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-${{ env.RELEASE_TAG }}
+          path: |
+            out/*-win-x64.exe
+            out/*-win-x64.exe.blockmap
+            out/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Pixebot Browser ${{ env.RELEASE_TAG }} (Windows preview)
+          prerelease: true
+          draft: false
+          files: |
+            out/*-win-x64.exe
+            out/*-win-x64.exe.blockmap
+            out/latest.yml
+          body: |
+            Windows x64 preview build of Pixebot Browser ${{ env.RELEASE_TAG }}.
+
+            **Unsigned build.** The first time you run the installer, Windows may show "Windows protected your PC". Click **More info**, then **Run anyway**.
+
+            **Known limitation:** agents running on the Claude Code engine don't start on Windows yet, because its launcher is macOS/Linux only. Agents on the other engines work.
+
+            Mac and Linux builds are not part of this release.
