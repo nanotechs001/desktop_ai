@@ -49,7 +49,11 @@ async function startFakeBackend(): Promise<FakeBackend> {
     seen.push({ method: req.method ?? '', url: req.url ?? '', headers: req.headers });
     if (req.method === 'POST' && req.url?.split('?')[0] === '/logout') revoked = true; // routes ignore the query
     req.resume();
-    res.writeHead(200, { 'content-type': 'application/json' });
+    const setCookie =
+      req.url === '/login'
+        ? { 'set-cookie': ['aionui-session=s; HttpOnly; Path=/', 'aionui-refresh=r; Path=/; secure'] }
+        : {};
+    res.writeHead(200, { 'content-type': 'application/json', ...setCookie });
     res.end(JSON.stringify({ url: req.url, headers: req.headers }));
   });
   server.on('connection', (s) => {
@@ -112,7 +116,7 @@ function rawExchange(
     });
     sock.on('data', (d: Buffer) => {
       text += d.toString('latin1');
-      if (opts.after101 && !sentAfter && text.includes('\r\n\r\n') && text.startsWith('HTTP/1.1 101')) {
+      if (opts.after101 && !sentAfter && /HTTP\/1\.1 101 [^]*?\r\n\r\n/.test(text)) {
         sentAfter = true;
         sock.write(opts.after101);
       }
@@ -409,13 +413,14 @@ describe('WebUI listener timeouts', () => {
       sock.once('data', (d: Buffer) => resolve(d.toString('latin1'))); // read the 401, never end our side
     });
     expect(got).toMatch(/^HTTP\/1\.1 401/);
-    // The listener only finishes stopping once every connection is gone, so this shows the server dropped it.
-    const outcome = await Promise.race([
-      handle.stop().then(() => 'stopped'),
-      new Promise((r) => setTimeout(() => r('still open'), 1000)),
-    ]);
+    // Once the server has dropped its end after the linger timeout, writes are answered with a reset.
+    await new Promise((r) => setTimeout(r, 400));
+    const closed = new Promise((r) => sock.once('close', () => r('closed')));
+    const writer = setInterval(() => sock.writable && sock.write('x'), 50);
+    const outcome = await Promise.race([closed, new Promise((r) => setTimeout(() => r('still open'), 1000))]);
+    clearInterval(writer);
     sock.destroy();
-    expect(outcome).toBe('stopped');
+    expect(outcome).toBe('closed');
   });
 
   it('does not time out a piped upgrade', async () => {
@@ -725,5 +730,214 @@ describe('WebUI listener without sessionsNotBefore', () => {
       await handle.stop();
       await backend.close();
     }
+  });
+});
+
+describe('WebUI listener upgrade on a reused keep-alive connection (R16)', () => {
+  // cloudflared pools connections, so an upgrade can follow a plain request on a connection already
+  // handed to the internal HTTP server. It must get exactly the raw upgrade path's gate.
+  const jwtAt = (iat: number): string => `e30.${Buffer.from(JSON.stringify({ iat })).toString('base64url')}.good`;
+  const FIRST = 'GET /api/auth/status HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n';
+  const lastResponse = (text: string): string => text.slice(text.lastIndexOf('HTTP/1.1 '));
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    backend = await startFakeBackend();
+    handle = await startStaticServer({ staticDir: STATIC_DIR, backendPort: backend.port, port: 0 });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  for (const route of ['/ws', '/api/stt/stream']) {
+    it(`${route} after a plain request is refused without a session and closed`, async () => {
+      const r = await rawExchange(handle.port, [FIRST, upgrade(route)], { gapMs: 150 });
+      expect(r.text).toMatch(/^HTTP\/1\.1 200/);
+      expect(lastResponse(r.text)).toMatch(/^HTTP\/1\.1 401/);
+      expect(r.closed).toBe(true);
+      expect(backend.seen.map((s) => s.url)).toEqual(['/api/auth/status']);
+    });
+
+    it(`${route} after a plain request is spliced to aioncore with a session`, async () => {
+      const r = await rawExchange(
+        handle.port,
+        [FIRST, upgrade(route, `Cookie: ${GOOD}\r\nX-Forwarded-For: 6.6.6.6\r\n`)],
+        { gapMs: 150, after101: 'ping-frame' }
+      );
+      expect(lastResponse(r.text)).toMatch(/^HTTP\/1\.1 101/);
+      expect(r.text.endsWith('ping-frame')).toBe(true);
+      expect(backend.seen.map((s) => s.url)).toEqual(['/api/auth/status', route]);
+      expect(backend.seen[1].headers['x-forwarded-for']).toBe('127.0.0.1');
+    });
+
+    it(`${route} after a plain request refuses a token issued before not-before`, async () => {
+      handle.setSessionsNotBefore(2_000_000);
+      const old = await rawExchange(
+        handle.port,
+        [FIRST, upgrade(route, `Cookie: aionui-session=${jwtAt(1_000)}\r\n`)],
+        {
+          gapMs: 150,
+        }
+      );
+      expect(lastResponse(old.text)).toMatch(/^HTTP\/1\.1 401/);
+      expect(backend.seen.map((s) => s.url)).toEqual(['/api/auth/status']);
+      const fresh = await rawExchange(
+        handle.port,
+        [FIRST, upgrade(route, `Cookie: aionui-session=${jwtAt(3_000)}\r\n`)],
+        { gapMs: 150, after101: 'x' }
+      );
+      expect(lastResponse(fresh.text)).toMatch(/^HTTP\/1\.1 101/);
+    });
+  }
+
+  it.each([
+    ['a non-canonical path', '/ws/../ws'],
+    ['a route outside the allowlist', '/api/agents'],
+    ['a static route', '/index.html'],
+  ])('refuses an upgrade to %s with 400', async (_name, route) => {
+    const r = await rawExchange(handle.port, [FIRST, upgrade(route, `Cookie: ${GOOD}\r\n`)], { gapMs: 150 });
+    expect(lastResponse(r.text)).toMatch(/^HTTP\/1\.1 400/);
+    expect(backend.seen.map((s) => s.url)).toEqual(['/api/auth/status']);
+  });
+
+  it('refuses an upgrade with a non-ASCII cookie byte with 400', async () => {
+    const r = await rawExchange(handle.port, [FIRST, upgrade('/ws', `Cookie: ${GOOD}; x=\xe9\r\n`)], { gapMs: 150 });
+    expect(lastResponse(r.text)).toMatch(/^HTTP\/1\.1 400/);
+    expect(backend.authCalls).toBe(0);
+  });
+
+  it('re-checks not-before after aioncore answers', async () => {
+    const held = backend.holdAuth();
+    const pending = rawExchange(handle.port, [FIRST, upgrade('/ws', `Cookie: aionui-session=${jwtAt(1_000)}\r\n`)], {
+      gapMs: 150,
+    });
+    for (let i = 0; i < 100 && held.waiting() === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    handle.setSessionsNotBefore(2_000_000);
+    held.release();
+    expect(lastResponse((await pending).text)).toMatch(/^HTTP\/1\.1 401/);
+    expect(backend.seen.map((s) => s.url)).toEqual(['/api/auth/status']);
+  });
+
+  it('tracks the spliced socket, so a later not-before closes it', async () => {
+    const sock = net.connect({ host: '127.0.0.1', port: handle.port });
+    let closed = false;
+    let text = '';
+    sock.on('close', () => (closed = true));
+    sock.on('error', () => {});
+    sock.on('data', (d: Buffer) => (text += d.toString('latin1')));
+    sock.write(FIRST);
+    for (let i = 0; i < 100 && !text.includes('HTTP/1.1 200'); i++) await new Promise((r) => setTimeout(r, 10));
+    sock.write(upgrade('/ws', `Cookie: aionui-session=${jwtAt(1_000)}\r\n`));
+    for (let i = 0; i < 100 && !text.includes('HTTP/1.1 101'); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(text).toContain('HTTP/1.1 101');
+    handle.setSessionsNotBefore(2_000_000);
+    for (let i = 0; i < 100 && !closed; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(closed).toBe(true);
+  });
+});
+
+describe('WebUI internal server peer', () => {
+  it('a request with no peers entry is forwarded as unknown, and Cf-Connecting-Ip is not trusted', async () => {
+    const backend = await startFakeBackend();
+    const createServer = vi.spyOn(http, 'createServer');
+    const handle = await startStaticServer({
+      staticDir: STATIC_DIR,
+      backendPort: backend.port,
+      port: 0,
+      isTunnelActive: () => true,
+    });
+    const internal = createServer.mock.results[0].value as http.Server;
+    createServer.mockRestore();
+    try {
+      // A local process talking to the internal port directly was never spliced by the listener.
+      const internalPort = (internal.address() as AddressInfo).port;
+      const r = await request(internalPort, 'GET', '/api/agents', { cookie: GOOD, 'Cf-Connecting-Ip': '9.9.9.9' });
+      expect(r.status).toBe(200);
+      expect(backend.seen[0].headers['x-forwarded-for']).toBe('unknown');
+    } finally {
+      await handle.stop();
+      await backend.close();
+    }
+  });
+});
+
+describe('WebUI listener Secure cookies over the tunnel (R17)', () => {
+  let tunnelActive = true;
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    tunnelActive = true;
+    backend = await startFakeBackend();
+    handle = await startStaticServer({
+      staticDir: STATIC_DIR,
+      backendPort: backend.port,
+      port: 0,
+      isTunnelActive: () => tunnelActive,
+    });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  const loginCookies = (headers: Record<string, string>): Promise<string[] | undefined> =>
+    new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port: handle.port, method: 'POST', path: '/login', headers, agent: false },
+        (res) => {
+          res.resume();
+          resolve(res.headers['set-cookie']);
+        }
+      );
+      req.on('error', reject);
+      req.end();
+    });
+
+  const AS_SENT = ['aionui-session=s; HttpOnly; Path=/', 'aionui-refresh=r; Path=/; secure'];
+
+  it('adds Secure to a tunnel request, without doubling one that has it', async () => {
+    expect(await loginCookies({ 'Cf-Connecting-Ip': '203.0.113.7' })).toEqual([
+      'aionui-session=s; HttpOnly; Path=/; Secure',
+      'aionui-refresh=r; Path=/; secure',
+    ]);
+  });
+
+  it('leaves a plain local/LAN request (no Cf-Connecting-Ip) unchanged', async () => {
+    expect(await loginCookies({})).toEqual(AS_SENT);
+  });
+
+  it('leaves cookies unchanged while the tunnel is off, even with Cf-Connecting-Ip', async () => {
+    tunnelActive = false;
+    expect(await loginCookies({ 'Cf-Connecting-Ip': '203.0.113.7' })).toEqual(AS_SENT);
+  });
+});
+
+describe('WebUI listener stop', () => {
+  it('stop() closes an idle keep-alive connection at once', async () => {
+    const backend = await startFakeBackend();
+    const handle = await startStaticServer({ staticDir: STATIC_DIR, backendPort: backend.port, port: 0 });
+    const sock = net.connect({ host: '127.0.0.1', port: handle.port });
+    let closed = false;
+    let text = '';
+    sock.on('close', () => (closed = true));
+    sock.on('error', () => {});
+    sock.on('data', (d: Buffer) => (text += d.toString('latin1')));
+    sock.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n');
+    for (let i = 0; i < 100 && !text.includes('</html>'); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(text).toMatch(/^HTTP\/1\.1 200/);
+    const outcome = await Promise.race([
+      handle.stop().then(() => 'stopped'),
+      new Promise((r) => setTimeout(() => r('hung'), 1000)),
+    ]);
+    for (let i = 0; i < 50 && !closed; i++) await new Promise((r) => setTimeout(r, 10));
+    sock.destroy();
+    await backend.close();
+    expect(outcome).toBe('stopped');
+    expect(closed).toBe(true);
   });
 });

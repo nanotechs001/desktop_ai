@@ -19,6 +19,7 @@ import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
 import serveHandler from 'serve-handler';
 import {
+  cameThroughTunnel,
   classifyRequest,
   createSessionValidator,
   forwardingHeaders,
@@ -29,6 +30,7 @@ import {
   isRefreshRevoked,
   isSessionRevoked,
   normalizePath,
+  secureSetCookies,
   sessionIssuedAtMs,
   type SessionValidator,
 } from './auth-gate/index.js';
@@ -145,6 +147,7 @@ function forwardToBackend(
   res: ServerResponse,
   backendPort: number,
   headers: Record<string, string>,
+  secureCookies: boolean,
   onStatus: (status: number) => void
 ): void {
   const options: http.RequestOptions = {
@@ -156,7 +159,13 @@ function forwardToBackend(
   };
   const proxy = http.request(options, (proxyRes) => {
     onStatus(proxyRes.statusCode ?? 502);
-    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    const setCookie = proxyRes.headers['set-cookie'];
+    // R17: the browser reached us over HTTPS (the tunnel), so its cookies must not leak to plain HTTP.
+    const outHeaders =
+      secureCookies && setCookie
+        ? { ...proxyRes.headers, 'set-cookie': secureSetCookies(setCookie) }
+        : proxyRes.headers;
+    res.writeHead(proxyRes.statusCode ?? 502, outHeaders);
     proxyRes.pipe(res);
   });
   proxy.on('error', () => {
@@ -291,14 +300,12 @@ function peekWsRoute(buf: Buffer): 'upgrade' | 'refuse' | 'http' | null {
 
 /**
  * Parse a raw upgrade header block (no trailing blank line). Null on anything a downstream
- * parser could read differently: a non-exact request line, a CR or LF outside a CRLF pair,
- * NUL, obs-fold or a malformed header name.
+ * parser could read differently: a CR or LF outside a CRLF pair, NUL, obs-fold or a malformed
+ * header name. The request line is checked by the gate.
  */
-function parseHead(text: string): { target: string; headers: Record<string, string[]> } | null {
+function parseHead(text: string): { requestLine: string; headers: Record<string, string[]> } | null {
   if (['\r', '\n', '\0'].some((c) => text.replaceAll('\r\n', '').includes(c))) return null;
   const [requestLine, ...fields] = text.split('\r\n');
-  const match = UPGRADE_REQUEST_LINE.exec(requestLine);
-  if (!match) return null;
   const headers: Record<string, string[]> = {};
   for (const line of fields) {
     const colon = line.indexOf(':');
@@ -306,7 +313,7 @@ function parseHead(text: string): { target: string; headers: Record<string, stri
     if (colon <= 0 || !HEADER_NAME.test(name)) return null; // also rejects obs-fold (leading whitespace)
     (headers[name.toLowerCase()] ??= []).push(line.slice(colon + 1).trim());
   }
-  return { target: match[1] + (match[2] ?? ''), headers };
+  return { requestLine, headers };
 }
 
 export async function startStaticServer(opts: StaticServerOptions): Promise<StaticServerHandle> {
@@ -321,6 +328,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const openSockets = new Set<{ iat: number; client: Socket; upstream: Socket }>();
   // Internal-server connections are local splices; map each one's local port back to the real client.
   const peers = new Map<number, string>();
+  // A connection we did not splice (a local process on the internal port) has no real peer: never loopback.
+  const peerOf = (socket: Socket): string => peers.get(socket.remotePort ?? 0) ?? 'unknown';
+  // Every accepted client connection, so stop() need not wait for idle keep-alive ones.
+  const clients = new Set<Socket>();
   const headerMs = opts.timeouts?.headerMs ?? HEADER_TIMEOUT_MS;
   const lingerMs = opts.timeouts?.refuseLingerMs ?? REFUSE_LINGER_MS;
 
@@ -335,10 +346,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       replyError(res, 400, 'BAD_CREDENTIAL_HEADER');
       return;
     }
-    // A request not spliced by our listener (a local process on the internal port) keeps its own address.
-    const remotePort = req.socket.remotePort;
-    const peer = remotePort !== undefined && peers.has(remotePort) ? peers.get(remotePort) : req.socket.remoteAddress;
-    const headers = forwardingHeaders(peer, req.headers, isTunnelActive());
+    const peer = peerOf(req.socket);
+    const tunnelActive = isTunnelActive();
+    const secureCookies = cameThroughTunnel(peer, req.headers, tunnelActive);
+    const headers = forwardingHeaders(peer, req.headers, tunnelActive);
     // Validate exactly the credentials aioncore will receive (a Connection-named cookie is gone from both).
     const creds = credentialsOf(headers);
     if (decision === 'auth') {
@@ -362,11 +373,53 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       replyError(res, 401, 'UNAUTHORIZED');
       return;
     }
-    forwardToBackend(req, res, opts.backendPort, headers, (status) => {
+    forwardToBackend(req, res, opts.backendPort, headers, secureCookies, (status) => {
       if (method === 'POST' && normalizePath(url) === '/logout' && status >= 200 && status < 300) {
         validate.invalidate(creds);
       }
     });
+  };
+
+  /**
+   * The one gate for /ws and /api/stt/stream upgrades, from a fresh raw connection or (R16) a reused
+   * keep-alive connection on the internal server: exact request line and canonical path, readable
+   * credential bytes, not-before, aioncore validation and a re-check, then a splice to aioncore that
+   * holds client bytes until its 101. `held` is what the client sent after the header block.
+   */
+  const gateUpgrade = async (
+    client: Socket,
+    requestLine: string,
+    incoming: Record<string, string | string[] | undefined>,
+    peer: string,
+    held: Buffer,
+    settle: () => void
+  ): Promise<void> => {
+    client.on('error', () => client.destroy());
+    const match = UPGRADE_REQUEST_LINE.exec(requestLine);
+    const target = match ? match[1] + (match[2] ?? '') : '';
+    if (!match || !isCanonicalPath(target) || hasUnreadableCredentialBytes(incoming)) {
+      settle();
+      refuseRaw(client, 400, lingerMs);
+      return;
+    }
+    const headers = forwardingHeaders(peer, incoming, isTunnelActive());
+    const creds = credentialsOf(headers);
+    let verdict = isSessionRevoked(creds, sessionsNotBefore) ? 'invalid' : await validate(creds);
+    // A sign-out can land while aioncore is still answering; check again before splicing.
+    if (verdict === 'valid' && isSessionRevoked(creds, sessionsNotBefore)) verdict = 'invalid';
+    if (client.destroyed) return;
+    settle();
+    if (verdict !== 'valid') {
+      refuseRaw(client, verdict === 'invalid' ? 401 : 503, lingerMs);
+      return;
+    }
+    // Rebuilt from parsed parts: nothing the gate did not check reaches the backend.
+    const fields = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
+    const rewritten = Buffer.from(`GET ${target} HTTP/1.1\r\n${fields.join('')}\r\n`, 'latin1');
+    const upstream = spliceToTcpEndpoint(client, opts.backendPort, rewritten, held);
+    const entry = { iat: sessionIssuedAtMs(creds), client, upstream };
+    openSockets.add(entry);
+    client.once('close', () => openSockets.delete(entry));
   };
 
   // The HTTP server listens only on loopback — user traffic hits the outer
@@ -377,7 +430,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   // bun 1.3's http-compat layer does not faithfully forward writes on the
   // socket delivered to the `upgrade` handler, so the backend's 101 response
   // never reaches the browser (see #2824). Making the outer listener pure
-  // TCP avoids touching that code path on both bun and node.
+  // TCP avoids touching that code path on both bun and node. The `upgrade` handler below only
+  // serves an upgrade on a connection already handed to this server (a reused keep-alive one).
   const http_server: Server = http.createServer(async (req, res) => {
     try {
       if (!req.url || !req.method) {
@@ -420,6 +474,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     }
   });
 
+  // R16: cloudflared pools connections, so an upgrade can arrive on one already spliced here.
+  http_server.on('upgrade', (req: IncomingMessage, socket: Socket, head: Buffer) => {
+    const requestLine = `${req.method} ${req.url} HTTP/${req.httpVersion}`;
+    void gateUpgrade(socket, requestLine, req.headers, peerOf(socket), head, () => {});
+  });
+
   // Internal HTTP server — 127.0.0.1 ephemeral port, never visible to the user.
   await new Promise<void>((resolve, reject) => {
     http_server.once('error', reject);
@@ -435,47 +495,13 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
 
   // User-facing listener: inspect the first line of every TCP connection and
   // route to either the backend (for /ws and /api/stt/stream upgrades) or the internal HTTP
-  // server (everything else). Both routes use raw TCP splice — no reliance
-  // on http.Server's upgrade event.
-  // /ws and /api/stt/stream both need a session (classifyRequest gives 'auth'); the
-  // peek regex only admits those exact canonical paths, so no R2 check is needed here.
-  const gateUpgrade = async (
-    client: Socket,
-    peeked: Buffer,
-    headEnd: number,
-    peer: string,
-    settle: () => void
-  ): Promise<void> => {
-    client.on('error', () => client.destroy());
+  // server (everything else). Both routes use raw TCP splice; only a later upgrade on a
+  // connection already handed to the internal server goes through its upgrade event.
+  // A header block parseHead rejects gets an empty request line, which the gate refuses with 400.
+  const gateRawUpgrade = (client: Socket, peeked: Buffer, headEnd: number, peer: string, settle: () => void): void => {
     const head = parseHead(peeked.subarray(0, headEnd).toString('latin1'));
-    if (!head) {
-      settle();
-      refuseRaw(client, 400, lingerMs);
-      return;
-    }
-    if (hasUnreadableCredentialBytes(head.headers)) {
-      settle();
-      refuseRaw(client, 400, lingerMs);
-      return;
-    }
-    const headers = forwardingHeaders(peer, head.headers, isTunnelActive());
-    const creds = credentialsOf(headers);
-    let verdict = isSessionRevoked(creds, sessionsNotBefore) ? 'invalid' : await validate(creds);
-    // A sign-out can land while aioncore is still answering; check again before splicing.
-    if (verdict === 'valid' && isSessionRevoked(creds, sessionsNotBefore)) verdict = 'invalid';
-    if (client.destroyed) return;
-    settle();
-    if (verdict !== 'valid') {
-      refuseRaw(client, verdict === 'invalid' ? 401 : 503, lingerMs);
-      return;
-    }
-    // Rebuilt from parsed parts: nothing the gate did not check reaches the backend.
-    const fields = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
-    const rewritten = Buffer.from(`GET ${head.target} HTTP/1.1\r\n${fields.join('')}\r\n`, 'latin1');
-    const upstream = spliceToTcpEndpoint(client, opts.backendPort, rewritten, peeked.subarray(headEnd + 4));
-    const entry = { iat: sessionIssuedAtMs(creds), client, upstream };
-    openSockets.add(entry);
-    client.once('close', () => openSockets.delete(entry));
+    const held = peeked.subarray(headEnd + 4);
+    void gateUpgrade(client, head?.requestLine ?? '', head?.headers ?? {}, peer, held, settle);
   };
 
   const tcp_server = net.createServer((client: Socket) => {
@@ -485,6 +511,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       client.destroy();
       return;
     }
+    clients.add(client);
+    client.once('close', () => clients.delete(client));
     // Header-read deadline from accept until the connection is piped, handed to HTTP, or refused.
     const deadline = setTimeout(() => client.destroy(), headerMs).unref();
     const settle = (): void => clearTimeout(deadline);
@@ -532,7 +560,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
         refuseRaw(client, 431, lingerMs);
         return;
       }
-      void gateUpgrade(client, peeked, headEnd, peer, settle);
+      gateRawUpgrade(client, peeked, headEnd, peer, settle);
     };
     const onEarlyError = (): void => {
       cleanup();
@@ -581,11 +609,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     },
     stop: () =>
       new Promise<void>((resolve) => {
-        // Spliced sockets never end on their own; close() would wait for them.
+        // Spliced and idle keep-alive sockets never end on their own; close() would wait for them.
         for (const { client, upstream } of openSockets) {
           client.destroy();
           upstream.destroy();
         }
+        for (const client of clients) client.destroy();
         tcp_server.close(() => {
           http_server.close(() => resolve());
         });

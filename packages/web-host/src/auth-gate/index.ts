@@ -250,6 +250,25 @@ const isLoopback = (address: string): boolean => {
   return ip === '::1' || (isIP(ip) === 4 && ip.startsWith('127.'));
 };
 
+/**
+ * R17: the request reached us through the Cloudflare tunnel (HTTPS at the browser): the tunnel runs,
+ * the peer is loopback (cloudflared) and Cf-Connecting-Ip is present. Read before forwardingHeaders strips it.
+ */
+export function cameThroughTunnel(
+  peerAddress: string,
+  incoming: Record<string, string | string[] | undefined>,
+  tunnelActive: boolean
+): boolean {
+  return tunnelActive && isLoopback(peerAddress) && incoming['cf-connecting-ip'] !== undefined;
+}
+
+const SECURE_ATTRIBUTE = /;\s*secure\s*(;|$)/i;
+
+/** Set-Cookie values with `; Secure` appended where it is missing. */
+export function secureSetCookies(values: string[]): string[] {
+  return values.map((v) => (SECURE_ATTRIBUTE.test(v) ? v : `${v}; Secure`));
+}
+
 export function forwardingHeaders(
   peerAddress: string | undefined,
   incoming: Record<string, string | string[] | undefined>,

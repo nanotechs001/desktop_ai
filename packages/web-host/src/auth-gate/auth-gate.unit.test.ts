@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  cameThroughTunnel,
   classifyRequest,
   createSessionValidator,
   forwardingHeaders,
@@ -10,6 +11,7 @@ import {
   isRefreshRevoked,
   isSessionRevoked,
   normalizePath,
+  secureSetCookies,
   sessionIssuedAtMs,
   tokenIssuedAtMs,
 } from './index.js';
@@ -455,5 +457,41 @@ describe('sessionIssuedAtMs', () => {
   it('is 0 when a credential cannot be decoded, so any not-before closes it', () => {
     expect(sessionIssuedAtMs({ cookie: `aionui-session=${jwt({ iat: 50 })}`, authorization: 'Bearer junk' })).toBe(0);
     expect(sessionIssuedAtMs({ cookie: 'aionui-session=junk' })).toBe(0);
+  });
+});
+
+describe('cameThroughTunnel (R17)', () => {
+  const cf = { 'cf-connecting-ip': '203.0.113.7' };
+  it('is true only for a loopback peer with Cf-Connecting-Ip while the tunnel runs', () => {
+    expect(cameThroughTunnel('127.0.0.1', cf, true)).toBe(true);
+    expect(cameThroughTunnel('::ffff:127.0.0.1', cf, true)).toBe(true);
+  });
+  it.each([
+    ['a LAN peer', '192.168.1.5', cf, true],
+    ['an unknown peer', 'unknown', cf, true],
+    ['no Cf-Connecting-Ip', '127.0.0.1', {}, true],
+    ['the tunnel off', '127.0.0.1', cf, false],
+  ])('is false for %s', (_name, peer, headers, active) => {
+    expect(cameThroughTunnel(peer, headers, active)).toBe(false);
+  });
+});
+
+describe('secureSetCookies (R17)', () => {
+  it('appends Secure where it is missing and never doubles it', () => {
+    expect(
+      secureSetCookies([
+        'a=1; Path=/',
+        'b=2; Secure; HttpOnly',
+        'c=3; HttpOnly; secure',
+        'secure=4',
+        'd=5; Path=/insecure',
+      ])
+    ).toEqual([
+      'a=1; Path=/; Secure',
+      'b=2; Secure; HttpOnly',
+      'c=3; HttpOnly; secure',
+      'secure=4; Secure',
+      'd=5; Path=/insecure; Secure',
+    ]);
   });
 });
