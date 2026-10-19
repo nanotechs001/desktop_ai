@@ -169,6 +169,11 @@ describe('aionui-notes MCP', () => {
       expect(await rejection(client, { ...valid, name })).toMatch(rule);
     });
 
+    it('rejects an unknown key instead of silently dropping it, so the card cannot go missing', async () => {
+      const client = await connect(envFor('chat-agent-1'));
+      expect(await rejection(client, { ...valid, title: 'Weekly report' })).toMatch(/unrecognized.*title/is);
+    });
+
     it('rejects a short description and oversized steps', async () => {
       const client = await connect(envFor('chat-agent-1'));
       expect(await rejection(client, { ...valid, description: 'too short' })).toMatch(/at least 20/);

@@ -60,7 +60,7 @@ export function createNotesMcpServer(api: ArtifactsApi): McpServer {
   // Shows a card for the user to review; the draft is saved by the app only after they click Save.
   server.registerTool(
     'propose_skill',
-    { description: PROPOSE_SKILL_DESCRIPTION, inputSchema: skillProposalInput },
+    { description: PROPOSE_SKILL_DESCRIPTION, inputSchema: z.object(skillProposalInput).strict() },
     async (args): Promise<CallToolResult> => ({
       content: [
         {

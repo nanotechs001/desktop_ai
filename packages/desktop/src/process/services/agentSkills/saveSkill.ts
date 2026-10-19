@@ -62,7 +62,7 @@ export function createSkillSaver(deps: SkillSaverDeps): { save(req: SaveSkillReq
       if ((saves.get(conversationId) ?? 0) >= SKILL_PROPOSAL_LIMITS.savesPerChat)
         return fail('rate_limited', 'Too many skills saved in this chat');
 
-      if ((await deps.listSkillNames()).includes(proposal.name))
+      if ((await deps.listSkillNames()).some((n) => n.toLowerCase() === proposal.name))
         return fail('exists', `A skill named ${proposal.name} already exists`);
 
       let skillName: string;

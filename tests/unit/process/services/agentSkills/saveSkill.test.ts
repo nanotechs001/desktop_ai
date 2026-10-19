@@ -81,6 +81,15 @@ describe('createSkillSaver', () => {
     expect(makeTempDir).not.toHaveBeenCalled();
   });
 
+  it('returns exists when only the case differs, so a user skill is never overwritten', async () => {
+    const importSkill = vi.fn(deps.importSkill);
+    const result = await save({}, { ...deps, listSkillNames: async () => ['Weekly-Report'], importSkill });
+
+    expect(result).toMatchObject({ ok: false, code: 'exists' });
+    expect(makeTempDir).not.toHaveBeenCalled();
+    expect(importSkill).not.toHaveBeenCalled();
+  });
+
   it('removes the temp folder when the import fails, and does not enable', async () => {
     let tempDir = '';
     const result = await save(
