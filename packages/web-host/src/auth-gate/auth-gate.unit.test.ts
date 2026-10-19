@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { classifyRequest, createSessionValidator, forwardingHeaders, GATE_LIMITS } from './auth-gate.js';
+import {
+  classifyRequest,
+  createSessionValidator,
+  forwardingHeaders,
+  GATE_LIMITS,
+  isCanonicalPath,
+  normalizePath,
+} from './index.js';
 
 describe('classifyRequest', () => {
   it.each([
@@ -42,6 +49,37 @@ describe('classifyRequest', () => {
     ['POST', '/api/auth/status'],
   ])('%s %s needs auth', (method, path) => {
     expect(classifyRequest(method, path)).toBe('auth');
+  });
+});
+
+describe('normalizePath / isCanonicalPath', () => {
+  it('preserves case and trailing slash, strips the query', () => {
+    expect(normalizePath('/API/Agents/?x=1')).toBe('/API/Agents/');
+    expect(normalizePath('/')).toBe('/');
+    expect(normalizePath('/api/x/..')).toBe('/api/');
+  });
+
+  it('returns null for bad percent-encoding and non-origin-form paths', () => {
+    expect(normalizePath('/api/%zz')).toBeNull();
+    expect(normalizePath('http://h/api')).toBeNull();
+  });
+
+  it.each(['/', '/assets/App-ABC.js', '/api/agents/', '/api/agents?x=1', '/API/Agents'])('%s is canonical', (p) => {
+    expect(isCanonicalPath(p)).toBe(true);
+  });
+
+  it.each([
+    '/api/%2e%2e/x',
+    '//api/x',
+    '/api\\x',
+    '/api/x/../y',
+    '/api%252fwebui/x',
+    '/api%3F/webui/x',
+    '/api%00/agents',
+    '/api/./x',
+    '/api/%zz',
+  ])('%s is not canonical', (p) => {
+    expect(isCanonicalPath(p)).toBe(false);
   });
 });
 
@@ -109,6 +147,60 @@ describe('createSessionValidator', () => {
     expect(fetchUser).toHaveBeenCalledTimes(4);
   });
 
+  it('dedupes concurrent in-flight checks per key', async () => {
+    let release: (status: number) => void = () => {};
+    const fetchUser = vi.fn(() => new Promise<number>((resolve) => (release = resolve)));
+    const validate = createSessionValidator(fetchUser);
+    const calls = Array.from({ length: 20 }, () => validate(creds));
+    release(200);
+    expect(await Promise.all(calls)).toEqual(Array(20).fill('valid'));
+    expect(fetchUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache dedup results that are not valid', async () => {
+    const fetchUser = vi.fn().mockResolvedValue(401);
+    const validate = createSessionValidator(fetchUser);
+    await Promise.all([validate(creds), validate(creds)]);
+    expect(fetchUser).toHaveBeenCalledTimes(1);
+    await validate(creds);
+    expect(fetchUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidate drops one cached session', async () => {
+    const fetchUser = vi.fn().mockResolvedValue(200);
+    const validate = createSessionValidator(fetchUser);
+    await validate({ cookie: 'a' });
+    await validate({ cookie: 'b' });
+    validate.invalidate({ cookie: 'a' });
+    validate.invalidate({});
+    await validate({ cookie: 'a' });
+    await validate({ cookie: 'b' });
+    expect(fetchUser).toHaveBeenCalledTimes(3);
+  });
+
+  it('invalidate during an in-flight check keeps its result out of the cache', async () => {
+    let release: (status: number) => void = () => {};
+    const fetchUser = vi.fn(() => new Promise<number>((resolve) => (release = resolve)));
+    const validate = createSessionValidator(fetchUser);
+    const pending = validate(creds);
+    validate.invalidate(creds);
+    release(200);
+    await pending;
+    fetchUser.mockResolvedValue(401);
+    expect(await validate(creds)).toBe('invalid');
+  });
+
+  it('clear drops every cached session', async () => {
+    const fetchUser = vi.fn().mockResolvedValue(200);
+    const validate = createSessionValidator(fetchUser);
+    await validate({ cookie: 'a' });
+    await validate({ cookie: 'b' });
+    validate.clear();
+    await validate({ cookie: 'a' });
+    await validate({ cookie: 'b' });
+    expect(fetchUser).toHaveBeenCalledTimes(4);
+  });
+
   it('defaults to GATE_LIMITS', () => {
     expect(GATE_LIMITS).toEqual({ ttlMs: 30_000, max: 500, headerMaxBytes: 16_384 });
   });
@@ -156,5 +248,45 @@ describe('forwardingHeaders', () => {
     expect(out).not.toHaveProperty('cf-connecting-ip');
     expect(out).not.toHaveProperty('gone');
     expect(out.cookie).toBe('a=1, b=2');
+  });
+
+  it('strips every x-forwarded-* and other client-ip headers, case-insensitively', () => {
+    const out = forwardingHeaders(
+      '198.51.100.7',
+      {
+        'X-Forwarded-Host': 'evil',
+        'X-Forwarded-Proto': 'https',
+        'X-Forwarded-For': '1.1.1.1',
+        'True-Client-IP': '1.1.1.1',
+        'X-Client-IP': '1.1.1.1',
+        'X-Real-IP': '1.1.1.1',
+        Host: 'h',
+      },
+      false
+    );
+    expect(out).toEqual({ host: 'h', 'x-forwarded-for': '198.51.100.7' });
+  });
+
+  it('reads cf-connecting-ip case-insensitively', () => {
+    const out = forwardingHeaders('127.0.0.1', { 'CF-Connecting-IP': '203.0.113.9' }, true);
+    expect(out['x-forwarded-for']).toBe('203.0.113.9');
+  });
+
+  it('strips headers named in Connection and drops those tokens, keeping upgrade', () => {
+    const out = forwardingHeaders(
+      '198.51.100.7',
+      { connection: 'X-Forwarded-For, Upgrade, x-secret', upgrade: 'websocket', 'x-secret': 's', 'x-other': 'o' },
+      false
+    );
+    expect(out).not.toHaveProperty('x-secret');
+    expect(out.connection).toBe('Upgrade');
+    expect(out.upgrade).toBe('websocket');
+    expect(out['x-other']).toBe('o');
+    expect(out['x-forwarded-for']).toBe('198.51.100.7');
+  });
+
+  it('uses "unknown" for a missing or empty peer, never "undefined"', () => {
+    expect(forwardingHeaders(undefined, {}, false)['x-forwarded-for']).toBe('unknown');
+    expect(forwardingHeaders('', {}, true)['x-forwarded-for']).toBe('unknown');
   });
 });
