@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
     otherSession: { setUserAgent: vi.fn() },
     app: {
       userAgentFallback:
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) AionUi/2.2.2 Chrome/138.0.7204.243 Electron/37.10.3 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) PixebotBrowser/37.10.3 Chrome/138.0.7204.251 Electron/37.10.3 Safari/537.36',
       on: vi.fn(),
     },
     fromPartition: vi.fn((partition: string) =>
@@ -77,7 +77,7 @@ vi.mock('@process/services/browserSession/windowOpen', () => ({
 }));
 
 const CHROME_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.243 Safari/537.36';
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
 
 const makeContents = (type: string, session: unknown = mocks.browserSession): StubContents => ({
   getType: () => type,

@@ -8,9 +8,31 @@ import { describe, expect, it } from 'vitest';
 import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from '@process/services/browserSession/userAgent';
 
 const CHROME_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.243 Safari/537.36';
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
 
 describe('toChromeUserAgent', () => {
+  it('drops the app-name token whatever the app is called', () => {
+    expect(
+      toChromeUserAgent(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) PixebotBrowser/37.10.3 Chrome/138.0.7204.251 Electron/37.10.3 Safari/537.36'
+      )
+    ).toBe(CHROME_UA);
+  });
+
+  it('keeps the Windows platform section', () => {
+    expect(
+      toChromeUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Pixebot Browser-Dev/2.2.2 Chrome/138.0.7204.251 Electron/37.10.3 Safari/537.36'
+      )
+    ).toBe(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+    );
+  });
+
+  it('returns the input unchanged when it has no Chrome version', () => {
+    expect(toChromeUserAgent('Mozilla/5.0 (X11; Linux x86_64)')).toBe('Mozilla/5.0 (X11; Linux x86_64)');
+  });
+
   it('strips AionUi and Electron tokens', () => {
     expect(
       toChromeUserAgent(

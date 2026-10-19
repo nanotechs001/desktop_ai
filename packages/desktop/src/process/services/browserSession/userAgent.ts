@@ -4,21 +4,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// `AionUi[\w-]*` also covers the dev-mode app names (`AionUi-Dev`, `AionUi-Dev-2`).
-const APP_TOKENS = /\s*\b(?:AionUi[\w-]*|Electron)\/\S+/gi;
+const UA_PLATFORM = /^Mozilla\/5\.0 \(([^)]+)\)/;
+const CHROME_MAJOR = /\bChrome\/(\d+)\./;
 const CHROMIUM_BRAND = /"Chromium";v="([^"]+)"/;
 const GOOGLE_CHROME_BRAND = '"Google Chrome"';
 
 /**
- * Turns Electron's default user agent into the one plain Chrome would send, by
- * removing the `AionUi/<ver>` and `Electron/<ver>` tokens. Google rejects sign-in
- * from user agents that carry an Electron token.
+ * Rebuilds Electron's default user agent as the one plain Chrome sends, keeping only
+ * the platform and the Chrome major version (in Chrome's reduced `<major>.0.0.0` form).
+ * Every other `Name/ver` token (the app name, whatever it is, and `Electron/<ver>`) is
+ * dropped, because Google rejects sign-in from user agents that carry one.
  */
 export function toChromeUserAgent(electronUa: string): string {
-  return electronUa
-    .replace(APP_TOKENS, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  const platform = UA_PLATFORM.exec(electronUa)?.[1];
+  const major = CHROME_MAJOR.exec(electronUa)?.[1];
+  if (!platform || !major) return electronUa;
+  return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 
 /**
