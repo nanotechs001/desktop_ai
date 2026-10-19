@@ -27,6 +27,9 @@ type NamedRobot = AgentWidgetRobot & { name: string };
 const SHOW_ALL_KEY = '__all__';
 const ROW_ICON_SIZE = 14;
 
+// Arco's Menu.Item treats Enter as a row click (Watch): a row button's own Enter must not reach it.
+const stopRowKey = (event: React.KeyboardEvent): void => event.stopPropagation();
+
 const showRobot = (robot: AgentWidgetRobot): Promise<unknown> =>
   ipcBridge.agentWidget.ensure
     .invoke({ conversation_id: robot.conversation_id, force: true, agent_id: robot.agent_id })
@@ -105,6 +108,7 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, icon
                 type='text'
                 size='mini'
                 aria-label={watchLabel}
+                onKeyDown={stopRowKey}
                 icon={<PreviewOpen theme='outline' size={ROW_ICON_SIZE} fill='currentColor' />}
               />
             </Tooltip>
@@ -113,6 +117,7 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, icon
                 type='text'
                 size='mini'
                 aria-label={chatLabel}
+                onKeyDown={stopRowKey}
                 icon={<Message theme='outline' size={ROW_ICON_SIZE} fill='currentColor' />}
                 onClick={(event) => chat(event, robot)}
               />
@@ -129,7 +134,15 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, icon
   );
 
   return (
-    <Dropdown droplist={menu} trigger='hover' position='br' popupVisible={open} onVisibleChange={setOpen}>
+    // Click too, for keyboard and touch; a click after hovering must not toggle the list shut again.
+    <Dropdown
+      droplist={menu}
+      trigger={['hover', 'click']}
+      triggerProps={{ clickToClose: false }}
+      position='br'
+      popupVisible={open}
+      onVisibleChange={setOpen}
+    >
       <Button
         type='text'
         size='mini'

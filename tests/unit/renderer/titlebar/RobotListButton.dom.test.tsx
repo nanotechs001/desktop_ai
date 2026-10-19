@@ -157,6 +157,25 @@ describe('RobotListButton', () => {
     expect(h.navigate).not.toHaveBeenCalled();
   });
 
+  it('opens on click too, so keyboard and touch users can reach it', async () => {
+    h.robots = [{ conversation_id: 'c1', agent_id: 'bot-1', hidden: false }];
+    renderButton();
+    fireEvent.click(await screen.findByTestId('titlebar-robots'));
+    expect(await screen.findByTestId('robot-row-c1')).toBeTruthy();
+  });
+
+  it('Enter on a row button acts only through that button, never as a row click', async () => {
+    h.robots = [{ conversation_id: 'c1', agent_id: 'bot-1', hidden: false }];
+    renderButton();
+    await openList();
+    // A real browser turns Enter on a button into its click; the keydown itself must not reach the row.
+    fireEvent.keyDown(screen.getByLabelText('pet.widget.chatWithRobot'), { key: 'Enter', keyCode: 13 });
+    fireEvent.keyDown(screen.getByLabelText('pet.widget.watchRobot'), { key: 'Enter', keyCode: 13 });
+    await act(async () => {});
+    expect(h.navigate).not.toHaveBeenCalled();
+    expect(h.setChatLocation).not.toHaveBeenCalled();
+  });
+
   it('"Show all" brings back every hidden robot only', async () => {
     h.robots = [
       { conversation_id: 'c1', agent_id: 'bot-1', hidden: false },

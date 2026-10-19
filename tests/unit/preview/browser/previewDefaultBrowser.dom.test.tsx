@@ -414,6 +414,18 @@ describe('watching a robot opens its chat browser pane', () => {
     expect(ctx.isOpen).toBe(true);
   });
 
+  it('keeps a request while another conversation re-enters its scope first', () => {
+    mount();
+    enterScope('/ws/y', { ...OPEN_BROWSER, conversationId: 'cy' });
+    act(() => ctx.collapsePreview());
+    enterScope('/ws/x', { ...OPEN_BROWSER, conversationId: 'cx' });
+
+    act(() => ctx.revealBrowserFor('cy'));
+    enterScope('/ws/x', { ...OPEN_BROWSER, conversationId: 'cx' }); // e.g. its project_id arrived
+    enterScope('/ws/y', { ...OPEN_BROWSER, conversationId: 'cy' });
+    expect(ctx.isOpen).toBe(true);
+  });
+
   it('a request for a conversation that is never entered does not reopen another one', () => {
     mount();
     enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });

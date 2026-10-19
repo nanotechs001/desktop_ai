@@ -1192,7 +1192,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
       const prev = currentScopeRef.current;
       const revealing = options?.conversationId != null && revealRequestRef.current === options.conversationId;
-      if (options?.conversationId != null) revealRequestRef.current = null;
+      if (revealing) revealRequestRef.current = null;
       // Entering a conversation reopens its panel unless the user closed it: restore what is
       // there, or start with a blank browser tab.
       const reopenUnlessUserClosed = () => {

@@ -785,6 +785,29 @@ describe('the titlebar robot list', () => {
     expect(manager.getChatLocations()).toEqual({ [A]: 'widget' });
   });
 
+  it('a pending popup is dropped when the chat goes back to the main window first', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    manager.hide(A);
+    manager.openPopup(A, 'bot-1');
+    manager.setChatLocation(A, 'main'); // Watch, before the robot has appeared
+    appear(manager, A);
+    expect(manager.getSnapshot(A)?.layout.expanded).toBe(false);
+  });
+
+  it('a pending popup is dropped when the robot disappears before it is live', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    manager.hide(A);
+    manager.openPopup(A, 'bot-1');
+    manager.rendererReady(A); // appearing
+    manager.setSuspended(A, true);
+    manager.animationDone(A, 'disappearing');
+    manager.setSuspended(A, false);
+    manager.animationDone(A, 'appearing');
+    expect(manager.getSnapshot(A)?.layout.expanded).toBe(false);
+  });
+
   it('opening the popup of a robot already on the desktop expands it at once', async () => {
     const { manager } = await makeManager();
     manager.ensure(A, false, 'bot-1');

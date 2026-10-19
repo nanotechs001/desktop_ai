@@ -330,9 +330,11 @@ export class AgentWidgetManager {
 
   setChatLocation(conversationId: string, location: AgentChatLocation): void {
     const record = this.state.widgets[conversationId];
+    const entry = this.entries.get(conversationId);
+    // The chat came back to the main window: a popup still waiting for the robot to appear is no longer wanted.
+    if (location === 'main' && entry) entry.expandWhenLive = false;
     if (!record || record.chat_location === location) return;
     record.chat_location = location;
-    const entry = this.entries.get(conversationId);
     if (location === 'main' && entry?.record.expanded) {
       entry.record.expanded = false;
       this.place(entry);
@@ -732,6 +734,7 @@ export class AgentWidgetManager {
    * first and clicks pass through. A window nobody can see goes at once.
    */
   private disappear(entry: WidgetEntry, then: 'hide' | 'destroy'): void {
+    entry.expandWhenLive = false;
     if (entry.phase === 'disappearing') {
       if (then === 'destroy') entry.afterOut = 'destroy';
       return;
