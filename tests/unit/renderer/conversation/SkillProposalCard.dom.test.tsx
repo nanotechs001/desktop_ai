@@ -107,6 +107,52 @@ describe('SkillProposalCard', () => {
     expect(screen.queryByText('messages.skillCard.save')).not.toBeInTheDocument();
   });
 
+  it('shows Saved after a reload when the skill was saved under Save as <name>-2 with this description', async () => {
+    mocks.listSkills.mockResolvedValue([
+      { name: 'weekly-report', description: 'An unrelated skill of the same name' },
+      { name: 'weekly-report-2', description: proposal.description },
+    ]);
+    renderCard();
+
+    expect(await screen.findByText('messages.skillCard.savedLibrary')).toBeInTheDocument();
+    expect(screen.queryByText('messages.skillCard.save')).not.toBeInTheDocument();
+  });
+
+  it('matches library names case-insensitively for Saved and for the offered Save as name', async () => {
+    mocks.listSkills.mockResolvedValue([{ name: 'Weekly-Report', description: ` ${proposal.description}` }]);
+    const first = renderCard();
+    expect(await screen.findByText('messages.skillCard.savedLibrary')).toBeInTheDocument();
+    first.unmount();
+
+    mocks.listSkills.mockResolvedValue([
+      { name: 'Weekly-Report', description: 'other' },
+      { name: 'WEEKLY-REPORT-2', description: 'other' },
+    ]);
+    mocks.save.mockResolvedValue({ ok: false, code: 'exists', message: 'exists' });
+    renderCard();
+    fireEvent.click(await screen.findByText('messages.skillCard.save'));
+    expect(await screen.findByText(/messages\.skillCard\.saveAs .*weekly-report-3/)).toBeInTheDocument();
+  });
+
+  it('disables Save while the steps are empty, and caps the steps field at the limit', async () => {
+    renderCard();
+
+    const steps = await screen.findByRole('textbox');
+    expect(steps).toHaveAttribute('maxlength', '8000');
+    fireEvent.change(steps, { target: { value: '   ' } });
+    expect(screen.getByText('messages.skillCard.save').closest('button')).toBeDisabled();
+  });
+
+  it('disables Save as while the steps are empty', async () => {
+    mocks.save.mockResolvedValue({ ok: false, code: 'exists', message: 'exists' });
+    renderCard();
+
+    fireEvent.click(await screen.findByText('messages.skillCard.save'));
+    const saveAs = await screen.findByText(/messages\.skillCard\.saveAs/);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '' } });
+    expect(saveAs.closest('button')).toBeDisabled();
+  });
+
   it('on exists offers Save as <name>-2 and saves under that name', async () => {
     mocks.save.mockResolvedValueOnce({ ok: false, code: 'exists', message: 'exists' });
     mocks.save.mockResolvedValueOnce(ok({ skill_name: 'weekly-report-2', enabled_for: 'Writer' }));

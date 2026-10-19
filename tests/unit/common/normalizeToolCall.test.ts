@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { IMessageAcpToolCall } from '@/common/chat/chatLib';
-import { normalizeAcpToolCall } from '@/common/chat/normalizeToolCall';
+import type { IMessageAcpToolCall, IMessageToolCall } from '@/common/chat/chatLib';
+import { normalizeAcpToolCall, normalizeToolCall } from '@/common/chat/normalizeToolCall';
 
 describe('normalizeToolCall', () => {
   it('normalizes compact snake_case acp tool calls from history responses', () => {
@@ -80,6 +80,29 @@ describe('normalizeToolCall', () => {
         },
       },
     } as unknown as IMessageAcpToolCall);
+
+    expect(result?.skill).toEqual(skill);
+  });
+
+  it('attaches skill to a completed propose_skill tool_call from Claude Code', () => {
+    const skill = {
+      name: 'weekly-report',
+      description: 'Use when the user asks for the weekly report',
+      steps: '1. Open the dashboard',
+    };
+    const result = normalizeToolCall({
+      id: 'message-4',
+      conversation_id: 'conversation-1',
+      type: 'tool_call',
+      content: {
+        call_id: 'tool-4',
+        name: 'mcp__aionui-notes__propose_skill',
+        args: skill,
+        input: skill,
+        status: 'completed',
+        output: JSON.stringify({ proposed: true, name: 'weekly-report' }),
+      },
+    } as unknown as IMessageToolCall);
 
     expect(result?.skill).toEqual(skill);
   });

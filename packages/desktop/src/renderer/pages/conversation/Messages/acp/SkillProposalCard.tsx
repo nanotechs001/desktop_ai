@@ -28,11 +28,21 @@ const note = (text: string, action?: React.ReactNode) => (
 
 /** The first `<base>-N` (N >= 2) not in `taken`; the base is trimmed so the name stays within the length limit and valid. */
 const freeSkillName = (base: string, taken: Set<string>): string => {
+  // Skill folders clash regardless of case on macOS and Windows, so compare lowercase.
   for (let n = 2; ; n += 1) {
     const suffix = `-${n}`;
     const candidate = base.slice(0, SKILL_PROPOSAL_LIMITS.nameMax - suffix.length).replace(/-+$/, '') + suffix;
-    if (!taken.has(candidate)) return candidate;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
   }
+};
+
+/** This card's own saved skill: `<name>` or its `<name>-N` Save-as variant (any case), with the same description. */
+const isOwnSkill = (skill: { name: string; description?: string }, name: string, description: string): boolean => {
+  const have = skill.name.toLowerCase();
+  const base = name.toLowerCase();
+  const suffix = have.startsWith(`${base}-`) ? have.slice(base.length + 1) : '';
+  const isVariant = have === base || (/^\d+$/.test(suffix) && Number(suffix) >= 2 && String(Number(suffix)) === suffix);
+  return isVariant && skill.description?.trim() === description.trim();
 };
 
 /**
@@ -91,7 +101,10 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
     </div>
   );
 
-  const freeName = freeSkillName(name, new Set([...(skills ?? []).map((skill) => skill.name), clashName]));
+  const freeName = freeSkillName(
+    name,
+    new Set([...(skills ?? []).map((skill) => skill.name), clashName].map((n) => n.toLowerCase()))
+  );
 
   const body = (): React.ReactNode => {
     if (dismissed) return <div className='text-13px text-t-secondary'>{t('messages.skillCard.notSaved')}</div>;
@@ -126,7 +139,7 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
     const failure = result?.ok === false ? result : undefined;
     const exists = failure?.code === 'exists';
     // Only the same name AND description reads as this card's own skill; a same-name skill from elsewhere is a clash.
-    if (!result && skills?.some((skill) => skill.name === name && skill.description?.trim() === description.trim())) {
+    if (!result && skills?.some((skill) => isOwnSkill(skill, name, description))) {
       return note(t('messages.skillCard.savedLibrary'));
     }
 
@@ -145,14 +158,20 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
         <div className='text-13px text-t-secondary break-words'>
           {t('messages.skillCard.appliesWhen', { description })}
         </div>
-        <Input.TextArea value={draft} onChange={setDraft} autoSize={{ minRows: 3, maxRows: 12 }} disabled={saving} />
+        <Input.TextArea
+          value={draft}
+          onChange={setDraft}
+          autoSize={{ minRows: 3, maxRows: 12 }}
+          maxLength={SKILL_PROPOSAL_LIMITS.stepsMax}
+          disabled={saving}
+        />
         <div className='flex items-center gap-8px'>
           {exists ? (
             <Button
               size='small'
               type='primary'
               loading={saving}
-              disabled={!conversationId}
+              disabled={!conversationId || !draft.trim()}
               onClick={() => void save(freeName)}
             >
               {t('messages.skillCard.saveAs', { name: freeName })}
