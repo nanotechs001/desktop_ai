@@ -14,6 +14,10 @@ async function mkRendererFixture(): Promise<string> {
   return dir;
 }
 
+// The listener checks every gated request against the backend's GET /api/auth/user; these
+// mock backends answer it with 200, so any non-empty session cookie counts as logged in.
+const SESSION = { cookie: 'aionui-session=test' };
+
 async function startMockBackend(
   handler: (req: http.IncomingMessage, res: http.ServerResponse) => void
 ): Promise<{ port: number; close: () => Promise<void> }> {
@@ -82,7 +86,7 @@ describe('static-server', () => {
     });
     stopBackend = backend.close;
     handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
-    const r = await fetch(`${handle.localUrl}/api/anything`);
+    const r = await fetch(`${handle.localUrl}/api/anything`, { headers: SESSION });
     expect(r.status).toBe(200);
     const json = (await r.json()) as { path: string };
     expect(json.path).toBe('/api/anything');
@@ -126,7 +130,7 @@ describe('static-server', () => {
     stopBackend = backend.close;
     handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
 
-    const r = await fetch(`${handle.localUrl}/api/auth/user`);
+    const r = await fetch(`${handle.localUrl}/api/auth/user`, { headers: SESSION });
     expect(r.status).toBe(200);
     const json = (await r.json()) as { user: { username: string } };
     expect(json.user.username).toBe('from-backend');
@@ -152,14 +156,14 @@ describe('static-server', () => {
     expect(r.headers.get('set-cookie')).toMatch(/Max-Age=0/);
   });
 
-  it('/api proxy returns 502 when backend unreachable', async () => {
+  it('proxy returns 502 when backend unreachable (open route)', async () => {
     // allocate a port then free it
     const placeholder = await startMockBackend((_req, res) => res.end());
     const freePort = placeholder.port;
     await placeholder.close();
 
     handle = await startStaticServer({ staticDir, backendPort: freePort, port: 0 });
-    const r = await fetch(`${handle.localUrl}/api/anything`);
+    const r = await fetch(`${handle.localUrl}/login`, { method: 'POST' });
     expect(r.status).toBe(502);
   });
 
@@ -171,7 +175,7 @@ describe('static-server', () => {
     const { createHash } = await import('node:crypto');
     const net = await import('node:net');
     const httpMod = await import('node:http');
-    const backendServer = httpMod.createServer();
+    const backendServer = httpMod.createServer((_req, res) => res.writeHead(200).end());
     backendServer.on('upgrade', (req, socket) => {
       const wsKey = (req.headers['sec-websocket-key'] as string) || '';
       const accept = createHash('sha1')
@@ -202,6 +206,7 @@ describe('static-server', () => {
             'Connection: Upgrade\r\n' +
             'Sec-WebSocket-Version: 13\r\n' +
             'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+            `Cookie: ${SESSION.cookie}\r\n` +
             '\r\n'
         );
       });
@@ -229,7 +234,7 @@ describe('static-server', () => {
     const { createHash } = await import('node:crypto');
     const net = await import('node:net');
     const httpMod = await import('node:http');
-    const backendServer = httpMod.createServer();
+    const backendServer = httpMod.createServer((_req, res) => res.writeHead(200).end());
     backendServer.on('upgrade', (req, socket) => {
       const wsKey = (req.headers['sec-websocket-key'] as string) || '';
       const accept = createHash('sha1')
@@ -258,6 +263,7 @@ describe('static-server', () => {
             'Connection: Upgrade\r\n' +
             'Sec-WebSocket-Version: 13\r\n' +
             'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+            `Cookie: ${SESSION.cookie}\r\n` +
             '\r\n'
         );
       });
@@ -284,7 +290,7 @@ describe('static-server', () => {
     const { createHash } = await import('node:crypto');
     const net = await import('node:net');
     const httpMod = await import('node:http');
-    const backendServer = httpMod.createServer();
+    const backendServer = httpMod.createServer((_req, res) => res.writeHead(200).end());
     backendServer.on('upgrade', (req, socket) => {
       const wsKey = (req.headers['sec-websocket-key'] as string) || '';
       const accept = createHash('sha1')
@@ -313,6 +319,7 @@ describe('static-server', () => {
             'Connection: Upgrade\r\n' +
             'Sec-WebSocket-Version: 13\r\n' +
             'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+            `Cookie: ${SESSION.cookie}\r\n` +
             '\r\n'
         );
       });
@@ -371,6 +378,7 @@ describe('static-server', () => {
           headers: {
             'content-type': 'application/octet-stream',
             'content-length': BODY_LEN,
+            ...SESSION,
           },
         },
         (res) => {

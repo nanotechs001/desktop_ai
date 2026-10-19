@@ -38,6 +38,8 @@ export type WebHostOptions = {
   dataDir?: string;
   logDir?: string;
   dirs?: BackendSystemDirs;
+  /** True while the Cloudflare tunnel runs (see StaticServerOptions.isTunnelActive). */
+  isTunnelActive?: () => boolean;
   backend: { kind: 'ownBackend'; resolveBackend: BackendBinaryResolver } | { kind: 'useExistingBackend'; port: number };
 };
 

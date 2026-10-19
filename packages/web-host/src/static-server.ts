@@ -7,6 +7,10 @@
  * /api/auth/*. /ws and /api/stt/stream are WebSocket/stream upgrades spliced at
  * TCP level; /api/stt/stream is the STT streaming endpoint.
  *
+ * Auth gate: aioncore runs with `--local`, so this listener is what enforces
+ * login. Every proxied request and upgrade is classified (auth-gate/), and those
+ * that need a session are checked against aioncore `GET /api/auth/user` first.
+ *
  * Design: Node native http + serve-handler. No Express. No business routes.
  */
 
@@ -14,12 +18,22 @@ import http, { type IncomingMessage, type Server, type ServerResponse } from 'no
 import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
 import serveHandler from 'serve-handler';
+import {
+  classifyRequest,
+  createSessionValidator,
+  forwardingHeaders,
+  GATE_LIMITS,
+  isCanonicalPath,
+  type SessionValidator,
+} from './auth-gate/index.js';
 
 export type StaticServerOptions = {
   staticDir: string;
   backendPort: number;
   port?: number;
   allowRemote?: boolean;
+  /** True while the Cloudflare tunnel runs; only then is a loopback peer's Cf-Connecting-Ip trusted. */
+  isTunnelActive?: () => boolean;
 };
 
 export type StaticServerHandle = {
@@ -76,15 +90,56 @@ function getLanIP(): string | null {
   return pickLanIP(networkInterfaces());
 }
 
-function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
+type Credentials = Parameters<SessionValidator>[0];
+
+// How long an aioncore session check may take before we fail closed with 503.
+const VALIDATE_TIMEOUT_MS = 5000;
+
+const credentialsOf = (headers: Record<string, string>): Credentials => ({
+  cookie: headers.cookie,
+  authorization: headers.authorization,
+});
+
+/** `GET /api/auth/user` on aioncore with only the request's credentials; resolves the status code. */
+function fetchAuthUser(backendPort: number): (creds: Credentials) => Promise<number> {
+  return (creds) =>
+    new Promise((resolve, reject) => {
+      const headers: Record<string, string> = {};
+      if (creds.cookie) headers.cookie = creds.cookie;
+      if (creds.authorization) headers.authorization = creds.authorization;
+      const req = http.get(
+        { hostname: '127.0.0.1', port: backendPort, path: '/api/auth/user', headers, agent: false },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        }
+      );
+      req.setTimeout(VALIDATE_TIMEOUT_MS, () => req.destroy(new Error('auth check timed out')));
+      req.on('error', reject);
+    });
+}
+
+function replyError(res: ServerResponse, status: number, error: string): void {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ error }));
+}
+
+function forwardToBackend(
+  req: IncomingMessage,
+  res: ServerResponse,
+  backendPort: number,
+  headers: Record<string, string>,
+  onStatus: (status: number) => void
+): void {
   const options: http.RequestOptions = {
     hostname: '127.0.0.1',
     port: backendPort,
     path: req.url,
     method: req.method,
-    headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
+    headers: { ...headers, host: `127.0.0.1:${backendPort}` },
   };
   const proxy = http.request(options, (proxyRes) => {
+    onStatus(proxyRes.statusCode ?? 502);
     res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
     proxyRes.pipe(res);
   });
@@ -109,8 +164,17 @@ const PEEK_LIMIT_BYTES = 4096;
  * Splice `client` to a TCP endpoint on `targetPort`. Any bytes already read
  * from `client` during peek are replayed to the upstream as the first write,
  * so the endpoint sees the full HTTP request as-sent.
+ *
+ * With `heldUntilUpgrade`, client bytes (starting with `heldUntilUpgrade`) only
+ * flow once the upstream answers `101`: a request it does not upgrade cannot be
+ * followed by a second, ungated request on the same raw connection.
  */
-function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: Buffer): void {
+function spliceToTcpEndpoint(
+  client: Socket,
+  targetPort: number,
+  initialBytes: Buffer,
+  heldUntilUpgrade?: Buffer
+): Socket {
   client.setNoDelay(true);
   client.setKeepAlive(true);
   client.setTimeout(0);
@@ -128,6 +192,10 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
   upstream.setKeepAlive(true);
   upstream.once('connect', () => {
     if (initialBytes.length > 0) upstream.write(initialBytes);
+    if (heldUntilUpgrade) {
+      relayAfterUpgrade(client, upstream, heldUntilUpgrade);
+      return;
+    }
     upstream.pipe(client);
     client.pipe(upstream);
   });
@@ -139,6 +207,59 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
   client.on('error', tearDown);
   upstream.on('close', tearDown);
   client.on('close', tearDown);
+  return upstream;
+}
+
+// Longest upstream status line we wait for before deciding it is not a 101.
+const STATUS_LINE_LIMIT_BYTES = 1024;
+
+function relayAfterUpgrade(client: Socket, upstream: Socket, held: Buffer): void {
+  let head = Buffer.alloc(0);
+  const onFirstBytes = (chunk: Buffer): void => {
+    head = Buffer.concat([head, chunk]);
+    const newlineIdx = head.indexOf(0x0a);
+    if (newlineIdx < 0 && head.length < STATUS_LINE_LIMIT_BYTES) return;
+    upstream.off('data', onFirstBytes);
+    client.write(head);
+    const statusLine = head.subarray(0, Math.max(newlineIdx, 0)).toString('latin1');
+    if (/^HTTP\/1\.[01] 101\b/.test(statusLine)) {
+      if (held.length > 0) upstream.write(held);
+      client.pipe(upstream);
+    } else {
+      upstream.end(); // not upgraded: the backend finishes this response and closes
+    }
+    upstream.pipe(client);
+  };
+  upstream.on('data', onFirstBytes);
+}
+
+const REFUSAL_REASONS: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  431: 'Request Header Fields Too Large',
+  503: 'Service Unavailable',
+};
+
+/** Answer a raw connection with a bodiless status and close it; later client bytes are discarded. */
+function refuseRaw(client: Socket, status: number): void {
+  client.resume();
+  client.end(`HTTP/1.1 ${status} ${REFUSAL_REASONS[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+}
+
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/** Parse a raw header block (no trailing blank line). Null on anything a downstream parser could read differently. */
+function parseHead(text: string): { requestLine: string; headers: Record<string, string[]> } | null {
+  const [requestLine, ...fields] = text.split('\r\n');
+  const headers: Record<string, string[]> = {};
+  for (const line of fields) {
+    const colon = line.indexOf(':');
+    const name = line.slice(0, colon);
+    // Rejects obs-fold (leading whitespace), bare CR/LF and NUL.
+    if (colon <= 0 || !HEADER_NAME.test(name) || ['\r', '\n', '\0'].some((c) => line.includes(c))) return null;
+    (headers[name.toLowerCase()] ??= []).push(line.slice(colon + 1).trim());
+  }
+  return { requestLine, headers };
 }
 
 /**
@@ -147,10 +268,10 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
  *  - `false` → any other HTTP method / path, hand to internal HTTP server
  *  - `null`  → need more bytes (no CRLF yet)
  *
- * We only check the request-line; `Upgrade: websocket` is not strictly
- * required — the backend will reject a non-upgrade GET on these paths on its own.
- * Keeping the rule simple means we can decide after the first ~50 bytes
- * instead of waiting for the full header block.
+ * Routing needs only the request-line. Upgrade routes then wait for the full
+ * header block so the auth gate can check the session before any byte reaches
+ * the backend; `Upgrade: websocket` is not required here (a request the backend
+ * does not upgrade gets its response and the connection is closed).
  */
 function peekWsRoute(buf: Buffer): boolean | null {
   const newlineIdx = buf.indexOf(0x0a); // \n
@@ -163,6 +284,34 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const port = opts.port ?? DEFAULT_PORT;
   const allowRemote = opts.allowRemote === true;
   const host = allowRemote ? '0.0.0.0' : '127.0.0.1';
+
+  const isTunnelActive = opts.isTunnelActive ?? (() => false);
+  const validate = createSessionValidator(fetchAuthUser(opts.backendPort));
+  // Internal-server connections are local splices; map each one's local port back to the real client.
+  const peers = new Map<number, string | undefined>();
+
+  const proxyThroughGate = async (req: IncomingMessage, res: ServerResponse, url: string): Promise<void> => {
+    const method = req.method ?? '';
+    const decision = classifyRequest(method, url);
+    if (decision === 'blocked') {
+      replyError(res, 404, 'NOT_FOUND');
+      return;
+    }
+    const peer = peers.get(req.socket.remotePort ?? -1) ?? req.socket.remoteAddress;
+    const headers = forwardingHeaders(peer, req.headers, isTunnelActive());
+    // Validate exactly the credentials aioncore will receive (a Connection-named cookie is gone from both).
+    const creds = credentialsOf(headers);
+    if (decision === 'auth') {
+      const verdict = await validate(creds);
+      if (verdict !== 'valid') {
+        replyError(res, verdict === 'invalid' ? 401 : 503, verdict === 'invalid' ? 'UNAUTHORIZED' : 'AUTH_UNAVAILABLE');
+        return;
+      }
+    }
+    forwardToBackend(req, res, opts.backendPort, headers, (status) => {
+      if (method === 'POST' && url === '/logout' && status >= 200 && status < 300) validate.invalidate(creds);
+    });
+  };
 
   // The HTTP server listens only on loopback — user traffic hits the outer
   // net.Server first. We route to this server for everything except WS
@@ -180,11 +329,17 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
         return;
       }
 
+      // R2: the gate and aioncore must never disagree on which route a path names.
+      if ((req.url.startsWith('/api') || req.url.startsWith('/ws')) && !isCanonicalPath(req.url)) {
+        replyError(res, 400, 'NON_CANONICAL_PATH');
+        return;
+      }
+
       // /api/* — reverse proxy to backend (includes /api/auth/*).
       // /login and /logout are aionui-auth's top-level auth endpoints: proxy them too
       // so WebUI browser clients reach the backend without a path-rewrite.
       if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || req.url === '/login' || req.url === '/logout') {
-        forwardToBackend(req, res, opts.backendPort);
+        await proxyThroughGate(req, res, req.url);
         return;
       }
 
@@ -220,8 +375,31 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   // route to either the backend (for /ws and /api/stt/stream upgrades) or the internal HTTP
   // server (everything else). Both routes use raw TCP splice — no reliance
   // on http.Server's upgrade event.
+  // /ws and /api/stt/stream both need a session (classifyRequest gives 'auth'); the
+  // peek regex only admits those exact canonical paths, so no R2 check is needed here.
+  const gateUpgrade = async (client: Socket, peeked: Buffer, headEnd: number, peer?: string): Promise<void> => {
+    client.on('error', () => client.destroy());
+    const head = parseHead(peeked.subarray(0, headEnd).toString('latin1'));
+    if (!head) {
+      refuseRaw(client, 400);
+      return;
+    }
+    const headers = forwardingHeaders(peer, head.headers, isTunnelActive());
+    const verdict = await validate(credentialsOf(headers));
+    if (client.destroyed) return;
+    if (verdict !== 'valid') {
+      refuseRaw(client, verdict === 'invalid' ? 401 : 503);
+      return;
+    }
+    const fields = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
+    const rewritten = Buffer.from(`${head.requestLine}\r\n${fields.join('')}\r\n`, 'latin1');
+    spliceToTcpEndpoint(client, opts.backendPort, rewritten, peeked.subarray(headEnd + 4));
+  };
+
   const tcp_server = net.createServer((client: Socket) => {
+    const peer = client.remoteAddress;
     let peeked = Buffer.alloc(0);
+    let wsRoute: boolean | null = null;
     let settled = false;
     const cleanup = (): void => {
       if (settled) return;
@@ -232,11 +410,31 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     };
     const onData = (chunk: Buffer): void => {
       peeked = Buffer.concat([peeked, chunk]);
-      const decision = peekWsRoute(peeked);
-      if (decision === null && peeked.length < PEEK_LIMIT_BYTES) return;
+      if (wsRoute !== true) {
+        wsRoute = peekWsRoute(peeked);
+        if (wsRoute === null && peeked.length < PEEK_LIMIT_BYTES) return;
+        if (wsRoute !== true) {
+          cleanup();
+          const upstream = spliceToTcpEndpoint(client, internalPort, peeked);
+          upstream.once('connect', () => {
+            const localPort = upstream.localPort;
+            if (localPort === undefined) return;
+            peers.set(localPort, peer);
+            upstream.once('close', () => peers.delete(localPort));
+          });
+          return;
+        }
+      }
+      // Upgrade routes: the whole header block must be in hand before deciding.
+      const headEnd = peeked.indexOf('\r\n\r\n');
+      if (headEnd < 0 && peeked.length <= GATE_LIMITS.headerMaxBytes) return;
       cleanup();
-      const target = decision === true ? opts.backendPort : internalPort;
-      spliceToTcpEndpoint(client, target, peeked);
+      client.pause();
+      if (headEnd < 0 || headEnd + 4 > GATE_LIMITS.headerMaxBytes) {
+        refuseRaw(client, 431);
+        return;
+      }
+      void gateUpgrade(client, peeked, headEnd, peer);
     };
     const onEarlyError = (): void => {
       cleanup();
