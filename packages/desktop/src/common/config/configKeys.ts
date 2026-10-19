@@ -31,6 +31,8 @@ export type ConfigKeyMap = {
   'agent.enginePins': Record<string, string> | undefined;
   /** Color of each VA Bot's dot: assistant id -> `#rrggbb`. */
   'agent.colors': Record<string, string> | undefined;
+  /** Chats left by deleted VA Bots that the user chose to keep: never offered for cleanup again. */
+  'agent.keptOrphanChats': string[] | undefined;
   /** User-defined order for the enabled assistant picker surfaces. */
   'assistants.enabledOrder': string[] | undefined;
   'upload.saveToWorkspace': boolean | undefined;

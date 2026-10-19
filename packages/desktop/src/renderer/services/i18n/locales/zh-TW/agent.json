@@ -118,5 +118,16 @@
     "chatsFailed_one": "{{count}} 個聊天中有 {{failed}} 個無法刪除，已保留該 VA Bot。請重試。",
     "chatsFailed_other": "{{count}} 個聊天中有 {{failed}} 個無法刪除，已保留該 VA Bot。請重試。",
     "tasksFailed": "無法移除此 VA Bot 的排程任務，因此已保留該 VA Bot。請重試。"
+  },
+  "orphanChats": {
+    "title": "已刪除 VA Bot 的 {{count}} 個聊天",
+    "title_one": "已刪除 VA Bot 的 {{count}} 個聊天",
+    "title_other": "已刪除 VA Bot 的 {{count}} 個聊天",
+    "intro": "這些聊天屬於已不存在的 VA Bot。你可以刪除它們，或選擇保留，之後不再詢問。",
+    "more": "以及另外 {{count}} 個",
+    "keep": "保留",
+    "deleteFailed": "{{count}} 個聊天中有 {{failed}} 個無法刪除。",
+    "deleteFailed_one": "{{count}} 個聊天中有 {{failed}} 個無法刪除。",
+    "deleteFailed_other": "{{count}} 個聊天中有 {{failed}} 個無法刪除。"
   }
 }

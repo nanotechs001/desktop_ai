@@ -118,5 +118,16 @@
     "chatsFailed_one": "{{count}} 件中 {{failed}} 件のチャットを削除できなかったため、VA Bot は削除されていません。もう一度お試しください。",
     "chatsFailed_other": "{{count}} 件中 {{failed}} 件のチャットを削除できなかったため、VA Bot は削除されていません。もう一度お試しください。",
     "tasksFailed": "この VA Bot のスケジュール済みタスクを削除できなかったため、VA Bot は削除されていません。もう一度お試しください。"
+  },
+  "orphanChats": {
+    "title": "削除された VA Bot のチャット {{count}} 件",
+    "title_one": "削除された VA Bot のチャット {{count}} 件",
+    "title_other": "削除された VA Bot のチャット {{count}} 件",
+    "intro": "これらのチャットは、すでに存在しない VA Bot のものです。削除するか、残す場合は今後確認しません。",
+    "more": "ほか {{count}} 件",
+    "keep": "残す",
+    "deleteFailed": "{{count}} 件中 {{failed}} 件のチャットを削除できませんでした。",
+    "deleteFailed_one": "{{count}} 件中 {{failed}} 件のチャットを削除できませんでした。",
+    "deleteFailed_other": "{{count}} 件中 {{failed}} 件のチャットを削除できませんでした。"
   }
 }

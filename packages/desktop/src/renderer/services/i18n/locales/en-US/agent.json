@@ -118,5 +118,16 @@
     "chatsFailed_one": "Couldn't delete {{failed}} of {{count}} chat; the bot was kept. Try again.",
     "chatsFailed_other": "Couldn't delete {{failed}} of {{count}} chats; the bot was kept. Try again.",
     "tasksFailed": "Couldn't remove this bot's scheduled tasks, so the bot was kept. Try again."
+  },
+  "orphanChats": {
+    "title": "{{count}} chats from deleted bots",
+    "title_one": "{{count}} chat from a deleted bot",
+    "title_other": "{{count}} chats from deleted bots",
+    "intro": "These chats belong to VA Bots that no longer exist. Delete them, or keep them and you won't be asked again.",
+    "more": "and {{count}} more",
+    "keep": "Keep",
+    "deleteFailed": "Couldn't delete {{failed}} of {{count}} chats.",
+    "deleteFailed_one": "Couldn't delete {{failed}} of {{count}} chat.",
+    "deleteFailed_other": "Couldn't delete {{failed}} of {{count}} chats."
   }
 }

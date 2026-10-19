@@ -118,5 +118,16 @@
     "chatsFailed_one": "Não foi possível excluir o chat, então o VA Bot foi mantido. Tente novamente.",
     "chatsFailed_other": "Não foi possível excluir {{failed}} de {{count}} chats, então o VA Bot foi mantido. Tente novamente.",
     "tasksFailed": "Não foi possível remover as tarefas agendadas deste VA Bot, então o VA Bot foi mantido. Tente novamente."
+  },
+  "orphanChats": {
+    "title": "{{count}} chats de VA Bots excluídos",
+    "title_one": "{{count}} chat de um VA Bot excluído",
+    "title_other": "{{count}} chats de VA Bots excluídos",
+    "intro": "Esses chats pertencem a VA Bots que não existem mais. Exclua-os ou mantenha-os e você não será perguntado de novo.",
+    "more": "e mais {{count}}",
+    "keep": "Manter",
+    "deleteFailed": "Não foi possível excluir {{failed}} de {{count}} chats.",
+    "deleteFailed_one": "Não foi possível excluir {{failed}} de {{count}} chat.",
+    "deleteFailed_other": "Não foi possível excluir {{failed}} de {{count}} chats."
   }
 }

@@ -118,5 +118,16 @@
     "chatsFailed_one": "Der Chat konnte nicht gelöscht werden; der VA Bot wurde behalten. Versuchen Sie es erneut.",
     "chatsFailed_other": "{{failed}} von {{count}} Chats konnten nicht gelöscht werden; der VA Bot wurde behalten. Versuchen Sie es erneut.",
     "tasksFailed": "Die geplanten Aufgaben dieses VA Bots konnten nicht entfernt werden, daher wurde der VA Bot behalten. Versuchen Sie es erneut."
+  },
+  "orphanChats": {
+    "title": "{{count}} Chats gelöschter VA Bots",
+    "title_one": "{{count}} Chat eines gelöschten VA Bots",
+    "title_other": "{{count}} Chats gelöschter VA Bots",
+    "intro": "Diese Chats gehören zu VA Bots, die nicht mehr existieren. Löschen Sie sie, oder behalten Sie sie, dann werden Sie nicht erneut gefragt.",
+    "more": "und {{count}} weitere",
+    "keep": "Behalten",
+    "deleteFailed": "{{failed}} von {{count}} Chats konnten nicht gelöscht werden.",
+    "deleteFailed_one": "{{failed}} von {{count}} Chat konnte nicht gelöscht werden.",
+    "deleteFailed_other": "{{failed}} von {{count}} Chats konnten nicht gelöscht werden."
   }
 }

@@ -126,5 +126,18 @@
     "chatsFailed_few": "Не вдалося видалити {{failed}} з {{count}} чатів; VA Bot збережено. Повторіть спробу.",
     "chatsFailed_many": "Не вдалося видалити {{failed}} з {{count}} чатів; VA Bot збережено. Повторіть спробу.",
     "tasksFailed": "Не вдалося видалити заплановані задачі цього VA Bot, тож VA Bot збережено. Повторіть спробу."
+  },
+  "orphanChats": {
+    "title": "{{count}} чатів видалених VA Bot",
+    "title_one": "{{count}} чат видаленого VA Bot",
+    "title_other": "{{count}} чатів видалених VA Bot",
+    "title_few": "{{count}} чати видалених VA Bot",
+    "title_many": "{{count}} чатів видалених VA Bot",
+    "intro": "Ці чати належать VA Bot, яких більше немає. Видаліть їх або збережіть, і запитання більше не повторюватиметься.",
+    "more": "і ще {{count}}",
+    "keep": "Зберегти",
+    "deleteFailed": "Не вдалося видалити {{failed}} з {{count}} чатів.",
+    "deleteFailed_one": "Не вдалося видалити {{failed}} з {{count}} чату.",
+    "deleteFailed_other": "Не вдалося видалити {{failed}} з {{count}} чатів."
   }
 }

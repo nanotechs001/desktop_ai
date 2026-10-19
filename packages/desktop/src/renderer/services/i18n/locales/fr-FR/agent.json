@@ -118,5 +118,16 @@
     "chatsFailed_one": "Impossible de supprimer la conversation ; le VA Bot a été conservé. Réessayez.",
     "chatsFailed_other": "Impossible de supprimer {{failed}} des {{count}} conversations ; le VA Bot a été conservé. Réessayez.",
     "tasksFailed": "Impossible de supprimer les tâches planifiées de ce VA Bot ; le VA Bot a donc été conservé. Réessayez."
+  },
+  "orphanChats": {
+    "title": "{{count}} conversations de VA Bots supprimés",
+    "title_one": "{{count}} conversation d’un VA Bot supprimé",
+    "title_other": "{{count}} conversations de VA Bots supprimés",
+    "intro": "Ces conversations appartiennent à des VA Bots qui n’existent plus. Supprimez-les, ou conservez-les et la question ne vous sera plus posée.",
+    "more": "et {{count}} de plus",
+    "keep": "Conserver",
+    "deleteFailed": "Impossible de supprimer {{failed}} conversations sur {{count}}.",
+    "deleteFailed_one": "Impossible de supprimer {{failed}} conversation sur {{count}}.",
+    "deleteFailed_other": "Impossible de supprimer {{failed}} conversations sur {{count}}."
   }
 }

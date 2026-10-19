@@ -118,5 +118,16 @@
     "chatsFailed_one": "No se pudo eliminar el chat, así que se conservó el VA Bot. Inténtalo de nuevo.",
     "chatsFailed_other": "No se pudieron eliminar {{failed}} de {{count}} chats, así que se conservó el VA Bot. Inténtalo de nuevo.",
     "tasksFailed": "No se pudieron quitar las tareas programadas de este VA Bot, así que se conservó el VA Bot. Inténtalo de nuevo."
+  },
+  "orphanChats": {
+    "title": "{{count}} chats de VA Bots eliminados",
+    "title_one": "{{count}} chat de un VA Bot eliminado",
+    "title_other": "{{count}} chats de VA Bots eliminados",
+    "intro": "Estos chats pertenecen a VA Bots que ya no existen. Elimínalos o consérvalos y no se te volverá a preguntar.",
+    "more": "y {{count}} más",
+    "keep": "Conservar",
+    "deleteFailed": "No se pudieron eliminar {{failed}} de {{count}} chats.",
+    "deleteFailed_one": "No se pudo eliminar {{failed}} de {{count}} chat.",
+    "deleteFailed_other": "No se pudieron eliminar {{failed}} de {{count}} chats."
   }
 }

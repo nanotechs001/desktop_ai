@@ -118,5 +118,16 @@
     "chatsFailed_one": "حذف {{failed}} گفتگو از {{count}} گفتگو ممکن نشد؛ VA Bot نگه داشته شد. دوباره تلاش کنید.",
     "chatsFailed_other": "حذف {{failed}} گفتگو از {{count}} گفتگو ممکن نشد؛ VA Bot نگه داشته شد. دوباره تلاش کنید.",
     "tasksFailed": "حذف وظایف زمان‌بندی‌شده این VA Bot ممکن نشد، بنابراین VA Bot نگه داشته شد. دوباره تلاش کنید."
+  },
+  "orphanChats": {
+    "title": "{{count}} گفتگو از VA Botهای حذف‌شده",
+    "title_one": "{{count}} گفتگو از یک VA Bot حذف‌شده",
+    "title_other": "{{count}} گفتگو از VA Botهای حذف‌شده",
+    "intro": "این گفتگوها به VA Botهایی تعلق دارند که دیگر وجود ندارند. آن‌ها را حذف کنید، یا نگه دارید تا دوباره پرسیده نشود.",
+    "more": "و {{count}} مورد دیگر",
+    "keep": "نگه داشتن",
+    "deleteFailed": "حذف {{failed}} گفتگو از {{count}} گفتگو ممکن نشد.",
+    "deleteFailed_one": "حذف {{failed}} گفتگو از {{count}} گفتگو ممکن نشد.",
+    "deleteFailed_other": "حذف {{failed}} گفتگو از {{count}} گفتگو ممکن نشد."
   }
 }

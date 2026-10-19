@@ -10,7 +10,10 @@
 import { ipcBridge } from '@/common';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { scopeToToken } from '@/common/adapter/sidebarMapper';
+import { configService } from '@/common/config/configService';
 import type { TChatConversation } from '@/common/config/storage';
+import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
+import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
 import { emitter } from '@/renderer/utils/emitter';
 
 const LIVE_PAGE_SIZE = 500;
@@ -98,10 +101,10 @@ const getConversation = async (id: string): Promise<TChatConversation | null> =>
 };
 
 /**
- * The bot's chats, live and archived, each once. Throws when the list can't be read. Sidebar rows carry no
- * assistant identity (only the conversation service fills it in), so archived chats are looked up one by one.
+ * Every chat, live and archived, each once, that `match` accepts. Throws when the list can't be read. Sidebar rows
+ * carry no assistant identity (only the conversation service fills it in), so archived chats are looked up one by one.
  */
-export async function collectBotChats(agentId: string): Promise<TChatConversation[]> {
+export async function collectChats(match: (conversation: TChatConversation) => boolean): Promise<TChatConversation[]> {
   const [live, archivedIds] = await Promise.all([listLiveConversations(), listArchivedIds()]);
   const liveIds = new Set(live.map((conversation) => conversation.id));
   const archived = await mapInBatches(
@@ -111,9 +114,33 @@ export async function collectBotChats(agentId: string): Promise<TChatConversatio
   );
   const byId = new Map<string, TChatConversation>();
   for (const conversation of [...live, ...archived]) {
-    if (conversation?.assistant?.id === agentId) byId.set(conversation.id, conversation);
+    if (conversation && match(conversation)) byId.set(conversation.id, conversation);
   }
   return [...byId.values()];
+}
+
+/** The bot's chats, live and archived. */
+export const collectBotChats = (agentId: string): Promise<TChatConversation[]> =>
+  collectChats((conversation) => conversation.assistant?.id === agentId);
+
+/**
+ * Chats left behind by a VA Bot that was deleted: the snapshot keeps `assistant.source === 'user'` and the id, while the
+ * definition lookup fails (the name falls back to the raw id). The default Agent and the hidden butler are never
+ * orphans even when the catalog does not list them. Throws when the catalog is empty or unreadable: a real install
+ * always has the default Agent, so an empty list means a failed load, and treating every bot as gone would be wrong.
+ */
+export async function findOrphanChats(keptIds: readonly string[] = []): Promise<TChatConversation[]> {
+  const catalog = await ipcBridge.assistants.list.invoke();
+  if (!Array.isArray(catalog) || catalog.length === 0) throw new Error('Assistant catalog is empty');
+  const known = new Set(catalog.map((assistant) => assistant.id));
+  const kept = new Set(keptIds);
+  const storedDefaultId = configService.get('agent.builtinDefaultId');
+  return collectChats(({ id, assistant }) => {
+    if (assistant?.source !== 'user' || kept.has(id)) return false;
+    return (
+      !known.has(assistant.id) && !isUndeletableAgent(assistant.id, storedDefaultId) && !isHiddenAgentId(assistant.id)
+    );
+  });
 }
 
 export type RemoveChatsOptions = {

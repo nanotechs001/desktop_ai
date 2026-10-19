@@ -63,6 +63,7 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktopMock }));
 vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
+vi.mock('@renderer/hooks/assistant/OrphanChatsPrompt', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
@@ -209,7 +210,7 @@ describe('Layout sider brand Home button', () => {
   });
 });
 
-describe('Layout tray bridge: open a VA Bot\'s settings', () => {
+describe("Layout tray bridge: open a VA Bot's settings", () => {
   it('opens that bot in the assistant editor', () => {
     renderLayout();
     navigate.mockClear();

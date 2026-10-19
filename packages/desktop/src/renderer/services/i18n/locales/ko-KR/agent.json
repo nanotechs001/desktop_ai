@@ -118,5 +118,16 @@
     "chatsFailed_one": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요.",
     "chatsFailed_other": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요.",
     "tasksFailed": "이 VA Bot의 예약된 작업을 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요."
+  },
+  "orphanChats": {
+    "title": "삭제된 VA Bot의 채팅 {{count}}개",
+    "title_one": "삭제된 VA Bot의 채팅 {{count}}개",
+    "title_other": "삭제된 VA Bot의 채팅 {{count}}개",
+    "intro": "이 채팅은 더 이상 존재하지 않는 VA Bot의 것입니다. 삭제하거나, 유지하면 다시 묻지 않습니다.",
+    "more": "외 {{count}}개",
+    "keep": "유지",
+    "deleteFailed": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못했습니다.",
+    "deleteFailed_one": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못했습니다.",
+    "deleteFailed_other": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못했습니다."
   }
 }
