@@ -238,4 +238,19 @@ describe("Layout tray bridge: a link clicked in a robot's chat", () => {
     expect(revealBrowserFor).toHaveBeenCalledWith('c1', 'https://example.com/a');
     expect(navigate).toHaveBeenCalledWith('/conversation/c1');
   });
+
+  it('ignores a link that is not http(s)', () => {
+    renderLayout();
+    navigate.mockClear();
+    revealBrowserFor.mockClear();
+
+    window.dispatchEvent(
+      new CustomEvent('tray:open-link-in-conversation', {
+        detail: { conversation_id: 'c1', url: 'file:///etc/passwd' },
+      })
+    );
+
+    expect(revealBrowserFor).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
 });

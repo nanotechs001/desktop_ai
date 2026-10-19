@@ -13,6 +13,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { setGlobalNavigate } from '@/renderer/utils/navigation';
+import { isHttpUrl } from '@/common/types/agent/agentWidget';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import { ProjectPanelHost } from '@renderer/components/layout/ProjectPanelHost';
 import { ProjectPanelMobileOverlay } from '@renderer/components/layout/ProjectPanelMobileOverlay';
@@ -365,6 +366,7 @@ const Layout: React.FC<{
     // A link clicked in a robot's chat: that conversation's browser pane opens it, once the conversation is on screen
     const handleOpenLinkInConversation = (event: CustomEvent<{ conversation_id: string; url: string }>) => {
       const { conversation_id, url } = event.detail;
+      if (!isHttpUrl(url)) return;
       revealBrowserFor(conversation_id, url);
       void navigate(`/conversation/${conversation_id}`);
     };

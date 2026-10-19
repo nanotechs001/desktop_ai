@@ -446,6 +446,37 @@ describe('watching a robot opens its chat browser pane', () => {
     expect(ctx.tabs.filter((tab) => tab.content === 'https://example.com/x')).toHaveLength(1);
   });
 
+  it('drops a link request that is consumed after its expiry', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    act(() => ctx.collapsePreview());
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+
+    act(() => ctx.revealBrowserFor('c1', 'https://example.com/late'));
+    act(() => {
+      vi.advanceTimersByTime(11_000);
+    });
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+
+    expect(ctx.tabs.map((tab) => tab.content)).not.toContain('https://example.com/late');
+    expect(ctx.isOpen).toBe(false);
+  });
+
+  it('still opens a link request consumed within its expiry', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    act(() => ctx.collapsePreview());
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+
+    act(() => ctx.revealBrowserFor('c1', 'https://example.com/soon'));
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+
+    expect(ctx.tabs.map((tab) => tab.content)).toContain('https://example.com/soon');
+  });
+
   it('opens the given address in the first tab of a conversation that has none, with no blank tab', () => {
     mount();
     enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });

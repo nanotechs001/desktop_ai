@@ -264,6 +264,9 @@ type PersistedScopeState = {
   userClosed?: boolean;
 };
 
+/** How long a revealBrowserFor request for a conversation not on screen stays valid. */
+const REVEAL_REQUEST_TTL_MS = 10_000;
+
 type ScopeChangeOptions = {
   /** Conversation routes: (re)open the panel unless the user closed it, with a blank browser tab when it has none. */
   openBrowserIfEmpty?: boolean;
@@ -1135,11 +1138,11 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [closePreview]);
 
   // A Watch (or a link) for a conversation not on screen yet; consumed when the route enters its scope.
-  const revealRequestRef = useRef<{ conversationId: string; url?: string } | null>(null);
+  const revealRequestRef = useRef<{ conversationId: string; url?: string; at: number } | null>(null);
   const revealBrowserFor = useCallback(
     (conversationId: string, url?: string) => {
       if (getCurrentConversation() !== conversationId) {
-        revealRequestRef.current = { conversationId, url };
+        revealRequestRef.current = { conversationId, url, at: Date.now() };
         return;
       }
       userClosedRef.current = false;
@@ -1212,8 +1215,12 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
       const prev = currentScopeRef.current;
       const request = revealRequestRef.current;
-      const revealing = options?.conversationId != null && request?.conversationId === options.conversationId;
-      if (revealing) revealRequestRef.current = null;
+      const revealing =
+        options?.conversationId != null &&
+        request?.conversationId === options.conversationId &&
+        Date.now() - request.at <= REVEAL_REQUEST_TTL_MS;
+      // An expired request for this conversation is dropped too, so a chat that never loaded cannot open a tab later.
+      if (revealing || (request && request.conversationId === options?.conversationId)) revealRequestRef.current = null;
       const revealUrl = revealing ? request?.url : undefined;
       // A link from that conversation's robot chat: a new tab, in place of the blank one a fresh scope would open.
       const openRevealUrl = (): boolean => {

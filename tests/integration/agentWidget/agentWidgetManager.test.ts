@@ -1245,6 +1245,7 @@ describe("opening a robot chat's link in the main window", () => {
 
   it('rejects a non-http(s) url or a malformed payload at the IPC boundary', async () => {
     const { manager } = await makeManager();
+    manager.ensure(A);
     initAgentWidgetBridge(manager);
     const main = makeMain();
     host.getMainWindow.mockReturnValue(main);
@@ -1266,8 +1267,19 @@ describe("opening a robot chat's link in the main window", () => {
     expect(main.webContents.send).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores a conversation that has no live robot', async () => {
+    const { manager } = await makeManager();
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+    manager.openLinkInMain('unknown-conv', URL_IN_CHAT);
+    expect(main.show).not.toHaveBeenCalled();
+    expect(main.focus).not.toHaveBeenCalled();
+    expect(main.webContents.send).not.toHaveBeenCalled();
+  });
+
   it('the manager refuses a non-http(s) url too', async () => {
     const { manager } = await makeManager();
+    manager.ensure(A);
     const main = makeMain();
     host.getMainWindow.mockReturnValue(main);
     manager.openLinkInMain(A, 'file:///etc/passwd');

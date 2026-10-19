@@ -15,7 +15,7 @@ const BLOCK_REASON = 'Use the Pixebot browser pane tools (aionui-browser) instea
 const DEFAULT_FALLBACK_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
 const DENIED_BASH_TOOLS = ['Bash(open:*)', 'Bash(xdg-open:*)', 'Bash(osascript:*)'];
 /** Claude Code's own cloud artifact tools publish to claude.ai; artifacts here must stay local (aionui-artifacts). */
-const DENIED_CLOUD_TOOLS = ['Artifact', 'ArtifactComments', 'ArtifactData'];
+const DENIED_CLOUD_TOOLS = ['Artifact', 'ArtifactComments', 'ArtifactData', 'ArtifactCheck'];
 
 /**
  * True when a shell command would open an external browser (open, xdg-open, gio open, osascript, ...).

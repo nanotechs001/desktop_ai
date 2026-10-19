@@ -598,7 +598,8 @@ export class AgentWidgetManager {
    * in its popup. Only http(s) links are forwarded.
    */
   openLinkInMain(conversationId: string, url: string): void {
-    if (!isHttpUrl(url)) return;
+    // Only a live robot may ask: the bridge is also reachable from WebUI sockets.
+    if (!this.entries.has(conversationId) || !isHttpUrl(url)) return;
     this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId, url });
   }
 

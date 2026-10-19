@@ -168,7 +168,7 @@ describe('buildLauncherScript', () => {
     expect(result.status).toBe(0);
     const [, ...args] = result.stdout.trimEnd().split('\n');
     expect(args.slice(0, 2)).toEqual(['--print', 'a b']);
-    expect(args.slice(2, 11)).toEqual([
+    expect(args.slice(2, 12)).toEqual([
       '--no-chrome',
       '--disallowedTools',
       'Bash(open:*)',
@@ -177,16 +177,17 @@ describe('buildLauncherScript', () => {
       'Artifact',
       'ArtifactComments',
       'ArtifactData',
+      'ArtifactCheck',
       '--settings',
     ]);
-    expect(JSON.parse(args[11])).toEqual({
+    expect(JSON.parse(args[12])).toEqual({
       permissions: {
         allow: [
           `mcp__${BUILTIN_BROWSER_MCP_NAME}`,
           `mcp__${BUILTIN_ARTIFACTS_MCP_NAME}`,
           `mcp__${BUILTIN_NOTES_MCP_NAME}`,
         ],
-        deny: ['Artifact', 'ArtifactComments', 'ArtifactData'],
+        deny: ['Artifact', 'ArtifactComments', 'ArtifactData', 'ArtifactCheck'],
       },
       hooks: {
         PreToolUse: [
@@ -194,7 +195,7 @@ describe('buildLauncherScript', () => {
         ],
       },
     });
-    expect(args).toHaveLength(12);
+    expect(args).toHaveLength(13);
   });
 
   it('skips itself when it appears on PATH as claude', () => {
