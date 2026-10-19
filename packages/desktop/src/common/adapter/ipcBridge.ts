@@ -1641,6 +1641,10 @@ export const agentWidget = {
   ),
   draftReady: bridge.buildEmitter<AgentWidgetTarget & { to: AgentChatLocation }>('agent-widget:draft-ready'),
   settingsChanged: bridge.buildEmitter<AgentWidgetSettings>('agent-widget:settings-changed'),
+  /** Main window -> main: the Agent colors (`agent.colors`) changed; main re-emits them via `botColorsChanged`. */
+  broadcastBotColors: bridge.buildProvider<void, Record<string, string>>('agent-widget:broadcast-bot-colors'),
+  /** Main -> every window: the current Agent colors (assistant id -> `#rrggbb`), so widget windows follow edits. */
+  botColorsChanged: bridge.buildEmitter<Record<string, string>>('agent-widget:bot-colors-changed'),
 };
 
 // ---------------------------------------------------------------------------

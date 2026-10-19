@@ -24,6 +24,11 @@ const mocks = vi.hoisted(() => {
         store.set(key, value);
         notify(key, value);
       }),
+      setLocal: (key: string, value: unknown) => {
+        mocks.setLocal(key, value);
+        store.set(key, value);
+        notify(key, value);
+      },
       subscribe: (key: string, callback: (value: unknown) => void) => {
         if (!subscribers.has(key)) subscribers.set(key, new Set());
         subscribers.get(key)!.add(callback);
@@ -31,11 +36,27 @@ const mocks = vi.hoisted(() => {
       },
     },
     listAssistants: vi.fn(),
+    broadcast: vi.fn((_colors: unknown) => Promise.resolve()),
+    listeners: new Set<(colors: Record<string, string>) => void>(),
+    setLocal: vi.fn(),
   };
 });
 
 vi.mock('@/common/config/configService', () => ({ configService: mocks.configService }));
-vi.mock('@/common', () => ({ ipcBridge: { assistants: { list: { invoke: mocks.listAssistants } } } }));
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    assistants: { list: { invoke: mocks.listAssistants } },
+    agentWidget: {
+      broadcastBotColors: { invoke: mocks.broadcast },
+      botColorsChanged: {
+        on: (callback: (colors: Record<string, string>) => void) => {
+          mocks.listeners.add(callback);
+          return () => mocks.listeners.delete(callback);
+        },
+      },
+    },
+  },
+}));
 
 import {
   afterBotColorsChanged,
@@ -45,6 +66,8 @@ import {
   seedBotColors,
   useBotColor,
   useBotColorSeed,
+  useBotColorsSync,
+  useVaBotColor,
   writeBotColors,
 } from '@/renderer/hooks/agent/useBotColor';
 
@@ -56,6 +79,9 @@ beforeEach(() => {
   mocks.state.initialized = true;
   mocks.configService.set.mockClear();
   mocks.listAssistants.mockReset();
+  mocks.broadcast.mockReset().mockResolvedValue(undefined);
+  mocks.setLocal.mockClear();
+  mocks.listeners.clear();
 });
 afterEach(cleanup);
 
@@ -92,10 +118,27 @@ describe('useBotColor', () => {
 });
 
 describe('writing colors', () => {
-  it('writeBotColors stores the map and the broadcast hook is a harmless no-op', async () => {
-    expect(() => afterBotColorsChanged({ a: '#112233' })).not.toThrow();
+  it('writeBotColors stores the map, then broadcasts it to the other windows', async () => {
     await writeBotColors({ a: '#112233' });
     expect(mocks.store.get('agent.colors')).toEqual({ a: '#112233' });
+    expect(mocks.broadcast).toHaveBeenCalledWith({ a: '#112233' });
+  });
+
+  it('a failed broadcast never fails the write', async () => {
+    mocks.broadcast.mockRejectedValue(new Error('no main'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(writeBotColors({ a: '#112233' })).resolves.toBeUndefined();
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    warn.mockRestore();
+  });
+
+  it('a broadcast that throws synchronously (no bridge) is swallowed too', () => {
+    mocks.broadcast.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => afterBotColorsChanged({ a: '#112233' })).not.toThrow();
+    warn.mockRestore();
   });
 
   it('rememberBotColor adds or replaces one entry without touching the others', async () => {
@@ -188,5 +231,50 @@ describe('useBotColorSeed', () => {
     await waitFor(() => expect(warn).toHaveBeenCalled());
     expect(mocks.store.get('agent.colors')).toBeUndefined();
     warn.mockRestore();
+  });
+});
+
+describe('useBotColorsSync (widget windows)', () => {
+  it('puts colors pushed by the main window into the local cache without writing to the backend', async () => {
+    const { result } = renderHook(() => {
+      useBotColorsSync();
+      return useBotColor('a');
+    });
+    expect(result.current).toBe(fallbackBotColor('a'));
+    act(() => mocks.listeners.forEach((listener) => listener({ a: '#abcdef' })));
+    expect(mocks.setLocal).toHaveBeenCalledWith('agent.colors', { a: '#abcdef' });
+    expect(result.current).toBe('#abcdef');
+    expect(mocks.configService.set).not.toHaveBeenCalled();
+    expect(mocks.broadcast).not.toHaveBeenCalled();
+  });
+
+  it('stops listening when unmounted', () => {
+    const { unmount } = renderHook(() => useBotColorsSync());
+    expect(mocks.listeners.size).toBe(1);
+    unmount();
+    expect(mocks.listeners.size).toBe(0);
+  });
+});
+
+describe('useVaBotColor (the dot rule for every surface)', () => {
+  const colorOf = (assistant: { id?: string; source?: string } | null | undefined) =>
+    renderHook(() => useVaBotColor(assistant)).result.current;
+
+  it('gives a user-made VA Bot its stored color, else the id fallback', () => {
+    mocks.store.set('agent.colors', { a: '#112233' });
+    expect(colorOf({ id: 'a', source: 'user' })).toBe('#112233');
+    expect(colorOf({ id: 'b', source: 'user' })).toBe(fallbackBotColor('b'));
+  });
+
+  it('gives nothing to built-in, engine-generated, default and missing Agents', () => {
+    mocks.store.set('agent.colors', { a: '#112233', 'the-default': '#445566' });
+    mocks.store.set('agent.builtinDefaultId', 'the-default');
+    expect(colorOf({ id: 'a', source: 'builtin' })).toBeUndefined();
+    expect(colorOf({ id: 'a', source: 'generated' })).toBeUndefined();
+    expect(colorOf({ id: 'the-default', source: 'user' })).toBeUndefined();
+    expect(colorOf({ id: 'aion-default-agent', source: 'user' })).toBeUndefined();
+    expect(colorOf({ source: 'user' })).toBeUndefined();
+    expect(colorOf(undefined)).toBeUndefined();
+    expect(colorOf(null)).toBeUndefined();
   });
 });

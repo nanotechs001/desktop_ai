@@ -57,6 +57,12 @@
   transition: opacity 0.15s ease;
 }
 
+/* The bot's color dot inside the name pill. */
+.markerDot {
+  margin-inline-end: 3px;
+  vertical-align: middle;
+}
+
 /* Visibility comes from pointer events (data-visible), not :hover, which can stick in this window. */
 .marker[data-visible='true'],
 .bot:focus-visible .marker {
@@ -146,6 +152,11 @@
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nameDot {
+  margin-inline-end: 6px;
+  vertical-align: middle;
 }
 
 .status {

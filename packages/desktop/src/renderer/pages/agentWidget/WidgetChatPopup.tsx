@@ -11,6 +11,7 @@ import { Close, History, Left, Minus, PreviewCloseOne, SettingTwo, Tv } from '@i
 import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import ConversationChatBody from '@/renderer/pages/conversation/components/ConversationChatBody';
 import { HistoryPanelBody } from '@/renderer/components/layout/Titlebar/HistoryPanel';
 import { ConversationHistoryProvider } from '@/renderer/hooks/context/ConversationHistoryContext';
@@ -67,7 +68,10 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
     >
       <header className={styles.header}>
         <div className={styles.title}>
-          <div className={styles.name}>{props.name}</div>
+          <div className={styles.name}>
+            <VaBotColorDot assistant={props.conversation?.assistant} className={styles.nameDot} />
+            {props.name}
+          </div>
           <div className={styles.status} aria-live='polite'>
             <span className={styles.dot} data-state={state} aria-hidden />
             {t(`pet.widget.state.${state}`)}

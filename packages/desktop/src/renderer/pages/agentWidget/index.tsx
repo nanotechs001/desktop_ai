@@ -13,6 +13,8 @@ import type { AgentWidgetLayout, AgentWidgetSettings } from '@/common/types/agen
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
+import { useBotColorsSync, useVaBotColor } from '@/renderer/hooks/agent/useBotColor';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { useChatLocation } from './chatLocation';
 import { isTurning, resolveRobotVisual, type RobotInteraction, type RobotStrip } from './agentAnimationState';
@@ -50,6 +52,8 @@ const AgentWidgetPage: React.FC = () => {
     getConversationOrNull(id)
   );
   const chatLocation = useChatLocation(id);
+  useBotColorsSync();
+  const botColor = useVaBotColor(conversation?.assistant);
   const expanded = layout?.expanded ?? false;
   const [chatMounted, setChatMounted] = useState(false);
   const { state, awaitingUser, wake } = useAgentAnimationState(id, expanded && chatLocation === 'widget');
@@ -331,11 +335,13 @@ const AgentWidgetPage: React.FC = () => {
           state={state}
           size={layout.bot_size}
           reduceMotion={reduceMotion}
+          glowColor={botColor}
           onClipEnd={onClipEnd}
         />
         {state === 'notification' && <span className={styles.badge} aria-label={t('pet.widget.state.notification')} />}
         {!expanded && lifecycle === null && layout.drag_phase === 'none' && (
           <span className={styles.marker} data-visible={nameVisible} aria-hidden>
+            <VaBotColorDot assistant={conversation?.assistant} size={6} className={styles.markerDot} />
             {conversation?.assistant?.name || name}
           </span>
         )}

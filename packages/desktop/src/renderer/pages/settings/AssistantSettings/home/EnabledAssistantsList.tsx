@@ -8,6 +8,7 @@ import type { AssistantListItem } from '../types';
 import { resolveAssistantSourceTag } from '../assistantUtils';
 import AssistantAvatar from '../AssistantAvatar';
 import RuntimeBadge from './RuntimeBadge';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import {
   DndContext,
   KeyboardSensor,
@@ -106,6 +107,7 @@ const EnabledAssistantRow: React.FC<EnabledAssistantRowProps> = ({
         </Button>
         <AssistantAvatar assistant={assistant} imageFit='contain' shape='circle' size={20} />
         <div className='flex min-w-0 flex-1 items-center gap-8px'>
+          <VaBotColorDot assistant={assistant} />
           <span className='truncate font-medium text-t-primary'>{name}</span>
           <Tag
             size='small'

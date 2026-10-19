@@ -15,6 +15,7 @@ import { managedAgentSearchText } from '@/renderer/utils/model/agentTypes';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import { selectableAssistants } from '@/renderer/utils/model/assistantSelection';
 import { useTranslation } from 'react-i18next';
 
@@ -259,6 +260,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
         <span data-assistant-label='true' className='min-w-0 max-w-180px truncate whitespace-nowrap'>
           {label}
         </span>
+        <VaBotColorDot assistant={assistant} />
       </Button>
     );
   };

@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { ipcBridge } from '@/common';
 import { AGENT_ANIMATION_STATES, CONVERSATION_ID_PATTERN } from '@/common/types/agent/agentWidget';
+import { isBotColor } from '@/common/types/agent/botColors';
 import type { AgentWidgetManager } from './agentWidgetManager';
 import { settingsPatchSchema } from './agentWidgetStore';
 
@@ -19,6 +20,7 @@ import { settingsPatchSchema } from './agentWidgetStore';
 const conversationId = z.string().regex(CONVERSATION_ID_PATTERN);
 const target = z.object({ conversation_id: conversationId }).strict();
 const agentId = z.string().min(1).max(256);
+const botColors = z.record(agentId, z.string().refine(isBotColor));
 const schemas = {
   ensure: target.extend({ force: z.boolean().optional(), agent_id: agentId.optional() }).strict(),
   openPopup: target.extend({ agent_id: agentId.optional() }).strict(),
@@ -99,6 +101,9 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   w.animationDone.provider(async (p) => {
     const { conversation_id, animation } = parse(schemas.animationDone, p, 'animationDone');
     manager.animationDone(conversation_id, animation);
+  });
+  w.broadcastBotColors.provider(async (p) => {
+    w.botColorsChanged.emit(parse(botColors, p, 'broadcastBotColors'));
   });
   w.setSuspended.provider(async (p) => {
     const { conversation_id, suspended } = parse(schemas.setSuspended, p, 'setSuspended');

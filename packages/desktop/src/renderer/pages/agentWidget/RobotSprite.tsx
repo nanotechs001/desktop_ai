@@ -7,6 +7,7 @@
 import React, { useEffect, useRef } from 'react';
 import classNames from 'classnames';
 import type { AgentAnimationState, RobotAnimationName } from '@/common/types/agent/agentWidget';
+import { isBotColor } from '@/common/types/agent/botColors';
 import appearingStrip from '@renderer/assets/agentWidget/appearing.webp';
 import disappearingStrip from '@renderer/assets/agentWidget/disappearing.webp';
 import draggingStrip from '@renderer/assets/agentWidget/dragging.webp';
@@ -279,6 +280,8 @@ type RobotSpriteProps = {
   state: AgentAnimationState;
   size: number;
   reduceMotion: boolean;
+  /** The bot's `#rrggbb` color: a still underglow beneath the robot. Nothing is drawn without a valid one. */
+  glowColor?: string;
   /** A one-shot (turn, lifecycle, landing) finished playing. */
   onClipEnd?: (strip: RobotStrip) => void;
 };
@@ -288,7 +291,7 @@ type RobotSpriteProps = {
  * anchored at the feet), sprite (frame strip, drawn by the clock). Nothing else — text, badges, the popup — lives
  * inside the mirror.
  */
-const RobotSprite: React.FC<RobotSpriteProps> = ({ visual, state, size, reduceMotion, onClipEnd }) => {
+const RobotSprite: React.FC<RobotSpriteProps> = ({ visual, state, size, reduceMotion, glowColor, onClipEnd }) => {
   const spriteRef = useRef<HTMLDivElement>(null);
   useRobotClock(spriteRef, visual, size, reduceMotion, onClipEnd);
   return (
@@ -297,6 +300,14 @@ const RobotSprite: React.FC<RobotSpriteProps> = ({ visual, state, size, reduceMo
       className={classNames(styles.direction, visual.panicking && styles.panicking)}
       data-facing={visual.mirrored ? 'left' : 'right'}
     >
+      {isBotColor(glowColor) && (
+        <span
+          aria-hidden
+          data-robot-glow
+          className={styles.glow}
+          style={{ '--bot-glow': glowColor } as React.CSSProperties}
+        />
+      )}
       <div className={classNames(styles.hop, visual.hopping && styles.hopping)}>
         <div
           ref={spriteRef}

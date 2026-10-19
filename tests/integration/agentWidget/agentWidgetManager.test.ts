@@ -142,6 +142,7 @@ vi.mock('@/common', () => {
     'animationDone',
     'setSuspended',
     'showConversation',
+    'broadcastBotColors',
   ];
   const emitterNames = [
     'layoutChanged',
@@ -152,6 +153,7 @@ vi.mock('@/common', () => {
     'retargeted',
     'hiddenChanged',
     'robotsChanged',
+    'botColorsChanged',
   ];
   const agentWidget: Record<string, unknown> = {};
   for (const name of providerNames) {
@@ -1160,7 +1162,7 @@ describe('IPC boundary', () => {
   });
 });
 
-describe('opening a VA Bot\'s settings in the main window', () => {
+describe("opening a VA Bot's settings in the main window", () => {
   const makeMain = () => ({
     isDestroyed: () => false,
     isMinimized: () => true,
@@ -1202,6 +1204,35 @@ describe('opening a VA Bot\'s settings in the main window', () => {
     expect(main.webContents.send).not.toHaveBeenCalled();
     await expect(h.providers.openAgentSettings({ conversation_id: A, agent_id: 'bot-1' })).resolves.toBeUndefined();
     expect(main.webContents.send).toHaveBeenCalledWith('tray:open-agent-settings', { agent_id: 'bot-1' });
+  });
+});
+
+describe('Agent color broadcast', () => {
+  it('re-emits a valid color map to every window', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    const colors = { 'bot-1': '#3B82F6', 'bot-2': '#10b981' };
+    await expect(h.providers.broadcastBotColors(colors)).resolves.toBeUndefined();
+    expect(emittedOf('botColorsChanged')).toEqual([colors]);
+  });
+
+  it('rejects anything that is not a map of #rrggbb colors, emitting nothing', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    for (const bad of [
+      null,
+      'red',
+      [],
+      { a: 'red' },
+      { a: '#12345' },
+      { a: 'url(x)' },
+      { a: '#112233; background: red' },
+      { a: 5 },
+      { '': '#112233' },
+    ]) {
+      await expect(h.providers.broadcastBotColors(bad)).rejects.toThrow();
+    }
+    expect(emittedOf('botColorsChanged')).toEqual([]);
   });
 });
 

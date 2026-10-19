@@ -17,6 +17,7 @@ import CronStatusTag from './CronStatusTag';
 import CreateTaskDialog from './CreateTaskDialog';
 import { getJobAgentMeta } from './jobAgentMeta';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import { formatCronRunConversationTitle, formatSchedule, formatNextRun } from '@renderer/pages/cron/cronUtils';
 import { useCronJobConversations } from '@renderer/pages/cron/useCronJobs';
 import { repairCronJobTimeZone } from '@renderer/pages/cron/repairCronJobTimeZone';
@@ -54,6 +55,7 @@ const TaskDetailPage: React.FC = () => {
   const { conversations, refetch: refetchConversations } = useCronJobConversations(job_id);
   const { presetAssistants } = useConversationAssistants();
   const assistantIdentity = job ? getJobAgentMeta(job, presetAssistants, t) : null;
+  const jobAssistant = presetAssistants.find((item) => item.id === job?.metadata.agent_config?.assistant_id);
 
   useEffect(() => {
     setSelectedConversationIds((prev) => {
@@ -532,6 +534,7 @@ const TaskDetailPage: React.FC = () => {
                     <Robot size='28' className='shrink-0 text-t-secondary' />
                   )}
                   <span className='min-w-0 text-14px font-medium text-t-primary'>{assistantIdentity.name}</span>
+                  <VaBotColorDot assistant={jobAssistant} />
                 </div>
               </section>
             )}

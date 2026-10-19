@@ -9,6 +9,7 @@ import AssistantAvatar from '../AssistantAvatar';
 import RuntimeBadge from './RuntimeBadge';
 import { Button, Dropdown, Menu, Switch, Tooltip } from '@arco-design/web-react';
 import { isUndeletableAgent, isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { Attention, MoreOne } from '@icon-park/react';
@@ -90,6 +91,7 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
         </span>
       </div>
       <div className={`mt-12px flex min-w-0 items-center gap-8px ${enabled ? '' : 'opacity-70'}`}>
+        <VaBotColorDot assistant={assistant} />
         <span className='truncate text-14px font-600 text-t-primary'>
           {assistant.name_i18n?.[localeKey] || assistant.name}
         </span>

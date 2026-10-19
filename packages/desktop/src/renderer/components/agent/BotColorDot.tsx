@@ -5,6 +5,7 @@
  */
 
 import { isBotColor } from '@/common/types/agent/botColors';
+import { useVaBotColor } from '@/renderer/hooks/agent/useBotColor';
 import React from 'react';
 
 type BotColorDotProps = {
@@ -26,5 +27,10 @@ const BotColorDot: React.FC<BotColorDotProps> = ({ color, size = 8, className })
     />
   );
 };
+
+/** The dot for an Agent object from any list or chat: drawn for user-made VA Bots only (see `useVaBotColor`). */
+export const VaBotColorDot: React.FC<
+  Omit<BotColorDotProps, 'color'> & { assistant?: { id?: string; source?: string } | null }
+> = ({ assistant, ...rest }) => <BotColorDot color={useVaBotColor(assistant)} {...rest} />;
 
 export default BotColorDot;

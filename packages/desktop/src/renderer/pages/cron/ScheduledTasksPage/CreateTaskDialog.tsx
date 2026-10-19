@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Form, Input, Select, Message, TimePicker, Radio, Button, Switch } from '@arco-design/web-react';
 import AionModal from '@renderer/components/base/AionModal';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import { Down, Robot } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import { resolveLocaleKey } from '@/common/utils';
@@ -619,6 +620,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                       <Robot size='16' />
                     )}
                     <span>{name}</span>
+                    <VaBotColorDot assistant={assistant} />
                   </div>
                 );
               }}
@@ -641,6 +643,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                         <Robot size='16' />
                       )}
                       <span>{name}</span>
+                      <VaBotColorDot assistant={assistant} />
                       {disabled && (
                         <span className='text-12px text-t-tertiary'>{t('cron.page.form.aionrsNoProvider')}</span>
                       )}

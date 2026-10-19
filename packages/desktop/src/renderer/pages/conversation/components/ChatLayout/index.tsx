@@ -1,4 +1,5 @@
 import { AgentLogoIcon } from '@/renderer/components/agent/AgentLogoIcon';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
 import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -225,7 +226,12 @@ const ChatLayout: React.FC<{
           conversation_id={conversation_id}
           leading={
             props.headerLeading ??
-            ((backend || presetAssistant) && <AgentLogoIcon agent_name={agent?.name} agentLogo={agent?.avatar} />)
+            ((backend || presetAssistant) && (
+              <span className='inline-flex items-center gap-6px'>
+                <AgentLogoIcon agent_name={agent?.name} agentLogo={agent?.avatar} />
+                <VaBotColorDot assistant={{ id: presetAssistant?.assistantId, source: presetAssistant?.source }} />
+              </span>
+            ))
           }
         />
       </FlexFullContainer>

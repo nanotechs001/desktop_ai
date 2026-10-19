@@ -25,7 +25,10 @@ const h = vi.hoisted(() => ({
   navigate: vi.fn(),
   openDashboard: vi.fn(),
   revealBrowserFor: vi.fn(),
-  conversations: {} as Record<string, { id: string; name?: string; assistant?: { id: string; name: string } }>,
+  conversations: {} as Record<
+    string,
+    { id: string; name?: string; assistant?: { id: string; name: string; source?: string } }
+  >,
 }));
 
 vi.mock('@/common', () => ({
@@ -69,6 +72,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+import { configService } from '@/common/config/configService';
 import RobotListButton from '@/renderer/components/layout/Titlebar/RobotListButton';
 import { useRestoreHiddenAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 
@@ -142,6 +146,24 @@ describe('RobotListButton', () => {
     expect(screen.getByTestId('titlebar-assistants').querySelector('.arco-badge-number')?.textContent).toBe('1');
     // A single hidden robot needs no "show all".
     expect(screen.queryByTestId('robots-show-all')).toBeNull();
+  });
+
+  it("marks each VA Bot robot with the bot's color, and nothing else", async () => {
+    configService.setLocal('agent.colors', { 'bot-1': '#3e63dd', 'bot-2': '#3e63dd' });
+    h.conversations.c1.assistant = { id: 'bot-1', name: 'Research Bot', source: 'user' };
+    h.conversations.c2.assistant = { id: 'bot-2', name: 'Sales Bot', source: 'builtin' };
+    h.robots = [
+      { conversation_id: 'c1', agent_id: 'bot-1', hidden: false },
+      { conversation_id: 'c2', agent_id: 'bot-2', hidden: false },
+    ];
+    renderButton();
+    await openList();
+    const dots = (id: string) =>
+      Array.from(
+        screen.getByTestId(`robot-row-${id}`).querySelectorAll<HTMLElement>('span[aria-hidden="true"]')
+      ).filter((span) => span.style.backgroundColor === 'rgb(62, 99, 221)');
+    expect(dots('c1')).toHaveLength(1);
+    expect(dots('c2')).toHaveLength(0);
   });
 
   it('Watch opens the chat in the main window with its browser pane', async () => {

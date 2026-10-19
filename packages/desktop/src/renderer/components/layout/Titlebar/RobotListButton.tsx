@@ -10,6 +10,8 @@ import { Message, PreviewOpen } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
+import { VaBotColorDot } from '@/renderer/components/agent/BotColorDot';
+import type { TConversationAssistantIdentity } from '@/common/config/storage';
 import type { AgentWidgetRobot } from '@/common/types/agent/agentWidget';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
@@ -24,7 +26,7 @@ type RobotListButtonProps = {
 };
 
 /** `name` is empty when neither the bot nor the chat has one (shown as the untitled label). */
-type NamedRobot = AgentWidgetRobot & { name: string };
+type NamedRobot = AgentWidgetRobot & { name: string; assistant: TConversationAssistantIdentity | undefined };
 
 const SHOW_ALL_KEY = '__all__';
 const ROW_ICON_SIZE = 14;
@@ -57,7 +59,11 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
       listed.map(async (robot) => {
         const conversation = await getConversationOrNull(robot.conversation_id).catch((): null => null);
         if (!conversation) return null;
-        return { ...robot, name: conversation.assistant?.name?.trim() || conversation.name?.trim() || '' };
+        return {
+          ...robot,
+          name: conversation.assistant?.name?.trim() || conversation.name?.trim() || '',
+          assistant: conversation.assistant,
+        };
       })
     ).then((list) => {
       if (active) setRobots(list.filter((robot): robot is NamedRobot => robot !== null));
@@ -112,6 +118,7 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
       {robots.map((robot) => (
         <Menu.Item key={robot.conversation_id} data-testid={`robot-row-${robot.conversation_id}`}>
           <div className='flex items-center gap-6px'>
+            <VaBotColorDot assistant={robot.assistant} />
             <span className='flex-1 min-w-0 truncate'>{robot.name || t('pet.widget.untitledAgent')}</span>
             {robot.hidden && <Tag size='small'>{t('pet.widget.hiddenTag')}</Tag>}
             {/* Watch is the row's own action: its click goes on to the menu item. */}

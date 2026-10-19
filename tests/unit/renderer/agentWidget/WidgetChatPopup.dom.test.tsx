@@ -20,12 +20,16 @@ vi.mock('@/renderer/hooks/context/ConversationHistoryContext', () => ({
   ConversationHistoryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+import { configService } from '@/common/config/configService';
 import WidgetChatPopup from '@/renderer/pages/agentWidget/WidgetChatPopup';
 
 const SETTINGS_LABEL = 'pet.widget.botSettings';
 const LAYOUT = { bot_offset_x: 0, bot_size: 64 };
 
-const renderPopup = (assistant: { id: string; name: string } | undefined, onOpenBotSettings = vi.fn()) => {
+const renderPopup = (
+  assistant: { id: string; name: string; source?: string } | undefined,
+  onOpenBotSettings = vi.fn()
+) => {
   render(
     <WidgetChatPopup
       conversation={{ id: 'c1', assistant } as never}
@@ -45,6 +49,11 @@ const renderPopup = (assistant: { id: string; name: string } | undefined, onOpen
   return onOpenBotSettings;
 };
 
+const colorDots = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('span[aria-hidden="true"]')).filter(
+    (span) => span.style.backgroundColor === 'rgb(62, 99, 221)'
+  );
+
 afterEach(cleanup);
 
 describe('WidgetChatPopup settings gear', () => {
@@ -63,5 +72,22 @@ describe('WidgetChatPopup settings gear', () => {
     renderPopup({ id: 'bot-1', name: 'Bot' });
     const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     expect(labels.indexOf(SETTINGS_LABEL) + 1).toBe(labels.indexOf('pet.widget.hideWidget'));
+  });
+});
+
+describe('WidgetChatPopup bot color', () => {
+  it('shows the bot color dot in the header for a VA Bot', () => {
+    configService.setLocal('agent.colors', { 'bot-1': '#3e63dd' });
+    renderPopup({ id: 'bot-1', name: 'Bot', source: 'user' });
+    expect(colorDots()).toHaveLength(1);
+  });
+
+  it('shows none for a built-in Agent or a conversation without a bot', () => {
+    configService.setLocal('agent.colors', { 'bot-1': '#3e63dd' });
+    renderPopup({ id: 'bot-1', name: 'Bot', source: 'builtin' });
+    expect(colorDots()).toHaveLength(0);
+    cleanup();
+    renderPopup(undefined);
+    expect(colorDots()).toHaveLength(0);
   });
 });

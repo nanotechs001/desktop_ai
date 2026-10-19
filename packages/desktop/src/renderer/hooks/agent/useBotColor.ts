@@ -25,12 +25,40 @@ export function useBotColor(agentId?: string): string | undefined {
   return isBotColor(stored) ? stored : fallbackBotColor(agentId);
 }
 
+type BotIdentity = { id?: string; source?: string };
+
 /**
- * Called after every write to `agent.colors` (create, delete, seed, editor save).
- * Task B wires the cross-window broadcast here; keep it the one place that needs to know.
+ * The color a dot shows for this Agent: a user-made VA Bot's color, nothing for built-in, engine-generated and
+ * default Agents or a regular chat (the same rule the editor's Color row follows).
  */
-export function afterBotColorsChanged(_colors: BotColors): void {
-  // No-op until the broadcast to the other windows exists.
+export function useVaBotColor(assistant: BotIdentity | null | undefined): string | undefined {
+  const [defaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
+  const color = useBotColor(assistant?.id);
+  return assistant?.source === 'user' && isVaBotAgent(assistant, defaultAgentId) ? color : undefined;
+}
+
+/**
+ * Called after every write to `agent.colors` (create, delete, seed, editor save): tells main, which re-emits the colors
+ * to every window so the widget windows (own renderers, own config cache) follow. Never throws: the colors are saved.
+ */
+export function afterBotColorsChanged(colors: BotColors): void {
+  const warn = (error: unknown) => console.warn('[botColor] could not tell the other windows:', error);
+  try {
+    ipcBridge.agentWidget.broadcastBotColors.invoke({ ...colors }).catch(warn);
+  } catch (error) {
+    warn(error);
+  }
+}
+
+/**
+ * Widget windows: follow the colors the main window broadcasts. Only the local cache is updated, the backend was
+ * already written by the window that changed them.
+ */
+export function useBotColorsSync(): void {
+  useEffect(
+    () => ipcBridge.agentWidget.botColorsChanged.on((colors) => configService.setLocal('agent.colors', colors)),
+    []
+  );
 }
 
 /** Store the whole color map, then tell the other surfaces. */

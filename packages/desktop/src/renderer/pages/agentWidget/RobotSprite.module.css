@@ -81,6 +81,7 @@
 /* Direction layer: the art faces right; facing left mirrors only the robot, around its own centre,
    so its visual centre and taskbar contact point never move. */
 .direction {
+  position: relative;
   width: var(--bot-size, 100%);
   height: 100%;
   transform: scaleX(1);
@@ -103,6 +104,26 @@
   50% {
     transform: scaleX(-1);
   }
+}
+
+/* Underglow: a soft ellipse of the bot's color at the robot's feet. It is drawn once and never animates, so reduced
+   motion needs no special case. */
+.glow {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 80%;
+  height: 22%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--bot-glow) 55%, transparent) 0%,
+    color-mix(in srgb, var(--bot-glow) 22%, transparent) 45%,
+    transparent 72%
+  );
+  filter: blur(3px);
 }
 
 /* Hop layer: anchored at the feet so squash never pushes the robot into the taskbar. */
