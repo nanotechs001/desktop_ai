@@ -222,7 +222,7 @@ describe('WebviewHost __WEBVIEW_HOST_NAVIGATE__ marker', () => {
 
     fire(webview, consoleMessage(forgedNavigateMessage('https://example.org/next')));
 
-    expect(webviewSrcProperty(webview)).toBe('https://example.org/next');
+    // The src attribute is what loads a <webview>.
     expect(webview.getAttribute('src')).toBe('https://example.org/next');
     expect(onUrlChange).toHaveBeenCalledWith('https://example.org/next');
   });
@@ -284,5 +284,37 @@ describe('WebviewHost StarOffice zoom with interceptNavigation=false', () => {
     fire(getWebview(container), consoleMessage('__AIONUI_WEBVIEW_ZOOM__ {"deltaY":-100}'));
 
     expect(getByText('108%')).not.toBeNull();
+  });
+});
+
+// Setting a <webview>'s src reloads the page even when it already shows that URL, so the page's own URL changes
+// (SPA navigation, pushState: YouTube moving to the next playlist video) must never be written back into src.
+describe('WebviewHost src follows explicit navigations only', () => {
+  const navigateEvent = (type: string, url: string): Event =>
+    Object.assign(new Event(type), { url, isMainFrame: true });
+
+  it.each(['did-navigate-in-page', 'did-navigate'])('%s updates the address but leaves src alone', (type) => {
+    const onUrlChange = vi.fn();
+    const { container } = render(
+      <WebviewHost
+        url='https://www.youtube.com/watch?v=a&index=1'
+        interceptNavigation={false}
+        onUrlChange={onUrlChange}
+      />
+    );
+    const webview = getWebview(container);
+
+    fire(webview, navigateEvent(type, 'https://www.youtube.com/watch?v=b&index=2'));
+
+    expect(webview.getAttribute('src')).toBe('https://www.youtube.com/watch?v=a&index=1');
+    expect(onUrlChange).toHaveBeenLastCalledWith('https://www.youtube.com/watch?v=b&index=2');
+  });
+
+  it('a new url prop still loads it', () => {
+    const { container, rerender } = render(<WebviewHost url='https://example.com/a' interceptNavigation={false} />);
+
+    rerender(<WebviewHost url='https://example.com/b' interceptNavigation={false} />);
+
+    expect(getWebview(container).getAttribute('src')).toBe('https://example.com/b');
   });
 });

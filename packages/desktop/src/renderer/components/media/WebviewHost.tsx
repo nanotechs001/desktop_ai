@@ -147,6 +147,10 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(url);
+  // What the <webview> was last asked to load, apart from currentUrl: setting `src` reloads the page even when it
+  // already shows that URL, so the page's own URL changes (SPA navigation, pushState: YouTube moving to the next
+  // playlist video) must never be written back into it.
+  const [srcUrl, setSrcUrl] = useState(url);
   const [inputUrl, setInputUrl] = useState(url);
   const [isLoading, setIsLoading] = useState(true);
   const [zoomFactor, setZoomFactor] = useState(1);
@@ -194,6 +198,20 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     onUrlChangeRef.current?.(currentUrl);
   }, [currentUrl]);
 
+  /** Loads `target`. When `src` already holds it but the page has moved on, React would skip the update: load directly. */
+  const loadUrl = useCallback((target: string) => {
+    setSrcUrl(target);
+    const webviewEl = webviewRef.current;
+    if (!webviewEl || webviewEl.getAttribute('src') !== target) return;
+    let shown: string | null = null;
+    try {
+      shown = webviewEl.getURL();
+    } catch {
+      // Not attached yet: the pending load is already this target.
+    }
+    if (shown !== null && shown !== target) webviewEl.src = target;
+  }, []);
+
   // Reset when props.url changes
   useEffect(() => {
     // 只有「外部」换址才该清空历史（换 tab、换预览文件）。判断逻辑抽到
@@ -207,12 +225,13 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     setCanGoBack(false);
     setCanGoForward(false);
     setCurrentUrl(url);
+    loadUrl(url);
     setInputUrl(url);
     setIsLoading(true);
     setZoomFactor(1);
     setWebviewReady(false);
     autoFitPendingRef.current = isStarOfficeUrl(url);
-  }, [url]);
+  }, [url, loadUrl]);
 
   useEffect(() => {
     const webviewEl = webviewRef.current as any;
@@ -242,10 +261,9 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       internalNavRef.current.record(targetUrl);
       setCurrentUrl(targetUrl);
       setInputUrl(targetUrl);
-
-      webviewEl.src = targetUrl;
+      loadUrl(targetUrl);
     },
-    [currentUrl]
+    [currentUrl, loadUrl]
   );
 
   // Webview event listeners
@@ -353,7 +371,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     const handleDidNavigate = (event: Event & { url?: string; isMainFrame?: boolean }) => {
       // `did-navigate-in-page` also fires for iframes (isMainFrame: false). Gmail/Drive iframes (contacts hovercard,
       // Workspace side panel) change their #hash constantly; taking their URL as the tab's would reload the whole tab
-      // with the iframe page (src={currentUrl}). `did-navigate` only fires for the main frame.
+      // with the iframe page. `did-navigate` only fires for the main frame.
       if (event.isMainFrame === false) return;
       const newUrl = event.url;
       if (newUrl && newUrl !== currentUrl) {
@@ -871,7 +889,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       >
         <webview
           ref={webviewRef as any}
-          src={currentUrl}
+          src={srcUrl}
           className='border-0 absolute start-0 top-0'
           style={{
             opacity: !showNavBar && isLoading ? 0 : 1,
