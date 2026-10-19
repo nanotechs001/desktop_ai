@@ -29,15 +29,13 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: unknown) =>
-      typeof options === 'object' && options !== null && 'reason' in options
-        ? `${key}|${String((options as { reason: unknown }).reason)}`
-        : key,
-    i18n: { language: 'en-US' },
-  }),
-}));
+// A stable `t`, like the real one: the QR effect depends on it.
+const translate = (key: string, options?: unknown) =>
+  typeof options === 'object' && options !== null && 'reason' in options
+    ? `${key}|${String((options as { reason: unknown }).reason)}`
+    : key;
+const i18nStub = { language: 'en-US' };
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: translate, i18n: i18nStub }) }));
 
 vi.mock('@arco-design/web-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@arco-design/web-react')>();
@@ -199,6 +197,37 @@ describe('WebuiModalContent secure link row', () => {
 
     cleanup();
     expect(clearSpy).toHaveBeenCalledWith(timerId);
+  });
+
+  it('arms no refresh timer when the page unmounts while the token is being issued', async () => {
+    let release: (value: { token: string; expires_at_ms: number }) => void = () => {};
+    mocks.generateQRToken.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    const setSpy = vi.spyOn(globalThis, 'setTimeout');
+    await renderRow({ state: 'running', url: TUNNEL_URL });
+    await waitFor(() => expect(mocks.generateQRToken).toHaveBeenCalledTimes(1));
+
+    cleanup();
+    await act(async () => release({ token: 'TOK', expires_at_ms: 1_900_000_000_000 }));
+
+    expect(setSpy.mock.calls.some(([, delay]) => delay === 4 * 60 * 1000)).toBe(false);
+  });
+
+  it('does not flash the failure text when a stale request finishes while a new one is pending', async () => {
+    const releases: Array<(value: { token: string; expires_at_ms: number }) => void> = [];
+    mocks.generateQRToken.mockImplementation(() => new Promise((resolve) => releases.push(resolve)));
+    await renderRow({ state: 'stopped' }, { allowRemote: true, networkUrl: 'http://192.168.1.5:25808' });
+    await waitFor(() => expect(releases).toHaveLength(1));
+
+    await emitTunnel({ state: 'running', url: TUNNEL_URL });
+    await waitFor(() => expect(releases).toHaveLength(2));
+
+    await act(async () => releases[0]({ token: 'OLD', expires_at_ms: 1_900_000_000_000 }));
+    expect(screen.queryByText('settings.webui.qrGenerateFailed')).not.toBeInTheDocument();
+  });
+
+  it('labels the secure link row separately from the LAN access URL', async () => {
+    await renderRow({ state: 'running', url: TUNNEL_URL });
+    expect(screen.getByText('settings.webui.tunnelLinkLabel')).toBeInTheDocument();
   });
 
   it('keeps the LAN QR when only LAN access is on, then swaps it when the link comes up', async () => {

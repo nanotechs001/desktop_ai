@@ -575,6 +575,7 @@
   "webui.featureChannelsDesc": "Підключіть Telegram, Lark, DingTalk та WeChat для взаємодії з Pixebot Browser з месенджерів.",
   "webui.goToChannels": "Перейти до каналів",
   "webui.tunnelLabel": "Доступ звідусіль (захищене посилання)",
+  "webui.tunnelLinkLabel": "Захищене посилання",
   "webui.tunnelDesc": "Безкоштовне захищене HTTPS-посилання через Cloudflare. Налаштування роутера не потрібне. Посилання змінюється під час кожного перезапуску.",
   "webui.tunnelWarning": "Будь-хто, хто має це посилання, зможе відкрити вашу сторінку входу. Зберігайте пароль у таємниці.",
   "webui.tunnelNeedsWebui": "Спершу увімкніть WebUI",

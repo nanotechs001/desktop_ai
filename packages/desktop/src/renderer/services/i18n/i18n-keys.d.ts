@@ -2706,6 +2706,7 @@ export type I18nKey =
   | 'settings.webui.tunnelDownloading'
   | 'settings.webui.tunnelError'
   | 'settings.webui.tunnelLabel'
+  | 'settings.webui.tunnelLinkLabel'
   | 'settings.webui.tunnelNeedsWebui'
   | 'settings.webui.tunnelStarting'
   | 'settings.webui.tunnelWarning'

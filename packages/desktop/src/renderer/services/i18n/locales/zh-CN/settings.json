@@ -567,6 +567,7 @@
   "webui.featureChannelsDesc": "连接 Telegram、Lark、钉钉、微信，在即时通讯软件中与 Pixebot Browser 交互。",
   "webui.goToChannels": "前往 Channels",
   "webui.tunnelLabel": "随时随地访问（安全链接）",
+  "webui.tunnelLinkLabel": "安全链接",
   "webui.tunnelDesc": "通过 Cloudflare 提供的免费 HTTPS 安全链接，无需配置路由器。每次重启后链接都会变化。",
   "webui.tunnelWarning": "任何拿到此链接的人都能打开你的登录页面，请妥善保管密码。",
   "webui.tunnelNeedsWebui": "请先开启 WebUI",

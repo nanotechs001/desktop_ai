@@ -483,6 +483,7 @@ const WebuiModalContent: React.FC = () => {
   const qrBaseUrl = status?.running ? (tunnel.url ?? lanQrBase) : null;
   const qrBaseUrlRef = useRef(qrBaseUrl);
   qrBaseUrlRef.current = qrBaseUrl;
+  const mountedRef = useRef(false);
 
   // 生成二维码 / Generate QR code
   const generateQRCode = useCallback(async () => {
@@ -494,8 +495,9 @@ const WebuiModalContent: React.FC = () => {
       // Backend returns only { token, expires_at_ms }; the scannable URL is
       // composed here so it points at the right host (see qrBaseUrl).
       const qrData = await webui.generateQRToken.invoke();
-      // The base changed while the token was being issued; that token belongs to a stale link.
-      if (qrBaseUrlRef.current !== baseUrl) return;
+      // Unmounted, or the base changed while the token was being issued: that token is stale,
+      // and arming the refresh timer now would leak it.
+      if (!mountedRef.current || qrBaseUrlRef.current !== baseUrl) return;
 
       if (qrData) {
         setQrUrl(`${baseUrl}/qr-login?token=${qrData.token}`);
@@ -520,7 +522,8 @@ const WebuiModalContent: React.FC = () => {
       console.error('Generate QR code error:', error);
       Message.error(t('settings.webui.qrGenerateFailed'));
     } finally {
-      setQrLoading(false);
+      // A stale request must not clear the loading state of the newer one.
+      if (qrBaseUrlRef.current === baseUrl) setQrLoading(false);
     }
   }, [t]);
 
@@ -533,14 +536,15 @@ const WebuiModalContent: React.FC = () => {
 
   // 卸载时清理定时器（不能放在上面的 effect 里，否则二维码一生成就会取消自动刷新）
   // Clear the refresh timer on unmount only; in the effect above it would cancel the refresh as soon as the QR renders
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       if (qrRefreshTimerRef.current) {
         clearTimeout(qrRefreshTimerRef.current);
       }
-    },
-    []
-  );
+    };
+  }, []);
 
   // 地址变化或不再可用时清除二维码 / Drop the QR code when its base URL changes or goes away
   useEffect(() => {
@@ -710,7 +714,7 @@ const WebuiModalContent: React.FC = () => {
           )}
           {tunnel.url && (
             <>
-              <PreferenceRow label={t('settings.webui.accessUrl')}>
+              <PreferenceRow label={t('settings.webui.tunnelLinkLabel')}>
                 <div className='flex items-center gap-8px min-w-0'>
                   <span className='text-14px text-t-primary font-mono truncate'>{tunnel.url}</span>
                   <Tooltip content={t('settings.webui.tunnelCopyLink')}>

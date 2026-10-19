@@ -18,7 +18,7 @@ export const useWebuiTunnel = () => {
   const { t } = useTranslation();
   const [status, setStatus] = useState<TunnelStatus>({ state: 'stopped' });
   // `start` resolves only after the attempt settles (a first download can take a while);
-  // keep the switch on until the first status event arrives.
+  // keep the switch on until then, whatever the status events say in between.
   const [startPending, setStartPending] = useState(false);
   const sawEventRef = useRef(false);
 

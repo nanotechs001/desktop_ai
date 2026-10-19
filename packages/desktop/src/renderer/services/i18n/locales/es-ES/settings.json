@@ -555,6 +555,7 @@
   "webui.featureChannelsDesc": "Conecta Telegram, Lark, DingTalk y WeChat para interactuar con Pixebot Browser desde aplicaciones de mensajería.",
   "webui.goToChannels": "Ir a Canales",
   "webui.tunnelLabel": "Acceso desde cualquier lugar (enlace seguro)",
+  "webui.tunnelLinkLabel": "Enlace seguro",
   "webui.tunnelDesc": "Enlace HTTPS seguro y gratuito a través de Cloudflare. Sin configurar el router. El enlace cambia cada vez que se reinicia.",
   "webui.tunnelWarning": "Cualquiera con este enlace puede llegar a tu página de inicio de sesión. Mantén tu contraseña en privado.",
   "webui.tunnelNeedsWebui": "Activa primero WebUI",

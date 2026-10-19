@@ -567,6 +567,7 @@
   "webui.featureChannelsDesc": "Telegram, Lark, DingTalk, WeChat을 연결해 IM 앱에서 Pixebot Browser와 상호작용하세요.",
   "webui.goToChannels": "Channels로 이동",
   "webui.tunnelLabel": "어디서나 접속(보안 링크)",
+  "webui.tunnelLinkLabel": "보안 링크",
   "webui.tunnelDesc": "Cloudflare를 통한 무료 HTTPS 보안 링크입니다. 라우터 설정이 필요 없습니다. 다시 시작할 때마다 링크가 바뀝니다.",
   "webui.tunnelWarning": "이 링크를 아는 사람은 누구나 로그인 페이지에 접근할 수 있습니다. 비밀번호를 안전하게 보관하세요.",
   "webui.tunnelNeedsWebui": "먼저 WebUI를 켜세요",
