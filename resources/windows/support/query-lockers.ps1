@@ -7,7 +7,9 @@ param(
   [string]$Version,
   [string]$Arch,
   [string]$Updated,
-  [string]$CurrentOutDir
+  [string]$CurrentOutDir,
+  [string]$AppExecutable = 'PixebotBrowser.exe',
+  [string]$Uninstaller = 'Uninstall PixebotBrowser.exe'
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -78,8 +80,8 @@ try {
   } elseif ($targetPathFull -and (Test-Path -LiteralPath $targetPathFull -PathType Container)) {
     $topLevel = @(Get-ChildItem -LiteralPath $targetPathFull -Force -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
     $knownRelative = @(
-      'AionUi.exe',
-      'Uninstall AionUi.exe',
+      $AppExecutable,
+      $Uninstaller,
       'resources\app.asar',
       'resources\app-update.yml',
       'resources\bundled-aioncore\win32-x64\aioncore.exe'

@@ -131,6 +131,25 @@ childProcess.execSync = function mockedExecSync(command) {
     expect(script).not.toContain("Name -ieq '${AIONUI_APP_EXECUTABLE_FILENAME}'");
   });
 
+  it('takes the app and uninstaller executable names from electron-builder instead of hardcoding them', () => {
+    const windowsDir = resolve(repoRoot, 'resources/windows');
+    const observability = readFileSync(resolve(windowsDir, 'installer-observability.nsh'), 'utf8');
+    const processControl = readFileSync(resolve(windowsDir, 'installer-process-control.nsh'), 'utf8');
+    const sources = [
+      ...readdirSync(windowsDir).filter((file) => file.endsWith('.nsh')),
+      'support/query-lockers.ps1',
+      'support/verify-bundled-aioncore-install.ps1',
+    ].map((file) => readFileSync(resolve(windowsDir, file), 'utf8'));
+
+    expect(observability).toContain('!define AIONUI_APP_EXECUTABLE_FILENAME "${PRODUCT_FILENAME}.exe"');
+    expect(processControl).toContain(
+      '-AppExecutable "${AIONUI_APP_EXECUTABLE_FILENAME}" -Uninstaller "${UNINSTALL_FILENAME}"'
+    );
+    for (const source of sources) {
+      expect(source).not.toMatch(/AionUi\.exe/);
+    }
+  });
+
   it('records installer self-lock diagnostics when Restart Manager finds no locking process', () => {
     const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-process-control.nsh'), 'utf8');
     const queryScript = readFileSync(resolve(repoRoot, 'resources/windows/support/query-lockers.ps1'), 'utf8');
