@@ -160,6 +160,10 @@
   "assistantDescription": "Опис",
   "assistantDescriptionPlaceholder": "З чим може допомогти цей агент?",
   "assistantAvatarUploadImage": "Завантажити зображення",
+  "botColor": {
+    "label": "Колір",
+    "custom": "Інший"
+  },
   "assistantAvatarImageFiles": "Файли зображень",
   "assistantAvatarEmojiTab": "Емодзі",
   "assistantAvatarBuiltinTab": "Вбудовані зображення",

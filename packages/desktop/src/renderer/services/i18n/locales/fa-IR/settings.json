@@ -152,6 +152,10 @@
   "assistantDescription": "توضیحات",
   "assistantDescriptionPlaceholder": "این عامل در چه مواردی کمک می‌کند؟",
   "assistantAvatarUploadImage": "آپلود تصویر",
+  "botColor": {
+    "label": "رنگ",
+    "custom": "سفارشی"
+  },
   "assistantAvatarImageFiles": "فایل‌های تصویری",
   "assistantAvatarEmojiTab": "ایموجی",
   "assistantAvatarBuiltinTab": "داخلی",

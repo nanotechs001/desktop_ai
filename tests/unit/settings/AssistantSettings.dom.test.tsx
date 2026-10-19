@@ -11,10 +11,12 @@ import { ConfigProvider } from '@arco-design/web-react';
 import { MemoryRouter } from 'react-router-dom';
 import AssistantSettings from '@/renderer/pages/settings/AssistantSettings';
 import EnabledAssistantsList from '@/renderer/pages/settings/AssistantSettings/home/EnabledAssistantsList';
+import { fallbackBotColor } from '@/common/types/agent/botColors';
 import type { AssistantListItem } from '@/renderer/pages/settings/AssistantSettings/types';
 
 const useAssistantListMock = vi.fn();
 const useAssistantEditorMock = vi.fn();
+const editorPageProps = vi.hoisted(() => ({ editor: undefined as any }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -43,7 +45,10 @@ vi.mock('@/renderer/pages/settings/components/SettingsPageWrapper', () => ({
 }));
 
 vi.mock('@/renderer/pages/settings/AssistantSettings/AssistantEditorPage', () => ({
-  default: () => <div data-testid='assistant-editor-page' />,
+  default: (props: { editor: unknown }) => {
+    editorPageProps.editor = props.editor;
+    return <div data-testid='assistant-editor-page' />;
+  },
 }));
 
 vi.mock('@/renderer/utils/model/agentLogo', async () => {
@@ -156,6 +161,38 @@ describe('AssistantSettings', () => {
     );
 
     expect(screen.getByTestId('assistant-editor-page')).toBeInTheDocument();
+  });
+
+  it('hands the editor a color only for a new Agent or a user-made one', () => {
+    const renderPage = () =>
+      render(
+        <ConfigProvider>
+          <MemoryRouter>
+            <AssistantSettings />
+          </MemoryRouter>
+        </ConfigProvider>
+      );
+    const list = (activeAssistant: object | null) => ({
+      ...useAssistantListMock(),
+      activeAssistant,
+    });
+    const editorState = (overrides: object) => ({ ...useAssistantEditorMock(), ...overrides });
+
+    // A new Agent shows the color it starts with.
+    useAssistantEditorMock.mockReturnValue(editorState({ isCreating: true, editColor: '#112233' }));
+    renderPage().unmount();
+    expect(editorPageProps.editor.profile.color).toBe('#112233');
+
+    // A user-made Agent with no stored color shows its fallback color.
+    useAssistantListMock.mockReturnValue(list({ id: 'bot-1', source: 'user', name: 'Bot' }));
+    useAssistantEditorMock.mockReturnValue(editorState({ isCreating: false, editColor: '' }));
+    renderPage().unmount();
+    expect(editorPageProps.editor.profile.color).toBe(fallbackBotColor('bot-1'));
+
+    // A built-in Agent has no color.
+    useAssistantListMock.mockReturnValue(list({ id: 'preset', source: 'builtin', name: 'Preset' }));
+    renderPage().unmount();
+    expect(editorPageProps.editor.profile.color).toBeUndefined();
   });
 
   it('renders enabled assistants in one preferred cross-source list', () => {

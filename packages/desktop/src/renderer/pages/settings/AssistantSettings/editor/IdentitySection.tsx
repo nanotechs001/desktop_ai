@@ -3,6 +3,7 @@ import { Avatar, Button, Input } from '@arco-design/web-react';
 import type { BuiltinAvatarOption } from '../types';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import BotColorField from './BotColorField';
 import { FieldLabel, SectionCard } from './editorSectionPrimitives';
 
 type IdentitySectionProps = {
@@ -19,6 +20,9 @@ type IdentitySectionProps = {
   renderAvatarPreview: () => React.ReactNode;
   builtinAvatarOptions: BuiltinAvatarOption[];
   readOnlyLabel: string;
+  /** The Agent's color; the Color row is hidden without it. */
+  color?: string;
+  setColor?: (value: string) => void;
 };
 
 const IdentitySection: React.FC<IdentitySectionProps> = ({
@@ -35,6 +39,8 @@ const IdentitySection: React.FC<IdentitySectionProps> = ({
   renderAvatarPreview,
   builtinAvatarOptions,
   readOnlyLabel,
+  color,
+  setColor,
 }) => {
   const { t } = useTranslation();
   const isIdentityEditable = !isIdentityLocked;
@@ -113,6 +119,12 @@ const IdentitySection: React.FC<IdentitySectionProps> = ({
               className='rounded-8px border-border-2 bg-bg-0'
             />
           </div>
+          {color && setColor ? (
+            <div className='flex items-start gap-12px'>
+              <FieldLabel>{t('settings.botColor.label', { defaultValue: 'Color' })}</FieldLabel>
+              <BotColorField value={color} onChange={setColor} />
+            </div>
+          ) : null}
         </div>
       </div>
     </SectionCard>

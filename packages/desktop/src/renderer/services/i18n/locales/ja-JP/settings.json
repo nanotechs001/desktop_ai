@@ -152,6 +152,10 @@
   "assistantDescription": "説明",
   "assistantDescriptionPlaceholder": "どんな支援ができるかを入力",
   "assistantAvatarUploadImage": "画像をアップロード",
+  "botColor": {
+    "label": "カラー",
+    "custom": "カスタム"
+  },
   "assistantAvatarImageFiles": "画像ファイル",
   "assistantAvatarEmojiTab": "絵文字",
   "assistantAvatarBuiltinTab": "内蔵画像",

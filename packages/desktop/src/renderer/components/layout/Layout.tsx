@@ -29,6 +29,7 @@ import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspac
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
 import BrowserTabLayer from '@renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
+import { useBotColorSeed } from '@renderer/hooks/agent/useBotColor';
 import { useDefaultAgentSync, useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useAgentWidgetSync } from '@renderer/pages/agentWidget/useAgentWidgetSync';
@@ -143,6 +144,7 @@ const Layout: React.FC<{
   useDesktopTurnNotification();
   useEngineDriftSync();
   useDefaultAgentSync();
+  useBotColorSeed();
   const navigate = useNavigate();
   const location = useLocation();
   const workspaceAvailable = location.pathname.startsWith('/conversation/');

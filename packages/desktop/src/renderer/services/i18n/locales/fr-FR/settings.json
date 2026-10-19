@@ -152,6 +152,10 @@
   "assistantDescription": "Description de l'agent",
   "assistantDescriptionPlaceholder": "Avec quoi cet agent peut-il aider ?",
   "assistantAvatarUploadImage": "Télécharger une image",
+  "botColor": {
+    "label": "Couleur",
+    "custom": "Personnalisée"
+  },
   "assistantAvatarImageFiles": "Fichiers images",
   "assistantAvatarEmojiTab": "Émoji",
   "assistantAvatarBuiltinTab": "Intégré",

@@ -77,6 +77,7 @@ import { useAssistantEditor } from '@/renderer/hooks/assistant/useAssistantEdito
 import { ipcBridge } from '@/common';
 import type { AssistantListItem } from '@/renderer/pages/settings/AssistantSettings/types';
 import { mutate as swrMutate } from 'swr';
+import { BOT_COLOR_PALETTE } from '@/common/types/agent/botColors';
 
 describe('useAssistantEditor', () => {
   const mockAssistantDetail = {
@@ -817,6 +818,153 @@ describe('useAssistantEditor', () => {
 
     consoleErrorSpy.mockRestore();
   });
+  describe('bot color', () => {
+    const userAssistant: AssistantListItem = {
+      id: 'a1',
+      name: 'Existing',
+      agent_id: 'agent-claude',
+      sort_order: 1,
+      source: 'user',
+      enabled: true,
+    };
+
+    it('gives a new Agent a random palette color nobody uses yet and stores it on create', async () => {
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'new-id' });
+      engineConfig.store.set(
+        'agent.colors',
+        Object.fromEntries(BOT_COLOR_PALETTE.slice(0, 11).map((color, index) => [`b${index}`, color]))
+      );
+      const { result } = renderHook(() => useAssistantEditor(defaultParams));
+
+      await act(async () => {
+        await result.current.handleCreate();
+      });
+      act(() => result.current.setEditName('Fresh'));
+      expect(result.current.editColor).toBe(BOT_COLOR_PALETTE[11]);
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(engineConfig.store.get('agent.colors')).toMatchObject({ 'new-id': BOT_COLOR_PALETTE[11] });
+      expect(Object.keys(engineConfig.store.get('agent.colors') as object)).toHaveLength(12);
+    });
+
+    it("stores the user's pick instead of the random color on create", async () => {
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'new-id' });
+      const { result } = renderHook(() => useAssistantEditor(defaultParams));
+
+      await act(async () => {
+        await result.current.handleCreate();
+      });
+      act(() => {
+        result.current.setEditName('Fresh');
+        result.current.setEditColor('#123abc');
+      });
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(engineConfig.store.get('agent.colors')).toEqual({ 'new-id': '#123abc' });
+    });
+
+    it('gives a duplicate its own new color', async () => {
+      (ipcBridge.assistants.create.invoke as any).mockResolvedValue({ id: 'copy-id' });
+      engineConfig.store.set('agent.colors', { a1: BOT_COLOR_PALETTE[0] });
+      const { result } = renderHook(() => useAssistantEditor(defaultParams));
+
+      await act(async () => {
+        await result.current.handleDuplicate(userAssistant);
+      });
+      expect(BOT_COLOR_PALETTE).toContain(result.current.editColor);
+      expect(result.current.editColor).not.toBe(BOT_COLOR_PALETTE[0]);
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      const colors = engineConfig.store.get('agent.colors') as Record<string, string>;
+      expect(colors.a1).toBe(BOT_COLOR_PALETTE[0]);
+      expect(colors['copy-id']).toBe(result.current.editColor);
+    });
+
+    it('opens an Agent with its stored color, or none when it has none', async () => {
+      engineConfig.store.set('agent.colors', { a1: '#112233' });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      expect(result.current.editColor).toBe('#112233');
+
+      await act(async () => {
+        await result.current.handleEdit({ ...userAssistant, id: 'a2' });
+      });
+      expect(result.current.editColor).toBe('');
+    });
+
+    it('saves a changed color of an existing Agent with Save, and writes nothing when it did not change', async () => {
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
+      engineConfig.store.set('agent.colors', { a1: '#112233', other: '#445566' });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      await act(async () => {
+        await result.current.handleSave();
+      });
+      expect(engineConfig.configService.set).not.toHaveBeenCalledWith('agent.colors', expect.anything());
+
+      act(() => result.current.setEditColor('#abcdef'));
+      await act(async () => {
+        await result.current.handleSave();
+      });
+      expect(engineConfig.store.get('agent.colors')).toEqual({ a1: '#abcdef', other: '#445566' });
+    });
+
+    it('does not give the default Agent a color', async () => {
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'the-default' });
+      engineConfig.store.set('agent.builtinDefaultId', 'the-default');
+      const defaultAgent = { ...userAssistant, id: 'the-default' };
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: defaultAgent }));
+
+      await act(async () => {
+        await result.current.handleEdit(defaultAgent);
+      });
+      act(() => result.current.setEditColor('#abcdef'));
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(engineConfig.configService.set).not.toHaveBeenCalledWith('agent.colors', expect.anything());
+    });
+
+    it('removes the color of a deleted Agent', async () => {
+      engineConfig.store.set('agent.colors', { a1: '#112233', other: '#445566' });
+      (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
+
+      await act(async () => {
+        await result.current.handleDeleteConfirm(false);
+      });
+
+      expect(engineConfig.store.get('agent.colors')).toEqual({ other: '#445566' });
+    });
+
+    it('keeps the color when the Agent delete fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      engineConfig.store.set('agent.colors', { a1: '#112233' });
+      (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('backend down'));
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
+
+      await act(async () => {
+        await result.current.handleDeleteConfirm(false);
+      });
+
+      expect(engineConfig.store.get('agent.colors')).toEqual({ a1: '#112233' });
+    });
+  });
+
   describe('engine pinning', () => {
     const userAssistant: AssistantListItem = {
       id: 'a1',

@@ -223,6 +223,23 @@ describe('AssistantEditorSections', () => {
     ];
   });
 
+  it('shows the Color row only when the Agent has a color, and saves a clicked swatch through the editor', () => {
+    const setColor = vi.fn();
+    const { unmount } = renderWithProviders(
+      <AssistantEditorSections
+        editor={createEditor({ profile: { color: '#3e63dd', setColor } as AssistantEditorViewModel['profile'] })}
+        activeAssistant={null}
+      />
+    );
+    expect(screen.getByTestId('bot-color-field')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '#e5484d' }));
+    expect(setColor).toHaveBeenCalledWith('#e5484d');
+    unmount();
+
+    renderWithProviders(<AssistantEditorSections editor={createEditor()} activeAssistant={null} />);
+    expect(screen.queryByTestId('bot-color-field')).not.toBeInTheDocument();
+  });
+
   it('renders all default configuration rows in a single card', () => {
     renderWithProviders(
       <AssistantEditorSections

@@ -73,6 +73,9 @@ export type AssistantEditorViewModel = {
     setAvatarPreview: (value: string | undefined) => void;
     avatarImage?: string;
     builtinAvatarOptions: BuiltinAvatarOption[];
+    /** The Agent's `#rrggbb` color; absent for Agents that have none (built-in, default, CLI), which hides the row. */
+    color?: string;
+    setColor?: (value: string) => void;
   };
   agent: {
     value: string;

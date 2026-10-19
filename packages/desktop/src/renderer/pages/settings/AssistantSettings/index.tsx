@@ -18,6 +18,9 @@
  * read-only so users can inspect what's bundled.
  */
 import { Message } from '@arco-design/web-react';
+import { fallbackBotColor } from '@/common/types/agent/botColors';
+import { isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { useAssistantEditor, useAssistantList } from '@/renderer/hooks/assistant';
 import { useDefaultEngine } from '@/renderer/hooks/agent/useDefaultEngine';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
@@ -69,6 +72,7 @@ const AssistantSettings: React.FC = () => {
     localeKey,
   } = useAssistantList();
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
+  const [defaultAgentId] = useConfig('agent.builtinDefaultId');
   const defaultEngine = useDefaultEngine();
   const builtinAvatarOptions = useMemo(
     () =>
@@ -105,6 +109,11 @@ const AssistantSettings: React.FC = () => {
     [editor.editAgent, localeKey, managedAgentRuntimeCatalog]
   );
 
+  // Only a VA Bot has a color: one being created, or a user-made Agent (not built-in, default or CLI entry).
+  const editColor =
+    editor.isCreating || (activeAssistant?.source === 'user' && isVaBotAgent(activeAssistant, defaultAgentId))
+      ? editor.editColor || (activeAssistant ? fallbackBotColor(activeAssistant.id) : undefined)
+      : undefined;
   const editAvatarImage = editor.editAvatarPreview || resolveAvatarImageSrc(editor.editAvatar);
   const hasConsumedNavigationIntentRef = useRef(false);
   const showEditor = editor.editVisible && (editor.isCreating || activeAssistantId !== null);
@@ -120,6 +129,8 @@ const AssistantSettings: React.FC = () => {
       setAvatarPreview: editor.setEditAvatarPreview,
       avatarImage: editAvatarImage,
       builtinAvatarOptions,
+      color: editColor,
+      setColor: editor.setEditColor,
     },
     agent: {
       value: editor.editAgent,

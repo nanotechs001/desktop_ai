@@ -152,6 +152,10 @@
   "assistantDescription": "설명",
   "assistantDescriptionPlaceholder": "이 에이전트는 무엇을 도와줄 수 있나요?",
   "assistantAvatarUploadImage": "이미지 업로드",
+  "botColor": {
+    "label": "색상",
+    "custom": "사용자 지정"
+  },
   "assistantAvatarImageFiles": "이미지 파일",
   "assistantAvatarEmojiTab": "이모지",
   "assistantAvatarBuiltinTab": "내장 이미지",

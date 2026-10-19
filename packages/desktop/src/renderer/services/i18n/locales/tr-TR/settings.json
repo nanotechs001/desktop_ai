@@ -152,6 +152,10 @@
   "assistantDescription": "Açıklama",
   "assistantDescriptionPlaceholder": "Bu Agent neye yardımcı olabilir?",
   "assistantAvatarUploadImage": "Görsel yükle",
+  "botColor": {
+    "label": "Renk",
+    "custom": "Özel"
+  },
   "assistantAvatarImageFiles": "Görsel dosyaları",
   "assistantAvatarEmojiTab": "Emoji",
   "assistantAvatarBuiltinTab": "Yerleşik görseller",

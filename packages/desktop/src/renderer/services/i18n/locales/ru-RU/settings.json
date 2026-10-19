@@ -160,6 +160,10 @@
   "assistantDescription": "Описание",
   "assistantDescriptionPlaceholder": "С какими задачами помогает этот агент?",
   "assistantAvatarUploadImage": "Загрузить изображение",
+  "botColor": {
+    "label": "Цвет",
+    "custom": "Другой"
+  },
   "assistantAvatarImageFiles": "Файлы изображений",
   "assistantAvatarEmojiTab": "Эмодзи",
   "assistantAvatarBuiltinTab": "Встроенные изображения",

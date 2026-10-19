@@ -84,6 +84,27 @@ describe('AssistantEditorPage', () => {
     expect(screen.getByTestId('assistant-editor-body')).toBeInTheDocument();
   });
 
+  it('shows the chosen color as a dot in the top bar only for an Agent that has one', () => {
+    const withColor = createEditor();
+    withColor.profile.color = '#3e63dd';
+    const { rerender } = render(
+      <ConfigProvider>
+        <AssistantEditorPage editor={withColor} activeAssistant={null} onBack={vi.fn()} />
+      </ConfigProvider>
+    );
+    const bar = screen.getByTestId('assistant-editor-bar');
+    const dot = bar.querySelector('[aria-hidden="true"][style*="background-color"]') as HTMLElement;
+    expect(dot).not.toBeNull();
+    expect(dot.style.backgroundColor).toBe('rgb(62, 99, 221)');
+
+    rerender(
+      <ConfigProvider>
+        <AssistantEditorPage editor={createEditor()} activeAssistant={null} onBack={vi.fn()} />
+      </ConfigProvider>
+    );
+    expect(screen.getByTestId('assistant-editor-bar').querySelector('[style*="background-color"]')).toBeNull();
+  });
+
   it('uses a high-contrast back action in the editor header', () => {
     render(
       <ConfigProvider>

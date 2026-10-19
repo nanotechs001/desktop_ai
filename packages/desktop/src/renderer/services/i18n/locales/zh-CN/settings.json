@@ -152,6 +152,10 @@
   "assistantDescription": "描述",
   "assistantDescriptionPlaceholder": "帮你解决什么问题",
   "assistantAvatarUploadImage": "上传图片",
+  "botColor": {
+    "label": "颜色",
+    "custom": "自定义"
+  },
   "assistantAvatarImageFiles": "图片文件",
   "assistantAvatarEmojiTab": "表情",
   "assistantAvatarBuiltinTab": "内置图片",

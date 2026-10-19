@@ -423,6 +423,8 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
         onPickAvatarImage={() => void handlePickAvatarImage()}
         renderAvatarPreview={renderAvatarPreview}
         readOnlyLabel={readOnlyLabel}
+        color={profile.color}
+        setColor={profile.setColor}
       />
 
       <PromptsSection

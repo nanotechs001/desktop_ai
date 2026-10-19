@@ -1,5 +1,6 @@
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
+import { forgetBotColor, newBotColor, rememberBotColor } from '@/renderer/hooks/agent/useBotColor';
 import { persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
 import type { IMcpServer } from '@/common/config/storage';
 import type { Assistant, CreateAssistantRequest, UpdateAssistantRequest } from '@/common/types/agent/assistantTypes';
@@ -12,7 +13,8 @@ import type {
 } from '@/renderer/pages/settings/AssistantSettings/types';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { getSkillImportErrorMessage } from '@/renderer/pages/settings/SkillsSettings/skillImportMessages';
-import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
+import { isBotColor } from '@/common/types/agent/botColors';
+import { isUndeletableAgent, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { stripBrowserRule } from '@/common/types/agent/managedRuleBlock';
 import { emitter } from '@/renderer/utils/emitter';
 import { assistantOrderAfterToggle, selectableAssistants } from '@/renderer/utils/model/assistantSelection';
@@ -75,8 +77,8 @@ const syncEnginePin = async (assistantId: string, usesDefault: boolean, engineId
 };
 
 /**
- * After an Agent is deleted: drop its notebook (and main's cached chats of it) and its engine pin. Failures are logged
- * only: the Agent is already gone, and a leftover notebook or pin is never read again.
+ * After an Agent is deleted: drop its notebook (and main's cached chats of it), its engine pin and its color. Failures
+ * are logged only: the Agent is already gone, and a leftover notebook, pin or color is never read again.
  */
 const forgetDeletedAgent = async (assistantId: string): Promise<void> => {
   const reply = await ipcBridge.agentNotes.removeAgent
@@ -89,6 +91,9 @@ const forgetDeletedAgent = async (assistantId: string): Promise<void> => {
       console.warn('[useAssistantEditor] could not drop the deleted Agent engine pin:', error)
     );
   }
+  await forgetBotColor(assistantId).catch((error: unknown) =>
+    console.warn('[useAssistantEditor] could not drop the deleted Agent color:', error)
+  );
 };
 
 /**
@@ -115,6 +120,8 @@ export const useAssistantEditor = ({
   const [editContext, setEditContext] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
   const [editAvatarPreview, setEditAvatarPreview] = useState<string | undefined>(undefined);
+  // '' while the Agent has no stored color; a new or duplicated Agent starts on a random unused one.
+  const [editColor, setEditColor] = useState('');
   const [editAgent, setEditAgentState] = useState<string>('');
   // True while the Agent follows the default engine (no pin); `editAgent` is then the engine it will run on.
   const [editUsesDefault, setEditUsesDefault] = useState(true);
@@ -281,6 +288,7 @@ export const useAssistantEditor = ({
     setEditDescription(assistant.description || '');
     setEditAvatar(assistant.avatar || '');
     setEditAvatarPreview(undefined);
+    setEditColor(configService.get('agent.colors')?.[assistant.id] ?? '');
     setEditAgent(assistant.agent_id || '');
     // A generated (bare CLI) Agent is the engine itself: it never follows the default.
     setEditUsesDefault(!isGeneratedAssistant(assistant) && !configService.get('agent.enginePins')?.[assistant.id]);
@@ -341,6 +349,7 @@ export const useAssistantEditor = ({
     setEditContext('');
     setEditAvatar('\u{1F916}');
     setEditAvatarPreview(undefined);
+    setEditColor(newBotColor());
     setEditAgent(defaultEngineId ?? '');
     setEditUsesDefault(true);
     resetDefaultConfigState();
@@ -371,6 +380,7 @@ export const useAssistantEditor = ({
     setEditDescription(assistant.description_i18n?.[localeKey] || assistant.description || '');
     setEditAvatar(assistant.avatar || '\u{1F916}');
     setEditAvatarPreview(undefined);
+    setEditColor(newBotColor());
     // A copy of a pinned or bare CLI Agent stays on that engine; any other copy follows the default.
     const keepsEngine =
       isGeneratedAssistant(assistant) || Boolean(configService.get('agent.enginePins')?.[assistant.id]);
@@ -532,6 +542,7 @@ export const useAssistantEditor = ({
         // The Agent exists from here on: if a step below fails, Save again updates it instead of creating another.
         setIsCreating(false);
         setActiveAssistantId(created.id);
+        await rememberBotColor(created.id, isBotColor(editColor) ? editColor : newBotColor());
         await refreshAssistantCatalog();
         if (!(await persistAssistantRules(created.id, editContext))) return;
         await syncEnginePin(created.id, editUsesDefault, engineId);
@@ -586,6 +597,14 @@ export const useAssistantEditor = ({
         await ipcBridge.assistants.update.invoke(updateRequest);
         if (!isGeneratedAssistant(activeAssistant)) {
           await syncEnginePin(activeAssistant.id, editUsesDefault, engineId);
+        }
+        if (
+          activeAssistant.source === 'user' &&
+          isVaBotAgent(activeAssistant, configService.get('agent.builtinDefaultId')) &&
+          isBotColor(editColor) &&
+          editColor !== configService.get('agent.colors')?.[activeAssistant.id]
+        ) {
+          await rememberBotColor(activeAssistant.id, editColor);
         }
 
         if (!isBuiltinAssistant(activeAssistant) && !(await persistAssistantRules(activeAssistant.id, editContext))) {
@@ -725,6 +744,8 @@ export const useAssistantEditor = ({
     setEditAvatar,
     editAvatarPreview,
     setEditAvatarPreview,
+    editColor,
+    setEditColor,
     editAgent,
     setEditAgent,
     editUsesDefault,

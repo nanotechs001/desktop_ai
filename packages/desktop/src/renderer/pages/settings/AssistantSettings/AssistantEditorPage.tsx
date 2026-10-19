@@ -5,6 +5,7 @@ import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { ArrowLeft } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import BotColorDot from '@/renderer/components/agent/BotColorDot';
 import AssistantEditorSections from './AssistantEditorSections';
 
 type AssistantEditorPageProps = {
@@ -37,6 +38,7 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activ
           >
             {t('settings.assistantBackToList', { defaultValue: 'All Agents' })}
           </Button>
+          <BotColorDot color={profile.color} />
           <div className='truncate text-14px font-600 text-t-primary'>
             {profile.name.trim() ||
               (isCreating

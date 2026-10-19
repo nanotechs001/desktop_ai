@@ -29,6 +29,8 @@ export type ConfigKeyMap = {
   'agent.builtinDefaultId': string | undefined;
   /** Agents pinned to one engine: assistant id -> managed agent id. */
   'agent.enginePins': Record<string, string> | undefined;
+  /** Color of each VA Bot's dot: assistant id -> `#rrggbb`. */
+  'agent.colors': Record<string, string> | undefined;
   /** User-defined order for the enabled assistant picker surfaces. */
   'assistants.enabledOrder': string[] | undefined;
   'upload.saveToWorkspace': boolean | undefined;

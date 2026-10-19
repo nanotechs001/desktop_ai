@@ -1814,6 +1814,8 @@ export type I18nKey =
   | 'settings.bedrock.regionHint'
   | 'settings.bedrock.secretAccessKey'
   | 'settings.bedrock.testConnection'
+  | 'settings.botColor.custom'
+  | 'settings.botColor.label'
   | 'settings.browserData.agentControlDesc'
   | 'settings.browserData.agentControlFailed'
   | 'settings.browserData.agentControlLabel'
