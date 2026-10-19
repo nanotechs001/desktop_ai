@@ -9,7 +9,10 @@
     "closePopup": "Chat schließen",
     "returnToMain": "Im Hauptfenster öffnen",
     "hideWidget": "Widget ausblenden",
-    "showHiddenRobots": "Ausgeblendete Roboter anzeigen",
+    "robotList": "Roboter der VA Bots",
+    "hiddenTag": "Ausgeblendet",
+    "watchRobot": "Im Hauptfenster ansehen",
+    "chatWithRobot": "Auf dem Desktop chatten",
     "showAllRobots": "Alle anzeigen",
     "state": {
       "idle": "Bereit",

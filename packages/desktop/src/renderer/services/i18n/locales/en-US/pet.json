@@ -9,7 +9,10 @@
     "closePopup": "Close chat",
     "returnToMain": "Open in main window",
     "hideWidget": "Hide widget",
-    "showHiddenRobots": "Show hidden robots",
+    "robotList": "VA Bot robots",
+    "hiddenTag": "Hidden",
+    "watchRobot": "Watch in the main window",
+    "chatWithRobot": "Chat on the desktop",
     "showAllRobots": "Show all",
     "state": {
       "idle": "Ready",

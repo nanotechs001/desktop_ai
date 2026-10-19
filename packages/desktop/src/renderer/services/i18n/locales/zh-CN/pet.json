@@ -9,7 +9,10 @@
     "closePopup": "关闭对话",
     "returnToMain": "在主窗口中打开",
     "hideWidget": "隐藏小助手",
-    "showHiddenRobots": "显示已隐藏的机器人",
+    "robotList": "VA Bot 机器人",
+    "hiddenTag": "已隐藏",
+    "watchRobot": "在主窗口中查看",
+    "chatWithRobot": "在桌面上聊天",
     "showAllRobots": "全部显示",
     "state": {
       "idle": "就绪",

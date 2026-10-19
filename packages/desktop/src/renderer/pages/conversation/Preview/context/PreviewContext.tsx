@@ -25,6 +25,7 @@ import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conve
 import { enterScope, leaveScope, liveBrowserTabs, type BackgroundTab } from './backgroundTabs';
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
+import { getCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { onPreviewWatchChange, reconcilePreviewWatch, resetPreviewWatch } from './previewWatchStore';
 
 /** DOM 片段数据结构 / DOM snippet data structure */
@@ -153,6 +154,11 @@ export interface PreviewContextValue {
   closePreview: () => void;
   /** Hide the panel because the user closed it: the scope then stays closed until a tab is opened again. */
   collapsePreview: () => void;
+  /**
+   * Open this conversation's browser pane even if the user closed it (Watch in the titlebar robot list): at once when
+   * the conversation is on screen, otherwise when it is entered next. One-shot.
+   */
+  revealBrowserFor: (conversationId: string) => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
   /** The open conversation runs on a VA Bot (a user-created Agent): browser on top, chat underneath. */
@@ -260,6 +266,8 @@ type ScopeChangeOptions = {
   openBrowserIfEmpty?: boolean;
   /** The scope this same conversation was in before (workspace fallback before project_id arrived): its live state moves to the new scope. */
   carryFromScope?: string;
+  /** The conversation entering the scope: a pending revealBrowserFor for it overrides a user close, once. */
+  conversationId?: string;
 };
 
 // 仅持久化小体积文本预览，避免大文本导致 localStorage 写入卡顿
@@ -1123,6 +1131,21 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     closePreview();
   }, [closePreview]);
 
+  // A Watch for a conversation not on screen yet; consumed when the route enters its scope.
+  const revealRequestRef = useRef<string | null>(null);
+  const revealBrowserFor = useCallback(
+    (conversationId: string) => {
+      if (getCurrentConversation() !== conversationId) {
+        revealRequestRef.current = conversationId;
+        return;
+      }
+      userClosedRef.current = false;
+      if (tabsRef.current.length > 0) setIsOpen(true);
+      else openBrowserTab();
+    },
+    [openBrowserTab]
+  );
+
   /**
    * Discard this scope's tabs outright — the panel closes and nothing is restored.
    *
@@ -1168,9 +1191,12 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const closePreviewIfScopeChanged = useCallback(
     (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
       const prev = currentScopeRef.current;
+      const revealing = options?.conversationId != null && revealRequestRef.current === options.conversationId;
+      if (options?.conversationId != null) revealRequestRef.current = null;
       // Entering a conversation reopens its panel unless the user closed it: restore what is
       // there, or start with a blank browser tab.
       const reopenUnlessUserClosed = () => {
+        if (revealing) userClosedRef.current = false;
         if (!options?.openBrowserIfEmpty || scopeKey == null || isOpen || userClosedRef.current) return;
         if (tabsRef.current.length > 0) setIsOpen(true);
         else autoOpenedTabIdRef.current = openBrowserTab();
@@ -1242,7 +1268,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsOpen(loaded.isOpen);
       setIsMaximized(false);
       setDomSnippets([]);
-      userClosedRef.current = loaded.userClosed === true;
+      userClosedRef.current = loaded.userClosed === true && !revealing;
       if (options?.openBrowserIfEmpty && scopeKey != null && !userClosedRef.current) {
         if (entered.tabs.length > 0) {
           setIsOpen(true);
@@ -1670,6 +1696,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       openPreview,
       closePreview,
       collapsePreview,
+      revealBrowserFor,
       toggleMaximized,
       isVaBotMode,
       setVaBotMode,
@@ -1707,6 +1734,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     openPreview,
     closePreview,
     collapsePreview,
+    revealBrowserFor,
     toggleMaximized,
     isVaBotMode,
     setVaBotMode,

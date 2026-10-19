@@ -121,6 +121,8 @@ vi.mock('@/common', () => {
     'ensure',
     'hide',
     'listHidden',
+    'listRobots',
+    'openPopup',
     'remove',
     'getSnapshot',
     'setExpanded',
@@ -148,6 +150,7 @@ vi.mock('@/common', () => {
     'lifecycle',
     'retargeted',
     'hiddenChanged',
+    'robotsChanged',
   ];
   const agentWidget: Record<string, unknown> = {};
   for (const name of providerNames) {
@@ -734,6 +737,67 @@ describe('showing hidden robots again', () => {
     manager.ensure(A);
     manager.hide(A);
     await expect(h.providers.listHidden(undefined)).resolves.toEqual([{ conversation_id: A, agent_id: undefined }]);
+  });
+});
+
+describe('the titlebar robot list', () => {
+  it('lists every robot, visible and hidden', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A, false, 'bot-1');
+    manager.ensure(B, false, 'bot-2');
+    manager.hide(B);
+    const robots = [
+      { conversation_id: A, agent_id: 'bot-1', hidden: false },
+      { conversation_id: B, agent_id: 'bot-2', hidden: true },
+    ];
+    expect(manager.listRobots()).toEqual(robots);
+    await expect(h.providers.listRobots(undefined)).resolves.toEqual(robots);
+  });
+
+  it('announces the list on create, hide, show, remove and retarget', async () => {
+    const { manager } = await makeManager();
+    const last = () => emittedOf('robotsChanged').at(-1);
+    manager.ensure(A, false, 'bot-1');
+    expect(last()).toEqual([{ conversation_id: A, agent_id: 'bot-1', hidden: false }]);
+    manager.hide(A);
+    expect(last()).toEqual([{ conversation_id: A, agent_id: 'bot-1', hidden: true }]);
+    manager.ensure(A, true, 'bot-1');
+    expect(last()).toEqual([{ conversation_id: A, agent_id: 'bot-1', hidden: false }]);
+    manager.retarget(A, B);
+    expect(last()).toEqual([{ conversation_id: B, agent_id: 'bot-1', hidden: false }]);
+    manager.remove(B);
+    expect(last()).toEqual([]);
+    expect(emittedOf('robotsChanged')).toHaveLength(5);
+  });
+
+  it('opening the popup of a hidden robot shows it and expands it once it has fully appeared', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A, false, 'bot-1');
+    manager.hide(A);
+    await expect(h.providers.openPopup({ conversation_id: A, agent_id: 'bot-1' })).resolves.toBe(true);
+    expect(manager.listHidden()).toEqual([]);
+    manager.rendererReady(A);
+    expect(manager.getSnapshot(A)?.layout.expanded).toBe(false); // still appearing
+    manager.animationDone(A, 'appearing');
+    expect(manager.getSnapshot(A)?.layout.expanded).toBe(true);
+    expect(manager.getChatLocations()).toEqual({ [A]: 'widget' });
+  });
+
+  it('opening the popup of a robot already on the desktop expands it at once', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    appear(manager, A);
+    expect(manager.openPopup(A, 'bot-1')).toBe(true);
+    expect(manager.getSnapshot(A)?.layout.expanded).toBe(true);
+  });
+
+  it('rejects a malformed openPopup request', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    await expect(h.providers.openPopup({ conversation_id: '../x' })).rejects.toThrow();
+    await expect(h.providers.openPopup({ conversation_id: A, extra: 1 })).rejects.toThrow();
   });
 });
 

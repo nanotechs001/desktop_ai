@@ -9,7 +9,10 @@
     "closePopup": "Fechar chat",
     "returnToMain": "Abrir na janela principal",
     "hideWidget": "Ocultar widget",
-    "showHiddenRobots": "Mostrar robôs ocultos",
+    "robotList": "Robôs dos VA Bots",
+    "hiddenTag": "Oculto",
+    "watchRobot": "Assistir na janela principal",
+    "chatWithRobot": "Conversar na área de trabalho",
     "showAllRobots": "Mostrar todos",
     "state": {
       "idle": "Pronto",

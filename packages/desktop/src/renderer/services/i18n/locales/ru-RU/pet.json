@@ -9,7 +9,10 @@
     "closePopup": "Закрыть чат",
     "returnToMain": "Открыть в главном окне",
     "hideWidget": "Скрыть виджет",
-    "showHiddenRobots": "Показать скрытых роботов",
+    "robotList": "Роботы VA Bot",
+    "hiddenTag": "Скрыт",
+    "watchRobot": "Смотреть в главном окне",
+    "chatWithRobot": "Чат на рабочем столе",
     "showAllRobots": "Показать всех",
     "state": {
       "idle": "Готов",

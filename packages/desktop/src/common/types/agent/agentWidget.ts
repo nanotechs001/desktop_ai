@@ -73,6 +73,9 @@ export type AgentWidgetRecord = {
 /** A robot the user hid ("Hide widget"); the titlebar lists these so they can be shown again. */
 export type AgentWidgetHiddenRobot = { conversation_id: string; agent_id?: string };
 
+/** A VA Bot's robot, on the desktop or hidden by the user (the titlebar robot list). */
+export type AgentWidgetRobot = AgentWidgetHiddenRobot & { hidden: boolean };
+
 export type AgentWidgetPersistedState = {
   settings: AgentWidgetSettings;
   widgets: Record<string, AgentWidgetRecord>;

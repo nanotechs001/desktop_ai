@@ -80,6 +80,7 @@ import type {
   AgentWidgetHiddenRobot,
   AgentWidgetLayout,
   AgentWidgetLifecycleAnimation,
+  AgentWidgetRobot,
   AgentWidgetSettings,
   AgentWidgetSnapshot,
 } from '@/common/types/agent/agentWidget';
@@ -1579,6 +1580,12 @@ export const agentWidget = {
   listHidden: bridge.buildProvider<AgentWidgetHiddenRobot[], void>('agent-widget:list-hidden'),
   /** Main → renderers: the set of hidden robots changed. */
   hiddenChanged: bridge.buildEmitter<AgentWidgetHiddenRobot[]>('agent-widget:hidden-changed'),
+  /** Every robot, visible or hidden (the titlebar robot list). */
+  listRobots: bridge.buildProvider<AgentWidgetRobot[], void>('agent-widget:list-robots'),
+  /** Main → renderers: a robot was created, hidden, shown, removed or moved to another conversation. */
+  robotsChanged: bridge.buildEmitter<AgentWidgetRobot[]>('agent-widget:robots-changed'),
+  /** Show the robot (if hidden) and open its chat popup once it has fully appeared. */
+  openPopup: bridge.buildProvider<boolean, AgentWidgetTarget & { agent_id?: string }>('agent-widget:open-popup'),
   /** Conversation deleted/archived: destroy the window and forget its saved state. */
   remove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:remove'),
   getSnapshot: bridge.buildProvider<AgentWidgetSnapshot | null, AgentWidgetTarget>('agent-widget:get-snapshot'),

@@ -15,6 +15,7 @@ import type {
   AgentWidgetLayout,
   AgentWidgetPersistedState,
   AgentWidgetRecord,
+  AgentWidgetRobot,
   AgentWidgetSettings,
   AgentWidgetDragPhase,
   AgentWidgetLifecycleAnimation,
@@ -130,6 +131,8 @@ type WidgetEntry = {
   nextWanderAt: number;
   lastLayoutKey: string;
   lastSize: { width: number; height: number };
+  /** Open the popup as soon as the robot is live (asked for while it was still loading, appearing or away). */
+  expandWhenLive: boolean;
 };
 
 export class AgentWidgetManager {
@@ -236,6 +239,18 @@ export class AgentWidgetManager {
     if (this.needsWindow(conversationId)) this.open(record);
     void this.persist();
     if (wasHidden || sibling?.hidden) this.emitHiddenChanged();
+    if (!existing || wasHidden) this.emitRobotsChanged();
+    return true;
+  }
+
+  /** Show the robot if needed and open its chat popup; a robot still on its way in opens it once it is live. */
+  openPopup(conversationId: string, agentId?: string): boolean {
+    if (!this.ensure(conversationId, true, agentId)) return false;
+    // The chat leaves the main window now, so a robot stepped away for it (suspended) comes back.
+    this.setChatLocation(conversationId, 'widget');
+    const entry = this.entries.get(conversationId);
+    if (entry?.phase === 'live') this.setExpanded(conversationId, true);
+    else if (entry) entry.expandWhenLive = true;
     return true;
   }
 
@@ -250,6 +265,19 @@ export class AgentWidgetManager {
     ipcBridge.agentWidget.hiddenChanged.emit(this.listHidden());
   }
 
+  /** Every robot, on the desktop or hidden, for the titlebar robot list. */
+  listRobots(): AgentWidgetRobot[] {
+    return Object.values(this.state.widgets).map((record) => ({
+      conversation_id: record.conversation_id,
+      agent_id: record.agent_id,
+      hidden: record.hidden,
+    }));
+  }
+
+  private emitRobotsChanged(): void {
+    ipcBridge.agentWidget.robotsChanged.emit(this.listRobots());
+  }
+
   /** Remove the desktop widget only; the agent keeps running and the chat returns to the main window. */
   hide(conversationId: string): void {
     const record = this.state.widgets[conversationId];
@@ -261,6 +289,7 @@ export class AgentWidgetManager {
     if (entry) this.disappear(entry, 'destroy');
     void this.persist();
     this.emitHiddenChanged();
+    this.emitRobotsChanged();
   }
 
   /** The conversation is gone (deleted/archived/terminated): drop window, draft and saved state. */
@@ -273,6 +302,7 @@ export class AgentWidgetManager {
       delete this.state.widgets[conversationId];
       void this.persist();
       if (record.hidden) this.emitHiddenChanged();
+      this.emitRobotsChanged();
     }
   }
 
@@ -497,6 +527,10 @@ export class AgentWidgetManager {
       this.clearLifecycleTimer(entry);
       entry.phase = 'live';
       this.setIgnoreMouse(conversationId, false);
+      if (entry.expandWhenLive) {
+        entry.expandWhenLive = false;
+        this.setExpanded(conversationId, true);
+      }
     } else if (animation === 'disappearing' && entry.phase === 'disappearing') {
       this.finishDisappearing(entry);
     }
@@ -532,6 +566,7 @@ export class AgentWidgetManager {
       if (wasExpanded) this.setExpanded(to, true);
     }
     void this.persist();
+    this.emitRobotsChanged();
   }
 
   openInMain(conversationId: string): void {
@@ -615,6 +650,7 @@ export class AgentWidgetManager {
         Math.round(this.random() * (FIRST_WANDER_DELAY_MS[1] - FIRST_WANDER_DELAY_MS[0])),
       lastLayoutKey: '',
       lastSize: { width: size, height: size },
+      expandWhenLive: false,
     };
     this.entries.set(id, entry);
 

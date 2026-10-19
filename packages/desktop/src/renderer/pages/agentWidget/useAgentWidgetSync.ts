@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
-import type { AgentWidgetHiddenRobot, AgentWidgetSettings } from '@/common/types/agent/agentWidget';
+import type { AgentWidgetRobot, AgentWidgetSettings } from '@/common/types/agent/agentWidget';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
@@ -97,23 +97,23 @@ export function useSuspendAgentWidget(conversationId: string | undefined, chatOp
   }, [conversationId, suspended]);
 }
 
-/** The robots the user hid (main window only; [] elsewhere), kept current as robots are hidden or shown. */
-export function useHiddenRobots(): AgentWidgetHiddenRobot[] {
-  const [hidden, setHidden] = useState<AgentWidgetHiddenRobot[]>([]);
+/** Every robot, on the desktop or hidden (main window only; [] elsewhere), kept current as robots come and go. */
+export function useRobots(): AgentWidgetRobot[] {
+  const [robots, setRobots] = useState<AgentWidgetRobot[]>([]);
   useEffect(() => {
     if (!isElectronDesktop() || getWidgetConversationId()) return;
     let active = true;
-    void ipcBridge.agentWidget.listHidden
+    void ipcBridge.agentWidget.listRobots
       .invoke()
-      .then((list) => active && setHidden(list ?? []))
+      .then((list) => active && setRobots(list ?? []))
       .catch(() => {});
-    const off = ipcBridge.agentWidget.hiddenChanged.on((list) => setHidden(list ?? []));
+    const off = ipcBridge.agentWidget.robotsChanged.on((list) => setRobots(list ?? []));
     return () => {
       active = false;
       off();
     };
   }, []);
-  return hidden;
+  return robots;
 }
 
 /**

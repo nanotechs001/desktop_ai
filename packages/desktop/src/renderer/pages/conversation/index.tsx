@@ -44,7 +44,7 @@ const ChatConversationIndex: React.FC = () => {
     const last = lastEnteredRef.current;
     const carryFromScope = last?.conversationId === conversationId ? (last.scope ?? undefined) : undefined;
     lastEnteredRef.current = { conversationId, scope };
-    enterScopeRef.current(scope, { openBrowserIfEmpty: true, carryFromScope });
+    enterScopeRef.current(scope, { openBrowserIfEmpty: true, carryFromScope, conversationId });
   }, [conversationId, scope]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the

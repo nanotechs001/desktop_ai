@@ -62,6 +62,10 @@ import {
   type PreviewContextValue,
 } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { previewScopeStorageKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
+import {
+  resetCurrentConversationForTest,
+  setCurrentConversation,
+} from '@/renderer/pages/conversation/explorer/currentConversationStore';
 
 let ctx: PreviewContextValue;
 const Probe: React.FC = () => {
@@ -79,13 +83,16 @@ const mount = (): void => {
   );
 };
 
-const enterScope = (scope: string, options?: { openBrowserIfEmpty?: boolean; carryFromScope?: string }) =>
-  act(() => ctx.closePreviewIfScopeChanged(scope, options));
+const enterScope = (
+  scope: string,
+  options?: { openBrowserIfEmpty?: boolean; carryFromScope?: string; conversationId?: string }
+) => act(() => ctx.closePreviewIfScopeChanged(scope, options));
 
 const storedScope = (scope: string) => JSON.parse(localStorage.getItem(previewScopeStorageKey(scope)) ?? 'null');
 
 beforeEach(() => {
   localStorage.clear();
+  resetCurrentConversationForTest();
   vi.useFakeTimers();
 });
 
@@ -369,6 +376,55 @@ describe('conversation scopes open the browser pane by default', () => {
   });
 });
 
+describe('watching a robot opens its chat browser pane', () => {
+  it('reopens the pane the user closed when that conversation is entered next, once', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    act(() => ctx.collapsePreview());
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+
+    act(() => ctx.revealBrowserFor('c1'));
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs[0]).toMatchObject({ content_type: 'browser' });
+
+    // One-shot: a later user close holds again.
+    act(() => ctx.collapsePreview());
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    expect(ctx.isOpen).toBe(false);
+  });
+
+  it('reopens a user-closed pane in the same scope', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    act(() => ctx.collapsePreview());
+    act(() => ctx.revealBrowserFor('c2'));
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c2' });
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('opens the pane at once when the conversation is already on screen', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    setCurrentConversation('c1');
+    act(() => ctx.collapsePreview());
+
+    act(() => ctx.revealBrowserFor('c1'));
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('a request for a conversation that is never entered does not reopen another one', () => {
+    mount();
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    act(() => ctx.collapsePreview());
+    act(() => ctx.revealBrowserFor('c9'));
+    enterScope('/ws/b', { ...OPEN_BROWSER, conversationId: 'c2' });
+    enterScope('/ws/a', { ...OPEN_BROWSER, conversationId: 'c1' });
+    expect(ctx.isOpen).toBe(false);
+  });
+});
+
 /**
  * The conversation route enters its preview scope once per conversation/scope, and tells the
  * context when the scope changed under the same conversation (project_id arrived), so the
@@ -393,11 +449,19 @@ describe('conversation route preview scope entry', () => {
     );
 
     await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
-    expect(scopeEntered).toHaveBeenLastCalledWith('/w', { openBrowserIfEmpty: true, carryFromScope: undefined });
+    expect(scopeEntered).toHaveBeenLastCalledWith('/w', {
+      openBrowserIfEmpty: true,
+      carryFromScope: undefined,
+      conversationId: 'c1',
+    });
 
     listChangedCb?.({ conversation_id: 'c1', action: 'updated' } as IConversationListChangedEvent);
 
     await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(2));
-    expect(scopeEntered).toHaveBeenLastCalledWith('p1', { openBrowserIfEmpty: true, carryFromScope: '/w' });
+    expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
+      openBrowserIfEmpty: true,
+      carryFromScope: '/w',
+      conversationId: 'c1',
+    });
   });
 });

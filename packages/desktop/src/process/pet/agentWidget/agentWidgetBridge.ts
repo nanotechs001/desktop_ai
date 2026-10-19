@@ -21,6 +21,7 @@ const target = z.object({ conversation_id: conversationId }).strict();
 const agentId = z.string().min(1).max(256);
 const schemas = {
   ensure: target.extend({ force: z.boolean().optional(), agent_id: agentId.optional() }).strict(),
+  openPopup: target.extend({ agent_id: agentId.optional() }).strict(),
   setExpanded: target.extend({ expanded: z.boolean() }).strict(),
   setChatLocation: target.extend({ location: z.enum(['main', 'widget']) }).strict(),
   handoffDraft: target.extend({ text: z.string().max(100_000) }).strict(),
@@ -49,6 +50,11 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   });
   w.hide.provider(async (p) => manager.hide(parse(target, p, 'hide').conversation_id));
   w.listHidden.provider(async () => manager.listHidden());
+  w.listRobots.provider(async () => manager.listRobots());
+  w.openPopup.provider(async (p) => {
+    const { conversation_id, agent_id } = parse(schemas.openPopup, p, 'openPopup');
+    return manager.openPopup(conversation_id, agent_id);
+  });
   w.remove.provider(async (p) => manager.remove(parse(target, p, 'remove').conversation_id));
   w.getSnapshot.provider(async (p) => manager.getSnapshot(parse(target, p, 'getSnapshot').conversation_id));
   w.setExpanded.provider(async (p) => {
