@@ -83,3 +83,22 @@ describe('robot color mark', () => {
     expect(markOf(mountFacing(false, 'red;'))).toBeNull();
   });
 });
+
+// The collapsed robot window is only the robot's width, so a long bot name wraps onto a second line (the window has
+// headroom above the robot) instead of being cut to "Personal Assist…".
+describe('robot name label', () => {
+  const markerRule = () => {
+    const css = readFileSync(
+      path.resolve(__dirname, '../../../../packages/desktop/src/renderer/pages/agentWidget/AgentWidget.module.css'),
+      'utf8'
+    );
+    return css.match(/\.marker\s*{[^}]*}/)?.[0] ?? '';
+  };
+
+  it('wraps onto up to two lines instead of forcing one', () => {
+    const rule = markerRule();
+    expect(rule).not.toMatch(/white-space:\s*nowrap/);
+    expect(rule).toMatch(/-webkit-line-clamp:\s*2/);
+    expect(rule).not.toMatch(/(^|[^-])height:\s*18px/);
+  });
+});
