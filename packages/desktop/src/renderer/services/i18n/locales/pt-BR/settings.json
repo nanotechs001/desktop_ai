@@ -519,7 +519,7 @@
   "webui.passwordTooCommon": "A senha é muito comum, por favor escolha uma mais forte",
   "webui.passwordChanged": "Senha alterada com sucesso",
   "webui.signOutOthersNote": "Os outros dispositivos serão desconectados",
-  "webui.signOutOthersFailed": "Não foi possível desconectar os outros dispositivos. Reinicie a WebUI para aplicar.",
+  "webui.signOutOthersFailed": "Não foi possível salvar a desconexão dos outros dispositivos. Altere a senha novamente para ter certeza.",
   "webui.passwordChangeFailed": "Falha ao alterar a senha",
   "webui.usernameChanged": "Nome de usuário atualizado com sucesso",
   "webui.usernameChangeFailed": "Falha ao atualizar o nome de usuário",

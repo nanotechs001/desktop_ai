@@ -511,6 +511,136 @@ describe('WebUI listener sessionsNotBefore', () => {
   });
 });
 
+describe('WebUI listener credential bytes (R8)', () => {
+  const FRESH_REFRESH = `e30.${Buffer.from(JSON.stringify({ iat: 3_000_000_000 })).toString('base64url')}.good`;
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    backend = await startFakeBackend();
+    handle = await startStaticServer({
+      staticDir: STATIC_DIR,
+      backendPort: backend.port,
+      port: 0,
+      sessionsNotBefore: 2_000_000_000_000,
+    });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  it('a non-ASCII cookie byte beside a forged fresh refresh cookie is 400 and never forwarded', async () => {
+    const r = await request(handle.port, 'POST', '/api/auth/refresh', {
+      cookie: `aionui-refresh=${FRESH_REFRESH}; x=\xe9`,
+    });
+    expect(r.status).toBe(400);
+    expect(backend.seen).toHaveLength(0);
+  });
+
+  it('is 400 on an /api route, for a cookie and for an Authorization header, valid session or not', async () => {
+    const cookie = await request(handle.port, 'GET', '/api/agents', { cookie: `${GOOD}; x=\xe9` });
+    expect(cookie.status).toBe(400);
+    const auth = await request(handle.port, 'GET', '/api/agents', { authorization: 'Bearer a\xe9' });
+    expect(auth.status).toBe(400);
+    expect(backend.seen).toHaveLength(0);
+    expect(backend.authCalls).toBe(0);
+  });
+
+  it('is 400 on an open route too (POST /login)', async () => {
+    const r = await request(handle.port, 'POST', '/login', { cookie: 'x=\xe9' });
+    expect(r.status).toBe(400);
+    expect(backend.seen).toHaveLength(0);
+  });
+
+  it.each(['/ws', '/api/stt/stream'])('refuses an upgrade on %s with a non-ASCII cookie byte', async (route) => {
+    const r = await rawExchange(handle.port, [upgrade(route, `Cookie: aionui-session=${FRESH_REFRESH}; x=\xe9\r\n`)]);
+    expect(r.text.startsWith('HTTP/1.1 400')).toBe(true);
+    expect(backend.seen).toHaveLength(0);
+  });
+
+  it('an upgrade with a non-ASCII Authorization byte is 400', async () => {
+    const r = await rawExchange(handle.port, [upgrade('/ws', 'Authorization: Bearer a\xe9\r\n')]);
+    expect(r.text.startsWith('HTTP/1.1 400')).toBe(true);
+  });
+
+  it('a plain ASCII cookie still works', async () => {
+    const r = await request(handle.port, 'GET', '/api/agents', {
+      cookie: `aionui-session=${FRESH_REFRESH}; theme=dark`,
+    });
+    expect(r.status).toBe(200);
+  });
+
+  it('refuses an /api/stt/stream upgrade with an old cookie', async () => {
+    const old = `e30.${Buffer.from(JSON.stringify({ iat: 1 })).toString('base64url')}.good`;
+    const r = await rawExchange(handle.port, [upgrade('/api/stt/stream', `Cookie: aionui-session=${old}\r\n`)]);
+    expect(r.text.startsWith('HTTP/1.1 401')).toBe(true);
+    expect(backend.seen).toHaveLength(0);
+  });
+});
+
+describe('WebUI listener open sockets', () => {
+  const jwtAt = (iat: number): string => `e30.${Buffer.from(JSON.stringify({ iat })).toString('base64url')}.good`;
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    backend = await startFakeBackend();
+    handle = await startStaticServer({ staticDir: STATIC_DIR, backendPort: backend.port, port: 0 });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  /** Open an upgraded socket; resolves once the 101 arrives. `closed()` reports whether it has closed. */
+  async function openSocket(route: string, token: string): Promise<{ closed: () => boolean; sock: net.Socket }> {
+    const sock = net.connect({ host: '127.0.0.1', port: handle.port });
+    let closed = false;
+    sock.on('close', () => (closed = true));
+    sock.on('error', () => {});
+    let text = '';
+    const opened = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('no 101')), 2000);
+      sock.on('data', (d: Buffer) => {
+        text += d.toString('latin1');
+        if (text.startsWith('HTTP/1.1 101') && text.includes('\r\n\r\n')) {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+    });
+    sock.write(upgrade(route, `Cookie: aionui-session=${token}\r\n`));
+    await opened;
+    return { closed: () => closed, sock };
+  }
+
+  const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+  it.each(['/ws', '/api/stt/stream'])('closes an open %s with an old token when not-before is set', async (route) => {
+    const old = await openSocket(route, jwtAt(1_000));
+    const fresh = await openSocket(route, jwtAt(3_000));
+    await settle(50);
+    handle.setSessionsNotBefore(2_000_000);
+    await settle(200);
+    expect(old.closed()).toBe(true);
+    expect(fresh.closed()).toBe(false);
+    fresh.sock.destroy();
+  });
+
+  it('leaves open sockets alone when not-before is cleared, and forgets sockets that closed', async () => {
+    const a = await openSocket('/ws', jwtAt(1_000));
+    handle.setSessionsNotBefore(null);
+    await settle(100);
+    expect(a.closed()).toBe(false);
+    a.sock.destroy();
+    await settle(100);
+    expect(() => handle.setSessionsNotBefore(2_000_000)).not.toThrow();
+  });
+});
+
 describe('WebUI listener without sessionsNotBefore', () => {
   it("keeps today's behaviour: a malformed token that aioncore accepts passes", async () => {
     const backend = await startFakeBackend();

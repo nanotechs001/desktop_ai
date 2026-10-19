@@ -519,7 +519,7 @@
   "webui.passwordTooCommon": "Password is too common, please choose a stronger one",
   "webui.passwordChanged": "Password changed successfully",
   "webui.signOutOthersNote": "Other devices will be signed out",
-  "webui.signOutOthersFailed": "Could not sign out other devices. Restart the WebUI to apply it.",
+  "webui.signOutOthersFailed": "Couldn't save the sign-out of other devices. Change the password again to make sure.",
   "webui.passwordChangeFailed": "Failed to change password",
   "webui.usernameChanged": "Username updated successfully",
   "webui.usernameChangeFailed": "Failed to update username",

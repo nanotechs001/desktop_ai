@@ -519,7 +519,7 @@
   "webui.passwordTooCommon": "Пароль слишком распространённый, выберите более надёжный",
   "webui.passwordChanged": "Пароль успешно изменён",
   "webui.signOutOthersNote": "Другие устройства будут отключены",
-  "webui.signOutOthersFailed": "Не удалось отключить другие устройства. Перезапустите WebUI, чтобы применить.",
+  "webui.signOutOthersFailed": "Не удалось сохранить отключение других устройств. Измените пароль ещё раз, чтобы убедиться.",
   "webui.passwordChangeFailed": "Не удалось изменить пароль",
   "webui.usernameChanged": "Имя пользователя успешно изменено",
   "webui.usernameChangeFailed": "Не удалось изменить имя пользователя",

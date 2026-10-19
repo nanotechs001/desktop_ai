@@ -527,7 +527,7 @@
   "webui.passwordTooCommon": "Пароль занадто поширений, виберіть надійніший",
   "webui.passwordChanged": "Пароль успішно змінено",
   "webui.signOutOthersNote": "Інші пристрої буде виведено із системи",
-  "webui.signOutOthersFailed": "Не вдалося вивести інші пристрої із системи. Перезапустіть WebUI, щоб застосувати.",
+  "webui.signOutOthersFailed": "Не вдалося зберегти виведення інших пристроїв із системи. Змініть пароль ще раз, щоб переконатися.",
   "webui.passwordChangeFailed": "Не вдалося змінити пароль",
   "webui.usernameChanged": "Ім'я користувача успішно змінено",
   "webui.usernameChangeFailed": "Не вдалося змінити ім'я користувача",

@@ -519,7 +519,7 @@
   "webui.passwordTooCommon": "パスワードが一般的すぎます。より強いパスワードを選択してください",
   "webui.passwordChanged": "パスワードが正常に変更されました",
   "webui.signOutOthersNote": "他のデバイスはサインアウトされます",
-  "webui.signOutOthersFailed": "他のデバイスをサインアウトできませんでした。WebUI を再起動して適用してください。",
+  "webui.signOutOthersFailed": "他のデバイスのサインアウトを保存できませんでした。確実にするため、もう一度パスワードを変更してください。",
   "webui.passwordChangeFailed": "パスワードの変更に失敗しました",
   "webui.usernameChanged": "ユーザー名を変更しました",
   "webui.usernameChangeFailed": "ユーザー名の変更に失敗しました",

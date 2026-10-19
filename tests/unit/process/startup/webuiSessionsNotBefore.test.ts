@@ -82,11 +82,22 @@ describe('WebUI sessionsNotBefore', () => {
     expect(httpRequest).toHaveBeenCalledWith('PUT', '/api/settings/client', { [KEY]: 1_800_000_000_000 });
   });
 
-  it('revokeOtherWebUISessions still pushes to the web host, then rejects, when saving fails', async () => {
+  it('revokeOtherWebUISessions retries the save once before giving up', async () => {
     const { startDesktopWebUI, revokeOtherWebUISessions } = await importModule();
     await startDesktopWebUI({ port: 25809 });
-    httpRequest.mockRejectedValueOnce(new Error('disk full'));
+    httpRequest.mockClear();
+    httpRequest.mockRejectedValueOnce(new Error('busy'));
+    await expect(revokeOtherWebUISessions(1_800_000_000_000)).resolves.toBeUndefined();
+    expect(httpRequest.mock.calls.filter(([method]) => method === 'PUT')).toHaveLength(2);
+  });
+
+  it('revokeOtherWebUISessions still pushes to the web host, then rejects, when both saves fail', async () => {
+    const { startDesktopWebUI, revokeOtherWebUISessions } = await importModule();
+    await startDesktopWebUI({ port: 25809 });
+    httpRequest.mockClear();
+    httpRequest.mockRejectedValue(new Error('disk full'));
     await expect(revokeOtherWebUISessions(1_800_000_000_000)).rejects.toThrow('disk full');
     expect(setSessionsNotBefore).toHaveBeenCalledWith(1_800_000_000_000);
+    expect(httpRequest.mock.calls.filter(([method]) => method === 'PUT')).toHaveLength(2);
   });
 });

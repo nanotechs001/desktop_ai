@@ -56,7 +56,10 @@ async function writeWebUIDesktopEnabled(enabled: boolean): Promise<void> {
   }
 }
 
-/** Epoch ms before which WebUI sessions are refused; null when never set or unreadable (logged). */
+/**
+ * Epoch ms before which WebUI sessions are refused; null when never set or unreadable (logged).
+ * A failed read is acceptable: if aioncore's settings are down, the gate's validator answers 503 anyway.
+ */
 async function readSessionsNotBefore(): Promise<number | null> {
   try {
     const settings = await httpRequest<Record<string, unknown>>('GET', '/api/settings/client');
@@ -228,7 +231,13 @@ const toDesktopHandle = (handle: WebHostHandle, allowRemote: boolean): DesktopWe
  */
 export async function revokeOtherWebUISessions(now: number = Date.now()): Promise<void> {
   currentHandle?.setSessionsNotBefore(now);
-  await httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY]: now });
+  const save = (): Promise<void> =>
+    httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY]: now });
+  try {
+    await save();
+  } catch {
+    await save(); // one retry; a second failure rejects so the UI can warn
+  }
 }
 
 /**

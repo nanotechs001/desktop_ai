@@ -23,11 +23,13 @@ import {
   createSessionValidator,
   forwardingHeaders,
   GATE_LIMITS,
+  hasUnreadableCredentialBytes,
   isCanonicalPath,
   isRefreshRequest,
   isRefreshRevoked,
   isSessionRevoked,
   normalizePath,
+  sessionIssuedAtMs,
   type SessionValidator,
 } from './auth-gate/index.js';
 
@@ -315,6 +317,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const isTunnelActive = opts.isTunnelActive ?? (() => false);
   const validate = createSessionValidator(fetchAuthUser(opts.backendPort));
   let sessionsNotBefore = opts.sessionsNotBefore ?? null;
+  // Open upgraded sockets with the iat (ms) of their credential, so a later not-before can close them.
+  const openSockets = new Set<{ iat: number; client: Socket; upstream: Socket }>();
   // Internal-server connections are local splices; map each one's local port back to the real client.
   const peers = new Map<number, string>();
   const headerMs = opts.timeouts?.headerMs ?? HEADER_TIMEOUT_MS;
@@ -325,6 +329,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     const decision = classifyRequest(method, url);
     if (decision === 'blocked') {
       replyError(res, 404, 'NOT_FOUND');
+      return;
+    }
+    if (hasUnreadableCredentialBytes(req.headers)) {
+      replyError(res, 400, 'BAD_CREDENTIAL_HEADER');
       return;
     }
     // A request not spliced by our listener (a local process on the internal port) keeps its own address.
@@ -440,6 +448,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       refuseRaw(client, 400, lingerMs);
       return;
     }
+    if (hasUnreadableCredentialBytes(head.headers)) {
+      settle();
+      refuseRaw(client, 400, lingerMs);
+      return;
+    }
     const headers = forwardingHeaders(peer, head.headers, isTunnelActive());
     const creds = credentialsOf(headers);
     const verdict = isSessionRevoked(creds, sessionsNotBefore) ? 'invalid' : await validate(creds);
@@ -452,7 +465,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     // Rebuilt from parsed parts: nothing the gate did not check reaches the backend.
     const fields = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
     const rewritten = Buffer.from(`GET ${head.target} HTTP/1.1\r\n${fields.join('')}\r\n`, 'latin1');
-    spliceToTcpEndpoint(client, opts.backendPort, rewritten, peeked.subarray(headEnd + 4));
+    const upstream = spliceToTcpEndpoint(client, opts.backendPort, rewritten, peeked.subarray(headEnd + 4));
+    const entry = { iat: sessionIssuedAtMs(creds), client, upstream };
+    openSockets.add(entry);
+    client.once('close', () => openSockets.delete(entry));
   };
 
   const tcp_server = net.createServer((client: Socket) => {
@@ -548,6 +564,13 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     setSessionsNotBefore: (ms) => {
       sessionsNotBefore = ms;
       validate.clear();
+      if (ms === null) return;
+      for (const { iat, client, upstream } of openSockets) {
+        if (iat < ms) {
+          client.destroy();
+          upstream.destroy();
+        }
+      }
     },
     stop: () =>
       new Promise<void>((resolve) => {

@@ -509,7 +509,7 @@
   "webui.passwordTooCommon": "Passwort ist zu häufig, bitte ein stärkeres wählen",
   "webui.passwordChanged": "Passwort erfolgreich geändert",
   "webui.signOutOthersNote": "Andere Geräte werden abgemeldet",
-  "webui.signOutOthersFailed": "Andere Geräte konnten nicht abgemeldet werden. Starte das WebUI neu, um es zu übernehmen.",
+  "webui.signOutOthersFailed": "Das Abmelden anderer Geräte konnte nicht gespeichert werden. Ändere das Passwort erneut, um sicherzugehen.",
   "webui.passwordChangeFailed": "Passwort ändern fehlgeschlagen",
   "webui.usernameChanged": "Benutzername erfolgreich aktualisiert",
   "webui.usernameChangeFailed": "Benutzername aktualisieren fehlgeschlagen",

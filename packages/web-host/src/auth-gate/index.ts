@@ -112,17 +112,42 @@ export function tokenIssuedAtMs(token: string): number | null {
 }
 
 // Fail closed: an undecodable token or one without iat counts as issued before any not-before.
+// iat has one-second resolution, so a login in the same second as the change is refused once, on purpose.
 const issuedBefore = (token: string, notBefore: number): boolean => (tokenIssuedAtMs(token) ?? -Infinity) < notBefore;
+
+/** The credentials aioncore might authenticate by: the `Bearer` token and the session cookie. */
+function sessionTokens(headers: SessionHeaders): string[] {
+  const bearer = headers.authorization?.startsWith('Bearer ') ? headers.authorization.slice(7) : '';
+  return [bearer, sessionCookieValue(headers.cookie)].filter((t) => t !== '');
+}
 
 /**
  * True when a credential on this request predates `sessionsNotBefore` (epoch ms; null = off).
- * Checks every credential aioncore might use: the `Bearer` token and the session cookie.
  * A request with no credential is left to the validator.
  */
 export function isSessionRevoked(headers: SessionHeaders, sessionsNotBefore: number | null): boolean {
   if (sessionsNotBefore === null) return false;
-  const bearer = headers.authorization?.startsWith('Bearer ') ? headers.authorization.slice(7) : '';
-  return [bearer, sessionCookieValue(headers.cookie)].some((t) => t !== '' && issuedBefore(t, sessionsNotBefore));
+  return sessionTokens(headers).some((t) => issuedBefore(t, sessionsNotBefore));
+}
+
+/** Oldest `iat` (epoch ms) among the request's credentials; 0 when one cannot be decoded (closed by any not-before). */
+export function sessionIssuedAtMs(headers: SessionHeaders): number {
+  return Math.min(...sessionTokens(headers).map((t) => tokenIssuedAtMs(t) ?? 0));
+}
+
+// aioncore reads Cookie/Authorization with `HeaderValue::to_str()`, which fails on any byte outside
+// visible ASCII and then sees no credential (falling back to e.g. the refresh body token). The gate
+// must read the same credential, so such a request is refused outright.
+const UNREADABLE_BYTE = /[^\t\x20-\x7e]/;
+
+/** True when a Cookie or Authorization header holds a byte aioncore would not read (R8). Case-insensitive names. */
+export function hasUnreadableCredentialBytes(headers: Record<string, string | string[] | undefined>): boolean {
+  return Object.entries(headers).some(([name, value]) => {
+    const lower = name.toLowerCase();
+    return (
+      (lower === 'cookie' || lower === 'authorization') && [value ?? ''].flat().some((v) => UNREADABLE_BYTE.test(v))
+    );
+  });
 }
 
 /** True when the refresh cookie predates `sessionsNotBefore`, or is missing (the body fallback cannot be checked). */

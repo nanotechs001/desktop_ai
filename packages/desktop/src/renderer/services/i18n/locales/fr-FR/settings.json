@@ -519,7 +519,7 @@
   "webui.passwordTooCommon": "Le mot de passe est trop courant, veuillez en choisir un plus fort",
   "webui.passwordChanged": "Mot de passe changé avec succès",
   "webui.signOutOthersNote": "Les autres appareils seront déconnectés",
-  "webui.signOutOthersFailed": "Impossible de déconnecter les autres appareils. Redémarrez la WebUI pour l'appliquer.",
+  "webui.signOutOthersFailed": "Impossible d'enregistrer la déconnexion des autres appareils. Changez à nouveau le mot de passe pour être sûr.",
   "webui.passwordChangeFailed": "Échec du changement de mot de passe",
   "webui.usernameChanged": "Nom d'utilisateur mis à jour avec succès",
   "webui.usernameChangeFailed": "Échec de la mise à jour du nom d'utilisateur",

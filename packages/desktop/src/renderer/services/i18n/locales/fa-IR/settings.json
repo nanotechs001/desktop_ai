@@ -519,7 +519,7 @@
   "webui.passwordTooCommon": "رمز عبور بسیار رایج است، لطفاً یک رمز قوی‌تر انتخاب کنید",
   "webui.passwordChanged": "رمز عبور با موفقیت تغییر کرد",
   "webui.signOutOthersNote": "دستگاه‌های دیگر از حساب خارج می‌شوند",
-  "webui.signOutOthersFailed": "خروج دستگاه‌های دیگر ممکن نشد. برای اعمال آن، WebUI را دوباره راه‌اندازی کنید.",
+  "webui.signOutOthersFailed": "ذخیره‌ی خروج دستگاه‌های دیگر ممکن نشد. برای اطمینان، رمز عبور را دوباره تغییر دهید.",
   "webui.passwordChangeFailed": "تغییر رمز عبور ناموفق بود",
   "webui.usernameChanged": "نام کاربری با موفقیت به‌روزرسانی شد",
   "webui.usernameChangeFailed": "به‌روزرسانی نام کاربری ناموفق بود",

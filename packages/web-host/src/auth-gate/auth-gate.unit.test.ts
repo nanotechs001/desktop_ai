@@ -4,11 +4,13 @@ import {
   createSessionValidator,
   forwardingHeaders,
   GATE_LIMITS,
+  hasUnreadableCredentialBytes,
   isCanonicalPath,
   isRefreshRequest,
   isRefreshRevoked,
   isSessionRevoked,
   normalizePath,
+  sessionIssuedAtMs,
   tokenIssuedAtMs,
 } from './index.js';
 
@@ -414,5 +416,40 @@ describe('isRefreshRevoked / isRefreshRequest', () => {
     expect(isRefreshRequest('post', '/API/auth/Refresh?x=1')).toBe(true);
     expect(isRefreshRequest('GET', '/api/auth/refresh')).toBe(false);
     expect(isRefreshRequest('POST', '/api/auth/status')).toBe(false);
+  });
+});
+
+describe('hasUnreadableCredentialBytes', () => {
+  it('accepts tab and visible ASCII in cookie and authorization', () => {
+    expect(hasUnreadableCredentialBytes({ cookie: 'a=b;\tc=~!', authorization: 'Bearer abc.def' })).toBe(false);
+    expect(hasUnreadableCredentialBytes({})).toBe(false);
+  });
+
+  it.each([['\xe9'], ['\x7f'], ['\x00'], ['\x80'], ['\u00e9'], ['\n'], ['\r']])(
+    'rejects a cookie containing %j',
+    (ch) => {
+      expect(hasUnreadableCredentialBytes({ cookie: `aionui-refresh=x; y=${ch}` })).toBe(true);
+    }
+  );
+
+  it('rejects a bad authorization, in a list of values, with any header-name case', () => {
+    expect(hasUnreadableCredentialBytes({ authorization: 'Bearer a\xe9' })).toBe(true);
+    expect(hasUnreadableCredentialBytes({ Cookie: ['ok=1', 'bad=\xe9'] })).toBe(true);
+  });
+
+  it('ignores other headers', () => {
+    expect(hasUnreadableCredentialBytes({ 'user-agent': 'caf\xe9' })).toBe(false);
+  });
+});
+
+describe('sessionIssuedAtMs', () => {
+  it('is the minimum iat across the credentials present', () => {
+    const headers = { cookie: `aionui-session=${jwt({ iat: 50 })}`, authorization: `Bearer ${jwt({ iat: 20 })}` };
+    expect(sessionIssuedAtMs(headers)).toBe(20_000);
+  });
+
+  it('is 0 when a credential cannot be decoded, so any not-before closes it', () => {
+    expect(sessionIssuedAtMs({ cookie: `aionui-session=${jwt({ iat: 50 })}`, authorization: 'Bearer junk' })).toBe(0);
+    expect(sessionIssuedAtMs({ cookie: 'aionui-session=junk' })).toBe(0);
   });
 });
