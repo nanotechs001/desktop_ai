@@ -312,20 +312,20 @@
         "body": "L'application a reçu une erreur en amont, mais n'a pas pu déterminer si elle provenait de l'agent, du fournisseur, du réseau ou de l'environnement local."
       },
       "MCP_HTTP_RESPONSE_READ_FAILED": {
-        "title": "Échec de la lecture de la réponse de l'agent de l'équipe",
-        "body": "Pixebot Browser n'a pas pu lire la réponse de l'agent de l'équipe locale. Réessayez une fois et si cela continue, redémarrez l'application."
+        "title": "Échec de la lecture de la réponse du serveur d'outils local",
+        "body": "Pixebot Browser n'a pas pu lire la réponse d'un serveur d'outils local. Réessayez une fois et si cela continue, redémarrez l'application."
       },
       "MCP_TOOL_REMOTE_ERROR": {
-        "title": "L'agent de l'équipe locale a rejeté la demande",
-        "body": "L'agent de l'équipe locale a renvoyé une erreur lors du traitement de cette demande. Passez en revue les détails ci-dessous et réessayez après avoir ajusté l’action de l’équipe."
+        "title": "Le serveur d'outils local a rejeté la demande",
+        "body": "Le serveur d'outils local a renvoyé une erreur lors du traitement de cette demande. Passez en revue les détails ci-dessous et réessayez après avoir ajusté la demande."
       },
       "MCP_TOOL_RESPONSE_UNEXPECTED": {
-        "title": "L'agent de l'équipe a renvoyé une réponse inattendue",
-        "body": "Pixebot Browser a reçu une réponse inattendue de la part de l'agent de l'équipe locale. Réessayez une fois et signalez-le si le problème persiste."
+        "title": "Le serveur d'outils local a renvoyé une réponse inattendue",
+        "body": "Pixebot Browser a reçu une réponse inattendue d'un serveur d'outils local. Réessayez une fois et signalez-le si le problème persiste."
       },
       "MCP_TCP_READ_FAILED": {
-        "title": "Échec de la lecture de l'agent de l'équipe locale",
-        "body": "Pixebot Browser n'a pas pu lire la réponse TCP de l'agent de l'équipe locale. Réessayez une fois et redémarrez l'application si elle continue d'échouer."
+        "title": "Échec de la lecture depuis le serveur d'outils local",
+        "body": "Pixebot Browser n'a pas pu lire la réponse TCP d'un serveur d'outils local. Réessayez une fois et redémarrez l'application si elle continue d'échouer."
       },
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "L'agent sélectionné n'est plus disponible",

@@ -5,7 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
-import { APP_GITHUB_REPO } from '@/common/config/constants';
+import { APP_GITHUB_REPO, APP_PRODUCT_NAME } from '@/common/config/constants';
 import type {
   AutoUpdateReadyResult,
   UpdateCheckResult,
@@ -62,7 +62,7 @@ interface AutoUpdateCheckParams {
 }
 
 const DEFAULT_REPO = APP_GITHUB_REPO;
-const DEFAULT_USER_AGENT = 'AionUi';
+const DEFAULT_USER_AGENT = APP_PRODUCT_NAME;
 const ALLOWED_ASSET_EXTS = new Set(['.exe', '.msi', '.dmg', '.zip', '.deb', '.rpm']);
 const ALLOWED_DOWNLOAD_HOSTS = new Set<string>([
   'github.com',

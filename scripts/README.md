@@ -23,7 +23,6 @@ Build, packaging and dev tooling for Pixebot Browser. Run them through the `pack
 | `dev-bootstrap.mjs`                                              | `just dev-ext*`: frees stale ports/processes, starts the app with `examples/` |
 | `packaged-launch.mjs`                                            | Launches an unpacked build with `examples/` loaded (`just packaged-ext`)      |
 | `check-i18n.js`, `generate-i18n-types.js`                        | i18n validation and key type generation (`just i18n-check`)                   |
-| `resetpass.ts`                                                   | Resets the WebUI admin password (`bun run resetpass`)                         |
 | `smoke-installer-self-lock.js`, `smoke-installer-rstrtmgr-ui.js` | Windows installer smoke tests (`bun run test:smoke:installer:*`)              |
 | `codemods/`                                                      | One-off ts-morph codemods                                                     |
 

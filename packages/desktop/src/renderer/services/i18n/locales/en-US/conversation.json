@@ -312,20 +312,20 @@
         "body": "The app received an upstream error but could not classify whether it came from the agent, provider, network, or local environment."
       },
       "MCP_HTTP_RESPONSE_READ_FAILED": {
-        "title": "Failed to read the team helper response",
-        "body": "Pixebot Browser could not read the local team helper response. Retry once, and if it keeps happening, restart the app."
+        "title": "Failed to read the local tool server response",
+        "body": "Pixebot Browser could not read the response from a local tool server. Retry once, and if it keeps happening, restart the app."
       },
       "MCP_TOOL_REMOTE_ERROR": {
-        "title": "The local team helper rejected the request",
-        "body": "The local team helper returned an error while processing this request. Review the details below and retry after adjusting the team action."
+        "title": "The local tool server rejected the request",
+        "body": "The local tool server returned an error while processing this request. Review the details below and retry after adjusting the request."
       },
       "MCP_TOOL_RESPONSE_UNEXPECTED": {
-        "title": "The team helper returned an unexpected response",
-        "body": "Pixebot Browser received an unexpected response from the local team helper. Retry once, and report it if the problem persists."
+        "title": "The local tool server returned an unexpected response",
+        "body": "Pixebot Browser received an unexpected response from a local tool server. Retry once, and report it if the problem persists."
       },
       "MCP_TCP_READ_FAILED": {
-        "title": "Failed to read from the local team helper",
-        "body": "Pixebot Browser could not read the local team helper TCP response. Retry once, and restart the app if it keeps failing."
+        "title": "Failed to read from the local tool server",
+        "body": "Pixebot Browser could not read the TCP response from a local tool server. Retry once, and restart the app if it keeps failing."
       },
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected Agent is no longer available",

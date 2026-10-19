@@ -1,10 +1,10 @@
 appId: com.nanotechs.pixebot
 productName: Pixebot Browser
 executableName: PixebotBrowser
-copyright: Copyright © 2024 AionUi
+copyright: Copyright © 2024 Pixebot
 
 protocols:
-  - name: AionUi Protocol
+  - name: Pixebot Browser Protocol
     schemes:
       - aionui
 
@@ -166,15 +166,15 @@ linux:
   icon: resources/app.png
   artifactName: ${productName}-${version}-${os}-${arch}.${ext}
   category: Utility
-  maintainer: aionui
-  vendor: aionui
+  maintainer: pixebot
+  vendor: pixebot
   synopsis: ${description}
   description: ${description}
   desktop:
     entry:
-      Name: AionUi
+      Name: Pixebot Browser
       Comment: ${description}
-      Icon: AionUi
+      Icon: PixebotBrowser
       Categories: Office;Utility;
       MimeType: x-scheme-handler/aionui;
 

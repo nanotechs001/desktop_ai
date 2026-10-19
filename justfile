@@ -404,10 +404,6 @@ ext-test-watch:
 # Utilities
 # ============================================================
 
-# Reset WebUI password
-reset-password:
-    bun run resetpass
-
 # Clean build artifacts
 clean:
     #!/usr/bin/env bash
