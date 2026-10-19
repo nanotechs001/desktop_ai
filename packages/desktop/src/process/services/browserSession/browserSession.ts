@@ -19,7 +19,7 @@ import {
   rememberBrowserSession,
 } from './profiles/browserProfiles';
 import { installBrowserShortcuts } from './shortcuts';
-import { isGoogleHost, rewriteChromeBrands, toChromeUserAgent } from './userAgent';
+import { toBrowserUserAgent } from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
@@ -27,9 +27,6 @@ export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow |
 /** May be async: the dispatch does not await it, and a rejection is logged rather than thrown. */
 type BrowserContentsListener = (contents: Electron.WebContents) => void | Promise<void>;
 
-/** Requests whose client-hint headers get a "Google Chrome" brand. Mirrors `isGoogleHost`. */
-const GOOGLE_URL_FILTER = ['*://*.google.com/*', '*://google.com/*', '*://*.googleusercontent.com/*'];
-const BRAND_HEADERS = new Set(['sec-ch-ua', 'sec-ch-ua-full-version-list']);
 /** An Agent profile's Web Store extensions live in its own partition folder, so deleting the profile removes them. */
 const AGENT_EXTENSIONS_DIR = 'WebStoreExtensions';
 
@@ -106,12 +103,9 @@ const startExtensions = (
 
 /**
  * The browser session of `partition` (Personal, or an Agent partition from `agentPartition`), set up on first use
- * with everything Personal gets: Chrome's user agent and brands, the permission prompt, downloads and extensions;
+ * with everything Personal gets: the user agent without the app name, the permission prompt, downloads and extensions;
  * its tabs and popups get the context menu, shortcuts and window-open rules. Lazy, idempotent and cached per
  * partition. Throws before {@link initBrowserSession}, and for any other partition.
- *
- * Electron keeps one `webRequest.onBeforeSendHeaders` listener per session, and this is the only one on browser
- * sessions; a later module that needs the event must compose with it.
  */
 export function ensureBrowserSession(partition: string): Electron.Session {
   const existing = sessions.get(partition);
@@ -123,22 +117,9 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   const browserSession = session.fromPartition(partition);
   sessions.set(partition, browserSession);
   rememberBrowserSession(partition, browserSession);
-  browserSession.setUserAgent(toChromeUserAgent(app.userAgentFallback));
+  browserSession.setUserAgent(toBrowserUserAgent(app.userAgentFallback));
   installDownloads(browserSession);
   installPermissions(browserSession, partition);
-  browserSession.webRequest.onBeforeSendHeaders({ urls: GOOGLE_URL_FILTER }, (details, callback) => {
-    if (!isGoogleHost(details.url)) {
-      callback({ requestHeaders: details.requestHeaders });
-      return;
-    }
-    const requestHeaders = Object.fromEntries(
-      Object.entries(details.requestHeaders).map(([name, value]) => [
-        name,
-        BRAND_HEADERS.has(name.toLowerCase()) ? rewriteChromeBrands(value) : value,
-      ])
-    );
-    callback({ requestHeaders });
-  });
   extensionsSettled.set(partition, startExtensions(partition, browserSession, deps));
   return browserSession;
 }

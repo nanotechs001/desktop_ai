@@ -76,8 +76,8 @@ vi.mock('@process/services/browserSession/windowOpen', () => ({
   installBeforeUnloadDialog: mocks.installBeforeUnloadDialog,
 }));
 
-const CHROME_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.251 Electron/37.10.3 Safari/537.36';
 
 const makeContents = (type: string, session: unknown = mocks.browserSession): StubContents => ({
   getType: () => type,
@@ -191,59 +191,13 @@ describe('initBrowserSession', () => {
 
     expect(mocks.fromPartition).toHaveBeenCalledWith('persist:aionui-browser');
     expect(mocks.browserSession.setUserAgent).toHaveBeenCalledTimes(1);
-    expect(mocks.browserSession.setUserAgent).toHaveBeenCalledWith(CHROME_UA);
-    expect(mocks.browserSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
+    expect(mocks.browserSession.setUserAgent).toHaveBeenCalledWith(BROWSER_UA);
+    expect(mocks.browserSession.webRequest.onBeforeSendHeaders).not.toHaveBeenCalled();
     expect(mocks.installDownloads).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads).toHaveBeenCalledWith(mocks.browserSession);
     expect(mocks.installPermissions).toHaveBeenCalledTimes(1);
     expect(mocks.installPermissions).toHaveBeenCalledWith(mocks.browserSession, 'persist:aionui-browser');
     expect(mocks.app.on.mock.calls.filter(([name]) => name === 'web-contents-created')).toHaveLength(1);
-  });
-
-  describe('sec-ch-ua rewriting', () => {
-    const setup = async () => {
-      const { initBrowserSession } = await loadModule();
-      initBrowserSession({ getMainWindow: () => null });
-      const [filter, listener] = mocks.browserSession.webRequest.onBeforeSendHeaders.mock.calls[0];
-      return { filter, listener };
-    };
-    const run = (listener: (d: unknown, cb: (r: unknown) => void) => void, url: string, requestHeaders: object) => {
-      const callback = vi.fn();
-      listener({ url, requestHeaders }, callback);
-      expect(callback).toHaveBeenCalledTimes(1);
-      return callback.mock.calls[0][0] as { requestHeaders: Record<string, string> };
-    };
-
-    it('only listens for Google hosts', async () => {
-      const { filter } = await setup();
-
-      expect(filter).toEqual({ urls: ['*://*.google.com/*', '*://google.com/*', '*://*.googleusercontent.com/*'] });
-    });
-
-    it('adds "Google Chrome" to both client-hint headers without mutating the input', async () => {
-      const { listener } = await setup();
-      const headers = Object.freeze({
-        'sec-ch-ua': '"Chromium";v="138", "Not)A;Brand";v="8"',
-        'Sec-CH-UA-Full-Version-List': '"Chromium";v="138.0.7204.243", "Not)A;Brand";v="8.0.0.0"',
-        'User-Agent': CHROME_UA,
-      });
-
-      const { requestHeaders } = run(listener, 'https://accounts.google.com/signin', headers);
-
-      expect(requestHeaders).toEqual({
-        'sec-ch-ua': '"Chromium";v="138", "Not)A;Brand";v="8", "Google Chrome";v="138"',
-        'Sec-CH-UA-Full-Version-List':
-          '"Chromium";v="138.0.7204.243", "Not)A;Brand";v="8.0.0.0", "Google Chrome";v="138.0.7204.243"',
-        'User-Agent': CHROME_UA,
-      });
-    });
-
-    it('passes headers through unchanged for non-Google URLs', async () => {
-      const { listener } = await setup();
-      const headers = { 'sec-ch-ua': '"Chromium";v="138"' };
-
-      expect(run(listener, 'https://example.com/', headers).requestHeaders).toEqual(headers);
-    });
   });
 
   describe('web-contents-created', () => {
@@ -542,8 +496,8 @@ describe('ensureBrowserSession (Agent profiles)', () => {
 
     expect(mocks.fromPartition).toHaveBeenCalledWith(partition);
     expect(mocks.agentSession.setUserAgent).toHaveBeenCalledTimes(1);
-    expect(mocks.agentSession.setUserAgent).toHaveBeenCalledWith(CHROME_UA);
-    expect(mocks.agentSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
+    expect(mocks.agentSession.setUserAgent).toHaveBeenCalledWith(BROWSER_UA);
+    expect(mocks.agentSession.webRequest.onBeforeSendHeaders).not.toHaveBeenCalled();
     expect(mocks.installDownloads.mock.calls).toEqual([[mocks.browserSession], [mocks.agentSession]]);
     expect(mocks.installPermissions.mock.calls).toEqual([
       [mocks.browserSession, 'persist:aionui-browser'],
