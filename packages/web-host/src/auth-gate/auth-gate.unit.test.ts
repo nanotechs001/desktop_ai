@@ -64,7 +64,15 @@ describe('normalizePath / isCanonicalPath', () => {
     expect(normalizePath('http://h/api')).toBeNull();
   });
 
-  it.each(['/', '/assets/App-ABC.js', '/api/agents/', '/api/agents?x=1', '/API/Agents'])('%s is canonical', (p) => {
+  it.each([
+    '/',
+    '/assets/App-ABC.js',
+    '/api/agents/',
+    '/api/agents?x=1',
+    '/API/Agents',
+    '/api/skills/my%20skill',
+    '/api/x/%C3%A9t%C3%A9',
+  ])('%s is canonical', (p) => {
     expect(isCanonicalPath(p)).toBe(true);
   });
 
@@ -78,6 +86,11 @@ describe('normalizePath / isCanonicalPath', () => {
     '/api%00/agents',
     '/api/./x',
     '/api/%zz',
+    '/api/a%2Fb',
+    '/api%5cwebui',
+    '/api/x/%2E',
+    '/api/x/..',
+    '/api/a%23b',
   ])('%s is not canonical', (p) => {
     expect(isCanonicalPath(p)).toBe(false);
   });

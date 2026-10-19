@@ -50,8 +50,20 @@ export function normalizePath(rawPath: string): string | null {
   return '/' + segments.join('/') + (trailingSlash ? '/' : '');
 }
 
-/** True when the raw path (minus query/fragment) is already its own normal form; anything else could be read differently downstream. */
-export const isCanonicalPath = (rawPath: string): boolean => stripQuery(rawPath) === normalizePath(rawPath);
+// Percent-encoded / \ . % ? # NUL: the characters a downstream hop could decode differently.
+const RISKY_ENCODING = /%(2f|5c|2e|25|3f|23|00)/i;
+
+/**
+ * False when the raw path (minus query/fragment) could be read differently downstream: a `.`/`..`
+ * segment, `//`, `\`, a percent-encoded `/ \ . % ? # NUL`, or undecodable. Ordinary encodings
+ * (`%20`, `%C3%A9`) and a trailing slash are canonical.
+ */
+export function isCanonicalPath(rawPath: string): boolean {
+  const pathOnly = stripQuery(rawPath);
+  if (normalizePath(rawPath) === null) return false;
+  if (pathOnly.includes('//') || pathOnly.includes('\\') || RISKY_ENCODING.test(pathOnly)) return false;
+  return !pathOnly.split('/').some((segment) => segment === '.' || segment === '..');
+}
 
 const isUnder = (path: string, prefix: string): boolean => path === prefix || path.startsWith(prefix + '/');
 
