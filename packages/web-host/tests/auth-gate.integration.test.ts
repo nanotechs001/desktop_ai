@@ -4,7 +4,7 @@
  * echoes everything else with the headers it saw, and echoes raw bytes after a WebSocket upgrade.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import path from 'node:path';
@@ -35,12 +35,14 @@ async function startFakeBackend(): Promise<FakeBackend> {
   const server = http.createServer((req, res) => {
     if (req.url === '/api/auth/user') {
       authCalls += 1;
-      const ok = !revoked && (req.headers.cookie ?? '').includes(GOOD);
-      res.writeHead(forced ?? (ok ? 200 : 401)).end();
+      const cookie = req.headers.cookie ?? '';
+      // Like the live aioncore: a revoked session is 401, a garbage cookie or token is 400.
+      const status = cookie.includes(GOOD) ? (revoked ? 401 : 200) : 400;
+      res.writeHead(forced ?? status).end();
       return;
     }
     seen.push({ method: req.method ?? '', url: req.url ?? '', headers: req.headers });
-    if (req.method === 'POST' && req.url === '/logout') revoked = true;
+    if (req.method === 'POST' && req.url?.split('?')[0] === '/logout') revoked = true; // routes ignore the query
     req.resume();
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ url: req.url, headers: req.headers }));
@@ -165,6 +167,12 @@ describe('WebUI listener auth gate', () => {
     expect(backend.seen[0].headers.cookie).toBe(GOOD);
   });
 
+  it('a garbage cookie that aioncore answers with 400 is 401, not 503', async () => {
+    const r = await request(handle.port, 'GET', '/api/agents', { cookie: 'aionui-session=garbage' });
+    expect(r.status).toBe(401);
+    expect(backend.authCalls).toBe(1);
+  });
+
   it('a bad cookie is 401', async () => {
     const r = await request(handle.port, 'GET', '/api/agents', { cookie: 'aionui-session=bad' });
     expect(r.status).toBe(401);
@@ -217,6 +225,51 @@ describe('WebUI listener auth gate', () => {
     expect((await request(handle.port, 'GET', '/api/agents', { cookie: GOOD })).status).toBe(200);
     expect((await request(handle.port, 'POST', '/logout', { cookie: GOOD })).status).toBe(200);
     expect((await request(handle.port, 'GET', '/api/agents', { cookie: GOOD })).status).toBe(401);
+  });
+
+  it('POST /logout with a query string still drops the cached session', async () => {
+    expect((await request(handle.port, 'GET', '/api/agents', { cookie: GOOD })).status).toBe(200);
+    expect((await request(handle.port, 'POST', '/logout?next=%2F', { cookie: GOOD })).status).toBe(200);
+    expect(backend.seen.map((s) => s.url)).toContain('/logout?next=%2F');
+    expect((await request(handle.port, 'GET', '/api/agents', { cookie: GOOD })).status).toBe(401);
+  });
+
+  it('logout drops the session even when other cookies differ', async () => {
+    const withTheme = { cookie: `theme=dark; ${GOOD}` };
+    expect((await request(handle.port, 'GET', '/api/agents', withTheme)).status).toBe(200);
+    expect((await request(handle.port, 'POST', '/logout', { cookie: GOOD })).status).toBe(200);
+    expect((await request(handle.port, 'GET', '/api/agents', withTheme)).status).toBe(401);
+  });
+
+  describe('strict request line on the raw upgrade path', () => {
+    const tail = `Host: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nCookie: ${GOOD}\r\n\r\n`;
+    const cases: Array<[string, string]> = [
+      ['bare-LF request line hiding a spoofed header', `GET /ws HTTP/1.1\nX-Forwarded-For: 6.6.6.6\r\n${tail}`],
+      [
+        'bare-LF request line hiding a pipelined request',
+        `GET /ws HTTP/1.1\nPOST /api/webui/reset-password HTTP/1.1\r\n${tail}`,
+      ],
+      ['tab separator', `GET\t/ws HTTP/1.1\r\n${tail}`],
+      ['double space', `GET  /ws HTTP/1.1\r\n${tail}`],
+      ['HTTP/1.0', `GET /ws HTTP/1.0\r\n${tail}`],
+      ['lowercase method', `get /ws HTTP/1.1\r\n${tail}`],
+      ['bare LF inside the headers', `GET /api/stt/stream HTTP/1.1\r\nHost: x\nX-Forwarded-For: 6.6.6.6\r\n${tail}`],
+      ['bare CR inside the headers', `GET /ws HTTP/1.1\r\nHost: x\rX-Evil: 1\r\n${tail}`],
+    ];
+    for (const [name, raw] of cases) {
+      it(`refuses ${name} with 400, and the backend gets zero bytes`, async () => {
+        const r = await rawExchange(handle.port, [raw]);
+        expect(r.text).toMatch(/^HTTP\/1\.1 400/);
+        expect(r.closed).toBe(true);
+        expect(backend.bytes()).toBe(0);
+      });
+    }
+
+    it('forwards a request line rebuilt from its parsed parts', async () => {
+      const r = await rawExchange(handle.port, [`GET /ws?x=1 HTTP/1.1\r\n${tail}`], { after101: 'ok' });
+      expect(r.text).toMatch(/^HTTP\/1\.1 101/);
+      expect(backend.seen[0].url).toBe('/ws?x=1');
+    });
   });
 
   for (const route of ['/ws', '/api/stt/stream']) {
@@ -299,5 +352,75 @@ describe('WebUI listener auth gate', () => {
     ]);
     expect(r.text).toMatch(/^HTTP\/1\.1 200/);
     expect(backend.seen.map((s) => s.url)).toEqual(['/ws']);
+  });
+});
+
+describe('WebUI listener timeouts', () => {
+  let backend: FakeBackend;
+  let handle: StaticServerHandle;
+
+  beforeEach(async () => {
+    backend = await startFakeBackend();
+    handle = await startStaticServer({
+      staticDir: STATIC_DIR,
+      backendPort: backend.port,
+      port: 0,
+      timeouts: { headerMs: 200, refuseLingerMs: 200 },
+    });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    await backend.close();
+  });
+
+  it('closes a connection that never sends anything', async () => {
+    const r = await rawExchange(handle.port, []);
+    expect(r).toEqual({ text: '', closed: true });
+  });
+
+  it('closes an upgrade whose header block never ends, without reaching the backend', async () => {
+    const r = await rawExchange(handle.port, [`GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nCookie: ${GOOD}\r\n`]);
+    expect(r).toEqual({ text: '', closed: true });
+    expect(backend.bytes()).toBe(0);
+  });
+
+  it('closes a refused socket after the linger timeout even if the client keeps it half-open', async () => {
+    const sock = net.connect({ host: '127.0.0.1', port: handle.port, allowHalfOpen: true });
+    sock.on('error', () => {});
+    const got = await new Promise<string>((resolve) => {
+      sock.on('connect', () => sock.write(upgrade('/ws')));
+      sock.once('data', (d: Buffer) => resolve(d.toString('latin1'))); // read the 401, never end our side
+    });
+    expect(got).toMatch(/^HTTP\/1\.1 401/);
+    // The listener only finishes stopping once every connection is gone, so this shows the server dropped it.
+    const outcome = await Promise.race([
+      handle.stop().then(() => 'stopped'),
+      new Promise((r) => setTimeout(() => r('still open'), 1000)),
+    ]);
+    sock.destroy();
+    expect(outcome).toBe('stopped');
+  });
+
+  it('does not time out a piped upgrade', async () => {
+    const r = await rawExchange(handle.port, [upgrade('/ws', `Cookie: ${GOOD}\r\n`)], { timeoutMs: 600 });
+    expect(r.text).toMatch(/^HTTP\/1\.1 101/);
+    expect(r.closed).toBe(false);
+  });
+});
+
+describe('WebUI listener peer address', () => {
+  it('refuses a connection whose remote address is unknown', async () => {
+    const createServer = vi.spyOn(net, 'createServer');
+    const backend = await startFakeBackend();
+    const handle = await startStaticServer({ staticDir: STATIC_DIR, backendPort: backend.port, port: 0 });
+    const onConnection = createServer.mock.calls[0][0] as unknown as (socket: net.Socket) => void;
+    createServer.mockRestore();
+    const fake = { remoteAddress: undefined, destroy: vi.fn(), on: vi.fn(), setTimeout: vi.fn() };
+    onConnection(fake as unknown as net.Socket);
+    expect(fake.destroy).toHaveBeenCalled();
+    expect(fake.on).not.toHaveBeenCalledWith('data', expect.anything());
+    await handle.stop();
+    await backend.close();
   });
 });

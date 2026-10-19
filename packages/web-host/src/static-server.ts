@@ -24,6 +24,7 @@ import {
   forwardingHeaders,
   GATE_LIMITS,
   isCanonicalPath,
+  normalizePath,
   type SessionValidator,
 } from './auth-gate/index.js';
 
@@ -34,6 +35,8 @@ export type StaticServerOptions = {
   allowRemote?: boolean;
   /** True while the Cloudflare tunnel runs; only then is a loopback peer's Cf-Connecting-Ip trusted. */
   isTunnelActive?: () => boolean;
+  /** Raw-listener timeouts; defaults suit production, tests shorten them. */
+  timeouts?: { headerMs?: number; refuseLingerMs?: number };
 };
 
 export type StaticServerHandle = {
@@ -46,6 +49,10 @@ export type StaticServerHandle = {
 };
 
 const DEFAULT_PORT = 25808;
+// A raw connection must be routed (piped, handed to HTTP, or refused) this long after accept.
+const HEADER_TIMEOUT_MS = 10_000;
+// A refused connection is destroyed this long after its status was sent.
+const REFUSE_LINGER_MS = 2_000;
 
 // Ranges that are non-internal IPv4 yet never a reachable LAN address, so we
 // must never advertise them as the WebUI access URL even when they are the only
@@ -241,43 +248,56 @@ const REFUSAL_REASONS: Record<number, string> = {
 };
 
 /** Answer a raw connection with a bodiless status and close it; later client bytes are discarded. */
-function refuseRaw(client: Socket, status: number): void {
+function refuseRaw(client: Socket, status: number, lingerMs: number): void {
   client.resume();
   client.end(`HTTP/1.1 ${status} ${REFUSAL_REASONS[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  setTimeout(() => client.destroy(), lingerMs).unref();
 }
 
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
-/** Parse a raw header block (no trailing blank line). Null on anything a downstream parser could read differently. */
-function parseHead(text: string): { requestLine: string; headers: Record<string, string[]> } | null {
+// Anything a lenient parser could read as a request line for an upgrade route.
+const UPGRADE_ROUTE_LIKE = /^\S+\s+\/(?:ws|api\/stt\/stream)(?:[?\s]|$)/i;
+// The only upgrade request line forwarded; any other upgrade-like line is refused.
+const UPGRADE_REQUEST_LINE = /^GET (\/ws|\/api\/stt\/stream)(\?[\x21-\x7e]*)? HTTP\/1\.1$/;
+
+/**
+ * Decide routing from the first line of an incoming connection:
+ *  - `'upgrade'` → exactly `GET /ws[?q] HTTP/1.1\r\n` or `GET /api/stt/stream[?q] HTTP/1.1\r\n`; the
+ *    auth gate then waits for the full header block and splices to the backend
+ *  - `'refuse'`  → looks like an upgrade route but is not that exact form (bare LF, tab, HTTP/1.0, ...)
+ *  - `'http'`    → anything else, handed to the internal HTTP server (which parses and rebuilds it)
+ *  - `null`      → need more bytes (no LF yet)
+ *
+ * `Upgrade: websocket` is not required: a request the backend does not upgrade
+ * gets its response and the connection is closed.
+ */
+function peekWsRoute(buf: Buffer): 'upgrade' | 'refuse' | 'http' | null {
+  const newlineIdx = buf.indexOf(0x0a); // \n
+  if (newlineIdx < 0) return null;
+  const line = buf.subarray(0, newlineIdx).toString('latin1');
+  if (!UPGRADE_ROUTE_LIKE.test(line)) return 'http';
+  return line.endsWith('\r') && UPGRADE_REQUEST_LINE.test(line.slice(0, -1)) ? 'upgrade' : 'refuse';
+}
+
+/**
+ * Parse a raw upgrade header block (no trailing blank line). Null on anything a downstream
+ * parser could read differently: a non-exact request line, a CR or LF outside a CRLF pair,
+ * NUL, obs-fold or a malformed header name.
+ */
+function parseHead(text: string): { target: string; headers: Record<string, string[]> } | null {
+  if (['\r', '\n', '\0'].some((c) => text.replaceAll('\r\n', '').includes(c))) return null;
   const [requestLine, ...fields] = text.split('\r\n');
+  const match = UPGRADE_REQUEST_LINE.exec(requestLine);
+  if (!match) return null;
   const headers: Record<string, string[]> = {};
   for (const line of fields) {
     const colon = line.indexOf(':');
     const name = line.slice(0, colon);
-    // Rejects obs-fold (leading whitespace), bare CR/LF and NUL.
-    if (colon <= 0 || !HEADER_NAME.test(name) || ['\r', '\n', '\0'].some((c) => line.includes(c))) return null;
+    if (colon <= 0 || !HEADER_NAME.test(name)) return null; // also rejects obs-fold (leading whitespace)
     (headers[name.toLowerCase()] ??= []).push(line.slice(colon + 1).trim());
   }
-  return { requestLine, headers };
-}
-
-/**
- * Decide routing from the first chunk of an incoming HTTP connection:
- *  - `true`  → `GET /ws[...] HTTP/1.x` or `GET /api/stt/stream[...] HTTP/1.x` (WebSocket/stream upgrades), splice to backend
- *  - `false` → any other HTTP method / path, hand to internal HTTP server
- *  - `null`  → need more bytes (no CRLF yet)
- *
- * Routing needs only the request-line. Upgrade routes then wait for the full
- * header block so the auth gate can check the session before any byte reaches
- * the backend; `Upgrade: websocket` is not required here (a request the backend
- * does not upgrade gets its response and the connection is closed).
- */
-function peekWsRoute(buf: Buffer): boolean | null {
-  const newlineIdx = buf.indexOf(0x0a); // \n
-  if (newlineIdx < 0) return null;
-  const firstLine = buf.slice(0, newlineIdx).toString('ascii');
-  return /^GET\s+\/(?:ws|api\/stt\/stream)(?:\?[^\s]*)?\s+HTTP\/1\.[01]\r?$/.test(firstLine);
+  return { target: match[1] + (match[2] ?? ''), headers };
 }
 
 export async function startStaticServer(opts: StaticServerOptions): Promise<StaticServerHandle> {
@@ -288,7 +308,9 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const isTunnelActive = opts.isTunnelActive ?? (() => false);
   const validate = createSessionValidator(fetchAuthUser(opts.backendPort));
   // Internal-server connections are local splices; map each one's local port back to the real client.
-  const peers = new Map<number, string | undefined>();
+  const peers = new Map<number, string>();
+  const headerMs = opts.timeouts?.headerMs ?? HEADER_TIMEOUT_MS;
+  const lingerMs = opts.timeouts?.refuseLingerMs ?? REFUSE_LINGER_MS;
 
   const proxyThroughGate = async (req: IncomingMessage, res: ServerResponse, url: string): Promise<void> => {
     const method = req.method ?? '';
@@ -297,7 +319,9 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       replyError(res, 404, 'NOT_FOUND');
       return;
     }
-    const peer = peers.get(req.socket.remotePort ?? -1) ?? req.socket.remoteAddress;
+    // A request not spliced by our listener (a local process on the internal port) keeps its own address.
+    const remotePort = req.socket.remotePort;
+    const peer = remotePort !== undefined && peers.has(remotePort) ? peers.get(remotePort) : req.socket.remoteAddress;
     const headers = forwardingHeaders(peer, req.headers, isTunnelActive());
     // Validate exactly the credentials aioncore will receive (a Connection-named cookie is gone from both).
     const creds = credentialsOf(headers);
@@ -309,7 +333,9 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       }
     }
     forwardToBackend(req, res, opts.backendPort, headers, (status) => {
-      if (method === 'POST' && url === '/logout' && status >= 200 && status < 300) validate.invalidate(creds);
+      if (method === 'POST' && normalizePath(url) === '/logout' && status >= 200 && status < 300) {
+        validate.invalidate(creds);
+      }
     });
   };
 
@@ -338,7 +364,13 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       // /api/* — reverse proxy to backend (includes /api/auth/*).
       // /login and /logout are aionui-auth's top-level auth endpoints: proxy them too
       // so WebUI browser clients reach the backend without a path-rewrite.
-      if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || req.url === '/login' || req.url === '/logout') {
+      const pathOnly = req.url.split(/[?#]/, 1)[0];
+      if (
+        req.url.startsWith('/api/') ||
+        req.url.startsWith('/api?') ||
+        pathOnly === '/login' ||
+        pathOnly === '/logout'
+      ) {
         await proxyThroughGate(req, res, req.url);
         return;
       }
@@ -377,29 +409,46 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   // on http.Server's upgrade event.
   // /ws and /api/stt/stream both need a session (classifyRequest gives 'auth'); the
   // peek regex only admits those exact canonical paths, so no R2 check is needed here.
-  const gateUpgrade = async (client: Socket, peeked: Buffer, headEnd: number, peer?: string): Promise<void> => {
+  const gateUpgrade = async (
+    client: Socket,
+    peeked: Buffer,
+    headEnd: number,
+    peer: string,
+    settle: () => void
+  ): Promise<void> => {
     client.on('error', () => client.destroy());
     const head = parseHead(peeked.subarray(0, headEnd).toString('latin1'));
     if (!head) {
-      refuseRaw(client, 400);
+      settle();
+      refuseRaw(client, 400, lingerMs);
       return;
     }
     const headers = forwardingHeaders(peer, head.headers, isTunnelActive());
     const verdict = await validate(credentialsOf(headers));
     if (client.destroyed) return;
+    settle();
     if (verdict !== 'valid') {
-      refuseRaw(client, verdict === 'invalid' ? 401 : 503);
+      refuseRaw(client, verdict === 'invalid' ? 401 : 503, lingerMs);
       return;
     }
+    // Rebuilt from parsed parts: nothing the gate did not check reaches the backend.
     const fields = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
-    const rewritten = Buffer.from(`${head.requestLine}\r\n${fields.join('')}\r\n`, 'latin1');
+    const rewritten = Buffer.from(`GET ${head.target} HTTP/1.1\r\n${fields.join('')}\r\n`, 'latin1');
     spliceToTcpEndpoint(client, opts.backendPort, rewritten, peeked.subarray(headEnd + 4));
   };
 
   const tcp_server = net.createServer((client: Socket) => {
     const peer = client.remoteAddress;
+    if (!peer) {
+      // Without a peer we cannot set a trustworthy X-Forwarded-For.
+      client.destroy();
+      return;
+    }
+    // Header-read deadline from accept until the connection is piped, handed to HTTP, or refused.
+    const deadline = setTimeout(() => client.destroy(), headerMs).unref();
+    const settle = (): void => clearTimeout(deadline);
     let peeked = Buffer.alloc(0);
-    let wsRoute: boolean | null = null;
+    let wsRoute: 'upgrade' | 'refuse' | 'http' | null = null;
     let settled = false;
     const cleanup = (): void => {
       if (settled) return;
@@ -410,11 +459,18 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     };
     const onData = (chunk: Buffer): void => {
       peeked = Buffer.concat([peeked, chunk]);
-      if (wsRoute !== true) {
+      if (wsRoute !== 'upgrade') {
         wsRoute = peekWsRoute(peeked);
         if (wsRoute === null && peeked.length < PEEK_LIMIT_BYTES) return;
-        if (wsRoute !== true) {
+        if (wsRoute === 'refuse') {
           cleanup();
+          settle();
+          refuseRaw(client, 400, lingerMs);
+          return;
+        }
+        if (wsRoute !== 'upgrade') {
+          cleanup();
+          settle();
           const upstream = spliceToTcpEndpoint(client, internalPort, peeked);
           upstream.once('connect', () => {
             const localPort = upstream.localPort;
@@ -431,10 +487,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       cleanup();
       client.pause();
       if (headEnd < 0 || headEnd + 4 > GATE_LIMITS.headerMaxBytes) {
-        refuseRaw(client, 431);
+        settle();
+        refuseRaw(client, 431, lingerMs);
         return;
       }
-      void gateUpgrade(client, peeked, headEnd, peer);
+      void gateUpgrade(client, peeked, headEnd, peer, settle);
     };
     const onEarlyError = (): void => {
       cleanup();
@@ -448,6 +505,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     client.on('data', onData);
     client.on('error', onEarlyError);
     client.on('end', onEarlyEnd);
+    client.on('close', settle);
   });
 
   await new Promise<void>((resolve, reject) => {

@@ -79,6 +79,20 @@ export function classifyRequest(method: string, rawPath: string): GateDecision {
 
 type SessionHeaders = { cookie?: string; authorization?: string };
 
+const SESSION_COOKIE = 'aionui-session';
+
+/** Mirrors aioncore's `extract_cookie_value`: the first non-empty `aionui-session` value wins. */
+function sessionCookieValue(cookie: string | undefined): string {
+  for (const part of (cookie ?? '').split(';')) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf('=');
+    if (eq < 0 || trimmed.slice(0, eq).trim() !== SESSION_COOKIE) continue;
+    const value = trimmed.slice(eq + 1).trim();
+    if (value) return value;
+  }
+  return '';
+}
+
 type Verdict = 'valid' | 'invalid' | 'unavailable';
 
 export type SessionValidator = ((headers: SessionHeaders) => Promise<Verdict>) & {
@@ -96,23 +110,26 @@ export function createSessionValidator(
   const validUntil = new Map<string, number>(); // insertion order = LRU order
   const inFlight = new Map<string, Promise<Verdict>>();
 
+  // Keyed on what aioncore authenticates by, so neighbouring cookies share one entry and logout drops it.
   const keyOf = (h: SessionHeaders): string =>
     createHash('sha256')
-      .update(`${h.cookie ?? ''}\n${h.authorization ?? ''}`)
+      .update(`${sessionCookieValue(h.cookie)}\n${h.authorization ?? ''}`)
       .digest('hex');
+  const hasCredential = (h: SessionHeaders): boolean => sessionCookieValue(h.cookie) !== '' || !!h.authorization;
 
   const check = async (headers: SessionHeaders): Promise<Verdict> => {
     try {
       const status = await fetchUser(headers);
       if (status >= 200 && status < 300) return 'valid';
-      return status === 401 || status === 403 ? 'invalid' : 'unavailable';
+      // aioncore answers a garbage cookie or token with 400, a missing or revoked one with 401.
+      return status === 400 || status === 401 || status === 403 ? 'invalid' : 'unavailable';
     } catch {
       return 'unavailable';
     }
   };
 
   const validate = async (headers: SessionHeaders): Promise<Verdict> => {
-    if (!headers.cookie && !headers.authorization) return 'invalid';
+    if (!hasCredential(headers)) return 'invalid';
     const key = keyOf(headers);
 
     const expiry = validUntil.get(key);
@@ -143,7 +160,7 @@ export function createSessionValidator(
 
   return Object.assign(validate, {
     invalidate: (headers: SessionHeaders) => {
-      if (!headers.cookie && !headers.authorization) return;
+      if (!hasCredential(headers)) return;
       const key = keyOf(headers);
       validUntil.delete(key);
       inFlight.delete(key);

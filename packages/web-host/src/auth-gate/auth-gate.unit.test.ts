@@ -111,6 +111,11 @@ describe('createSessionValidator', () => {
     expect(fetchUser).toHaveBeenCalledTimes(2);
   });
 
+  it('treats 400 as invalid (aioncore answers a garbage cookie or token with 400)', async () => {
+    const validate = createSessionValidator(vi.fn().mockResolvedValue(400));
+    expect(await validate(creds)).toBe('invalid');
+  });
+
   it('treats 401/403 as invalid and does not cache', async () => {
     const fetchUser = vi.fn().mockResolvedValue(401);
     const validate = createSessionValidator(fetchUser);
@@ -125,9 +130,11 @@ describe('createSessionValidator', () => {
     const fetchUser = vi.fn().mockResolvedValue(500);
     const validate = createSessionValidator(fetchUser);
     expect(await validate(creds)).toBe('unavailable');
+    fetchUser.mockResolvedValue(429);
+    expect(await validate(creds)).toBe('unavailable');
     fetchUser.mockRejectedValue(new Error('ECONNREFUSED'));
     expect(await validate(creds)).toBe('unavailable');
-    expect(fetchUser).toHaveBeenCalledTimes(2);
+    expect(fetchUser).toHaveBeenCalledTimes(3);
   });
 
   it('treats empty credentials as invalid without fetching', async () => {
@@ -141,22 +148,42 @@ describe('createSessionValidator', () => {
   it('keys the cache on both cookie and authorization', async () => {
     const fetchUser = vi.fn().mockResolvedValue(200);
     const validate = createSessionValidator(fetchUser);
-    await validate({ cookie: 'a' });
-    await validate({ cookie: 'a', authorization: 'Bearer x' });
+    await validate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'aionui-session=a', authorization: 'Bearer x' });
     expect(fetchUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('keys the cache on the aionui-session value, ignoring neighbouring cookies', async () => {
+    const fetchUser = vi.fn().mockResolvedValue(200);
+    const validate = createSessionValidator(fetchUser);
+    await validate({ cookie: 'aionui-session=a; theme=dark' });
+    await validate({ cookie: 'theme=light; aionui-session=a' });
+    await validate({ cookie: 'aionui-session=; aionui-session=a' }); // aioncore takes the first non-empty value
+    expect(fetchUser).toHaveBeenCalledTimes(1);
+    validate.invalidate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'x=1; aionui-session=a' });
+    expect(fetchUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats a cookie without an aionui-session value (and no authorization) as invalid without fetching', async () => {
+    const fetchUser = vi.fn().mockResolvedValue(200);
+    const validate = createSessionValidator(fetchUser);
+    expect(await validate({ cookie: 'theme=dark' })).toBe('invalid');
+    expect(await validate({ cookie: 'aionui-session=' })).toBe('invalid');
+    expect(fetchUser).not.toHaveBeenCalled();
   });
 
   it('evicts the least recently used entry past max', async () => {
     const fetchUser = vi.fn().mockResolvedValue(200);
     const validate = createSessionValidator(fetchUser, { max: 2 });
-    await validate({ cookie: 'a' });
-    await validate({ cookie: 'b' });
-    await validate({ cookie: 'a' }); // hit: a becomes most recent
-    await validate({ cookie: 'c' }); // evicts b
+    await validate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'aionui-session=b' });
+    await validate({ cookie: 'aionui-session=a' }); // hit: a becomes most recent
+    await validate({ cookie: 'aionui-session=c' }); // evicts b
     expect(fetchUser).toHaveBeenCalledTimes(3);
-    await validate({ cookie: 'a' });
+    await validate({ cookie: 'aionui-session=a' });
     expect(fetchUser).toHaveBeenCalledTimes(3);
-    await validate({ cookie: 'b' });
+    await validate({ cookie: 'aionui-session=b' });
     expect(fetchUser).toHaveBeenCalledTimes(4);
   });
 
@@ -182,12 +209,12 @@ describe('createSessionValidator', () => {
   it('invalidate drops one cached session', async () => {
     const fetchUser = vi.fn().mockResolvedValue(200);
     const validate = createSessionValidator(fetchUser);
-    await validate({ cookie: 'a' });
-    await validate({ cookie: 'b' });
-    validate.invalidate({ cookie: 'a' });
+    await validate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'aionui-session=b' });
+    validate.invalidate({ cookie: 'aionui-session=a' });
     validate.invalidate({});
-    await validate({ cookie: 'a' });
-    await validate({ cookie: 'b' });
+    await validate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'aionui-session=b' });
     expect(fetchUser).toHaveBeenCalledTimes(3);
   });
 
@@ -206,11 +233,11 @@ describe('createSessionValidator', () => {
   it('clear drops every cached session', async () => {
     const fetchUser = vi.fn().mockResolvedValue(200);
     const validate = createSessionValidator(fetchUser);
-    await validate({ cookie: 'a' });
-    await validate({ cookie: 'b' });
+    await validate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'aionui-session=b' });
     validate.clear();
-    await validate({ cookie: 'a' });
-    await validate({ cookie: 'b' });
+    await validate({ cookie: 'aionui-session=a' });
+    await validate({ cookie: 'aionui-session=b' });
     expect(fetchUser).toHaveBeenCalledTimes(4);
   });
 
