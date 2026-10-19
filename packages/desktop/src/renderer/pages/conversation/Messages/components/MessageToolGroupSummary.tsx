@@ -10,6 +10,7 @@ import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/co
 import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
 import ArtifactCard from '@/renderer/pages/conversation/Messages/acp/ArtifactCard';
 import NoteSavedChip from '@/renderer/pages/conversation/Messages/acp/NoteSavedChip';
+import SkillProposalCard from '@/renderer/pages/conversation/Messages/acp/SkillProposalCard';
 import LocalImageView from '@/renderer/components/media/LocalImageView';
 import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import './MessageToolGroupSummary.css';
@@ -155,6 +156,8 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   const artifactTools = tools.filter((tool) => tool.artifact && tool.status === 'completed');
   // Likewise a saved note: the user sees what the agent will remember.
   const noteTools = tools.filter((tool) => tool.note && tool.status === 'completed');
+  // A proposed skill waits for the user's review, so its card stays visible too.
+  const skillTools = tools.filter((tool) => tool.skill && tool.status === 'completed');
 
   return (
     <div className='tool-group-summary'>
@@ -175,6 +178,11 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
       {noteTools.map((tool) => (
         <div key={tool.key} className='m-y-8px'>
           <NoteSavedChip {...tool.note} conversationId={messages[0]?.conversation_id} />
+        </div>
+      ))}
+      {skillTools.map((tool) => (
+        <div key={tool.key} className='m-y-8px'>
+          <SkillProposalCard {...tool.skill} conversationId={messages[0]?.conversation_id} />
         </div>
       ))}
       {showMore && (

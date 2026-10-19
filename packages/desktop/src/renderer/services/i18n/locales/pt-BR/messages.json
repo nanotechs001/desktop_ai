@@ -111,6 +111,22 @@
     "fromPage": "De uma página da web · não verificado",
     "open": "Abrir caderno"
   },
+  "skillCard": {
+    "title": "Salvar como habilidade?",
+    "appliesWhen": "Aplica-se quando: {{description}}",
+    "save": "Salvar",
+    "dismiss": "Dispensar",
+    "saved": "Salva como habilidade · ativada para {{bot}}",
+    "savedLibrary": "Salva na sua biblioteca de habilidades; ative-a para um bot nas configurações dele",
+    "enableFailed": "Salva, mas não foi possível ativá-la para este bot; ative-a nas configurações dele",
+    "exists": "Já existe uma habilidade chamada {{name}}",
+    "saveAs": "Salvar como {{name}}",
+    "notSaved": "Não salva",
+    "openSettings": "Abrir configurações do bot",
+    "error": "Não foi possível salvar a habilidade: {{message}}",
+    "errorRateLimited": "você atingiu o limite de habilidades salvas em uma conversa",
+    "errorNoAgent": "esta conversa não tem um bot para receber a habilidade"
+  },
   "fileLinks": {
     "title": "Arquivos",
     "openInPreview": "Abrir na visualização",

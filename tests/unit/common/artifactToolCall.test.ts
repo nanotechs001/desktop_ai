@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseArtifactToolCall, parseNoteToolCall } from '@/common/chat/artifactToolCall';
+import { parseArtifactToolCall, parseNoteToolCall, parseSkillProposalToolCall } from '@/common/chat/artifactToolCall';
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
 const url = `http://127.0.0.1:4300/a/${ID}`;
@@ -89,5 +89,39 @@ describe('parseNoteToolCall', () => {
   it('ignores other tools and servers', () => {
     expect(parseNoteToolCall('mcp__aionui-artifacts__create', saved)).toBeUndefined();
     expect(parseNoteToolCall('mcp__other-notes__add', saved)).toBeUndefined();
+  });
+});
+
+describe('parseSkillProposalToolCall', () => {
+  const draft = {
+    name: 'weekly-report',
+    description: 'Use when the user asks for the weekly report',
+    steps: '1. Open the dashboard\n2. Export the numbers',
+  };
+  const ok = JSON.stringify({ proposed: true, name: 'weekly-report', status: 'shown' });
+
+  it.each(['mcp__aionui-notes__propose_skill', 'aionui-notes.propose_skill', 'aionui-notes - propose_skill (MCP)'])(
+    'reads a %s call',
+    (name) => {
+      expect(parseSkillProposalToolCall(name, draft, ok)).toEqual(draft);
+    }
+  );
+
+  it('reads a bare propose_skill with the notes server field', () => {
+    expect(parseSkillProposalToolCall('propose_skill', draft, ok, 'aionui-notes')).toEqual(draft);
+    expect(parseSkillProposalToolCall('propose_skill', draft, ok, 'other')).toBeUndefined();
+    expect(parseSkillProposalToolCall('propose_skill', draft, ok)).toBeUndefined();
+  });
+
+  it('reads a JSON-string input', () => {
+    expect(parseSkillProposalToolCall('mcp__aionui-notes__propose_skill', JSON.stringify(draft), ok)).toEqual(draft);
+  });
+
+  it('returns undefined for an error result, an invalid draft and other tools', () => {
+    const name = 'mcp__aionui-notes__propose_skill';
+    expect(parseSkillProposalToolCall(name, draft, JSON.stringify({ isError: true }))).toBeUndefined();
+    expect(parseSkillProposalToolCall(name, { ...draft, name: 'Bad Name' }, ok)).toBeUndefined();
+    expect(parseSkillProposalToolCall(name, 'not json', ok)).toBeUndefined();
+    expect(parseSkillProposalToolCall('mcp__aionui-notes__add', draft, ok)).toBeUndefined();
   });
 });

@@ -1,3 +1,4 @@
+import { parseSkillProposal, type SkillProposal } from '@/common/types/agent/skillProposal';
 import { BUILTIN_ARTIFACTS_MCP_NAME, BUILTIN_NOTES_MCP_NAME } from '@/common/config/constants';
 
 /** What the chat card needs from an `aionui-artifacts` create/update call. */
@@ -12,6 +13,9 @@ export type NoteChipData = { text: string; source: 'agent' | 'page' };
 
 // `mcp__aionui-notes__add`, `aionui-notes.add`, `aionui-notes - add (MCP)`.
 const QUALIFIED_NOTE_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_NOTES_MCP_NAME}[\\W_]+add\\b`);
+
+// `mcp__aionui-notes__propose_skill`, `aionui-notes.propose_skill`, `aionui-notes - propose_skill (MCP)`.
+const QUALIFIED_SKILL_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_NOTES_MCP_NAME}[\\W_]+propose_skill\\b`);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,4 +69,20 @@ export const parseNoteToolCall = (
   const source = result?.source;
   if (result?.saved !== true || !text || (source !== 'agent' && source !== 'page')) return undefined;
   return { text, source };
+};
+
+/**
+ * Reads a propose_skill call of the built-in notes MCP: the draft comes from the call input (an object, or a JSON
+ * string). Returns undefined for any other call, for an error result and for a draft that fails validation.
+ */
+export const parseSkillProposalToolCall = (
+  name: string,
+  input: unknown,
+  output: string | undefined,
+  server?: string
+): SkillProposal | undefined => {
+  const isSkillTool =
+    QUALIFIED_SKILL_TOOL_NAME.test(name) || (server === BUILTIN_NOTES_MCP_NAME && name === 'propose_skill');
+  if (!isSkillTool || parseResult(output)?.isError === true) return undefined;
+  return parseSkillProposal(typeof input === 'string' ? parseResult(input) : input);
 };

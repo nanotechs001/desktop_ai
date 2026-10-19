@@ -57,4 +57,30 @@ describe('normalizeToolCall', () => {
 
     expect(result?.output).toBe('[diff] /workspace/file.ts');
   });
+
+  it('attaches skill to a completed propose_skill call', () => {
+    const skill = {
+      name: 'weekly-report',
+      description: 'Use when the user asks for the weekly report',
+      steps: '1. Open the dashboard',
+    };
+    const result = normalizeAcpToolCall({
+      id: 'message-3',
+      conversation_id: 'conversation-1',
+      type: 'acp_tool_call',
+      content: {
+        update: {
+          session_update: 'tool_call',
+          tool_call_id: 'tool-3',
+          status: 'completed',
+          title: 'mcp__aionui-notes__propose_skill',
+          kind: 'other',
+          raw_input: skill,
+          content: [{ type: 'content', content: { type: 'text', text: '{"proposed":true,"name":"weekly-report"}' } }],
+        },
+      },
+    } as unknown as IMessageAcpToolCall);
+
+    expect(result?.skill).toEqual(skill);
+  });
 });

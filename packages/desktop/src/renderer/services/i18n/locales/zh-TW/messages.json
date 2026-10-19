@@ -111,6 +111,22 @@
     "fromPage": "來自網頁 · 未經核實",
     "open": "開啟筆記本"
   },
+  "skillCard": {
+    "title": "儲存為技能？",
+    "appliesWhen": "適用情境：{{description}}",
+    "save": "儲存",
+    "dismiss": "略過",
+    "saved": "已儲存為技能 · 已為 {{bot}} 開啟",
+    "savedLibrary": "已儲存到你的技能庫；請在機器人設定中為它開啟",
+    "enableFailed": "已儲存，但未能為此機器人開啟；請在其設定中開啟",
+    "exists": "名為 {{name}} 的技能已存在",
+    "saveAs": "另存為 {{name}}",
+    "notSaved": "未儲存",
+    "openSettings": "開啟機器人設定",
+    "error": "無法儲存技能：{{message}}",
+    "errorRateLimited": "一次對話可儲存的技能數量已達上限",
+    "errorNoAgent": "此對話沒有可加入技能的機器人"
+  },
   "fileLinks": {
     "title": "檔案",
     "openInPreview": "在預覽中開啟",

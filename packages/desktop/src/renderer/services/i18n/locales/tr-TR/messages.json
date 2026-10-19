@@ -111,6 +111,22 @@
     "fromPage": "Bir web sayfasından · doğrulanmadı",
     "open": "Not defterini aç"
   },
+  "skillCard": {
+    "title": "Beceri olarak kaydedilsin mi?",
+    "appliesWhen": "Şu durumda geçerli: {{description}}",
+    "save": "Kaydet",
+    "dismiss": "Kapat",
+    "saved": "Beceri olarak kaydedildi · {{bot}} için açıldı",
+    "savedLibrary": "Beceri kitaplığınıza kaydedildi; bir bot için ayarlarından açın",
+    "enableFailed": "Kaydedildi, ancak bu bot için açılamadı; ayarlarından açın",
+    "exists": "{{name}} adlı bir beceri zaten var",
+    "saveAs": "{{name}} olarak kaydet",
+    "notSaved": "Kaydedilmedi",
+    "openSettings": "Bot ayarlarını aç",
+    "error": "Beceri kaydedilemedi: {{message}}",
+    "errorRateLimited": "bir sohbetten kaydedilebilecek beceri sınırına ulaşıldı",
+    "errorNoAgent": "bu sohbette beceri eklenecek bir bot yok"
+  },
   "fileLinks": {
     "title": "Dosyalar",
     "openInPreview": "Önizlemede aç",

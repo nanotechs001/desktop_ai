@@ -1,6 +1,13 @@
 import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup } from './chatLib';
 import { getAcpImagePath } from './acpToolCallOutput';
-import { parseArtifactToolCall, parseNoteToolCall, type ArtifactCardData, type NoteChipData } from './artifactToolCall';
+import {
+  parseArtifactToolCall,
+  parseNoteToolCall,
+  parseSkillProposalToolCall,
+  type ArtifactCardData,
+  type NoteChipData,
+} from './artifactToolCall';
+import type { SkillProposal } from '@/common/types/agent/skillProposal';
 
 export type NormalizedToolStatus = 'pending' | 'running' | 'completed' | 'error' | 'canceled';
 
@@ -19,6 +26,8 @@ export interface NormalizedToolCall {
   artifact?: ArtifactCardData;
   /** Set for a finished add call of the notes MCP; the summary renders a "Saved to notebook" chip for it. */
   note?: NoteChipData;
+  /** Set for a finished propose_skill call of the notes MCP; the summary renders a review card for it. */
+  skill?: SkillProposal;
 }
 
 const formatValue = (value: unknown): string => {
@@ -94,6 +103,12 @@ export function normalizeToolGroup(message: IMessageToolGroup): NormalizedToolCa
       ),
       note: parseNoteToolCall(
         name,
+        getResultDisplayText(result_display),
+        type === 'mcp' ? confirmationDetails.server_name : undefined
+      ),
+      skill: parseSkillProposalToolCall(
+        name,
+        input,
         getResultDisplayText(result_display),
         type === 'mcp' ? confirmationDetails.server_name : undefined
       ),
@@ -199,6 +214,7 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
     imagePath: getAcpImagePath(update),
     artifact: parseArtifactToolCall(update.title, rawInput, output),
     note: parseNoteToolCall(update.title, output),
+    skill: parseSkillProposalToolCall(update.title, rawInput, output),
   };
 }
 
@@ -238,6 +254,7 @@ export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall
     output,
     artifact: parseArtifactToolCall(name, hasKeys(input) ? input : args, output),
     note: parseNoteToolCall(name, output),
+    skill: parseSkillProposalToolCall(name, hasKeys(input) ? input : args, output),
   };
 }
 

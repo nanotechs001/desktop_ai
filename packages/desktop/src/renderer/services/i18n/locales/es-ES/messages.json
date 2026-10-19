@@ -111,6 +111,22 @@
     "fromPage": "De una página web · sin verificar",
     "open": "Abrir cuaderno"
   },
+  "skillCard": {
+    "title": "¿Guardar como habilidad?",
+    "appliesWhen": "Se aplica cuando: {{description}}",
+    "save": "Guardar",
+    "dismiss": "Descartar",
+    "saved": "Guardada como habilidad · activada para {{bot}}",
+    "savedLibrary": "Guardada en tu biblioteca de habilidades; actívala para un bot en su configuración",
+    "enableFailed": "Guardada, pero no se pudo activar para este bot; actívala en su configuración",
+    "exists": "Ya existe una habilidad llamada {{name}}",
+    "saveAs": "Guardar como {{name}}",
+    "notSaved": "No guardada",
+    "openSettings": "Abrir configuración del bot",
+    "error": "No se pudo guardar la habilidad: {{message}}",
+    "errorRateLimited": "has alcanzado el límite de habilidades guardadas desde un chat",
+    "errorNoAgent": "este chat no tiene un bot al que añadir la habilidad"
+  },
   "fileLinks": {
     "title": "Archivos",
     "openInPreview": "Abrir en la vista previa",

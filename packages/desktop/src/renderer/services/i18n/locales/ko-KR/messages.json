@@ -111,6 +111,22 @@
     "fromPage": "웹 페이지에서 · 확인되지 않음",
     "open": "노트북 열기"
   },
+  "skillCard": {
+    "title": "스킬로 저장할까요?",
+    "appliesWhen": "적용 시점: {{description}}",
+    "save": "저장",
+    "dismiss": "닫기",
+    "saved": "스킬로 저장됨 · {{bot}}에서 켜짐",
+    "savedLibrary": "스킬 라이브러리에 저장했습니다. 봇 설정에서 켜 주세요",
+    "enableFailed": "저장했지만 이 봇에서 켜지 못했습니다. 봇 설정에서 켜 주세요",
+    "exists": "{{name}} 스킬이 이미 있습니다",
+    "saveAs": "{{name}}(으)로 저장",
+    "notSaved": "저장하지 않음",
+    "openSettings": "봇 설정 열기",
+    "error": "스킬을 저장하지 못했습니다: {{message}}",
+    "errorRateLimited": "한 대화에서 저장할 수 있는 스킬 수 한도에 도달했습니다",
+    "errorNoAgent": "이 대화에는 스킬을 추가할 봇이 없습니다"
+  },
   "fileLinks": {
     "title": "파일",
     "openInPreview": "미리보기에서 열기",

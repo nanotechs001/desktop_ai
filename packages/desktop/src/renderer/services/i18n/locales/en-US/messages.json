@@ -111,6 +111,22 @@
     "fromPage": "From a web page · unverified",
     "open": "Open notebook"
   },
+  "skillCard": {
+    "title": "Save as a skill?",
+    "appliesWhen": "Applies when: {{description}}",
+    "save": "Save",
+    "dismiss": "Dismiss",
+    "saved": "Saved as a skill · turned on for {{bot}}",
+    "savedLibrary": "Saved to your skills library; turn it on for a bot in its settings",
+    "enableFailed": "Saved, but couldn't turn it on for this bot; turn it on in its settings",
+    "exists": "A skill named {{name}} already exists",
+    "saveAs": "Save as {{name}}",
+    "notSaved": "Not saved",
+    "openSettings": "Open bot settings",
+    "error": "Couldn't save the skill: {{message}}",
+    "errorRateLimited": "you've reached the limit of skills saved from one chat",
+    "errorNoAgent": "this chat has no bot to attach the skill to"
+  },
   "fileLinks": {
     "title": "Files",
     "openInPreview": "Open in preview",

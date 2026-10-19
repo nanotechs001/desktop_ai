@@ -111,6 +111,22 @@
     "fromPage": "Von einer Webseite · ungeprüft",
     "open": "Notizbuch öffnen"
   },
+  "skillCard": {
+    "title": "Als Skill speichern?",
+    "appliesWhen": "Gilt, wenn: {{description}}",
+    "save": "Speichern",
+    "dismiss": "Verwerfen",
+    "saved": "Als Skill gespeichert · für {{bot}} aktiviert",
+    "savedLibrary": "In deiner Skill-Bibliothek gespeichert; aktiviere ihn in den Einstellungen eines Bots",
+    "enableFailed": "Gespeichert, aber für diesen Bot konnte er nicht aktiviert werden; aktiviere ihn in dessen Einstellungen",
+    "exists": "Ein Skill namens {{name}} existiert bereits",
+    "saveAs": "Als {{name}} speichern",
+    "notSaved": "Nicht gespeichert",
+    "openSettings": "Bot-Einstellungen öffnen",
+    "error": "Skill konnte nicht gespeichert werden: {{message}}",
+    "errorRateLimited": "das Limit für aus einem Chat gespeicherte Skills ist erreicht",
+    "errorNoAgent": "dieser Chat hat keinen Bot, dem der Skill hinzugefügt werden kann"
+  },
   "fileLinks": {
     "title": "Dateien",
     "openInPreview": "In der Vorschau öffnen",

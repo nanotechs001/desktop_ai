@@ -111,6 +111,22 @@
     "fromPage": "D’une page web · non vérifié",
     "open": "Ouvrir le carnet"
   },
+  "skillCard": {
+    "title": "Enregistrer comme compétence ?",
+    "appliesWhen": "S'applique quand : {{description}}",
+    "save": "Enregistrer",
+    "dismiss": "Ignorer",
+    "saved": "Enregistrée comme compétence · activée pour {{bot}}",
+    "savedLibrary": "Enregistrée dans votre bibliothèque de compétences ; activez-la pour un bot dans ses paramètres",
+    "enableFailed": "Enregistrée, mais impossible de l'activer pour ce bot ; activez-la dans ses paramètres",
+    "exists": "Une compétence nommée {{name}} existe déjà",
+    "saveAs": "Enregistrer sous {{name}}",
+    "notSaved": "Non enregistrée",
+    "openSettings": "Ouvrir les paramètres du bot",
+    "error": "Impossible d'enregistrer la compétence : {{message}}",
+    "errorRateLimited": "vous avez atteint la limite de compétences enregistrées depuis une conversation",
+    "errorNoAgent": "cette conversation n'a pas de bot auquel ajouter la compétence"
+  },
   "fileLinks": {
     "title": "Fichiers",
     "openInPreview": "Ouvrir dans l’aperçu",

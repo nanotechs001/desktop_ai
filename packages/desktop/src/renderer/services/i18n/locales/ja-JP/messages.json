@@ -111,6 +111,22 @@
     "fromPage": "Web ページから · 未確認",
     "open": "ノートブックを開く"
   },
+  "skillCard": {
+    "title": "スキルとして保存しますか？",
+    "appliesWhen": "適用条件：{{description}}",
+    "save": "保存",
+    "dismiss": "閉じる",
+    "saved": "スキルとして保存しました · {{bot}} で有効にしました",
+    "savedLibrary": "スキルライブラリに保存しました。ボットの設定で有効にしてください",
+    "enableFailed": "保存しましたが、このボットで有効にできませんでした。ボットの設定で有効にしてください",
+    "exists": "{{name}} というスキルはすでに存在します",
+    "saveAs": "{{name}} として保存",
+    "notSaved": "保存しませんでした",
+    "openSettings": "ボット設定を開く",
+    "error": "スキルを保存できませんでした：{{message}}",
+    "errorRateLimited": "1つのチャットから保存できるスキルの上限に達しました",
+    "errorNoAgent": "このチャットにはスキルを追加できるボットがありません"
+  },
   "fileLinks": {
     "title": "ファイル",
     "openInPreview": "プレビューで開く",

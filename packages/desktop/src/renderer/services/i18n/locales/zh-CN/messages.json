@@ -111,6 +111,22 @@
     "fromPage": "来自网页 · 未经核实",
     "open": "打开笔记本"
   },
+  "skillCard": {
+    "title": "保存为技能？",
+    "appliesWhen": "适用场景：{{description}}",
+    "save": "保存",
+    "dismiss": "忽略",
+    "saved": "已保存为技能 · 已为 {{bot}} 开启",
+    "savedLibrary": "已保存到你的技能库；请在机器人设置中为它开启",
+    "enableFailed": "已保存，但未能为此机器人开启；请在其设置中开启",
+    "exists": "名为 {{name}} 的技能已存在",
+    "saveAs": "另存为 {{name}}",
+    "notSaved": "未保存",
+    "openSettings": "打开机器人设置",
+    "error": "无法保存技能：{{message}}",
+    "errorRateLimited": "一次对话可保存的技能数量已达上限",
+    "errorNoAgent": "此对话没有可添加技能的机器人"
+  },
   "fileLinks": {
     "title": "文件",
     "openInPreview": "在预览中打开",
