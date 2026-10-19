@@ -130,6 +130,24 @@ describe('WebUI secure link wiring', () => {
     }
   );
 
+  it('writeTunnelEnabled saves in call order, so the last requested value lands', async () => {
+    let stored: unknown;
+    let releaseTrue = () => {};
+    httpRequest.mockImplementation(async (method: string, _url: string, body: Record<string, unknown>) => {
+      if (method !== 'PUT') return {};
+      if (body[KEY] === true) await new Promise<void>((resolve) => (releaseTrue = resolve));
+      stored = body[KEY];
+      return {};
+    });
+    const { writeTunnelEnabled } = await importModule();
+    const saveTrue = writeTunnelEnabled(true);
+    const saveFalse = writeTunnelEnabled(false);
+    await vi.waitFor(() => expect(puts()).toHaveLength(1));
+    releaseTrue();
+    await Promise.all([saveTrue, saveFalse]);
+    expect(stored).toBe(false);
+  });
+
   it('writeTunnelEnabled retries once, then logs instead of throwing', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     httpRequest.mockRejectedValue(new Error('down'));

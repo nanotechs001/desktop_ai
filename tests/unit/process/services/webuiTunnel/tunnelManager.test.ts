@@ -131,6 +131,7 @@ describe('createTunnelManager', () => {
         })
     );
     const first = t.manager.start();
+    await vi.waitFor(() => expect(t.ensureBinary).toHaveBeenCalled());
     await t.manager.stop();
     const second = t.manager.start();
     await vi.waitFor(() => expect(t.manager.status()).toEqual({ state: 'downloading' }));

@@ -71,15 +71,23 @@ const retryOnce = async <T>(run: () => Promise<T>): Promise<T> => {
   }
 };
 
-/** Saves whether the secure link should run (and auto-start at boot). One retry; a second failure is logged. */
-export async function writeTunnelEnabled(enabled: boolean): Promise<void> {
-  try {
-    await retryOnce(() =>
-      httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_TUNNEL_ENABLED_KEY]: enabled })
-    );
-  } catch (error) {
-    console.error('[WebUI] Failed to save tunnelEnabled on backend:', error);
-  }
+let tunnelEnabledSaves: Promise<void> = Promise.resolve();
+
+/**
+ * Saves whether the secure link should run (and auto-start at boot). Saves run one after another, so the last
+ * requested value is the one that lands. One retry; a second failure is logged.
+ */
+export function writeTunnelEnabled(enabled: boolean): Promise<void> {
+  tunnelEnabledSaves = tunnelEnabledSaves.then(async () => {
+    try {
+      await retryOnce(() =>
+        httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_TUNNEL_ENABLED_KEY]: enabled })
+      );
+    } catch (error) {
+      console.error('[WebUI] Failed to save tunnelEnabled on backend:', error);
+    }
+  });
+  return tunnelEnabledSaves;
 }
 
 /**

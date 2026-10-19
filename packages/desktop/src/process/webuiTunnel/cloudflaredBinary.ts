@@ -135,8 +135,13 @@ export async function ensureCloudflared(deps: EnsureCloudflaredDeps): Promise<st
     if (!isWindows) await fs.chmod(staged, 0o755);
     await fs.rename(staged, binPath);
   } finally {
-    await fs.rm(staged, { force: true });
-    if (entry.archive === 'tgz') await fs.rm(extractDir, { force: true, recursive: true });
+    // A failed cleanup is logged, never thrown, so it cannot mask the original error.
+    const cleanup = (target: string) =>
+      fs.rm(target, { force: true, recursive: true }).catch((error: unknown) => {
+        console.warn('[WebUI tunnel] could not remove', target, error);
+      });
+    await cleanup(staged);
+    if (entry.archive === 'tgz') await cleanup(extractDir);
   }
   return binPath;
 }

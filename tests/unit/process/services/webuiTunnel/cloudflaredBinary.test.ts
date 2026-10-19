@@ -125,6 +125,17 @@ describe('ensureCloudflared', () => {
     expect(fs.files.size).toBe(0);
   });
 
+  it('a failing cleanup does not hide the original error', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { fs, deps } = setup('linux-x64', Buffer.from('evil'));
+    fs.rm.mockImplementation(async (p: string) => {
+      if (p.endsWith('.tmp')) throw new Error('EBUSY');
+    });
+    await expect(ensureCloudflared(deps)).rejects.toThrow('cloudflared checksum mismatch');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('verifies and extracts the tgz on darwin', async () => {
     const { fs, extract, deps } = setup('darwin-arm64', TGZ);
     await expect(ensureCloudflared(deps)).resolves.toBe('/data/bin/cloudflared');
