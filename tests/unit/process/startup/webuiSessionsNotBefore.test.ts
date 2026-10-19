@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 }));
 vi.mock('@aionui/web-host', () => ({ startWebHost: (...args: unknown[]) => startWebHost(...args) }));
 vi.mock('@/common/adapter/httpBridge', () => ({ httpRequest: (...args: unknown[]) => httpRequest(...args) }));
+vi.mock('@/common', () => ({ ipcBridge: { webui: { tunnel: { statusChanged: { emit: vi.fn() } } } } }));
 vi.mock('@process/utils/initStorage', () => ({
   getSystemDir: () => ({ logDir: '/l', cacheDir: '/c', workDir: '/w' }),
 }));

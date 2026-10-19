@@ -1703,8 +1703,27 @@ export interface IWebUIStartResult {
   initialPassword?: string;
 }
 
+/** The WebUI secure link (Cloudflare quick tunnel), owned by the main process. */
+export type TunnelStatus =
+  | { state: 'stopped' }
+  | { state: 'downloading' }
+  | { state: 'starting' }
+  | { state: 'running'; url: string }
+  | { state: 'error'; message: string };
+
+/** `webui-off`: the WebUI must be on first; `invalid-args`: start/stop take no payload. */
+export type TunnelCommandResult =
+  | { success: true; status: TunnelStatus }
+  | { success: false; code: 'webui-off' | 'invalid-args' };
+
 export const webui = {
   getStatus: bridge.buildProvider<IWebUIStatus, void>('webui.get-status'),
+  tunnel: {
+    getStatus: bridge.buildProvider<TunnelStatus, void>('webui.tunnel.get-status'),
+    start: bridge.buildProvider<TunnelCommandResult, void>('webui.tunnel.start'),
+    stop: bridge.buildProvider<TunnelCommandResult, void>('webui.tunnel.stop'),
+    statusChanged: bridge.buildEmitter<TunnelStatus>('webui.tunnel.status-changed'),
+  },
   start: bridge.buildProvider<IWebUIStartResult, { port?: number; allowRemote?: boolean }>('webui.start'),
   stop: bridge.buildProvider<void, void>('webui.stop'),
   /** Sign out every other WebUI device (main process owns the running web host). */

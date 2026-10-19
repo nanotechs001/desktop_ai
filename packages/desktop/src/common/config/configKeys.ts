@@ -21,6 +21,8 @@ export type ConfigKeyMap = {
   'webui.desktop.port': number | undefined;
   /** Epoch ms: WebUI sessions issued before it are refused (set when the WebUI password/username changes). */
   'webui.desktop.sessionsNotBefore': number | undefined;
+  /** The WebUI secure link (Cloudflare quick tunnel) is on; it starts at boot when the WebUI does. */
+  'webui.desktop.tunnelEnabled': boolean | undefined;
   'theme.activeId': string;
   'theme.userThemes': Theme[];
   'workspace.pasteConfirm': boolean | undefined;

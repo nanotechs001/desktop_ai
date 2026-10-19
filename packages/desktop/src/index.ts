@@ -62,6 +62,7 @@ import {
   resolveRemoteAccess,
   resolveWebUIPort,
   restoreDesktopWebUIFromPreferences,
+  webuiTunnel,
 } from './process/utils/webuiConfig';
 import {
   createOrUpdateTray,
@@ -1156,6 +1157,11 @@ app.on('activate', () => {
       createWindow();
     }
   }
+});
+
+// The secure link must not outlive the app; the setting is kept so it starts again next launch.
+app.on('before-quit', () => {
+  void webuiTunnel.stop();
 });
 
 installQuitCleanup({

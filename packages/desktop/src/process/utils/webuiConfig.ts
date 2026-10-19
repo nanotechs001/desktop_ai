@@ -5,19 +5,24 @@
  */
 
 import { app } from 'electron';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { networkInterfaces } from 'os';
+import { ipcBridge } from '@/common';
 import { getSystemDir } from './initStorage';
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { startWebHost, type WebHostHandle } from '@aionui/web-host';
 import { getDataPath } from './utils';
+import { cloudflaredPlatformKey, ensureCloudflared, extractTgz } from '@process/webuiTunnel/cloudflaredBinary';
+import { createTunnelManager } from '@process/webuiTunnel/tunnelManager';
 
 const WEBUI_CONFIG_FILE = 'webui.config.json';
 const DESKTOP_WEBUI_ENABLED_KEY = 'webui.desktop.enabled';
 const DESKTOP_WEBUI_ALLOW_REMOTE_KEY = 'webui.desktop.allowRemote';
 const DESKTOP_WEBUI_PORT_KEY = 'webui.desktop.port';
 const DESKTOP_WEBUI_SESSIONS_NOT_BEFORE_KEY = 'webui.desktop.sessionsNotBefore';
+const DESKTOP_WEBUI_TUNNEL_ENABLED_KEY = 'webui.desktop.tunnelEnabled';
 
 /**
  * Read WebUI preferences from the backend's /api/settings/client store.
@@ -34,6 +39,7 @@ async function readWebUIDesktopPreferences(): Promise<{
   enabled: boolean;
   allowRemote: boolean;
   port: number | undefined;
+  tunnelEnabled: boolean;
 }> {
   try {
     const settings = await httpRequest<Record<string, unknown>>('GET', '/api/settings/client');
@@ -41,10 +47,11 @@ async function readWebUIDesktopPreferences(): Promise<{
     const allowRemote = settings?.[DESKTOP_WEBUI_ALLOW_REMOTE_KEY] === true;
     const rawPort = settings?.[DESKTOP_WEBUI_PORT_KEY];
     const port = typeof rawPort === 'number' && rawPort > 0 ? rawPort : undefined;
-    return { enabled, allowRemote, port };
+    const tunnelEnabled = settings?.[DESKTOP_WEBUI_TUNNEL_ENABLED_KEY] === true;
+    return { enabled, allowRemote, port, tunnelEnabled };
   } catch (error) {
     console.error('[WebUI] Failed to read preferences from backend:', error);
-    return { enabled: false, allowRemote: false, port: undefined };
+    return { enabled: false, allowRemote: false, port: undefined, tunnelEnabled: false };
   }
 }
 
@@ -63,6 +70,17 @@ const retryOnce = async <T>(run: () => Promise<T>): Promise<T> => {
     return run();
   }
 };
+
+/** Saves whether the secure link should run (and auto-start at boot). One retry; a second failure is logged. */
+export async function writeTunnelEnabled(enabled: boolean): Promise<void> {
+  try {
+    await retryOnce(() =>
+      httpRequest<void>('PUT', '/api/settings/client', { [DESKTOP_WEBUI_TUNNEL_ENABLED_KEY]: enabled })
+    );
+  } catch (error) {
+    console.error('[WebUI] Failed to save tunnelEnabled on backend:', error);
+  }
+}
 
 /**
  * Epoch ms before which WebUI sessions are refused; null when never set or unreadable (logged).
@@ -204,6 +222,21 @@ let currentHandle: (WebHostHandle & { allowRemote: boolean }) | null = null;
 // so Settings can display the generated password exactly once. Cleared on stop.
 let currentInitialPassword: string | undefined;
 
+/** The secure link (Cloudflare quick tunnel) to the running WebUI; cloudflared lives in `<data dir>/bin`. */
+export const webuiTunnel = createTunnelManager({
+  ensureBinary: () =>
+    ensureCloudflared({
+      binDir: path.join(getDataPath(), 'bin'),
+      platformKey: cloudflaredPlatformKey(),
+      fetch,
+      fs: fs.promises,
+      extractTgz,
+    }),
+  spawn: (cmd, args) => spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }),
+  getWebuiPort: () => currentHandle?.port ?? null,
+  emit: (status) => ipcBridge.webui.tunnel.statusChanged.emit(status),
+});
+
 /**
  * Stash the plaintext password to surface on the next `getDesktopWebUIStatus()`
  * or IPC start response. Call with `undefined` to clear.
@@ -255,9 +288,10 @@ export async function revokeOtherWebUISessions(now: number = Date.now()): Promis
  * Settings → "Enable WebUI" IPC handler.
  */
 export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boolean }): Promise<DesktopWebUIHandle> {
-  // If already running, tear down first so we honour the new port / allowRemote.
+  // If already running, tear down first so we honour the new port / allowRemote. The secure link
+  // stays on and follows the new port (onWebuiRestarted below).
   if (currentHandle) {
-    await stopDesktopWebUI();
+    await stopWebHost();
   }
 
   const allowRemote = opts.allowRemote === true;
@@ -289,6 +323,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     port: preferredPort,
     allowRemote,
     sessionsNotBefore,
+    isTunnelActive: () => webuiTunnel.isActive(),
     // Must align with the desktop IPC path's backend dataDir (src/index.ts), otherwise
     // users see divergent SQLite state between desktop app and bundled WebUI.
     dataDir: getDataPath(),
@@ -302,16 +337,32 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
       kind: 'useExistingBackend',
       port: backendPort,
     },
+  }).catch(async (error: unknown) => {
+    // A restart that fails leaves no WebUI, so the secure link goes too.
+    await stopWebUITunnel();
+    throw error;
   });
 
   currentHandle = Object.assign(handle, { allowRemote });
+  webuiTunnel.onWebuiRestarted();
   return toDesktopHandle(handle, allowRemote);
 }
 
 /**
- * Stop the currently running WebUI instance, if any. No-op when nothing is running.
+ * Turn the WebUI off, if running. The secure link needs it, so it is stopped and saved off too.
  */
 export async function stopDesktopWebUI(): Promise<void> {
+  await stopWebUITunnel();
+  await stopWebHost();
+}
+
+async function stopWebUITunnel(): Promise<void> {
+  if (webuiTunnel.status().state === 'stopped') return;
+  await webuiTunnel.stop();
+  await writeTunnelEnabled(false);
+}
+
+async function stopWebHost(): Promise<void> {
   const handle = currentHandle;
   if (!handle) return;
   currentHandle = null;
@@ -358,7 +409,7 @@ export function getDesktopWebUIStatus(): {
 }
 
 export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
-  const { enabled, allowRemote, port } = await readWebUIDesktopPreferences();
+  const { enabled, allowRemote, port, tunnelEnabled } = await readWebUIDesktopPreferences();
   if (!enabled) return;
 
   const preferredPort = port ?? DEFAULT_WEBUI_PORT;
@@ -368,6 +419,9 @@ export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
     console.log(
       `[WebUI] Auto-restored from desktop preferences (port=${handle.port}, allowRemote=${handle.allowRemote})`
     );
+    if (tunnelEnabled) {
+      webuiTunnel.start().catch((error) => console.error('[WebUI] Failed to auto-start the secure link:', error));
+    }
   } catch (error) {
     // Reconcile the persisted preference with reality. Leaving enabled=true
     // means every subsequent launch will silently re-fail the same way, and

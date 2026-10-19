@@ -22,6 +22,7 @@ import {
   setDesktopWebUIInitialPassword,
   revokeOtherWebUISessions,
 } from '@process/utils/webuiConfig';
+import { initWebuiTunnelIpc } from '@process/webuiTunnel/tunnelIpc';
 
 type AdminUsernameResult = { username?: string };
 
@@ -78,6 +79,8 @@ async function maybeSeedInitialPassword(): Promise<void> {
 }
 
 export function initWebuiBridge(): void {
+  initWebuiTunnelIpc();
+
   ipcBridge.webui.getStatus.provider(async () => {
     const snapshot = getDesktopWebUIStatus();
     const adminUsername = await fetchAdminUsername();
