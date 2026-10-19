@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
-import type { SaveSkillResult, SkillProposal } from '@/common/types/agent/skillProposal';
+import { SKILL_PROPOSAL_LIMITS, type SaveSkillResult, type SkillProposal } from '@/common/types/agent/skillProposal';
 
 export type SkillProposalCardProps = SkillProposal & { conversationId?: string };
 
@@ -26,6 +26,15 @@ const note = (text: string, action?: React.ReactNode) => (
   </>
 );
 
+/** The first `<base>-N` (N >= 2) not in `taken`; the base is trimmed so the name stays within the length limit and valid. */
+const freeSkillName = (base: string, taken: Set<string>): string => {
+  for (let n = 2; ; n += 1) {
+    const suffix = `-${n}`;
+    const candidate = base.slice(0, SKILL_PROPOSAL_LIMITS.nameMax - suffix.length).replace(/-+$/, '') + suffix;
+    if (!taken.has(candidate)) return candidate;
+  }
+};
+
 /**
  * Review card for a skill the agent proposed: the user can edit the steps, then save it to the skills library (and
  * the chat's bot) or dismiss it. Nothing is saved until they click Save.
@@ -38,7 +47,8 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
   const [draft, setDraft] = useState(steps);
   const [saving, setSaving] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const [attemptName, setAttemptName] = useState(name);
+  // The name the last save reported as already taken.
+  const [clashName, setClashName] = useState(name);
   const [result, setResult] = useState<SaveSkillResult | undefined>();
   // State updates land after the next render, so two clicks in one tick would both pass a `saving` check.
   const inFlight = useRef(false);
@@ -47,16 +57,17 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
     if (inFlight.current || !conversationId) return;
     inFlight.current = true;
     setSaving(true);
-    setAttemptName(skillName);
+    // Drop the previous outcome so its text never describes the save that is now running.
+    setResult(undefined);
     try {
-      setResult(
-        await ipcBridge.agentSkills.save.invoke({
-          conversation_id: conversationId,
-          name: skillName,
-          description,
-          steps: draft,
-        })
-      );
+      const saved = await ipcBridge.agentSkills.save.invoke({
+        conversation_id: conversationId,
+        name: skillName,
+        description,
+        steps: draft,
+      });
+      if (saved.ok === false && saved.code === 'exists') setClashName(skillName);
+      setResult(saved);
     } catch (error) {
       setResult({ ok: false, code: 'import_failed', message: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -79,6 +90,8 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
       <Tag size='small'>{name}</Tag>
     </div>
   );
+
+  const freeName = freeSkillName(name, new Set([...(skills ?? []).map((skill) => skill.name), clashName]));
 
   const body = (): React.ReactNode => {
     if (dismissed) return <div className='text-13px text-t-secondary'>{t('messages.skillCard.notSaved')}</div>;
@@ -112,8 +125,8 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
     // Compared with `=== false` because this repo has no strictNullChecks, so a plain truthiness check doesn't narrow.
     const failure = result?.ok === false ? result : undefined;
     const exists = failure?.code === 'exists';
-    // A name already in the library reads as saved, unless the save itself just reported that clash.
-    if (!result && skills?.some((skill) => skill.name === name)) {
+    // Only the same name AND description reads as this card's own skill; a same-name skill from elsewhere is a clash.
+    if (!result && skills?.some((skill) => skill.name === name && skill.description?.trim() === description.trim())) {
       return note(t('messages.skillCard.savedLibrary'));
     }
 
@@ -126,7 +139,7 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
         )}
         {exists && (
           <div className='text-13px text-t-primary break-words'>
-            {t('messages.skillCard.exists', { name: attemptName })}
+            {t('messages.skillCard.exists', { name: clashName })}
           </div>
         )}
         <div className='text-13px text-t-secondary break-words'>
@@ -140,9 +153,9 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
               type='primary'
               loading={saving}
               disabled={!conversationId}
-              onClick={() => void save(`${attemptName}-2`)}
+              onClick={() => void save(freeName)}
             >
-              {t('messages.skillCard.saveAs', { name: `${attemptName}-2` })}
+              {t('messages.skillCard.saveAs', { name: freeName })}
             </Button>
           ) : (
             <Button

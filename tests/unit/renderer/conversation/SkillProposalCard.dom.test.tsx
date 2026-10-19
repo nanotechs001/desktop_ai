@@ -8,7 +8,7 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
-import type { SaveSkillResult } from '@/common/types/agent/skillProposal';
+import { SKILL_NAME_RE, type SaveSkillResult } from '@/common/types/agent/skillProposal';
 
 const mocks = vi.hoisted(() => ({ save: vi.fn(), listSkills: vi.fn(), navigate: vi.fn() }));
 
@@ -34,10 +34,10 @@ const proposal = {
   steps: '1. Open the dashboard\n2. Export the numbers',
 };
 
-const renderCard = () =>
+const renderCard = (overrides: Partial<typeof proposal> = {}) =>
   render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <SkillProposalCard {...proposal} conversationId='c1' />
+      <SkillProposalCard {...proposal} {...overrides} conversationId='c1' />
     </SWRConfig>
   );
 
@@ -100,7 +100,7 @@ describe('SkillProposalCard', () => {
   });
 
   it('shows Saved without a Save button when the library already has the name', async () => {
-    mocks.listSkills.mockResolvedValue([{ name: 'weekly-report' }]);
+    mocks.listSkills.mockResolvedValue([{ name: 'weekly-report', description: `  ${proposal.description} ` }]);
     renderCard();
 
     expect(await screen.findByText('messages.skillCard.savedLibrary')).toBeInTheDocument();
@@ -114,7 +114,7 @@ describe('SkillProposalCard', () => {
 
     const save = await screen.findByText('messages.skillCard.save');
     // By the time the save answers, the refreshed library lists the clashing name; that must not read as Saved.
-    mocks.listSkills.mockResolvedValue([{ name: 'weekly-report' }]);
+    mocks.listSkills.mockResolvedValue([{ name: 'weekly-report', description: 'something else entirely' }]);
     fireEvent.click(save);
 
     expect(await screen.findByText(/messages\.skillCard\.exists .*weekly-report/)).toBeInTheDocument();
@@ -124,6 +124,62 @@ describe('SkillProposalCard', () => {
       expect(mocks.save).toHaveBeenLastCalledWith({ ...proposal, name: 'weekly-report-2', conversation_id: 'c1' })
     );
     expect(await screen.findByText(/messages\.skillCard\.saved .*Writer/)).toBeInTheDocument();
+  });
+
+  it('does not call a same-name skill with another description Saved: Save, then exists, then Save as', async () => {
+    mocks.listSkills.mockResolvedValue([{ name: 'weekly-report', description: 'An unrelated skill of the same name' }]);
+    mocks.save.mockResolvedValue({ ok: false, code: 'exists', message: 'exists' });
+    renderCard();
+
+    fireEvent.click(await screen.findByText('messages.skillCard.save'));
+
+    expect(await screen.findByText(/messages\.skillCard\.exists .*weekly-report/)).toBeInTheDocument();
+    expect(screen.getByText(/messages\.skillCard\.saveAs .*weekly-report-2/)).toBeInTheDocument();
+  });
+
+  it('while Save as is running, shows neither the exists text for the new name nor a -2-2 label', async () => {
+    mocks.listSkills.mockResolvedValue([{ name: 'weekly-report', description: 'An unrelated skill of the same name' }]);
+    mocks.save.mockResolvedValueOnce({ ok: false, code: 'exists', message: 'exists' });
+    mocks.save.mockReturnValueOnce(new Promise(() => {}));
+    renderCard();
+
+    fireEvent.click(await screen.findByText('messages.skillCard.save'));
+    fireEvent.click(await screen.findByText(/messages\.skillCard\.saveAs .*weekly-report-2/));
+
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/messages\.skillCard\.exists/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/weekly-report-2-2/)).not.toBeInTheDocument();
+  });
+
+  it('offers the first free <name>-N', async () => {
+    mocks.listSkills.mockResolvedValue([
+      { name: 'weekly-report', description: 'other' },
+      { name: 'weekly-report-2', description: 'other' },
+    ]);
+    mocks.save.mockResolvedValue({ ok: false, code: 'exists', message: 'exists' });
+    renderCard();
+
+    fireEvent.click(await screen.findByText('messages.skillCard.save'));
+
+    expect(await screen.findByText(/messages\.skillCard\.saveAs .*weekly-report-3/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a'.repeat(47) + 'b', 'a'.repeat(46) + '-2'],
+    ['a'.repeat(45) + '-bb', 'a'.repeat(45) + '-2'],
+  ])('trims the %s base so the offered name stays valid and within 48 characters', async (name, expected) => {
+    expect(name).toHaveLength(48);
+    mocks.listSkills.mockResolvedValue([{ name, description: 'other' }]);
+    mocks.save.mockResolvedValue({ ok: false, code: 'exists', message: 'exists' });
+    renderCard({ name });
+
+    fireEvent.click(await screen.findByText('messages.skillCard.save'));
+
+    const label = await screen.findByText(/messages\.skillCard\.saveAs/);
+    const offered = JSON.parse(label.textContent!.replace('messages.skillCard.saveAs ', '')).name as string;
+    expect(offered).toBe(expected);
+    expect(offered.length).toBeLessThanOrEqual(48);
+    expect(offered).toMatch(SKILL_NAME_RE);
   });
 
   it.each([
