@@ -157,7 +157,7 @@ describe('buildLauncherScript', () => {
     return { file, ...spawnSync('/bin/sh', [file, ...args], { encoding: 'utf8', env }) };
   };
 
-  it('launcher settings allow mcp__aionui-browser, mcp__aionui-artifacts and mcp__aionui-notes; appends --no-chrome, the three disallowedTools and --settings with the hook path', () => {
+  it('launcher settings allow mcp__aionui-browser, mcp__aionui-artifacts and mcp__aionui-notes; appends --no-chrome, the disallowed Bash and cloud artifact tools and --settings with the hook path', () => {
     const fakeBin = path.join(tmp, 'bin');
     writeExecutable(path.join(fakeBin, 'claude'), FAKE_CLAUDE);
     const hookPath = path.join(tmp, 'dir with space', "it's$hook.cjs");
@@ -168,21 +168,25 @@ describe('buildLauncherScript', () => {
     expect(result.status).toBe(0);
     const [, ...args] = result.stdout.trimEnd().split('\n');
     expect(args.slice(0, 2)).toEqual(['--print', 'a b']);
-    expect(args.slice(2, 8)).toEqual([
+    expect(args.slice(2, 11)).toEqual([
       '--no-chrome',
       '--disallowedTools',
       'Bash(open:*)',
       'Bash(xdg-open:*)',
       'Bash(osascript:*)',
+      'Artifact',
+      'ArtifactComments',
+      'ArtifactData',
       '--settings',
     ]);
-    expect(JSON.parse(args[8])).toEqual({
+    expect(JSON.parse(args[11])).toEqual({
       permissions: {
         allow: [
           `mcp__${BUILTIN_BROWSER_MCP_NAME}`,
           `mcp__${BUILTIN_ARTIFACTS_MCP_NAME}`,
           `mcp__${BUILTIN_NOTES_MCP_NAME}`,
         ],
+        deny: ['Artifact', 'ArtifactComments', 'ArtifactData'],
       },
       hooks: {
         PreToolUse: [
@@ -190,7 +194,7 @@ describe('buildLauncherScript', () => {
         ],
       },
     });
-    expect(args).toHaveLength(9);
+    expect(args).toHaveLength(12);
   });
 
   it('skips itself when it appears on PATH as claude', () => {

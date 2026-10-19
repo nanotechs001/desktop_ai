@@ -64,7 +64,7 @@ describe('BROWSER_RULE_TEXT', () => {
 
   it('tells the agent to show pages with the artifacts tool, not a file, and stays within the cap', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      'To show the user a page, document or diagram you made, use `artifacts` (the `create` tool of `aionui-artifacts`), not a file.'
+      'To show the user a page, document or diagram you made, call `mcp__aionui-artifacts__create` (the `create` tool of `aionui-artifacts`; load it first if it is deferred), never a file or any other artifact or publishing tool.'
     );
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });

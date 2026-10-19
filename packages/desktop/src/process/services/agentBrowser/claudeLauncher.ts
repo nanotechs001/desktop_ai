@@ -14,6 +14,8 @@ import {
 const BLOCK_REASON = 'Use the Pixebot browser pane tools (aionui-browser) instead of opening an external browser.';
 const DEFAULT_FALLBACK_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
 const DENIED_BASH_TOOLS = ['Bash(open:*)', 'Bash(xdg-open:*)', 'Bash(osascript:*)'];
+/** Claude Code's own cloud artifact tools publish to claude.ai; artifacts here must stay local (aionui-artifacts). */
+const DENIED_CLOUD_TOOLS = ['Artifact', 'ArtifactComments', 'ArtifactData'];
 
 /**
  * True when a shell command would open an external browser (open, xdg-open, gio open, osascript, ...).
@@ -159,7 +161,7 @@ const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'
 
 /**
  * POSIX sh launcher that runs the user's real `claude` with Claude in Chrome off, browser-launching Bash
- * commands denied, and the PreToolUse hook at `hookPath` installed. It never re-launches itself.
+ * commands and Claude's cloud artifact tools denied, and the PreToolUse hook at `hookPath` installed. It never re-launches itself.
  */
 export function buildLauncherScript(hookPath: string, fallbackDirs: string[] = DEFAULT_FALLBACK_DIRS): string {
   const hookCommand = `node "${hookPath.replace(/[\\"$`]/g, '\\$&')}"`;
@@ -171,6 +173,7 @@ export function buildLauncherScript(hookPath: string, fallbackDirs: string[] = D
         `mcp__${BUILTIN_ARTIFACTS_MCP_NAME}`,
         `mcp__${BUILTIN_NOTES_MCP_NAME}`,
       ],
+      deny: DENIED_CLOUD_TOOLS,
     },
     hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: hookCommand }] }] },
   });
@@ -222,7 +225,7 @@ fi
 # The hook runs \`node\`; keep it reachable when the app was started with a minimal PATH.
 PATH="\${ORIG_PATH:+$ORIG_PATH:}\${real%/*}${extraPath}"
 # --disallowedTools is variadic, so --settings must follow it.
-exec "$real" "$@" --no-chrome --disallowedTools ${DENIED_BASH_TOOLS.map((tool) => `"${tool}"`).join(' ')} --settings ${shellQuote(settings)}
+exec "$real" "$@" --no-chrome --disallowedTools ${[...DENIED_BASH_TOOLS, ...DENIED_CLOUD_TOOLS].map((tool) => `"${tool}"`).join(' ')} --settings ${shellQuote(settings)}
 `;
 }
 
