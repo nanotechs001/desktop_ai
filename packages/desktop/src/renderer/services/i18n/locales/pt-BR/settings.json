@@ -215,8 +215,6 @@
   "promptEdit": "Edit",
   "promptPreview": "Visualizar",
   "promptPreviewEmpty": "Nenhum conteúdo para visualizar",
-  "deleteAssistantTitle": "Excluir Agente",
-  "deleteAssistantConfirm": "Tem certeza de que deseja excluir este agente? Esta ação não pode ser desfeita.",
   "cannotDeleteBuiltin": "Não é possível excluir agentes integrados",
   "duplicateAssistant": "Duplicar como meu agente",
   "assistantMainAgent": "Motor",

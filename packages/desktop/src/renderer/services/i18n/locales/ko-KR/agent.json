@@ -91,9 +91,32 @@
     "clearConfirmOk": "삭제",
     "cleared": "인터넷 사용 기록을 삭제했습니다.",
     "clearFailed": "인터넷 사용 기록을 삭제하지 못했습니다.",
-    "deleteWithAgent": "브라우저 데이터도 삭제(쿠키, 로그인, 사이트 데이터, 확장 프로그램)",
     "deleteFailed": "이 에이전트의 브라우저 데이터를 삭제하지 못해 에이전트를 유지했습니다. 다시 시도하세요.",
-    "partialDelete": "에이전트의 브라우저 데이터는 제거되었지만 에이전트는 삭제되지 않았습니다. 완료하려면 다시 삭제하세요.",
-    "keptOnDisk": "이 에이전트의 브라우저 데이터(쿠키, 로그인, 사이트 데이터)는 이 컴퓨터에 남습니다."
+    "partialDelete": "에이전트의 브라우저 데이터는 제거되었지만 에이전트는 삭제되지 않았습니다. 완료하려면 다시 삭제하세요."
+  },
+  "deleteBot": {
+    "title": "\"{{name}}\"을(를) 삭제할까요?",
+    "counting": "보유한 항목을 확인하는 중…",
+    "countFailed": "이 VA Bot이 보유한 항목을 확인하지 못했습니다. 닫고 다시 시도하세요.",
+    "intro": "다음 항목이 영구적으로 삭제됩니다:",
+    "chats": "채팅 {{count}}개(메시지, 파일, 기록 포함)",
+    "chats_one": "채팅 {{count}}개(메시지, 파일, 기록 포함)",
+    "chats_other": "채팅 {{count}}개(메시지, 파일, 기록 포함)",
+    "browserProfile": "브라우저 프로필: 쿠키, 로그인 정보, 사이트 데이터, 확장 프로그램",
+    "notebook": "노트북(학습한 내용)과 규칙",
+    "tasks": "예약된 작업 {{count}}개",
+    "tasks_one": "예약된 작업 {{count}}개",
+    "tasks_other": "예약된 작업 {{count}}개",
+    "robot": "데스크톱 로봇",
+    "channel": "{{platform}} 연결(다른 VA Bot을 선택할 때까지 응답하지 않습니다)",
+    "skillsStay": "저장한 스킬은 스킬 라이브러리에 그대로 남습니다.",
+    "irreversible": "이 작업은 되돌릴 수 없습니다.",
+    "progress": "채팅 삭제 중: {{done}} / {{total}}…",
+    "working": "삭제 중…",
+    "chatsListFailed": "이 VA Bot의 채팅을 읽지 못해 VA Bot을 유지했습니다. 다시 시도하세요.",
+    "chatsFailed": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요.",
+    "chatsFailed_one": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요.",
+    "chatsFailed_other": "채팅 {{count}}개 중 {{failed}}개를 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요.",
+    "tasksFailed": "이 VA Bot의 예약된 작업을 삭제하지 못해 VA Bot을 유지했습니다. 다시 시도하세요."
   }
 }

@@ -91,9 +91,32 @@
     "clearConfirmOk": "Temizle",
     "cleared": "Tarama verileri temizlendi.",
     "clearFailed": "Tarama verileri temizlenemedi.",
-    "deleteWithAgent": "Tarayıcı verilerini de sil (çerezler, oturumlar, site verileri, uzantılar)",
     "deleteFailed": "Bu Ajanın tarayıcı verileri silinemedi, bu yüzden Ajan korundu. Yeniden deneyin.",
-    "partialDelete": "Ajanın tarayıcı verileri kaldırıldı, ancak Ajan silinmedi. Bitirmek için yeniden silin.",
-    "keptOnDisk": "Tarayıcı verileri (çerezler, oturumlar, site verileri) bu bilgisayarda kalır."
+    "partialDelete": "Ajanın tarayıcı verileri kaldırıldı, ancak Ajan silinmedi. Bitirmek için yeniden silin."
+  },
+  "deleteBot": {
+    "title": "\"{{name}}\" silinsin mi?",
+    "counting": "Sahip olduğu her şey kontrol ediliyor…",
+    "countFailed": "Bu VA Bot'un sahip olduğu her şey kontrol edilemedi. Bunu kapatıp yeniden deneyin.",
+    "intro": "Bu işlem şunları kalıcı olarak siler:",
+    "chats": "{{count}} sohbeti; mesajları, dosyaları ve geçmişiyle birlikte",
+    "chats_one": "{{count}} sohbeti; mesajları, dosyaları ve geçmişiyle birlikte",
+    "chats_other": "{{count}} sohbeti; mesajları, dosyaları ve geçmişiyle birlikte",
+    "browserProfile": "tarayıcı profili: çerezler, oturum açma bilgileri, site verileri ve uzantılar",
+    "notebook": "defteri (öğrendikleri) ve kuralları",
+    "tasks": "{{count}} zamanlanmış görevi",
+    "tasks_one": "{{count}} zamanlanmış görevi",
+    "tasks_other": "{{count}} zamanlanmış görevi",
+    "robot": "masaüstü robotu",
+    "channel": "{{platform}} bağlantısı; başka bir VA Bot seçene kadar yanıt vermeyi bırakacak",
+    "skillsStay": "Kaydettiği beceriler beceri kitaplığınızda kalır.",
+    "irreversible": "Bu işlem geri alınamaz.",
+    "progress": "Sohbetler siliniyor: {{done}} / {{total}}…",
+    "working": "Siliniyor…",
+    "chatsListFailed": "Bu VA Bot'un sohbetleri okunamadı, bu yüzden VA Bot korundu. Yeniden deneyin.",
+    "chatsFailed": "{{count}} sohbetten {{failed}} tanesi silinemedi; VA Bot korundu. Yeniden deneyin.",
+    "chatsFailed_one": "{{count}} sohbetten {{failed}} tanesi silinemedi; VA Bot korundu. Yeniden deneyin.",
+    "chatsFailed_other": "{{count}} sohbetten {{failed}} tanesi silinemedi; VA Bot korundu. Yeniden deneyin.",
+    "tasksFailed": "Bu VA Bot'un zamanlanmış görevleri kaldırılamadı, bu yüzden VA Bot korundu. Yeniden deneyin."
   }
 }

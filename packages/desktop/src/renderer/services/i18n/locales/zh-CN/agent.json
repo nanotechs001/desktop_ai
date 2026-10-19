@@ -91,9 +91,32 @@
     "clearConfirmOk": "清除",
     "cleared": "浏览数据已清除。",
     "clearFailed": "无法清除浏览数据。",
-    "deleteWithAgent": "同时删除它的浏览器数据（Cookie、登录状态、网站数据、扩展）",
     "deleteFailed": "无法删除此智能体的浏览器数据，因此保留了该智能体。请重试。",
-    "partialDelete": "已移除该智能体的浏览器数据，但智能体本身未删除。请再次删除以完成。",
-    "keptOnDisk": "它的浏览器数据（Cookie、登录状态、网站数据）会保留在这台电脑上。"
+    "partialDelete": "已移除该智能体的浏览器数据，但智能体本身未删除。请再次删除以完成。"
+  },
+  "deleteBot": {
+    "title": "删除“{{name}}”？",
+    "counting": "正在检查它拥有的内容…",
+    "countFailed": "无法检查此 VA Bot 拥有的内容。请关闭后重试。",
+    "intro": "这将永久删除：",
+    "chats": "它的 {{count}} 个聊天，包括消息、文件和历史记录",
+    "chats_one": "它的 {{count}} 个聊天，包括消息、文件和历史记录",
+    "chats_other": "它的 {{count}} 个聊天，包括消息、文件和历史记录",
+    "browserProfile": "它的浏览器配置文件：Cookie、登录状态、网站数据和扩展",
+    "notebook": "它的笔记本（它学到的内容）和规则",
+    "tasks": "它的 {{count}} 个计划任务",
+    "tasks_one": "它的 {{count}} 个计划任务",
+    "tasks_other": "它的 {{count}} 个计划任务",
+    "robot": "它的桌面机器人",
+    "channel": "它的 {{platform}} 连接，在你选择其他 VA Bot 之前将不再回复",
+    "skillsStay": "它保存的技能会保留在你的技能库中。",
+    "irreversible": "此操作无法撤销。",
+    "progress": "正在删除聊天 {{done}} / {{total}}…",
+    "working": "正在删除…",
+    "chatsListFailed": "无法读取此 VA Bot 的聊天，因此已保留该 VA Bot。请重试。",
+    "chatsFailed": "{{count}} 个聊天中有 {{failed}} 个无法删除，已保留该 VA Bot。请重试。",
+    "chatsFailed_one": "{{count}} 个聊天中有 {{failed}} 个无法删除，已保留该 VA Bot。请重试。",
+    "chatsFailed_other": "{{count}} 个聊天中有 {{failed}} 个无法删除，已保留该 VA Bot。请重试。",
+    "tasksFailed": "无法移除此 VA Bot 的计划任务，因此已保留该 VA Bot。请重试。"
   }
 }

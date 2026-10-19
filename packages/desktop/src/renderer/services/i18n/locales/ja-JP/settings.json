@@ -215,8 +215,6 @@
   "promptEdit": "編集",
   "promptPreview": "プレビュー",
   "promptPreviewEmpty": "プレビューするコンテンツがありません",
-  "deleteAssistantTitle": "エージェントを削除",
-  "deleteAssistantConfirm": "このエージェントを削除してもよろしいですか？この操作は元に戻せません。",
   "cannotDeleteBuiltin": "ビルトインエージェントは削除できません",
   "duplicateAssistant": "マイエージェントとして複製",
   "assistantMainAgent": "エンジン",

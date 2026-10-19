@@ -82,6 +82,8 @@ vi.mock('@/common/config/configService', () => ({
   },
 }));
 
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn(), useMatch: () => null }));
+
 vi.mock('swr', () => ({
   __esModule: true,
   default: () => ({ data: mocks.engines.current }),
@@ -98,6 +100,21 @@ vi.mock('@/common', () => ({
       setState: { invoke: vi.fn() },
     },
     mcpService: { listServers: { invoke: vi.fn(async () => []) } },
+    // Deleting a bot also deletes what it owns; here it owns nothing.
+    browser: { deleteProfileData: { invoke: vi.fn(async () => ({ success: true })) } },
+    agentNotes: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
+    database: { getUserConversations: { invoke: vi.fn(async () => ({ items: [], total: 0, has_more: false })) } },
+    sidebar: {
+      get: { invoke: vi.fn(async () => ({ groups: [], has_more_groups: false })) },
+      items: { invoke: vi.fn() },
+    },
+    conversation: { remove: { invoke: vi.fn(async () => true) } },
+    agentWidget: { remove: { invoke: vi.fn(async () => undefined) }, listRobots: { invoke: vi.fn(async () => []) } },
+    cron: { listJobs: { invoke: vi.fn(async () => []) }, removeJob: { invoke: vi.fn(async () => undefined) } },
+    channel: {
+      getPlatformSettings: { invoke: vi.fn(async () => ({ platform: 'x', assistant: null, default_model: null })) },
+      syncChannelSettings: { invoke: vi.fn(async () => undefined) },
+    },
     fs: {
       readAssistantRule: { invoke: vi.fn() },
       listAvailableSkills: { invoke: vi.fn(async () => []) },
@@ -203,7 +220,7 @@ describe('the UI says Agent, not Assistant', () => {
     );
 
     expect(screen.getByText('VA Bots')).toBeInTheDocument();
-    expect(screen.getByText('Delete Agent')).toBeInTheDocument();
+    expect(screen.getByText('Delete "Researcher"?')).toBeInTheDocument();
     expect(`${container.textContent}${document.body.textContent}`).not.toMatch(/assistant/i);
   });
 });

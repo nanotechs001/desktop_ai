@@ -215,8 +215,6 @@
   "promptEdit": "Düzenle",
   "promptPreview": "Önizleme",
   "promptPreviewEmpty": "Önizlenecek içerik yok",
-  "deleteAssistantTitle": "Agent'ı Sil",
-  "deleteAssistantConfirm": "Bu Agent'ı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
   "cannotDeleteBuiltin": "Yerleşik Agent'lar silinemez",
   "duplicateAssistant": "Agent'ım olarak çoğalt",
   "assistantMainAgent": "Motor",

@@ -287,8 +287,10 @@ const AssistantSettings: React.FC = () => {
           <DeleteAssistantModal
             visible={editor.deleteConfirmVisible}
             onCancel={() => editor.setDeleteConfirmVisible(false)}
-            onConfirm={editor.handleDeleteConfirm}
+            onConfirm={() => void editor.handleDeleteConfirm()}
             activeAssistant={activeAssistant}
+            deleting={editor.deleting}
+            progress={editor.deleteProgress}
           />
 
           <SkillConfirmModals

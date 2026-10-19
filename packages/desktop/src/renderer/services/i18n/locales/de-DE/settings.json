@@ -215,8 +215,6 @@
   "promptEdit": "Bearbeiten",
   "promptPreview": "Vorschau",
   "promptPreviewEmpty": "Kein Inhalt zur Vorschau",
-  "deleteAssistantTitle": "Agents löschen",
-  "deleteAssistantConfirm": "Bist du sicher, dass du diesen Agent löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.",
   "cannotDeleteBuiltin": "Eingebaute Agents können nicht gelöscht werden",
   "duplicateAssistant": "Als meinen Agent duplizieren",
   "assistantMainAgent": "Engine",

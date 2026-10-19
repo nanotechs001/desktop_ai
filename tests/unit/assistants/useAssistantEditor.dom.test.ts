@@ -30,7 +30,20 @@ vi.mock('@/common', () => ({
       deleteAssistantRule: { invoke: vi.fn() },
       importSkills: { invoke: vi.fn() },
     },
-    browser: { deleteProfileData: { invoke: vi.fn() } },
+    browser: { deleteProfileData: { invoke: vi.fn(async () => ({ success: true })) } },
+    // Deleting a bot also removes its chats, robots, tasks and channel bindings; by default it owns none.
+    database: { getUserConversations: { invoke: vi.fn(async () => ({ items: [], total: 0, has_more: false })) } },
+    sidebar: {
+      get: { invoke: vi.fn(async () => ({ groups: [], has_more_groups: false })) },
+      items: { invoke: vi.fn() },
+    },
+    conversation: { remove: { invoke: vi.fn(async () => true) } },
+    agentWidget: { remove: { invoke: vi.fn(async () => undefined) }, listRobots: { invoke: vi.fn(async () => []) } },
+    cron: { listJobs: { invoke: vi.fn(async () => []) }, removeJob: { invoke: vi.fn(async () => undefined) } },
+    channel: {
+      getPlatformSettings: { invoke: vi.fn(async () => ({ platform: 'x', assistant: null, default_model: null })) },
+      syncChannelSettings: { invoke: vi.fn(async () => undefined) },
+    },
     agentNotes: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
     // The rule is saved through main, which adds the managed blocks.
     agentBrowser: {
@@ -63,6 +76,12 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('swr', () => ({
   mutate: vi.fn(),
+}));
+
+const router = vi.hoisted(() => ({ navigate: vi.fn(), openChatId: undefined as string | undefined }));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => router.navigate,
+  useMatch: () => (router.openChatId ? { params: { id: router.openChatId } } : null),
 }));
 
 vi.mock('@/renderer/hooks/mcp/catalog', () => ({
@@ -161,14 +180,26 @@ describe('useAssistantEditor', () => {
 
   describe('deleting an Agent', () => {
     const agent: AssistantListItem = { id: 'bare:gone', name: 'Gone', sort_order: 1, source: 'user', enabled: true };
-    const deleteWith = async (deleteBrowserData: boolean) => {
-      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: agent }));
-      await act(async () => {
-        await result.current.handleDeleteConfirm(deleteBrowserData);
+    const ownedChat = (id: string) => ({ id, name: id, assistant: { id: 'bare:gone' } });
+    const withChats = (...ids: string[]) =>
+      (ipcBridge.database.getUserConversations.invoke as any).mockResolvedValueOnce({
+        items: ids.map(ownedChat),
+        total: ids.length,
+        has_more: false,
       });
+    const deleteAgent = async () => {
+      const hook = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: agent }));
+      await act(async () => {
+        await hook.result.current.handleDeleteConfirm();
+      });
+      return hook;
     };
 
-    it('deletes its browser data before the Agent when asked to', async () => {
+    beforeEach(() => {
+      router.openChatId = undefined;
+    });
+
+    it('deletes its browser data before the Agent, always', async () => {
       const order: string[] = [];
       (ipcBridge.assistants.delete.invoke as any).mockImplementation(async () => order.push('agent'));
       (ipcBridge.browser.deleteProfileData.invoke as any).mockImplementation(async () => {
@@ -176,37 +207,48 @@ describe('useAssistantEditor', () => {
         return { success: true };
       });
 
-      await deleteWith(true);
+      await deleteAgent();
 
       expect(ipcBridge.browser.deleteProfileData.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
       expect(order).toEqual(['browser data', 'agent']);
       expect(mockMessage.success).toHaveBeenCalled();
     });
 
+    it('closes the dialog, refreshes the catalog and the chat history once it is all gone', async () => {
+      const refreshed = vi.fn();
+      const { emitter } = await import('@/renderer/utils/emitter');
+      emitter.on('chat.history.refresh', refreshed);
+      const loadAssistants = vi.fn();
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, loadAssistants, activeAssistant: agent })
+      );
+      act(() => result.current.setDeleteConfirmVisible(true));
+
+      await act(async () => {
+        await result.current.handleDeleteConfirm();
+      });
+
+      expect(result.current.deleteConfirmVisible).toBe(false);
+      expect(loadAssistants).toHaveBeenCalled();
+      expect(refreshed).toHaveBeenCalledTimes(1);
+      emitter.off('chat.history.refresh', refreshed);
+    });
+
     it('says the browser data is gone but the Agent is not when only the Agent delete fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      (ipcBridge.browser.deleteProfileData.invoke as any).mockResolvedValueOnce({ success: true });
       (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('backend down'));
 
-      await deleteWith(true);
+      await deleteAgent();
 
       expect(mockMessage.error).toHaveBeenCalledWith('agent.browserProfile.partialDelete');
       expect(mockMessage.success).not.toHaveBeenCalled();
-    });
-
-    it('keeps the browser data when not asked', async () => {
-      (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
-      await deleteWith(false);
-
-      expect(ipcBridge.browser.deleteProfileData.invoke).not.toHaveBeenCalled();
-      expect(ipcBridge.assistants.delete.invoke).toHaveBeenCalledWith({ id: 'bare:gone' });
     });
 
     it('forgets what the Agent learned: its notebook in main and its engine pin', async () => {
       engineConfig.store.set('agent.enginePins', { 'bare:gone': 'engine-x', other: 'engine-y' });
       (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
 
-      await deleteWith(false);
+      await deleteAgent();
 
       expect(ipcBridge.agentNotes.removeAgent.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
       expect(engineConfig.store.get('agent.enginePins')).toEqual({ other: 'engine-y' });
@@ -215,29 +257,105 @@ describe('useAssistantEditor', () => {
 
     it('writes no engine pins when the Agent had none (first-run seeding stays possible)', async () => {
       (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
-      await deleteWith(false);
+      await deleteAgent();
       expect(engineConfig.configService.set).not.toHaveBeenCalledWith('agent.enginePins', expect.anything());
     });
 
     it('keeps the notebook when the Agent delete fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('backend down'));
-      await deleteWith(false);
+      await deleteAgent();
       expect(ipcBridge.agentNotes.removeAgent.invoke).not.toHaveBeenCalled();
     });
 
     it('keeps the Agent, and says so, when its browser data could not be removed', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       (ipcBridge.browser.deleteProfileData.invoke as any).mockResolvedValueOnce({ success: false, msg: 'busy' });
-      await deleteWith(true);
+      await deleteAgent();
       (ipcBridge.browser.deleteProfileData.invoke as any).mockRejectedValueOnce(new Error('ipc down'));
-      await deleteWith(true);
+      await deleteAgent();
 
       expect(ipcBridge.assistants.delete.invoke).not.toHaveBeenCalled();
       expect(mockMessage.error).toHaveBeenCalledWith('agent.browserProfile.deleteFailed');
       expect(mockMessage.success).not.toHaveBeenCalled();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('browser data'), 'busy');
       warn.mockRestore();
+    });
+
+    it('deletes its chats first, then the Agent', async () => {
+      withChats('c1', 'c2');
+      await deleteAgent();
+
+      expect(ipcBridge.conversation.remove.invoke).toHaveBeenCalledWith({ id: 'c1' });
+      expect(ipcBridge.conversation.remove.invoke).toHaveBeenCalledWith({ id: 'c2' });
+      expect(ipcBridge.assistants.delete.invoke).toHaveBeenCalledWith({ id: 'bare:gone' });
+      expect(mockMessage.success).toHaveBeenCalled();
+    });
+
+    it('keeps the Agent, and says how many chats could not be deleted, when a chat fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      withChats('c1', 'c2', 'c3');
+      (ipcBridge.conversation.remove.invoke as any).mockImplementation(async ({ id }: { id: string }) => id !== 'c2');
+
+      const { result } = await deleteAgent();
+
+      expect(ipcBridge.assistants.delete.invoke).not.toHaveBeenCalled();
+      expect(mockMessage.error).toHaveBeenCalledWith('agent.deleteBot.chatsFailed');
+      expect(mockMessage.success).not.toHaveBeenCalled();
+      expect(result.current.deleting).toBe(false);
+      (ipcBridge.conversation.remove.invoke as any).mockImplementation(async () => true);
+    });
+
+    it('keeps the Agent when its chats cannot be listed or its tasks cannot be removed', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      (ipcBridge.database.getUserConversations.invoke as any).mockRejectedValueOnce(new Error('down'));
+      await deleteAgent();
+      expect(mockMessage.error).toHaveBeenLastCalledWith('agent.deleteBot.chatsListFailed');
+
+      (ipcBridge.cron.listJobs.invoke as any).mockRejectedValueOnce(new Error('down'));
+      await deleteAgent();
+      expect(mockMessage.error).toHaveBeenLastCalledWith('agent.deleteBot.tasksFailed');
+      expect(ipcBridge.assistants.delete.invoke).not.toHaveBeenCalled();
+    });
+
+    it('goes home when the open chat was one of the bot chats, and stays put otherwise', async () => {
+      router.openChatId = 'c2';
+      withChats('c1', 'c2');
+      await deleteAgent();
+      expect(router.navigate).toHaveBeenCalledWith('/');
+
+      router.navigate.mockClear();
+      router.openChatId = 'unrelated';
+      withChats('c1', 'c2');
+      await deleteAgent();
+      expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it('shows the progress of the chat deletion, and is busy until it is done', async () => {
+      withChats('c1', 'c2');
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      (ipcBridge.conversation.remove.invoke as any).mockImplementation(async () => {
+        await gate;
+        return true;
+      });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: agent }));
+
+      let pending: Promise<void> = Promise.resolve();
+      act(() => {
+        pending = result.current.handleDeleteConfirm();
+      });
+      await waitFor(() => expect(result.current.deleting).toBe(true));
+
+      release();
+      await act(async () => {
+        await pending;
+      });
+      expect(result.current.deleting).toBe(false);
+      expect(result.current.deleteProgress).toBeNull();
+      (ipcBridge.conversation.remove.invoke as any).mockImplementation(async () => true);
     });
   });
 
@@ -989,7 +1107,7 @@ describe('useAssistantEditor', () => {
       const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
 
       await act(async () => {
-        await result.current.handleDeleteConfirm(false);
+        await result.current.handleDeleteConfirm();
       });
 
       expect(engineConfig.store.get('agent.colors')).toEqual({ other: '#445566' });
@@ -1002,7 +1120,7 @@ describe('useAssistantEditor', () => {
       const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant }));
 
       await act(async () => {
-        await result.current.handleDeleteConfirm(false);
+        await result.current.handleDeleteConfirm();
       });
 
       expect(engineConfig.store.get('agent.colors')).toEqual({ a1: '#112233' });

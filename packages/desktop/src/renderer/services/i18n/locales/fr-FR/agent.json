@@ -91,9 +91,32 @@
     "clearConfirmOk": "Effacer",
     "cleared": "Données de navigation effacées.",
     "clearFailed": "Impossible d'effacer les données de navigation.",
-    "deleteWithAgent": "Supprimer aussi ses données de navigateur (cookies, connexions, données de sites, extensions)",
     "deleteFailed": "Impossible de supprimer les données de navigateur de cet Agent ; l'Agent a donc été conservé. Réessayez.",
-    "partialDelete": "Les données de navigateur de l'Agent ont été supprimées, mais l'Agent n'a pas été supprimé. Supprimez-le à nouveau pour terminer.",
-    "keptOnDisk": "Ses données de navigation (cookies, connexions, données de sites) restent sur cet ordinateur."
+    "partialDelete": "Les données de navigateur de l'Agent ont été supprimées, mais l'Agent n'a pas été supprimé. Supprimez-le à nouveau pour terminer."
+  },
+  "deleteBot": {
+    "title": "Supprimer « {{name}} » ?",
+    "counting": "Vérification de ce qu’il possède…",
+    "countFailed": "Impossible de vérifier ce que possède ce VA Bot. Fermez cette fenêtre et réessayez.",
+    "intro": "Cette action supprime définitivement :",
+    "chats": "ses {{count}} conversations, avec leurs messages, fichiers et historique",
+    "chats_one": "sa {{count}} conversation, avec ses messages, fichiers et son historique",
+    "chats_other": "ses {{count}} conversations, avec leurs messages, fichiers et historique",
+    "browserProfile": "son profil de navigateur : cookies, connexions, données de sites et extensions",
+    "notebook": "son carnet (ce qu’il a appris) et ses règles",
+    "tasks": "ses {{count}} tâches planifiées",
+    "tasks_one": "sa {{count}} tâche planifiée",
+    "tasks_other": "ses {{count}} tâches planifiées",
+    "robot": "son robot de bureau",
+    "channel": "sa connexion {{platform}}, qui cessera de répondre tant que vous n’aurez pas choisi un autre VA Bot",
+    "skillsStay": "Les skills qu’il a enregistrés restent dans votre bibliothèque de skills.",
+    "irreversible": "Cette action est irréversible.",
+    "progress": "Suppression des conversations : {{done}} sur {{total}}…",
+    "working": "Suppression…",
+    "chatsListFailed": "Impossible de lire les conversations de ce VA Bot ; le VA Bot a donc été conservé. Réessayez.",
+    "chatsFailed": "Impossible de supprimer {{failed}} des {{count}} conversations ; le VA Bot a été conservé. Réessayez.",
+    "chatsFailed_one": "Impossible de supprimer la conversation ; le VA Bot a été conservé. Réessayez.",
+    "chatsFailed_other": "Impossible de supprimer {{failed}} des {{count}} conversations ; le VA Bot a été conservé. Réessayez.",
+    "tasksFailed": "Impossible de supprimer les tâches planifiées de ce VA Bot ; le VA Bot a donc été conservé. Réessayez."
   }
 }

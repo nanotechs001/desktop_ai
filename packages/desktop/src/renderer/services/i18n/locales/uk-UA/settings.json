@@ -223,8 +223,6 @@
   "promptEdit": "Редагувати",
   "promptPreview": "Попередній перегляд",
   "promptPreviewEmpty": "Немає вмісту для перегляду",
-  "deleteAssistantTitle": "Видалити агента",
-  "deleteAssistantConfirm": "Ви впевнені, що хочете видалити цього агента? Цю дію неможливо скасувати.",
   "cannotDeleteBuiltin": "Неможливо видалити вбудованих агентів",
   "duplicateAssistant": "Дублювати як мого агента",
   "assistantMainAgent": "Рушій",

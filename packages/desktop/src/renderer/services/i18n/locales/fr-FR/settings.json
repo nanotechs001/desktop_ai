@@ -215,8 +215,6 @@
   "promptEdit": "Modifier",
   "promptPreview": "Aperçu",
   "promptPreviewEmpty": "Aucun contenu à prévisualiser",
-  "deleteAssistantTitle": "Supprimer l'agent",
-  "deleteAssistantConfirm": "Êtes-vous sûr de vouloir supprimer cet agent ? Cette action est irréversible.",
   "cannotDeleteBuiltin": "Impossible de supprimer les agents intégrés",
   "duplicateAssistant": "Dupliquer",
   "assistantMainAgent": "Moteur",

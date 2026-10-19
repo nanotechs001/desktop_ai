@@ -1,6 +1,6 @@
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
-import { forgetBotColor, newBotColor, rememberBotColor } from '@/renderer/hooks/agent/useBotColor';
+import { newBotColor, rememberBotColor } from '@/renderer/hooks/agent/useBotColor';
 import { persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
 import type { IMcpServer } from '@/common/config/storage';
 import type { Assistant, CreateAssistantRequest, UpdateAssistantRequest } from '@/common/types/agent/assistantTypes';
@@ -20,7 +20,9 @@ import { emitter } from '@/renderer/utils/emitter';
 import { assistantOrderAfterToggle, selectableAssistants } from '@/renderer/utils/model/assistantSelection';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMatch, useNavigate } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
+import { deleteVaBot, type DeleteVaBotOutcome } from './deleteVaBot';
 
 type UseAssistantEditorParams = {
   localeKey: string;
@@ -77,26 +79,6 @@ const syncEnginePin = async (assistantId: string, usesDefault: boolean, engineId
 };
 
 /**
- * After an Agent is deleted: drop its notebook (and main's cached chats of it), its engine pin and its color. Failures
- * are logged only: the Agent is already gone, and a leftover notebook, pin or color is never read again.
- */
-const forgetDeletedAgent = async (assistantId: string): Promise<void> => {
-  const reply = await ipcBridge.agentNotes.removeAgent
-    .invoke({ agentId: assistantId })
-    .catch((error: unknown) => ({ success: false, msg: error instanceof Error ? error.message : String(error) }));
-  if (!reply.success) console.warn('[useAssistantEditor] could not remove the deleted Agent notebook:', reply.msg);
-  // Only when pinned: writing an empty record would skip the first-run pin seeding.
-  if (configService.get('agent.enginePins')?.[assistantId]) {
-    await persistEnginePin(assistantId, null).catch((error: unknown) =>
-      console.warn('[useAssistantEditor] could not drop the deleted Agent engine pin:', error)
-    );
-  }
-  await forgetBotColor(assistantId).catch((error: unknown) =>
-    console.warn('[useAssistantEditor] could not drop the deleted Agent color:', error)
-  );
-};
-
-/**
  * Manages all assistant editing state and handlers:
  * create, edit, duplicate, save, delete, and toggle enabled.
  */
@@ -138,6 +120,10 @@ export const useAssistantEditor = ({
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<{ done: number; total: number } | null>(null);
+  const navigate = useNavigate();
+  const openChatId = useMatch('/conversation/:id')?.params.id;
   const [promptViewMode, setPromptViewMode] = useState<'edit' | 'preview'>('preview');
 
   const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>([]);
@@ -659,46 +645,67 @@ export const useAssistantEditor = ({
     setDeleteConfirmVisible(true);
   };
 
-  /**
-   * Deletes the Agent, its browser profile first when asked: if that fails the Agent stays, so nothing is left
-   * orphaned, and the user is told.
-   */
-  const handleDeleteConfirm = async (deleteBrowserData = false) => {
-    if (!activeAssistant) return;
+  /** The message for a delete that stopped early; every outcome but `bot` left the Agent in place. */
+  const deleteFailureMessage = (outcome: Exclude<DeleteVaBotOutcome, { ok: true }>): string => {
+    switch (outcome.stage) {
+      case 'profile':
+        return t('agent.browserProfile.deleteFailed', {
+          defaultValue: "Couldn't delete this Agent's browser data, so the Agent was kept. Try again.",
+        });
+      case 'chatsList':
+        return t('agent.deleteBot.chatsListFailed', {
+          defaultValue: "Couldn't read this bot's chats, so the bot was kept. Try again.",
+        });
+      case 'chats':
+        return t('agent.deleteBot.chatsFailed', {
+          count: outcome.total,
+          failed: outcome.failed,
+          defaultValue: "Couldn't delete {{failed}} of {{count}} chats; the bot was kept. Try again.",
+        });
+      case 'cron':
+        return t('agent.deleteBot.tasksFailed', {
+          defaultValue: "Couldn't remove this bot's scheduled tasks, so the bot was kept. Try again.",
+        });
+      case 'bot':
+        return t('agent.browserProfile.partialDelete', {
+          defaultValue:
+            "The Agent's browser data was removed, but the Agent wasn't deleted. Delete it again to finish.",
+        });
+    }
+  };
 
-    let browserDataDeleted = false;
+  /**
+   * Deletes the Agent and everything it owns (see `deleteVaBot`). Any step that fails stops the delete and keeps
+   * the Agent, so the user can retry; what was already deleted stays deleted.
+   */
+  const handleDeleteConfirm = async () => {
+    if (!activeAssistant || deleting) return;
+
+    setDeleting(true);
+    setDeleteProgress(null);
     try {
-      if (deleteBrowserData) {
-        const reply = await ipcBridge.browser.deleteProfileData
-          .invoke({ agentId: activeAssistant.id })
-          .catch((error: unknown) => ({ success: false, msg: error instanceof Error ? error.message : String(error) }));
-        if (!reply.success) {
-          console.warn('[useAssistantEditor] could not delete the Agent browser data:', reply.msg);
-          message.error(
-            t('agent.browserProfile.deleteFailed', {
-              defaultValue: "Couldn't delete this Agent's browser data, so the Agent was kept. Try again.",
-            })
-          );
-          return;
-        }
-        browserDataDeleted = true;
+      const outcome = await deleteVaBot(activeAssistant.id, {
+        onProgress: (done, total) => setDeleteProgress({ done, total }),
+        onChatRemoved: (id) => {
+          if (id === openChatId) void navigate('/');
+        },
+      });
+      if (outcome.ok === false) {
+        message.error(deleteFailureMessage(outcome));
+        return;
       }
-      await ipcBridge.assistants.delete.invoke({ id: activeAssistant.id });
-      await forgetDeletedAgent(activeAssistant.id);
       await refreshAssistantCatalog();
       setDeleteConfirmVisible(false);
       setEditVisible(false);
       message.success(t('common.success', { defaultValue: 'Success' }));
     } catch (error) {
       console.error('Failed to delete assistant:', error);
-      message.error(
-        browserDataDeleted
-          ? t('agent.browserProfile.partialDelete', {
-              defaultValue:
-                "The Agent's browser data was removed, but the Agent wasn't deleted. Delete it again to finish.",
-            })
-          : t('common.failed', { defaultValue: 'Failed' })
-      );
+      message.error(t('common.failed', { defaultValue: 'Failed' }));
+    } finally {
+      // Chats may be gone even when the Agent was kept.
+      emitter.emit('chat.history.refresh');
+      setDeleting(false);
+      setDeleteProgress(null);
     }
   };
 
@@ -778,6 +785,8 @@ export const useAssistantEditor = ({
     setSelectedMcpIds,
     isCreating,
     deleteConfirmVisible,
+    deleting,
+    deleteProgress,
     setDeleteConfirmVisible,
     promptViewMode,
     setPromptViewMode,

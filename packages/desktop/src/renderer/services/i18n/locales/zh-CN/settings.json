@@ -215,8 +215,6 @@
   "promptEdit": "编辑",
   "promptPreview": "预览",
   "promptPreviewEmpty": "暂无内容可预览",
-  "deleteAssistantTitle": "删除 Agent",
-  "deleteAssistantConfirm": "确定要删除此 Agent 吗？此操作无法撤销。",
   "cannotDeleteBuiltin": "无法删除内置 Agent",
   "duplicateAssistant": "复制为我的 Agent",
   "assistantMainAgent": "引擎",

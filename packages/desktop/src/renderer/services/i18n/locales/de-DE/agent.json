@@ -91,9 +91,32 @@
     "clearConfirmOk": "Löschen",
     "cleared": "Browserdaten gelöscht.",
     "clearFailed": "Die Browserdaten konnten nicht gelöscht werden.",
-    "deleteWithAgent": "Auch seine Browserdaten löschen (Cookies, Anmeldungen, Websitedaten, Erweiterungen)",
     "deleteFailed": "Die Browserdaten dieses Agenten konnten nicht gelöscht werden, daher wurde der Agent behalten. Versuchen Sie es erneut.",
-    "partialDelete": "Die Browserdaten des Agenten wurden entfernt, aber der Agent wurde nicht gelöscht. Löschen Sie ihn erneut, um den Vorgang abzuschließen.",
-    "keptOnDisk": "Seine Browserdaten (Cookies, Anmeldungen, Websitedaten) bleiben auf diesem Computer."
+    "partialDelete": "Die Browserdaten des Agenten wurden entfernt, aber der Agent wurde nicht gelöscht. Löschen Sie ihn erneut, um den Vorgang abzuschließen."
+  },
+  "deleteBot": {
+    "title": "„{{name}}“ löschen?",
+    "counting": "Es wird geprüft, was dazugehört…",
+    "countFailed": "Es konnte nicht geprüft werden, was zu diesem VA Bot gehört. Schließen Sie das Fenster und versuchen Sie es erneut.",
+    "intro": "Dadurch wird dauerhaft entfernt:",
+    "chats": "seine {{count}} Chats mit Nachrichten, Dateien und Verlauf",
+    "chats_one": "sein {{count}} Chat mit Nachrichten, Dateien und Verlauf",
+    "chats_other": "seine {{count}} Chats mit Nachrichten, Dateien und Verlauf",
+    "browserProfile": "sein Browserprofil: Cookies, Anmeldungen, Websitedaten und Erweiterungen",
+    "notebook": "sein Notizbuch (was er gelernt hat) und seine Regeln",
+    "tasks": "seine {{count}} geplanten Aufgaben",
+    "tasks_one": "seine {{count}} geplante Aufgabe",
+    "tasks_other": "seine {{count}} geplanten Aufgaben",
+    "robot": "sein Desktop-Roboter",
+    "channel": "seine {{platform}}-Verbindung, die nicht mehr antwortet, bis Sie einen anderen VA Bot wählen",
+    "skillsStay": "Von ihm gespeicherte Skills bleiben in Ihrer Skill-Bibliothek.",
+    "irreversible": "Das lässt sich nicht rückgängig machen.",
+    "progress": "Chats werden gelöscht: {{done}} von {{total}}…",
+    "working": "Wird gelöscht…",
+    "chatsListFailed": "Die Chats dieses VA Bots konnten nicht gelesen werden, daher wurde der VA Bot behalten. Versuchen Sie es erneut.",
+    "chatsFailed": "{{failed}} von {{count}} Chats konnten nicht gelöscht werden; der VA Bot wurde behalten. Versuchen Sie es erneut.",
+    "chatsFailed_one": "Der Chat konnte nicht gelöscht werden; der VA Bot wurde behalten. Versuchen Sie es erneut.",
+    "chatsFailed_other": "{{failed}} von {{count}} Chats konnten nicht gelöscht werden; der VA Bot wurde behalten. Versuchen Sie es erneut.",
+    "tasksFailed": "Die geplanten Aufgaben dieses VA Bots konnten nicht entfernt werden, daher wurde der VA Bot behalten. Versuchen Sie es erneut."
   }
 }

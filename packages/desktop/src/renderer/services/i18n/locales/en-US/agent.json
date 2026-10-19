@@ -91,9 +91,32 @@
     "clearConfirmOk": "Clear",
     "cleared": "Browsing data cleared.",
     "clearFailed": "Couldn't clear the browsing data.",
-    "deleteWithAgent": "Also delete its browser data (cookies, sign-ins, site data, extensions)",
     "deleteFailed": "Couldn't delete this Agent's browser data, so the Agent was kept. Try again.",
-    "partialDelete": "The Agent's browser data was removed, but the Agent wasn't deleted. Delete it again to finish.",
-    "keptOnDisk": "Its browser data (cookies, sign-ins, site data) stays on this computer."
+    "partialDelete": "The Agent's browser data was removed, but the Agent wasn't deleted. Delete it again to finish."
+  },
+  "deleteBot": {
+    "title": "Delete \"{{name}}\"?",
+    "counting": "Checking what it owns…",
+    "countFailed": "Couldn't check what this bot owns. Close this and try again.",
+    "intro": "This permanently removes:",
+    "chats": "its {{count}} chats, with their messages, files and history",
+    "chats_one": "its {{count}} chat, with its messages, files and history",
+    "chats_other": "its {{count}} chats, with their messages, files and history",
+    "browserProfile": "its browser profile: cookies, sign-ins, site data and extensions",
+    "notebook": "its notebook (what it learned) and its rules",
+    "tasks": "its {{count}} scheduled tasks",
+    "tasks_one": "its {{count}} scheduled task",
+    "tasks_other": "its {{count}} scheduled tasks",
+    "robot": "its desktop robot",
+    "channel": "its {{platform}} connection, which will stop replying until you pick another bot",
+    "skillsStay": "Skills it saved stay in your skills library.",
+    "irreversible": "This can't be undone.",
+    "progress": "Deleting chats {{done}} of {{total}}…",
+    "working": "Deleting…",
+    "chatsListFailed": "Couldn't read this bot's chats, so the bot was kept. Try again.",
+    "chatsFailed": "Couldn't delete {{failed}} of {{count}} chats; the bot was kept. Try again.",
+    "chatsFailed_one": "Couldn't delete {{failed}} of {{count}} chat; the bot was kept. Try again.",
+    "chatsFailed_other": "Couldn't delete {{failed}} of {{count}} chats; the bot was kept. Try again.",
+    "tasksFailed": "Couldn't remove this bot's scheduled tasks, so the bot was kept. Try again."
   }
 }

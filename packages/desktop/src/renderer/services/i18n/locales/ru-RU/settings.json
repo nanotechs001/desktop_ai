@@ -223,8 +223,6 @@
   "promptEdit": "Редактировать",
   "promptPreview": "Предпросмотр",
   "promptPreviewEmpty": "Нет содержимого для предпросмотра",
-  "deleteAssistantTitle": "Удалить агента",
-  "deleteAssistantConfirm": "Вы уверены, что хотите удалить этого агента? Это действие нельзя отменить.",
   "cannotDeleteBuiltin": "Невозможно удалить встроенных агентов",
   "duplicateAssistant": "Дублировать как моего агента",
   "assistantMainAgent": "Движок",

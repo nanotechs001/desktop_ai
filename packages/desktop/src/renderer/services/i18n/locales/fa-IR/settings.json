@@ -215,8 +215,6 @@
   "promptEdit": "ویرایش",
   "promptPreview": "پیش‌نمایش",
   "promptPreviewEmpty": "محتوایی برای پیش‌نمایش وجود ندارد",
-  "deleteAssistantTitle": "حذف عامل",
-  "deleteAssistantConfirm": "آیا مطمئن هستید که می‌خواهید این عامل را حذف کنید؟ این عمل غیرقابل بازگشت است.",
   "cannotDeleteBuiltin": "عامل‌های پیش‌فرض قابل حذف نیستند",
   "duplicateAssistant": "تکثیر",
   "assistantMainAgent": "موتور",
