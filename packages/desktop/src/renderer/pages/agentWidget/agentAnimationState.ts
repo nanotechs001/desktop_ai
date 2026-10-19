@@ -43,6 +43,36 @@ export type AgentActivity = {
 export const ERROR_HOLD_MS = 5000;
 export const TALK_WINDOW_MS = 1500;
 export const DEFAULT_SLEEP_AFTER_MS = 5 * 60_000;
+/** An idle robot naps for a random time in this range, then wakes on its own. */
+export const NAP_MS: readonly [number, number] = [2 * 60_000, 5 * 60_000];
+/** …and stays awake (wandering, looking around) for a random time in this range before the next nap. */
+export const AWAKE_SPELL_MS: readonly [number, number] = [60_000, 3 * 60_000];
+
+/** Where an idle robot is in its nap-and-wake cycle: asleep or awake until `until`. */
+export type RestCycle = { asleep: boolean; until: number };
+
+const pickIn = ([min, max]: readonly [number, number], random: () => number): number =>
+  min + Math.floor(random() * (max - min));
+
+/**
+ * The idle robot's rest cycle at `now`: null while it has been idle for less than `sleepAfterMs` (real activity
+ * restarts that countdown), otherwise naps (NAP_MS) alternating with awake spells (AWAKE_SPELL_MS), each of a random
+ * length. Returns `cycle` itself while the current phase lasts.
+ */
+export function advanceRestCycle(
+  cycle: RestCycle | null,
+  lastActivityAt: number,
+  now: number,
+  random: () => number = Math.random,
+  sleepAfterMs = DEFAULT_SLEEP_AFTER_MS
+): RestCycle | null {
+  if (now - lastActivityAt <= sleepAfterMs) return null;
+  if (!cycle) return { asleep: true, until: now + pickIn(NAP_MS, random) };
+  if (now < cycle.until) return cycle;
+  return cycle.asleep
+    ? { asleep: false, until: now + pickIn(AWAKE_SPELL_MS, random) }
+    : { asleep: true, until: now + pickIn(NAP_MS, random) };
+}
 
 export const createActivity = (now: number): AgentActivity => ({
   micActive: false,
@@ -56,10 +86,12 @@ export const createActivity = (now: number): AgentActivity => ({
   lastActivityAt: now,
 });
 
+/** `rest` is the idle robot's nap-and-wake cycle (see advanceRestCycle); without it, idle past `sleepAfterMs` sleeps. */
 export function resolveAnimationState(
   a: AgentActivity,
   now: number,
-  sleepAfterMs = DEFAULT_SLEEP_AFTER_MS
+  sleepAfterMs = DEFAULT_SLEEP_AFTER_MS,
+  rest?: RestCycle | null
 ): AgentAnimationState {
   if (a.lastErrorAt > 0 && now - a.lastErrorAt < ERROR_HOLD_MS) return 'error';
   if (a.offline) return 'offline';
@@ -70,7 +102,7 @@ export function resolveAnimationState(
   if (kinds.includes('work')) return 'working';
   if (a.turnActive) return 'thinking';
   if (a.unread) return 'notification';
-  if (now - a.lastActivityAt > sleepAfterMs) return 'sleeping';
+  if (rest === undefined ? now - a.lastActivityAt > sleepAfterMs : rest?.asleep) return 'sleeping';
   return 'idle';
 }
 

@@ -14,7 +14,11 @@ import {
   ERROR_HOLD_MS,
   resolveAnimationState,
   TALK_WINDOW_MS,
+  advanceRestCycle,
+  AWAKE_SPELL_MS,
+  NAP_MS,
   type AgentActivity,
+  type RestCycle,
 } from '@renderer/pages/agentWidget/agentAnimationState';
 
 const T0 = 1_000_000;
@@ -124,5 +128,62 @@ describe('turn completion', () => {
   });
   it('a failed turn shows the error pose', () => {
     expect(state(applyTurnCompleted(running, { status: 'error' }, true, T0))).toBe('error');
+  });
+});
+
+// An idle robot naps and wakes on its own: asleep for a random NAP_MS, awake for a random AWAKE_SPELL_MS, repeating,
+// instead of sleeping until the next real activity.
+describe('nap-and-wake rest cycle', () => {
+  const idleFor = (ms: number) => T0 + ms;
+  const sleepAt = idleFor(DEFAULT_SLEEP_AFTER_MS + 1);
+  const fixed = (value: number) => () => value;
+  const advance = (cycle: RestCycle | null, now: number, random = fixed(0)) => advanceRestCycle(cycle, T0, now, random);
+
+  it('has no cycle before the robot has been idle long enough to sleep', () => {
+    expect(advance(null, idleFor(DEFAULT_SLEEP_AFTER_MS))).toBeNull();
+  });
+
+  it('falls asleep after the idle timeout for a nap inside NAP_MS', () => {
+    const shortest = advance(null, sleepAt, fixed(0));
+    const longest = advance(null, sleepAt, fixed(0.999999));
+    expect(shortest).toEqual({ asleep: true, until: sleepAt + NAP_MS[0] });
+    expect(longest?.asleep).toBe(true);
+    expect(longest!.until - sleepAt).toBeLessThanOrEqual(NAP_MS[1]);
+    expect(longest!.until - sleepAt).toBeGreaterThan(NAP_MS[1] - 1000);
+  });
+
+  it('wakes by itself when the nap ends, for an awake spell inside AWAKE_SPELL_MS, then naps again', () => {
+    const nap = advance(null, sleepAt);
+    expect(advance(nap, nap!.until - 1)).toBe(nap);
+    const awake = advance(nap, nap!.until, fixed(0.5));
+    expect(awake).toEqual({
+      asleep: false,
+      until: nap!.until + AWAKE_SPELL_MS[0] + Math.floor(0.5 * (AWAKE_SPELL_MS[1] - AWAKE_SPELL_MS[0])),
+    });
+    const napAgain = advance(awake, awake!.until);
+    expect(napAgain).toEqual({ asleep: true, until: awake!.until + NAP_MS[0] });
+  });
+
+  it('real activity ends the cycle: the robot is awake and the idle countdown starts over', () => {
+    const nap = advance(null, sleepAt);
+    const afterActivity = advanceRestCycle(nap, sleepAt + 10, sleepAt + 20, fixed(0));
+    expect(afterActivity).toBeNull();
+  });
+
+  it('drives the animation: sleeping during a nap, idle during an awake spell, idle with no cycle', () => {
+    const idle = base();
+    expect(resolveAnimationState(idle, sleepAt, DEFAULT_SLEEP_AFTER_MS, { asleep: true, until: sleepAt + 1 })).toBe(
+      'sleeping'
+    );
+    expect(resolveAnimationState(idle, sleepAt, DEFAULT_SLEEP_AFTER_MS, { asleep: false, until: sleepAt + 1 })).toBe(
+      'idle'
+    );
+    expect(resolveAnimationState(idle, sleepAt, DEFAULT_SLEEP_AFTER_MS, null)).toBe('idle');
+  });
+
+  it('never outranks real states: a nap still yields to thinking or an unread reply', () => {
+    const nap: RestCycle = { asleep: true, until: sleepAt + 1 };
+    expect(resolveAnimationState(base({ turnActive: true }), sleepAt, DEFAULT_SLEEP_AFTER_MS, nap)).toBe('thinking');
+    expect(resolveAnimationState(base({ unread: true }), sleepAt, DEFAULT_SLEEP_AFTER_MS, nap)).toBe('notification');
   });
 });

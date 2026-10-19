@@ -11,6 +11,7 @@ import { addEventListener } from '@/renderer/utils/emitter';
 import {
   applyStreamFrame,
   applyTurnCompleted,
+  advanceRestCycle,
   createActivity,
   NORMAL_PRESENTATION,
   presentationAdvance,
@@ -18,6 +19,7 @@ import {
   resolveAnimationState,
   type AgentActivity,
   type Presentation,
+  type RestCycle,
 } from './agentAnimationState';
 
 // Re-evaluates time-based transitions (talking → thinking, error hold, sleep) without per-frame work.
@@ -37,6 +39,8 @@ export type AgentAnimationView = {
 
 export function useAgentAnimationState(conversationId: string, chatVisible: boolean): AgentAnimationView {
   const activityRef = useRef<AgentActivity>(createActivity(Date.now()));
+  // The idle robot's own nap-and-wake rhythm, so it never sleeps until the next chat.
+  const restRef = useRef<RestCycle | null>(null);
   const chatVisibleRef = useRef(chatVisible);
   chatVisibleRef.current = chatVisible;
   const [state, setState] = useState<AgentAnimationState>('idle');
@@ -45,7 +49,9 @@ export function useAgentAnimationState(conversationId: string, chatVisible: bool
 
   useEffect(() => {
     const recompute = () => {
-      const next = resolveAnimationState(activityRef.current, Date.now());
+      const now = Date.now();
+      restRef.current = advanceRestCycle(restRef.current, activityRef.current.lastActivityAt, now);
+      const next = resolveAnimationState(activityRef.current, now, undefined, restRef.current);
       setState((prev) => (prev === next ? prev : next));
       setAwaitingUser(activityRef.current.awaitingUser);
     };
@@ -91,7 +97,7 @@ export function useAgentAnimationState(conversationId: string, chatVisible: bool
   useEffect(() => {
     if (!chatVisible || !activityRef.current.unread) return;
     activityRef.current = { ...activityRef.current, unread: false };
-    setState(resolveAnimationState(activityRef.current, Date.now()));
+    setState(resolveAnimationState(activityRef.current, Date.now(), undefined, restRef.current));
   }, [chatVisible]);
 
   const wake = useCallback(() => updateRef.current((a) => ({ ...a, lastActivityAt: Date.now() })), []);
