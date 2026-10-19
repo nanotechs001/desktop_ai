@@ -130,16 +130,16 @@ export const collectBotChats = (agentId: string): Promise<TChatConversation[]> =
  * always has the default Agent, so an empty list means a failed load, and treating every bot as gone would be wrong.
  */
 export async function findOrphanChats(keptIds: readonly string[] = []): Promise<TChatConversation[]> {
+  const kept = new Set(keptIds);
+  // Chats first, catalog second: a bot created between the two reads is then in the catalog, never flagged.
+  const candidates = await collectChats(({ id, assistant }) => assistant?.source === 'user' && !kept.has(id));
   const catalog = await ipcBridge.assistants.list.invoke();
   if (!Array.isArray(catalog) || catalog.length === 0) throw new Error('Assistant catalog is empty');
   const known = new Set(catalog.map((assistant) => assistant.id));
-  const kept = new Set(keptIds);
   const storedDefaultId = configService.get('agent.builtinDefaultId');
-  return collectChats(({ id, assistant }) => {
-    if (assistant?.source !== 'user' || kept.has(id)) return false;
-    return (
-      !known.has(assistant.id) && !isUndeletableAgent(assistant.id, storedDefaultId) && !isHiddenAgentId(assistant.id)
-    );
+  return candidates.filter(({ assistant }) => {
+    const id = assistant?.id ?? '';
+    return !known.has(id) && !isUndeletableAgent(id, storedDefaultId) && !isHiddenAgentId(id);
   });
 }
 

@@ -29,7 +29,7 @@ import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspac
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
 import BrowserTabLayer from '@renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
-import OrphanChatsPrompt from '@renderer/hooks/assistant/OrphanChatsPrompt';
+import OrphanChatsPrompt from '@renderer/components/OrphanChatsPrompt';
 import { useBotColorSeed } from '@renderer/hooks/agent/useBotColor';
 import { useDefaultAgentSync, useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';

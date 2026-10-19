@@ -52,7 +52,10 @@ export function useOrphanChats(): OrphanChats {
     const timer = setTimeout(() => {
       if (checked) return;
       checked = true;
-      findOrphanChats(configService.get(KEPT_KEY) ?? [])
+      // The kept list lives in the settings cache, which may still be loading.
+      configService
+        .whenReady()
+        .then(() => findOrphanChats(configService.get(KEPT_KEY) ?? []))
         .then(setOrphans)
         .catch((error: unknown) => console.warn('[orphanChats] could not look for leftover chats:', error));
     }, ORPHAN_CHECK_DELAY_MS);
@@ -63,6 +66,7 @@ export function useOrphanChats(): OrphanChats {
     const ids = orphans.map((conversation) => conversation.id);
     setOrphans([]);
     try {
+      await configService.whenReady();
       await configService.set(KEPT_KEY, [...new Set([...(configService.get(KEPT_KEY) ?? []), ...ids])]);
     } catch (error) {
       console.warn('[orphanChats] could not remember the kept chats:', error);

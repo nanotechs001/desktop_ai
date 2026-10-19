@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   removeChats: vi.fn(),
   configGet: vi.fn(),
   configSet: vi.fn(),
+  whenReady: vi.fn(),
   widgetId: vi.fn(),
   navigate: vi.fn(),
   openChatId: { value: undefined as string | undefined },
@@ -40,7 +41,9 @@ vi.mock('@/renderer/hooks/assistant/botChats', () => ({
   findOrphanChats: mocks.findOrphanChats,
   removeChats: mocks.removeChats,
 }));
-vi.mock('@/common/config/configService', () => ({ configService: { get: mocks.configGet, set: mocks.configSet } }));
+vi.mock('@/common/config/configService', () => ({
+  configService: { get: mocks.configGet, set: mocks.configSet, whenReady: mocks.whenReady },
+}));
 vi.mock('@/renderer/pages/agentWidget/chatLocation', () => ({ getWidgetConversationId: mocks.widgetId }));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mocks.navigate,
@@ -48,7 +51,7 @@ vi.mock('react-router-dom', () => ({
 }));
 vi.mock('@/renderer/utils/emitter', () => ({ emitter: { emit: mocks.emit } }));
 
-import OrphanChatsPrompt from '@/renderer/hooks/assistant/OrphanChatsPrompt';
+import OrphanChatsPrompt from '@/renderer/components/OrphanChatsPrompt';
 import { ORPHAN_CHECK_DELAY_MS, resetOrphanCheck } from '@/renderer/hooks/assistant/useOrphanChats';
 import type { TChatConversation } from '@/common/config/storage';
 
@@ -83,6 +86,7 @@ beforeEach(() => {
   mocks.openChatId.value = undefined;
   mocks.configGet.mockReturnValue(undefined);
   mocks.configSet.mockResolvedValue(undefined);
+  mocks.whenReady.mockResolvedValue(undefined);
   mocks.findOrphanChats.mockResolvedValue([]);
   mocks.removeChats.mockImplementation(async (list: TChatConversation[]) => ({
     removed: list.map((c) => c.id),
@@ -170,6 +174,53 @@ describe('OrphanChatsPrompt', () => {
     await startDetection();
 
     expect(mocks.findOrphanChats).toHaveBeenCalledWith(['old1']);
+  });
+
+  /** Settings that only exist once the config cache has loaded. */
+  const settingsLoadLater = (stored: string[]) => {
+    let loaded = false;
+    let release: () => void = () => {};
+    mocks.whenReady.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = () => {
+            loaded = true;
+            resolve();
+          };
+        })
+    );
+    mocks.configGet.mockImplementation(() => (loaded ? stored : undefined));
+    return () => release();
+  };
+
+  it('waits for the settings to load before reading the kept chats', async () => {
+    const release = settingsLoadLater(['old1']);
+    mount();
+    await startDetection();
+    expect(mocks.findOrphanChats).not.toHaveBeenCalled();
+
+    await act(async () => {
+      release();
+    });
+
+    expect(mocks.findOrphanChats).toHaveBeenCalledWith(['old1']);
+  });
+
+  it('Keep waits for the settings too, so it never overwrites the stored list', async () => {
+    mocks.findOrphanChats.mockResolvedValue(chats(1));
+    mount();
+    await startDetection();
+    const release = settingsLoadLater(['old1']);
+
+    await act(async () => {
+      fireEvent.click(keepButton());
+    });
+    expect(mocks.configSet).not.toHaveBeenCalled();
+    await act(async () => {
+      release();
+    });
+
+    expect(mocks.configSet).toHaveBeenCalledWith('agent.keptOrphanChats', ['old1', 'c1']);
   });
 
   it('Keep remembers the ids next to the ones already kept, deletes nothing and closes', async () => {

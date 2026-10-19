@@ -117,6 +117,17 @@ describe('findOrphanChats', () => {
     await expect(findOrphanChats()).rejects.toThrow('offline');
   });
 
+  it('reads the chats before the catalog, so a bot created in between is not flagged', async () => {
+    live(chat('fresh', { id: 'new-bot', source: 'user' }));
+    // The bot appears in the catalog only once the chats have been read.
+    ipc.assistantsList.mockImplementation(async () => {
+      const chatsRead = ipc.getUserConversations.mock.calls.length > 0;
+      return [{ id: 'alive' }, ...(chatsRead ? [{ id: 'new-bot' }] : [])];
+    });
+
+    expect(await findOrphanChats()).toEqual([]);
+  });
+
   it('rejects when the chat list cannot be read', async () => {
     ipc.getUserConversations.mockRejectedValue(new Error('db'));
 

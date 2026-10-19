@@ -47,7 +47,7 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
-vi.mock('@renderer/hooks/assistant/OrphanChatsPrompt', () => ({ default: () => null }));
+vi.mock('@renderer/components/OrphanChatsPrompt', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),

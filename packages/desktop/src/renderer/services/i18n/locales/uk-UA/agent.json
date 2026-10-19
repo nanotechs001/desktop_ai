@@ -138,6 +138,8 @@
     "keep": "Зберегти",
     "deleteFailed": "Не вдалося видалити {{failed}} з {{count}} чатів.",
     "deleteFailed_one": "Не вдалося видалити {{failed}} з {{count}} чату.",
-    "deleteFailed_other": "Не вдалося видалити {{failed}} з {{count}} чатів."
+    "deleteFailed_other": "Не вдалося видалити {{failed}} з {{count}} чатів.",
+    "deleteFailed_few": "Не вдалося видалити {{failed}} з {{count}} чатів.",
+    "deleteFailed_many": "Не вдалося видалити {{failed}} з {{count}} чатів."
   }
 }
