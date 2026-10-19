@@ -44,7 +44,6 @@ import { useActiveLease } from '../hooks/useActiveLease';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
-// import SkillRuleGenerator from './components/SkillRuleGenerator'; // Temporarily hidden
 
 const configErrorMessageKey = (error: unknown) => {
   const errorKind = classifyConfigSetError(error);

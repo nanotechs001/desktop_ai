@@ -294,14 +294,6 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     ipcBridge.extensions.getAcpAdapters.invoke().catch(() => [] as Record<string, unknown>[])
   );
 
-  // Remote agent for remote conversations
-  const remoteAgentId =
-    conversation?.type === 'remote' ? (conversation.extra as { remoteAgentId?: string })?.remoteAgentId : undefined;
-  const { data: remoteAgent, isLoading: isLoadingRemoteAgent } = useSWR(
-    remoteAgentId ? `remote-agent.get.${remoteAgentId}` : null,
-    () => (remoteAgentId ? ipcBridge.remoteAgent.get.invoke({ id: remoteAgentId }) : null)
-  );
-
   return useMemo(() => {
     if (!conversation) return { info: null, isLoading: false };
 
@@ -327,24 +319,6 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
         info: buildPresetInfoFromConversationAssistant(conversation.assistant),
         isLoading: false,
       };
-    }
-
-    // Remote agent conversations short-circuit to the remote record
-    if (conversation.type === 'remote' && remoteAgentId) {
-      if (isLoadingRemoteAgent) return { info: null, isLoading: true };
-      if (remoteAgent) {
-        const normalized = normalizeAvatar(remoteAgent.avatar);
-        return {
-          info: {
-            name: remoteAgent.name,
-            logo: normalized.logo,
-            isEmoji: normalized.isEmoji,
-            isFallback: normalized.isFallback,
-          },
-          isLoading: false,
-        };
-      }
-      return { info: null, isLoading: false };
     }
 
     const explicitAssistantCandidates = collectExplicitAssistantIdentityCandidates(conversation);
@@ -441,8 +415,5 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     isLoadingAssistants,
     extensionAcpAdapters,
     isLoadingExtAdapters,
-    remoteAgentId,
-    remoteAgent,
-    isLoadingRemoteAgent,
   ]);
 }

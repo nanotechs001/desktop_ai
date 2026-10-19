@@ -1288,67 +1288,6 @@ export const mcpService = {
   getAuthenticatedServers: httpGet<string[], void>('/api/mcp/oauth/authenticated'),
 };
 
-export const openclawConversation = {
-  sendMessage: conversation.sendMessage,
-  responseStream: conversation.responseStream,
-  getRuntime: httpGet<
-    {
-      conversation_id: string;
-      runtime: {
-        workspace?: string;
-        backend?: string;
-        agent_name?: string;
-        cli_path?: string;
-        model?: string;
-        session_key?: string | null;
-        is_connected?: boolean;
-        has_active_session?: boolean;
-        identity_hash?: string | null;
-      };
-      expected?: {
-        expected_workspace?: string;
-        expected_backend?: string;
-        expected_agent_name?: string;
-        expected_cli_path?: string;
-        expected_model?: string;
-        expected_identity_hash?: string | null;
-        switched_at?: number;
-      };
-    },
-    { conversation_id: string }
-  >((p) => `/api/conversations/${p.conversation_id}/openclaw/runtime`),
-};
-
-// ---------------------------------------------------------------------------
-// Remote Agent — routed to /api/remote-agents/*
-// ---------------------------------------------------------------------------
-
-export const remoteAgent = {
-  list: httpGet<import('@/common/types/agent/remoteAgentTypes').RemoteAgentConfig[], void>('/api/remote-agents'),
-  get: httpGet<import('@/common/types/agent/remoteAgentTypes').RemoteAgentConfig | null, { id: string }>(
-    (p) => `/api/remote-agents/${p.id}`
-  ),
-  create: httpPost<
-    import('@/common/types/agent/remoteAgentTypes').RemoteAgentConfig,
-    import('@/common/types/agent/remoteAgentTypes').RemoteAgentInput
-  >('/api/remote-agents'),
-  update: httpPut<
-    boolean,
-    { id: string; updates: Partial<import('@/common/types/agent/remoteAgentTypes').RemoteAgentInput> }
-  >(
-    (p) => `/api/remote-agents/${p.id}`,
-    (p) => p.updates
-  ),
-  delete: httpDelete<boolean, { id: string }>((p) => `/api/remote-agents/${p.id}`),
-  testConnection: httpPost<
-    { success: boolean; error?: string },
-    { url: string; auth_type: string; auth_token?: string; allow_insecure?: boolean }
-  >('/api/remote-agents/test-connection'),
-  handshake: httpPost<{ status: 'ok' | 'pending_approval' | 'error'; error?: string }, { id: string }>(
-    (p) => `/api/remote-agents/${p.id}/handshake`
-  ),
-};
-
 // ---------------------------------------------------------------------------
 // Database — routed to conversation/message endpoints
 // ---------------------------------------------------------------------------
@@ -2051,7 +1990,6 @@ export interface ICreateConversationParams {
     };
     /** Legacy marker for pre-provider-probe health-check conversations. */
     is_health_check?: boolean;
-    remote_agent_id?: string;
     extra_skill_paths?: string[];
     team_id?: string;
   };
@@ -2407,21 +2345,7 @@ export const channel = {
   userAuthorized: wsMappedEmitter<IChannelUser>('channel.user-authorized', (raw) => toChannelUser(raw as RawUser)),
 };
 
-// ---------------------------------------------------------------------------
-// Agent Hub API — routed to /api/hub/*
-// ---------------------------------------------------------------------------
-
-import type { HubExtensionStatus, IHubAgentItem } from '@/common/types/agent/hub';
 import type { Note } from '@/common/types/agent/artifacts';
-export const hub = {
-  getExtensionList: httpGet<IHubAgentItem[], void>('/api/hub/extensions'),
-  install: httpPost<void, { name: string }>('/api/hub/install'),
-  uninstall: httpPost<void, { name: string }>('/api/hub/uninstall'),
-  retryInstall: httpPost<void, { name: string }>('/api/hub/retry-install'),
-  checkUpdates: httpPost<{ name: string }[], void>('/api/hub/check-updates'),
-  update: httpPost<void, { name: string }>('/api/hub/update'),
-  onStateChanged: wsEmitter<{ name: string; status: HubExtensionStatus; error?: string }>('hub.state-changed'),
-};
 
 // ---------------------------------------------------------------------------
 // Team Mode API — routed to /api/teams/*

@@ -72,7 +72,6 @@ const requiredAgentErrorCodes = [
   'USER_AGENT_PROTOCOL_ERROR',
   'USER_AGENT_PROTOCOL_MISMATCH',
   'USER_AGENT_NO_PREVIOUS_SESSION',
-  'USER_AGENT_OPENCLAW_GATEWAY_UNREACHABLE',
   'USER_AGENT_COMMAND_NOT_FOUND',
   'USER_AGENT_MISSING_ENV',
   'USER_LLM_PROVIDER_AWS_SSO_EXPIRED',
@@ -241,37 +240,6 @@ describe('MessageTips', () => {
     expect(screen.queryByText('backend billing required fallback')).not.toBeInTheDocument();
   });
 
-  it('renders OpenClaw Gateway unreachable errors with localized recovery guidance', () => {
-    render(
-      <MessageTips
-        message={buildTips('error', 'backend fallback should not be primary copy', {
-          message: 'OpenClaw Gateway is not reachable',
-          code: 'USER_AGENT_OPENCLAW_GATEWAY_UNREACHABLE',
-          ownership: 'user_agent',
-          detail:
-            'OpenClaw Gateway is not running or cannot be reached at 127.0.0.1:18789.\n\nStart OpenClaw Gateway and try again. You can run:\nopenclaw gateway status\nopenclaw gateway start',
-          retryable: true,
-          feedback_recommended: false,
-          resolution: {
-            kind: 'check_agent_installation',
-            target: 'agent_settings',
-          },
-        })}
-      />
-    );
-
-    expect(screen.getByText('OpenClaw Gateway is not reachable')).toBeInTheDocument();
-    expect(screen.getAllByText(/OpenClaw Gateway is not running/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/openclaw gateway status/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/openclaw gateway start/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Agent')).toBeInTheDocument();
-    expect(screen.getByText('Retryable')).toBeInTheDocument();
-    expect(
-      screen.getByText('Suggestion: Check the agent installation and local command configuration.')
-    ).toBeInTheDocument();
-    expect(screen.queryByText('backend fallback should not be primary copy')).not.toBeInTheDocument();
-  });
-
   it('keeps generic startup failures on the existing startup copy', () => {
     render(
       <MessageTips
@@ -291,8 +259,6 @@ describe('MessageTips', () => {
     );
 
     expect(screen.getByText('The selected agent failed to start')).toBeInTheDocument();
-    expect(screen.queryByText('OpenClaw Gateway is not reachable')).not.toBeInTheDocument();
-    expect(screen.queryByText(/openclaw gateway start/)).not.toBeInTheDocument();
   });
 
   it('renders ACP protocol errors with agent attribution and technical details only', () => {

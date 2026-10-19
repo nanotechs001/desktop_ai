@@ -14,17 +14,10 @@
  * Uses generic `DetectedAgent<K>`:
  *   - `DetectedAgent`           — any kind, for generic lists
  *   - `DetectedAgent<'acp'>`    — ACP-specific fields directly accessible
- *   - `DetectedAgent<'remote'>` — Remote-specific fields directly accessible
  */
 
-/** Remote agent communication protocol */
-export type RemoteAgentProtocol = 'openclaw' | 'zeroclaw' | 'acp';
-
-/** Remote agent authentication method */
-export type RemoteAgentAuthType = 'bearer' | 'password' | 'none';
-
 /** Execution engine kinds — each uses a different protocol or runtime */
-export type DetectedAgentKind = 'acp' | 'remote' | 'aionrs' | 'openclaw-gateway' | 'nanobot';
+export type DetectedAgentKind = 'acp' | 'aionrs';
 
 /** Kind-specific fields mapping */
 type KindFields = {
@@ -41,34 +34,11 @@ type KindFields = {
     custom_agent_id?: string;
   };
 
-  remote: {
-    /** Remote agent config ID (FK to remote_agents table) */
-    remoteAgentId: string;
-    /** WebSocket endpoint URL */
-    url: string;
-    /** Remote communication protocol */
-    protocol: RemoteAgentProtocol;
-    /** Remote authentication method */
-    authType: RemoteAgentAuthType;
-  };
-
   aionrs: {
     /** Resolved CLI binary path */
     cli_path?: string;
     /** Binary version string */
     version?: string;
-  };
-
-  'openclaw-gateway': {
-    /** Resolved CLI binary path */
-    cli_path?: string;
-    /** Gateway WebSocket URL */
-    gatewayUrl?: string;
-  };
-
-  nanobot: {
-    /** Resolved CLI binary path */
-    cli_path?: string;
   };
 };
 
@@ -89,10 +59,7 @@ export type DetectedAgent<K extends DetectedAgentKind = DetectedAgentKind> = {
 
 // Convenience aliases
 export type AcpDetectedAgent = DetectedAgent<'acp'>;
-export type RemoteDetectedAgent = DetectedAgent<'remote'>;
 export type AionrsDetectedAgent = DetectedAgent<'aionrs'>;
-export type NanobotDetectedAgent = DetectedAgent<'nanobot'>;
-export type OpenClawDetectedAgent = DetectedAgent<'openclaw-gateway'>;
 
 // Type guard — narrows a generic DetectedAgent to a specific kind
 export function isAgentKind<K extends DetectedAgentKind>(

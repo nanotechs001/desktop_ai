@@ -45,9 +45,6 @@ vi.mock('@/common', () => ({
     extensions: {
       getAcpAdapters: { invoke: vi.fn() },
     },
-    remoteAgent: {
-      get: { invoke: vi.fn() },
-    },
   },
 }));
 

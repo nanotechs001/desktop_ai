@@ -327,27 +327,6 @@ export type TChatConversation =
           backend?: string;
           agent_name?: string;
           custom_workspace?: boolean;
-          /** Gateway configuration */
-          gateway?: {
-            host?: string;
-            port?: number;
-            token?: string;
-            password?: string;
-            useExternalGateway?: boolean;
-            cli_path?: string;
-          };
-          /** Session key for resume */
-          sessionKey?: string;
-          /** Runtime validation snapshot used for post-switch strong checks */
-          runtimeValidation?: {
-            expectedWorkspace?: string;
-            expectedBackend?: string;
-            expectedAgentName?: string;
-            expectedCliPath?: string;
-            expectedModel?: string;
-            expectedIdentityHash?: string | null;
-            switchedAt?: number;
-          };
           /** Skills snapshot for this conversation — authoritative list, written
            * once at creation. Join with `GET /api/skills` for descriptions. */
           skills?: string[];
@@ -420,10 +399,6 @@ export type TChatConversation =
         {
           workspace?: string;
           custom_workspace?: boolean;
-          /** Remote agent config ID (FK to remote_agents table) */
-          remoteAgentId: string;
-          /** Remote session key for resume */
-          sessionKey?: string;
           /** Skills snapshot for this conversation — authoritative list, written
            * once at creation. Join with `GET /api/skills` for descriptions. */
           skills?: string[];
