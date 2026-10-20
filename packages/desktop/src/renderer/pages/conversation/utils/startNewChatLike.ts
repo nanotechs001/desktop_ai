@@ -9,19 +9,27 @@ import type { TChatConversation } from '@/common/config/storage';
 import { emitter } from '@/renderer/utils/emitter';
 import { getConversationOrNull } from './conversationCache';
 
-/** State that belongs to one chat: its backend session, usage, pin, schedule and first-turn attachments. */
-const PER_CHAT_EXTRA_KEYS = new Set([
-  'acp_session_id',
-  'acp_session_conversation_id',
-  'acp_session_updated_at',
-  'last_token_usage',
-  'last_context_limit',
-  'pinned',
-  'pinned_at',
-  'cron_job_id',
-  'default_files',
-  'is_temporary_workspace',
-]);
+/**
+ * The `extra` keys a new chat with the same assistant takes from `source`: its engine, identity and chosen settings.
+ * An allowlist, so nothing bound to the old chat rides along: its schedule (`cronJobId`/`cron_job_id`), team, fork,
+ * backend session, usage, pin or first-turn files. The backend re-resolves the rest from the assistant.
+ */
+const CARRIED_EXTRA_KEYS = [
+  'workspace',
+  'backend',
+  'cli_path',
+  'agent_name',
+  'custom_agent_id',
+  'agent_id',
+  'agent_source',
+  'preset_assistant_id',
+  'session_mode',
+  'current_model_id',
+  'sandboxMode',
+  'codexModel',
+  'session_mcp_servers',
+  'skills',
+] as const;
 
 /**
  * Creates an empty chat with the same assistant, engine, model and settings as `source`, over the aioncore HTTP API
@@ -35,12 +43,16 @@ export async function startNewChatLike(source: TChatConversation): Promise<strin
   // A temporary folder belongs to its chat: without a workspace the backend makes a fresh one, as for any new chat.
   const dropWorkspace = sourceExtra.is_temporary_workspace === true;
   const extra = Object.fromEntries(
-    Object.entries(sourceExtra).filter(
-      ([key]) => !PER_CHAT_EXTRA_KEYS.has(key) && !(dropWorkspace && key === 'workspace')
-    )
+    CARRIED_EXTRA_KEYS.filter((key) => key in sourceExtra && !(dropWorkspace && key === 'workspace')).map((key) => [
+      key,
+      sourceExtra[key],
+    ])
   );
+  // Only what creating the chat needs: never its source/channel binding, history or runtime state.
+  const model = 'model' in latest ? latest.model : undefined; // aionrs only: the other types carry it in `extra`
+  const conversation = { type: latest.type, model, assistant: latest.assistant, name: '', extra };
   const created = await ipcBridge.conversation.createWithConversation.invoke({
-    conversation: { ...latest, name: '', extra } as TChatConversation,
+    conversation: conversation as TChatConversation,
   });
   if (!created?.id) return null;
   emitter.emit('chat.history.refresh');

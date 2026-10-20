@@ -154,6 +154,81 @@ describe.each([
   });
 });
 
+describe('ConversationNewChatButton bindings', () => {
+  it("copies only the assistant's identity and settings, never the old chat's schedule, team, channel or state", async () => {
+    platform.electron = false;
+    const calls = stubBackend();
+    const KEPT = {
+      workspace: '/Users/me/project',
+      backend: 'codex',
+      cli_path: '/usr/local/bin/codex',
+      agent_name: 'Travel Bot',
+      custom_agent_id: 'custom-1',
+      session_mode: 'yolo',
+      current_model_id: 'gpt-5',
+      sandboxMode: 'workspace-write',
+      codexModel: 'gpt-5-codex',
+      session_mcp_servers: [{ id: 'aionui-browser' }],
+      skills: ['notes'],
+    };
+    const bound = {
+      ...SOURCE,
+      source: 'telegram',
+      channel_chat_id: 'user:42',
+      runtime: { status: 'running' },
+      status: 'running',
+      extra: {
+        ...KEPT,
+        is_temporary_workspace: false,
+        cronJobId: 'job-1',
+        cron_job_id: 'job-1',
+        teamId: 'team-1',
+        fork: { parent: 'c0' },
+        acp_session_id: 'sess-1',
+        last_token_usage: { total: 5 },
+        preset_context: 'old rule text',
+      },
+    } as unknown as TChatConversation;
+    vi.mocked(fetch).mockImplementationOnce(async () => json(200, { success: true, data: bound }));
+    render(
+      <MemoryRouter>
+        <ConversationNewChatButton conversation={bound} />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole('button', { name: LABEL }));
+
+    await waitFor(() => expect(calls.some((call) => call.path === '/api/conversations/clone')).toBe(true));
+    const sent = sentConversation(calls);
+    for (const key of ['source', 'channel_chat_id', 'runtime', 'status', 'id', 'created_at', 'modified_at']) {
+      expect(sent).not.toHaveProperty(key);
+    }
+    expect(sent).toMatchObject({ type: 'acp', name: '', assistant: { id: 'bot-1' } });
+    expect(sent.extra).toEqual(KEPT);
+  });
+});
+
+describe('ConversationNewChatButton for an Aion CLI chat', () => {
+  it('keeps its provider model, which aionrs takes at the top level', async () => {
+    platform.electron = false;
+    const calls = stubBackend();
+    const aionrs = {
+      ...SOURCE,
+      type: 'aionrs',
+      model: { provider_id: 'prov-1', use_model: 'gpt-5' }, // aioncore's shape: the GET maps it to the app's
+    } as unknown as TChatConversation;
+    vi.mocked(fetch).mockImplementationOnce(async () => json(200, { success: true, data: aionrs }));
+    render(
+      <MemoryRouter>
+        <ConversationNewChatButton conversation={aionrs} />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole('button', { name: LABEL }));
+
+    await waitFor(() => expect(calls.some((call) => call.path === '/api/conversations/clone')).toBe(true));
+    expect(sentConversation(calls)).toMatchObject({ type: 'aionrs', model: { provider_id: 'prov-1' } });
+  });
+});
+
 describe('ConversationNewChatButton with a chosen workspace', () => {
   it('keeps a workspace the user picked', async () => {
     platform.electron = false;
