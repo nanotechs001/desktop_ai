@@ -155,6 +155,32 @@ describe('browser-view confirm routes', () => {
     expect(confirms.answerConfirm).not.toHaveBeenCalled();
   });
 
+  it('POST with a chunked body that never ends stops reading once it passes 1 KB', async () => {
+    const outcome = await new Promise<string>((resolve) => {
+      const req = http.request(
+        {
+          host: '127.0.0.1',
+          port: handle.port,
+          method: 'POST',
+          path: `/api/browser-view/confirms/${ID}`,
+          headers: { 'content-type': 'application/json', 'transfer-encoding': 'chunked', cookie: GOOD, origin },
+          agent: false,
+        },
+        (res) => resolve(`status ${res.statusCode}`)
+      );
+      req.on('error', () => resolve('closed'));
+      req.on('close', () => resolve('closed'));
+      setTimeout(() => {
+        resolve('still reading');
+        req.destroy();
+      }, 2000).unref();
+      req.write('x'.repeat(2048)); // and never end: the old reader would wait for more forever
+    });
+
+    expect(['closed', 'status 413']).toContain(outcome);
+    expect(confirms.answerConfirm).not.toHaveBeenCalled();
+  });
+
   it('POST to a malformed id is 404, and GET on an answer path is 405', async () => {
     expect((await answer('{"allow":true,"always":false}', undefined, 'not-a-uuid')).status).toBe(404);
     const r = await request(handle.port, 'GET', `/api/browser-view/confirms/${ID}`, { cookie: GOOD, origin });

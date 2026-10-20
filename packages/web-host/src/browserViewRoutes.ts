@@ -85,7 +85,10 @@ export function serveTabs(req: IncomingMessage, res: ServerResponse, url: string
 /** True for the confirm list and anything under it (answers, and paths that are neither: 404 here, never aioncore). */
 export const isConfirmsPath = (path: string): boolean => path === CONFIRMS_PATH || path.startsWith(`${CONFIRMS_PATH}/`);
 
-/** The body as text, or null once it passes `max` bytes (the rest is drained, not kept). */
+/**
+ * The body as text, or null once it passes `max` bytes. A declared oversize body is drained; a chunked one that grows
+ * past `max` is cut off (the request destroyed), so a sender cannot keep the socket reading forever.
+ */
 function readBody(req: IncomingMessage, max: number): Promise<string | null> {
   return new Promise((resolve, reject) => {
     if (Number(req.headers['content-length'] ?? 0) > max) {
@@ -96,9 +99,11 @@ function readBody(req: IncomingMessage, max: number): Promise<string | null> {
     let size = 0;
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size <= max) chunks.push(chunk);
+      if (size <= max) return void chunks.push(chunk);
+      req.destroy();
+      resolve(null);
     });
-    req.on('end', () => resolve(size <= max ? Buffer.concat(chunks).toString('utf8') : null));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
 }
@@ -134,7 +139,11 @@ export function serveConfirms(
   if (req.method !== 'POST') return reply(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   readBody(req, MAX_ANSWER_BYTES)
     .then((text) => {
-      if (text === null) return reply(res, 413, { error: 'BODY_TOO_LARGE' });
+      if (text === null) {
+        // A cut-off chunked body took its socket with it: nothing left to answer on.
+        if (res.socket?.writable) reply(res, 413, { error: 'BODY_TOO_LARGE' });
+        return;
+      }
       const answer = parseAnswer(text);
       if (!answer) return reply(res, 400, { error: 'BAD_BODY' });
       if (!routes.answerConfirm(confirmId, answer.allow, answer.always)) return reply(res, 404, { error: 'NOT_FOUND' });
