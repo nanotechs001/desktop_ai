@@ -1141,6 +1141,79 @@ mod tests {
         );
     }
 
+    /// aionrs gets the built-ins from the session snapshot: `node` must resolve to
+    /// an absolute path and the script arg must survive.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn builtin_snapshot_server_resolves_node_for_aionrs() {
+        use aionui_api_types::{SessionMcpServer, SessionMcpTransport};
+        let _lock = path_test_lock().lock().await;
+        let runtime = install_fake_bundled_runtime();
+        let _runtime_data_dir = test_runtime_data_dir();
+        let _runtime_mode = BundledRuntimeModeGuard::install(runtime.path());
+
+        let snapshot = vec![SessionMcpServer {
+            id: "mcp-browser".into(),
+            name: "aionui-browser".into(),
+            transport: SessionMcpTransport::Stdio {
+                command: "node".into(),
+                args: vec!["/app/builtin-mcp-browser.js".into()],
+                env: Default::default(),
+            },
+        }];
+        let mut extra_mcp_servers = HashMap::new();
+        merge_session_snapshot_mcp_servers(
+            &mut extra_mcp_servers,
+            &snapshot,
+            TEST_USER_ID,
+            "conv-1",
+            test_broadcaster(),
+        )
+        .await;
+
+        let browser = &extra_mcp_servers["aionui-browser"];
+        let command = browser.command.as_deref().expect("resolved command");
+        assert!(
+            command.ends_with("/bin/node"),
+            "unexpected stdio command path: {command}"
+        );
+        assert_eq!(
+            browser.args.as_ref(),
+            Some(&vec!["/app/builtin-mcp-browser.js".to_owned()])
+        );
+    }
+
+    /// Pins the aionrs behaviour the built-ins rely on: its stdio MCP child keeps
+    /// aioncore's env (where Electron put `AION_*`) and adds the explicit env (where
+    /// aion-agent puts the runtime env, incl. `AIONUI_CONVERSATION_ID`). If an aionrs
+    /// bump clears the env, this fails and the built-ins need explicit env here too.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn aionrs_stdio_mcp_child_inherits_process_env_plus_explicit_env() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let out = dir.path().join("env.txt");
+        let env = HashMap::from([
+            ("AIONUI_CONVERSATION_ID".to_owned(), "conv-aionrs".to_owned()),
+            ("OUT".to_owned(), out.to_string_lossy().into_owned()),
+        ]);
+        let script = r#"printf '%s|%s' "$PATH" "$AIONUI_CONVERSATION_ID" > "$OUT"; sleep 5"#;
+        let _transport =
+            aion_mcp::transport::stdio::StdioTransport::spawn("/bin/sh", &["-c".to_owned(), script.to_owned()], &env)
+                .await
+                .expect("spawn");
+
+        let mut written = String::new();
+        for _ in 0..100 {
+            written = std::fs::read_to_string(&out).unwrap_or_default();
+            if written.contains('|') {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let parent_path = std::env::var("PATH").expect("test process PATH");
+        assert_eq!(written, format!("{parent_path}|conv-aionrs"));
+    }
+
     struct ProviderMappingCase<'a> {
         name: &'a str,
         platform: &'a str,

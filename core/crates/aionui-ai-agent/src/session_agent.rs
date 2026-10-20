@@ -1903,13 +1903,19 @@ pub async fn build_session_instance(
         None => Vec::new(),
     };
     neutral.retain(|server| server.name != TEAM_MCP_SERVER_NAME);
-    neutral.extend(
-        config
-            .session_mcp_servers
-            .iter()
-            .filter(|server| server.name != TEAM_MCP_SERVER_NAME)
-            .cloned(),
-    );
+    for server in config
+        .session_mcp_servers
+        .iter()
+        .filter(|server| server.name != TEAM_MCP_SERVER_NAME)
+    {
+        neutral.push(if backend_label == "codex" {
+            codex_snapshot_server(server, runtime_env).await
+        } else {
+            // claude is left as is: it already reaches the built-ins' env, and its MCP
+            // config rides argv (visible in the process list), so no tokens go there.
+            server.clone()
+        });
+    }
     let mut mcp_servers: Vec<McpServerSpec> = neutral.iter().map(session_server_to_spec).collect();
     if let Some(cfg) = config.team_mcp_stdio_config.as_ref() {
         // Team-MCP is PREPENDED before the user's servers (clean-slate + legacy
@@ -2211,8 +2217,8 @@ fn assemble_spawn_env(
 /// captured just before `open_session`. Symmetric with the ACP path's
 /// `build_acp_final_input_dump_value`: returns `{ "input", "resolved_context" }`.
 /// `SessionConfig` has no `Serialize`, so fields are mapped by hand. Contents
-/// are RAW (dev-only, `--dump-prompts`): secrets in `spawn_env` / MCP env are
-/// not redacted, matching the existing acp dump.
+/// are RAW (dev-only, `--dump-prompts`) except the built-in MCP tokens, which
+/// `dump_agent_final_input` redacts; other secrets in `spawn_env` / MCP env are not.
 fn build_session_cli_config_dump_value(backend: &str, cfg: &aionui_session::SessionConfig) -> serde_json::Value {
     use aionui_session::McpTransport;
     let mcp_servers: Vec<serde_json::Value> = cfg
@@ -2266,6 +2272,16 @@ fn build_session_cli_config_dump_value(backend: &str, cfg: &aionui_session::Sess
             "extra_args": cfg.extra_args,
         }
     })
+}
+
+/// codex builds an MCP child's env from an allowlist plus the explicit `env` map, so a
+/// built-in gets its relay / artifact env and an absolute `node` here.
+async fn codex_snapshot_server(
+    server: &aionui_api_types::SessionMcpServer,
+    runtime_env: &[(String, String)],
+) -> aionui_api_types::SessionMcpServer {
+    let server = crate::builtin_mcp_env::with_builtin_mcp_env(server, runtime_env);
+    crate::builtin_mcp_env::resolve_builtin_command(server).await
 }
 
 /// Convert a neutral `SessionMcpServer` (already stdio-launch-resolved by
@@ -5051,6 +5067,72 @@ mod build_mapping_tests {
             serde_json::json!("/usr/bin/team-coordinator"),
             "the coordination MCP must survive both repo and inline reserved-name collisions"
         );
+    }
+
+    /// The codex lane: the built-in browser spec that reaches `config.mcp_servers`
+    /// carries the relay env and conversation id; a user server does not.
+    #[test]
+    fn codex_builtin_browser_spec_carries_relay_env_and_user_server_does_not() {
+        use aionui_api_types::{SessionMcpServer, SessionMcpTransport};
+        use aionui_session::McpTransport;
+
+        let process_env = |key: &str| match key {
+            "AION_BROWSER_RELAY_URL" => Some("ws://127.0.0.1:4100".to_owned()),
+            "AION_BROWSER_RELAY_TOKEN" => Some("relay-secret".to_owned()),
+            _ => None,
+        };
+        let runtime_env = [("AIONUI_CONVERSATION_ID".to_owned(), "conv-codex".to_owned())];
+        let server = |name: &str| SessionMcpServer {
+            id: format!("id-{name}"),
+            name: name.into(),
+            transport: SessionMcpTransport::Stdio {
+                command: "/usr/bin/node".into(),
+                args: vec!["browser.js".into()],
+                env: Default::default(),
+            },
+        };
+        let env_of = |name: &str| {
+            let injected = crate::builtin_mcp_env::with_builtin_mcp_env_from(&server(name), &runtime_env, process_env);
+            match session_server_to_spec(&injected).transport {
+                McpTransport::Stdio { env, .. } => env,
+                other => panic!("stdio expected, got {other:?}"),
+            }
+        };
+
+        let builtin = env_of("aionui-browser");
+        assert!(builtin.contains(&("AION_BROWSER_RELAY_URL".to_owned(), "ws://127.0.0.1:4100".to_owned())));
+        assert!(builtin.contains(&("AION_BROWSER_RELAY_TOKEN".to_owned(), "relay-secret".to_owned())));
+        assert!(builtin.contains(&("AIONUI_CONVERSATION_ID".to_owned(), "conv-codex".to_owned())));
+        assert!(
+            env_of("my-browser").is_empty(),
+            "a user server must get no built-in env"
+        );
+    }
+
+    #[test]
+    fn session_cli_config_dump_redacts_builtin_mcp_tokens() {
+        use aionui_session::{McpServerSpec, McpTransport, SessionConfig, SessionInit};
+        let cfg = SessionConfig {
+            init: SessionInit {
+                mcp_servers: vec![McpServerSpec {
+                    name: "aionui-browser".into(),
+                    transport: McpTransport::Stdio {
+                        command: "/usr/bin/node".into(),
+                        args: vec![],
+                        env: vec![
+                            ("AION_BROWSER_RELAY_TOKEN".into(), "relay-secret".into()),
+                            ("AION_BROWSER_RELAY_URL".into(), "ws://127.0.0.1:4100".into()),
+                        ],
+                    },
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let dumped =
+            crate::builtin_mcp_env::redact_secret_env(build_session_cli_config_dump_value("codex", &cfg)).to_string();
+        assert!(!dumped.contains("relay-secret"), "{dumped}");
+        assert!(dumped.contains("ws://127.0.0.1:4100"));
     }
 
     #[test]

@@ -87,8 +87,8 @@ pub(crate) fn dump_agent_final_input(dump_dir: &Path, dump: AgentFinalInputDump<
         "msg_id": dump.msg_id.unwrap_or("none"),
         "turn_id": dump.turn_id.unwrap_or("none"),
         "created_at_ms": created_at_ms,
-        "input": dump.input,
-        "resolved_context": dump.resolved_context,
+        "input": crate::builtin_mcp_env::redact_secret_env(dump.input),
+        "resolved_context": crate::builtin_mcp_env::redact_secret_env(dump.resolved_context),
     }))?;
     fs::write(&path, body)?;
     Ok(path)
@@ -207,6 +207,41 @@ mod tests {
             dump["resolved_context"]["mcp_servers"][0]["env"]["TOKEN"],
             "raw-token-value"
         );
+    }
+
+    #[test]
+    fn dump_agent_final_input_redacts_builtin_mcp_tokens() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = dump_agent_final_input(
+            temp.path(),
+            AgentFinalInputDump {
+                kind: "session-cli-config",
+                backend: "codex",
+                conversation_id: "conv-1",
+                session_id: None,
+                msg_id: None,
+                turn_id: None,
+                input: serde_json::Value::Null,
+                resolved_context: serde_json::json!({
+                    "mcp_servers": [{
+                        "name": "aionui-browser",
+                        "transport": { "env": [
+                            { "name": "AION_BROWSER_RELAY_TOKEN", "value": "relay-secret" },
+                            { "name": "AION_BROWSER_RELAY_URL", "value": "ws://127.0.0.1:1" }
+                        ] }
+                    }, {
+                        "name": "aionui-artifacts",
+                        "env": { "AION_ARTIFACTS_TOKEN": "artifacts-secret" }
+                    }]
+                }),
+            },
+        )
+        .unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(!content.contains("relay-secret"), "{content}");
+        assert!(!content.contains("artifacts-secret"), "{content}");
+        assert!(content.contains("ws://127.0.0.1:1"));
     }
 
     #[test]
