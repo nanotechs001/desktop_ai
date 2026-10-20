@@ -96,6 +96,36 @@ pub async fn resolve_session_mcp_servers(
 /// always normalized exactly once, the same way the direct claude/codex path
 /// consumes it.
 pub async fn row_to_session_mcp_server(row: &McpServerRow) -> Result<SessionMcpServer, String> {
+    let server = parse_row_session_mcp_server(row)?;
+    let SessionMcpTransport::Stdio { command, args, mut env } = server.transport else {
+        return Ok(server);
+    };
+    // Resolve the launch command (npx/bun → bundled path) + fold in the
+    // runtime-provided args prefix + env, exactly like the legacy
+    // `ensure_stdio_launch`. The resolved form is what the agent spawns.
+    let resolved = ensure_runtime_command(&command).await.map_err(|e| e.to_string())?;
+    let mut final_args: Vec<String> = resolved
+        .args_prefix
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    final_args.extend(args);
+    for (k, v) in resolved.env {
+        env.insert(k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned());
+    }
+    Ok(SessionMcpServer {
+        transport: SessionMcpTransport::Stdio {
+            command: resolved.program.to_string_lossy().into_owned(),
+            args: final_args,
+            env,
+        },
+        ..server
+    })
+}
+
+/// The row as a neutral `SessionMcpServer`, its stdio command left as stored (resolved at
+/// launch). Returns an error string when `transport_config` is malformed.
+pub fn parse_row_session_mcp_server(row: &McpServerRow) -> Result<SessionMcpServer, String> {
     let value: serde_json::Value =
         serde_json::from_str(&row.transport_config).map_err(|e| format!("invalid transport_config JSON: {e}"))?;
 
@@ -104,13 +134,14 @@ pub async fn row_to_session_mcp_server(row: &McpServerRow) -> Result<SessionMcpS
             let command = value
                 .get("command")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| "stdio: missing command".to_owned())?;
+                .ok_or_else(|| "stdio: missing command".to_owned())?
+                .to_owned();
             let args: Vec<String> = value
                 .get("args")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
-            let mut env: std::collections::HashMap<String, String> = value
+            let env: std::collections::HashMap<String, String> = value
                 .get("env")
                 .and_then(|v| v.as_object())
                 .map(|obj| {
@@ -119,25 +150,7 @@ pub async fn row_to_session_mcp_server(row: &McpServerRow) -> Result<SessionMcpS
                         .collect()
                 })
                 .unwrap_or_default();
-
-            // Resolve the launch command (npx/bun → bundled path) + fold in the
-            // runtime-provided args prefix + env, exactly like the legacy
-            // `ensure_stdio_launch`. The resolved form is what the agent spawns.
-            let resolved = ensure_runtime_command(command).await.map_err(|e| e.to_string())?;
-            let mut final_args: Vec<String> = resolved
-                .args_prefix
-                .iter()
-                .map(|a| a.to_string_lossy().into_owned())
-                .collect();
-            final_args.extend(args);
-            for (k, v) in resolved.env {
-                env.insert(k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned());
-            }
-            SessionMcpTransport::Stdio {
-                command: resolved.program.to_string_lossy().into_owned(),
-                args: final_args,
-                env,
-            }
+            SessionMcpTransport::Stdio { command, args, env }
         }
         "http" | "streamable_http" => {
             let url = value

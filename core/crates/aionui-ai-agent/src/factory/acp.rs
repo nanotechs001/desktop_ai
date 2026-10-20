@@ -251,7 +251,7 @@ pub(super) async fn build(
             );
             continue;
         }
-        let server = crate::builtin_mcp_env::with_builtin_mcp_env(server, &ctx.runtime_env);
+        let server = crate::factory::builtin_mcp_env::with_builtin_mcp_env(server, &ctx.runtime_env);
         match session_server_to_sdk_mcp_server(&server).await {
             Ok(server) => session_mcp_servers.push(server),
             Err(err) => {

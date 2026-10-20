@@ -87,8 +87,8 @@ pub(crate) fn dump_agent_final_input(dump_dir: &Path, dump: AgentFinalInputDump<
         "msg_id": dump.msg_id.unwrap_or("none"),
         "turn_id": dump.turn_id.unwrap_or("none"),
         "created_at_ms": created_at_ms,
-        "input": crate::builtin_mcp_env::redact_secret_env(dump.input),
-        "resolved_context": crate::builtin_mcp_env::redact_secret_env(dump.resolved_context),
+        "input": crate::factory::builtin_mcp_env::redact_secret_env(dump.input),
+        "resolved_context": crate::factory::builtin_mcp_env::redact_secret_env(dump.resolved_context),
     }))?;
     fs::write(&path, body)?;
     Ok(path)

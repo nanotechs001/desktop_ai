@@ -2280,8 +2280,8 @@ async fn codex_snapshot_server(
     server: &aionui_api_types::SessionMcpServer,
     runtime_env: &[(String, String)],
 ) -> aionui_api_types::SessionMcpServer {
-    let server = crate::builtin_mcp_env::with_builtin_mcp_env(server, runtime_env);
-    crate::builtin_mcp_env::resolve_builtin_command(server).await
+    let server = crate::factory::builtin_mcp_env::with_builtin_mcp_env(server, runtime_env);
+    crate::factory::builtin_mcp_env::resolve_builtin_command(server).await
 }
 
 /// Convert a neutral `SessionMcpServer` (already stdio-launch-resolved by
@@ -5167,7 +5167,8 @@ mod build_mapping_tests {
             },
         };
         let env_of = |name: &str| {
-            let injected = crate::builtin_mcp_env::with_builtin_mcp_env_from(&server(name), &runtime_env, process_env);
+            let injected =
+                crate::factory::builtin_mcp_env::with_builtin_mcp_env_from(&server(name), &runtime_env, process_env);
             match session_server_to_spec(&injected).transport {
                 McpTransport::Stdio { env, .. } => env,
                 other => panic!("stdio expected, got {other:?}"),
@@ -5205,7 +5206,8 @@ mod build_mapping_tests {
             ..Default::default()
         };
         let dumped =
-            crate::builtin_mcp_env::redact_secret_env(build_session_cli_config_dump_value("codex", &cfg)).to_string();
+            crate::factory::builtin_mcp_env::redact_secret_env(build_session_cli_config_dump_value("codex", &cfg))
+                .to_string();
         assert!(!dumped.contains("relay-secret"), "{dumped}");
         assert!(dumped.contains("ws://127.0.0.1:4100"));
     }
@@ -6450,6 +6452,47 @@ mod persist_tests {
             translate_event(reading, "conv-1", false).is_empty(),
             "the reading never rides the per-turn message stream"
         );
+    }
+
+    /// Through the real `WebSocketManager` user filter: the reading reaches only the
+    /// owning user's connections, as a `WebSocketMessage` `{ name, data }` frame.
+    #[test]
+    fn rate_limit_reading_is_delivered_only_to_the_owning_user() {
+        use aionui_realtime::WebSocketManager;
+        use aionui_realtime::types::WsOutbound;
+
+        let manager = WebSocketManager::new();
+        let (owner_tx, mut owner_rx) = tokio::sync::mpsc::channel(8);
+        let (other_tx, mut other_rx) = tokio::sync::mpsc::channel(8);
+        manager.add_client_for_user("user-1".into(), "t-owner".into(), owner_tx);
+        manager.add_client_for_user("user-2".into(), "t-other".into(), other_tx);
+        let reading = SessionEvent::RateLimitInfo {
+            status: Some(aionui_session::RateLimitStatus::AllowedWarning),
+            rate_limit_type: Some(aionui_session::RateLimitWindowKind::SevenDay),
+            resets_at: Some(1_785_754_200),
+            utilization: Some(0.95),
+            windows: vec![],
+            surpassed_threshold: Some(0.9),
+        };
+
+        broadcast_rate_limit_frame(&manager, "conv-1", "user-1", &reading);
+
+        let WsOutbound::Text(text) = owner_rx.try_recv().expect("owner gets the reading") else {
+            panic!("text frame expected");
+        };
+        let frame: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let mut keys: Vec<&str> = frame.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["data", "name"], "WebSocketMessage shape: {frame}");
+        assert_eq!(frame["name"], aionui_api_types::CONVERSATION_RATE_LIMIT_UPDATED_EVENT);
+        let payload: aionui_api_types::ConversationRateLimitUpdatedPayload =
+            serde_json::from_value(frame["data"].clone()).expect("data is the typed payload");
+        assert_eq!(payload.user_id, "user-1");
+        assert_eq!(payload.conversation_id, "conv-1");
+        assert_eq!(payload.status, Some(aionui_api_types::RateLimitStatus::AllowedWarning));
+        assert_eq!(payload.utilization, Some(0.95));
+        assert!(owner_rx.try_recv().is_err(), "one frame per reading");
+        assert!(other_rx.try_recv().is_err(), "another user must not get the reading");
     }
 
     /// The gate is shared by the snapshot and the live broadcast, so a report can

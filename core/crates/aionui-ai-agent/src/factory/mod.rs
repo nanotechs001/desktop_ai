@@ -4,6 +4,7 @@ mod acp;
 mod acp_launch_policy;
 pub(crate) mod aionrs;
 mod antigravity;
+pub mod builtin_mcp_env;
 mod context;
 
 use std::path::PathBuf;
