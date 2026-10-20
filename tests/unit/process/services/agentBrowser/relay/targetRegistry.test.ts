@@ -49,6 +49,21 @@ describe('targetRegistry', () => {
     });
   });
 
+  it("inherit() gives a tab its agent opener's owner and chat; a user opener's child stays the user's", () => {
+    const registry = createTargetRegistry();
+    for (const id of [1, 2, 3, 4]) registry.track(new FakeContents(id));
+    registry.claim(1, { ...agent, conversationId: 'conv-1' });
+    registry.share(3, true);
+
+    registry.inherit(1, 2);
+    registry.inherit(1, 2);
+    registry.inherit(3, 4);
+    registry.inherit(99, 4);
+
+    expect(registry.ownership(2)?.owner).toEqual({ ...agent, conversationId: 'conv-1' });
+    expect(registry.ownership(4)?.owner).toBe('user');
+  });
+
   it("records each tab's browser profile, and an owner is only the client's id and label", () => {
     const registry = createTargetRegistry();
     const profile = { kind: 'agent', agentId: 'bare:x' } as const;

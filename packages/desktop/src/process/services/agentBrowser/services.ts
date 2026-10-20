@@ -9,6 +9,7 @@ import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
+import { setWindowOpenHooks } from '@process/services/browserSession/windowOpen';
 import {
   isDeletedAgentProfile,
   parseBrowserTabProfile,
@@ -73,6 +74,34 @@ const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry
     // Electron reports zoomed (DIP) coordinates; CDP input uses CSS px (measured on 37.10.3).
     const zoom = contents.getZoomFactor() || 1;
     registry.noteUserInput(contents.id, { kind: 'mouse', x: mouse.x / zoom, y: mouse.y / zoom });
+  });
+};
+
+/**
+ * Popups and `_blank` tabs an agent's page opens belong to that agent (and its chat), so it can drive them and the
+ * WebUI lists them. A `_blank` tab is matched like an agent's own new tab: its url and partition, within 15 s.
+ */
+const followOpeners = (registry: TargetRegistry, waiter: CreateTabWaiter<Electron.WebContents>): void => {
+  const agentOwner = (openerId: number) => {
+    const owner = registry.ownership(openerId)?.owner;
+    return owner && owner !== 'user' ? owner : null;
+  };
+  setWindowOpenHooks({
+    popupCreated(openerId, popup) {
+      const profile = profileOfSession(popup.session);
+      if (!profile) return;
+      registry.track(popup, profile);
+      registry.inherit(openerId, popup.id);
+    },
+    tabRequested(openerId, url, partition) {
+      const owner = agentOwner(openerId);
+      if (!owner || partition === null) return undefined;
+      waiter.wait(url, TAB_CREATE_TIMEOUT_MS, owner.conversationId, partition).then(
+        (tab) => registry.inherit(openerId, tab.id),
+        () => {} // not opened in time (or refused at the tab cap): the tab, if any, stays the user's
+      );
+      return owner.conversationId ? { conversationId: owner.conversationId } : {};
+    },
   });
 };
 
@@ -222,6 +251,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     watchUserInput(contents, registry);
     if (contents.getType() === 'webview') offerNewTab(waiter, contents, partitionOfProfile(profile));
   });
+  followOpeners(registry, waiter);
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
   confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));
 
@@ -256,6 +286,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
       // The relay's sessions no longer own the tabs' debuggers alone: phone streams must end with agent control.
       browserView?.closeAll('not-allowed');
       browserView = null;
+      setWindowOpenHooks({});
       return relay.close();
     },
   };

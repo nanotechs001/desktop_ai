@@ -57,6 +57,7 @@ import {
   popupTitle,
   installWindowOpenHandler,
   popupWindowOptions,
+  setWindowOpenHooks,
 } from '@process/services/browserSession/windowOpen';
 import { agentPartition, rememberBrowserSession } from '@process/services/browserSession/profiles/browserProfiles';
 
@@ -67,6 +68,10 @@ rememberBrowserSession(PERSONAL, personalSession);
 
 const classify = (url: string, disposition: string, features = '') =>
   classifyWindowOpen({ url, disposition, features });
+
+const boom = (): never => {
+  throw new Error('boom');
+};
 
 beforeEach(() => {
   mocks.emit.mockClear();
@@ -372,6 +377,54 @@ describe('installWindowOpenHandler', () => {
 
     expect(result.action).toBe('allow');
     expect(mocks.windows.at(-1)?.options.parent).toBeUndefined();
+  });
+
+  it('tells the agent-browser hooks about a tab request and a popup, and sends the chat they name', () => {
+    const tabRequested = vi.fn((_openerId: number, _url: string, _partition: string | null) => ({
+      conversationId: 'conv-1',
+    }));
+    const popupCreated = vi.fn();
+    setWindowOpenHooks({ tabRequested, popupCreated });
+    try {
+      const handler = install(liveParent(), new OpenLimiter(), 4);
+
+      handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '' });
+      const result = handler({ url: 'https://b.test/', disposition: 'new-window', features: 'popup' });
+      const created = result.createWindow?.({ webContents: { id: 12 } as unknown as Electron.WebContents });
+
+      expect(tabRequested).toHaveBeenCalledWith(4, 'https://a.test/', PERSONAL);
+      expect(mocks.emit).toHaveBeenCalledWith({
+        url: 'https://a.test/',
+        background: false,
+        profile: { kind: 'personal' },
+        conversationId: 'conv-1',
+      });
+      expect(popupCreated).toHaveBeenCalledWith(4, created);
+    } finally {
+      setWindowOpenHooks({});
+    }
+  });
+
+  it('still opens the tab and the popup when a hook throws', () => {
+    setWindowOpenHooks({ tabRequested: boom, popupCreated: boom });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const handler = install(liveParent());
+
+      handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '' });
+      const result = handler({ url: 'https://b.test/', disposition: 'new-window', features: 'popup' });
+      const created = result.createWindow?.({ webContents: { id: 13 } as unknown as Electron.WebContents });
+
+      expect(mocks.emit).toHaveBeenCalledWith({
+        url: 'https://a.test/',
+        background: false,
+        profile: { kind: 'personal' },
+      });
+      expect(created).toEqual({ id: 13, getURL: expect.any(Function) });
+    } finally {
+      setWindowOpenHooks({});
+      error.mockRestore();
+    }
   });
 
   it('denies an unsafe scheme without opening anything', () => {

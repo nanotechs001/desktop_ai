@@ -1027,6 +1027,22 @@ describe('relay server: limits', () => {
     expect(openTab).not.toHaveBeenCalled();
   });
 
+  it("lists a tab the agent's page opened as its own and counts it toward the tab cap", async () => {
+    const handle = await start({ maxTabsPerClient: 2 });
+    const client = await connect(handle);
+    ownedTab(35, 'claude');
+    registry.track(new FakeContents(36));
+    registry.inherit(35, 36);
+
+    const tabs = (await client.send('AionRelay.listTabs')).result?.tabs as Array<{ targetId: string; owner: string }>;
+    expect(tabs.map(({ targetId, owner }) => ({ targetId, owner }))).toEqual([
+      { targetId: 'wc-35', owner: 'agent' },
+      { targetId: 'wc-36', owner: 'agent' },
+    ]);
+    const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
+    expect(reply.error?.message).toMatch(/at most 2 tabs/);
+  });
+
   it('allows at most 5 createTarget calls per 10 s per client', async () => {
     const handle = await start();
     const client = await connect(handle);

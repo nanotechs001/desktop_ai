@@ -45,6 +45,13 @@ vi.mock('node:os', async (importOriginal) => {
   const home = mkdtempSync(os.tmpdir() + '/services-test-home-');
   return { ...os, homedir: () => home, default: { ...os, homedir: () => home } };
 });
+type WindowOpenHooks = import('@process/services/browserSession/windowOpen').WindowOpenHooks;
+const hooks = vi.hoisted(() => ({ current: {} as WindowOpenHooks }));
+vi.mock('@process/services/browserSession/windowOpen', () => ({
+  setWindowOpenHooks: (next: WindowOpenHooks) => {
+    hooks.current = next;
+  },
+}));
 vi.mock('@process/services/browserSession/browserSession', () => ({
   onBrowserContentsCreated: (listener: (contents: unknown) => void) => {
     h.created.push(listener);
@@ -370,6 +377,83 @@ describe('agent browser services: tabs', () => {
     expect((await createdB).result).toEqual({ targetId: 'wc-2' });
     expect((await ownership(1))?.owner).toBe('user');
     expect((await ownership(2))?.owner).toMatchObject({ label: 'b' });
+  });
+});
+
+describe('agent browser services: tabs an agent page opens', () => {
+  const AGENT_PARTITION = agentPartition('bare:agent-1');
+  const CONV_1_OWNER = { label: 'claude', conversationId: 'conv-1' };
+
+  /** Tab `id`, opened by an agent of chat conv-1 (its Agent's profile). */
+  const agentTab = async (id: number): Promise<void> => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: 'https://agent.test/' });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalled());
+    newTab(id, agentSession).navigate('https://agent.test/');
+    expect((await created).result).toEqual({ targetId: `wc-${id}` });
+  };
+
+  it("claims a popup of an agent's tab for that agent and chat", async () => {
+    await agentTab(50);
+    const popup = Object.assign(new FakeContents(51), { session: agentSession });
+
+    hooks.current.popupCreated?.(50, popup as unknown as Electron.WebContents);
+
+    expect((await ownership(51))?.owner).toMatchObject(CONV_1_OWNER);
+  });
+
+  it("opens an agent tab's _blank link in its chat and claims the tab once it appears", async () => {
+    await agentTab(52);
+
+    expect(hooks.current.tabRequested?.(52, 'https://link.test/', AGENT_PARTITION)).toEqual({
+      conversationId: 'conv-1',
+    });
+    const tab = newTab(53, agentSession);
+    expect((await ownership(53))?.owner).toBe('user');
+    tab.navigate('https://link.test/');
+
+    await vi.waitFor(async () => expect((await ownership(53))?.owner).toMatchObject(CONV_1_OWNER));
+  });
+
+  it("leaves a user tab's popup and _blank tab with the user", async () => {
+    await start();
+    newTab(54, personalSession);
+    const popup = Object.assign(new FakeContents(55), { session: personalSession });
+
+    hooks.current.popupCreated?.(54, popup as unknown as Electron.WebContents);
+    expect(hooks.current.tabRequested?.(54, 'https://link.test/', 'persist:aionui-browser')).toBeUndefined();
+    newTab(56, personalSession).navigate('https://link.test/');
+    await Promise.resolve();
+
+    expect((await ownership(55))?.owner).toBe('user');
+    expect((await ownership(56))?.owner).toBe('user');
+  });
+
+  it('claims nothing once the pending _blank tab expired', async () => {
+    await agentTab(57);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      hooks.current.tabRequested?.(57, 'https://late.test/', AGENT_PARTITION);
+      await vi.advanceTimersByTimeAsync(15_001);
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+
+    newTab(58, agentSession).navigate('https://late.test/');
+    await Promise.resolve();
+
+    expect((await ownership(58))?.owner).toBe('user');
+  });
+
+  it('stops following openers once agent control is off', async () => {
+    await start();
+    await services?.close();
+    services = null;
+
+    expect(hooks.current).toEqual({});
   });
 });
 

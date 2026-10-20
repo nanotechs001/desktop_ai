@@ -74,6 +74,31 @@ export class OpenLimiter {
 
 const sharedLimiter = new OpenLimiter();
 
+/** How agent browser control follows what a page opens; it sets them while it runs (see setWindowOpenHooks). */
+export type WindowOpenHooks = {
+  /** A page asks for a tab: the chat to open it in, when the opener is an agent's tab. */
+  tabRequested?: (openerId: number, url: string, partition: string | null) => { conversationId?: string } | undefined;
+  /** A page's popup window was created. */
+  popupCreated?: (openerId: number, popup: Electron.WebContents) => void;
+};
+
+let hooks: WindowOpenHooks = {};
+
+/** Replaces the window-open hooks; `{}` removes them. The handler itself stays installed here only. */
+export const setWindowOpenHooks = (next: WindowOpenHooks): void => {
+  hooks = next;
+};
+
+/** Runs a hook; a throw is logged and never stops the tab or popup from opening. */
+const runHook = <R>(name: string, call: () => R): R | undefined => {
+  try {
+    return call();
+  } catch (error) {
+    console.error(`[BrowserSession] window-open hook ${name} failed:`, error);
+    return undefined;
+  }
+};
+
 const clamp = (value: number, { min, max }: { min: number; max: number }): number =>
   Math.min(max, Math.max(min, value));
 
@@ -196,7 +221,14 @@ export function installWindowOpenHandler(
     const decision = classifyWindowOpen(details);
     if (decision.kind === 'tab') {
       if (limiter.tryOpenTab(openerId, Date.now())) {
-        ipcBridge.browser.openTabRequested.emit({ url: decision.url, background: decision.background, profile });
+        const extra = runHook('tabRequested', () => hooks.tabRequested?.(openerId, decision.url, partition));
+        const conversationId = extra?.conversationId;
+        ipcBridge.browser.openTabRequested.emit({
+          url: decision.url,
+          background: decision.background,
+          profile,
+          ...(conversationId ? { conversationId } : {}),
+        });
       } else {
         console.warn(`[BrowserSession] blocked a tab: too many opened by webContents ${openerId}`);
       }
@@ -231,6 +263,7 @@ export function installWindowOpenHandler(
             event.preventDefault();
             popup.setTitle(popupTitle(title, popup.webContents.getURL()));
           });
+          runHook('popupCreated', () => hooks.popupCreated?.(openerId, popup.webContents));
           return popup.webContents;
         },
       };

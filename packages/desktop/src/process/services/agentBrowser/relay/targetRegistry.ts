@@ -70,6 +70,8 @@ export type TargetRegistry = {
   ownership(webContentsId: number): TabOwnership | null;
   all(): TabOwnership[];
   claim(webContentsId: number, client: RelayClient): void;
+  /** A tab or popup an agent-owned page opened: claimed for the opener's owner and chat. No-op for a user opener. */
+  inherit(openerId: number, childId: number): void;
   share(webContentsId: number, on: boolean): void;
   setPaused(webContentsId: number, paused: boolean): void;
   /** The client disconnected: its tabs stay open under a label nobody can reclaim. */
@@ -188,6 +190,11 @@ export function createTargetRegistry(): TargetRegistry {
     all,
     claim: (webContentsId, { clientId, label, conversationId }) =>
       update(webContentsId, { owner: { clientId, label, ...(conversationId ? { conversationId } : {}) } }),
+    inherit(openerId, childId) {
+      const owner = tabs.get(openerId)?.ownership.owner;
+      if (!owner || owner === 'user' || !tabs.has(childId)) return;
+      update(childId, { owner: { ...owner } });
+    },
     share: (webContentsId, on) => update(webContentsId, { sharedWith: on ? 'all' : null }),
     setPaused: (webContentsId, paused) => update(webContentsId, { paused }),
     releaseClient(clientId) {
