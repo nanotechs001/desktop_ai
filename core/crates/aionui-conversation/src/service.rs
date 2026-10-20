@@ -19,12 +19,12 @@ use aionui_api_types::{
     AssistantMcpBindingChanged, CancelConversationResponse, CloneConversationRequest, ConfirmRequest,
     ConfirmationListResponse, ConversationArtifactKind, ConversationArtifactListResponse, ConversationArtifactResponse,
     ConversationArtifactStatus, ConversationListResponse, ConversationMcpStatus, ConversationMcpStatusKind,
-    ConversationNameUpdatedPayload, ConversationResponse, ConversationRuntimeSummary, CreateConversationRequest,
-    EnsureConversationRuntimeResponse, ForkCapabilityView, ForkConversationRequest, ListConversationsQuery,
-    ListMessagesQuery, McpRuntimeSnapshot, MessageListResponse, MessageResponse, MessageSearchResponse,
-    PromptCapabilityView, SearchMessagesQuery, SendMessageRequest, SendMessageResponse, SessionMcpServer,
-    SessionMcpTransport, TEAM_MCP_SERVER_NAME, TeamMcpSelection, TeamSessionBinding, UpdateConversationArtifactRequest,
-    UpdateConversationRequest, WebSocketMessage, assistant_avatar_response_value,
+    ConversationNameUpdatedPayload, ConversationResponse, ConversationRuntimeModeResponse, ConversationRuntimeSummary,
+    CreateConversationRequest, EnsureConversationRuntimeResponse, ForkCapabilityView, ForkConversationRequest,
+    ListConversationsQuery, ListMessagesQuery, McpRuntimeSnapshot, MessageListResponse, MessageResponse,
+    MessageSearchResponse, PromptCapabilityView, SearchMessagesQuery, SendMessageRequest, SendMessageResponse,
+    SessionMcpServer, SessionMcpTransport, TEAM_MCP_SERVER_NAME, TeamMcpSelection, TeamSessionBinding,
+    UpdateConversationArtifactRequest, UpdateConversationRequest, WebSocketMessage, assistant_avatar_response_value,
     assistant_avatar_response_value_with_version, assistant_mcp_binding_fingerprint,
 };
 use aionui_api_types::{ChatFileRef, SessionRef};
@@ -4551,6 +4551,55 @@ impl ConversationService {
         })
     }
 
+    /// The current mode of the conversation's runtime if one is already running. Read-only:
+    /// never starts, builds or restarts a runtime and persists nothing. The mode is the
+    /// running runtime's `mode` config option, the one the mode picker reads from
+    /// `runtime/ensure`. A team-owned conversation reports not live.
+    pub async fn runtime_mode(
+        &self,
+        user_id: &str,
+        conversation_id: &str,
+        task_manager: &Arc<dyn IWorkerTaskManager>,
+    ) -> Result<ConversationRuntimeModeResponse, ConversationError> {
+        let row = self
+            .conversation_repo
+            .get(user_id, conversation_id)
+            .await?
+            .ok_or_else(|| ConversationError::NotFound {
+                id: conversation_id.to_owned(),
+            })?;
+        let not_live = ConversationRuntimeModeResponse {
+            mode: None,
+            live: false,
+            agent_id: None,
+            backend: None,
+        };
+        if team_id_from_extra(&row.extra).is_some() {
+            return Ok(not_live);
+        }
+        let Some(agent) = task_manager.get_task(conversation_id) else {
+            return Ok(not_live);
+        };
+        let options = agent
+            .get_config_options()
+            .await
+            .map_err(ConversationError::from)?
+            .config_options;
+        let mode = options
+            .iter()
+            .find(|option| option.category.as_deref() == Some("mode"))
+            .or_else(|| options.iter().find(|option| option.id == "mode"))
+            .and_then(|option| option.current_value.clone());
+        let extra = serde_json::from_str::<serde_json::Value>(&row.extra).unwrap_or_default();
+        let extra_str = |key: &str| extra.get(key).and_then(serde_json::Value::as_str).map(str::to_owned);
+        Ok(ConversationRuntimeModeResponse {
+            mode,
+            live: true,
+            agent_id: extra_str("agent_id"),
+            backend: extra_str("backend"),
+        })
+    }
+
     /// Cancel any active turn, recycle the agent process, and eagerly rebuild it.
     ///
     /// Conversation messages, artifacts, and the persisted backend session anchor
@@ -5299,6 +5348,37 @@ fn build_options_backend(options: &BuildTaskOptions) -> Option<&str> {
     }
 }
 
+/// A snapshot entry with a built-in MCP name, rebuilt from the user's MCP row of that name.
+/// The built-ins get the relay / artifact credentials at launch, so the entry is accepted only
+/// when that row is a built-in one, and only with the row's own transport; otherwise it is
+/// dropped (`None`).
+async fn builtin_session_mcp_server(
+    repo: Option<&dyn IMcpServerRepository>,
+    user_id: &str,
+    name: &str,
+) -> Result<Option<SessionMcpServer>, ConversationError> {
+    let Some(repo) = repo else {
+        warn!(server_name = %name, "session_mcp: no MCP repository; built-in snapshot entry dropped");
+        return Ok(None);
+    };
+    let row = repo
+        .find_by_name(user_id, name)
+        .await
+        .map_err(|e| ConversationError::internal(format!("Failed to load MCP server: {e}")))?;
+    let Some(row) = row.filter(|row| row.builtin) else {
+        warn!(server_name = %name, "session_mcp: built-in name without a built-in MCP row; snapshot entry dropped");
+        return Ok(None);
+    };
+    // Unresolved, like the client-built entry it replaces: launch resolves the command.
+    match aionui_ai_agent::mcp_resolve::parse_row_session_mcp_server(&row) {
+        Ok(server) => Ok(Some(server)),
+        Err(err) => {
+            warn!(server_name = %name, error = %err, "session_mcp: built-in MCP row not usable; snapshot entry dropped");
+            Ok(None)
+        }
+    }
+}
+
 fn context_skill_names(context: &AgentSessionContext) -> Vec<String> {
     context.skills.clone()
 }
@@ -5329,7 +5409,7 @@ impl ConversationService {
             .read()
             .ok()
             .and_then(|guard| guard.as_ref().cloned());
-        if let Some(repo) = repo {
+        if let Some(repo) = &repo {
             let rows = match selected_ids {
                 Some(ids) => repo
                     .list_by_ids_any(user_id, ids)
@@ -5365,15 +5445,23 @@ impl ConversationService {
             if server.name == TEAM_MCP_SERVER_NAME {
                 continue;
             }
-            selected_session_servers.push(server.clone());
+            let server = if aionui_ai_agent::factory::builtin_mcp_env::is_builtin_mcp_name(&server.name) {
+                match builtin_session_mcp_server(repo.as_deref(), user_id, &server.name).await? {
+                    Some(server) => server,
+                    None => continue,
+                }
+            } else {
+                server.clone()
+            };
             if seen_mcp_names.insert(server.name.clone()) {
                 mcp_servers.push(server.name.clone());
             }
             upsert_conversation_mcp_status(
                 &mut mcp_statuses,
                 &mut status_index_by_name,
-                classify_session_mcp_status(server, mcp_support),
+                classify_session_mcp_status(&server, mcp_support),
             );
+            selected_session_servers.push(server);
         }
         for status in additional_statuses {
             if status.name == TEAM_MCP_SERVER_NAME {

@@ -200,21 +200,38 @@ impl IMockAgent for NoopMockAgent {
         &self,
     ) -> Result<aionui_api_types::GetConfigOptionsResponse, aionui_ai_agent::AgentError> {
         Ok(aionui_api_types::GetConfigOptionsResponse {
-            config_options: vec![aionui_api_types::AcpConfigOptionDto {
-                id: "model".to_owned(),
-                name: Some("Model".to_owned()),
-                label: None,
-                description: None,
-                category: Some("model".to_owned()),
-                option_type: "select".to_owned(),
-                current_value: Some("mock-model".to_owned()),
-                options: vec![aionui_api_types::AcpConfigSelectOptionDto {
-                    value: "mock-model".to_owned(),
-                    name: Some("Mock Model".to_owned()),
-                    label: Some("Mock Model".to_owned()),
+            config_options: vec![
+                aionui_api_types::AcpConfigOptionDto {
+                    id: "model".to_owned(),
+                    name: Some("Model".to_owned()),
+                    label: None,
                     description: None,
-                }],
-            }],
+                    category: Some("model".to_owned()),
+                    option_type: "select".to_owned(),
+                    current_value: Some("mock-model".to_owned()),
+                    options: vec![aionui_api_types::AcpConfigSelectOptionDto {
+                        value: "mock-model".to_owned(),
+                        name: Some("Mock Model".to_owned()),
+                        label: Some("Mock Model".to_owned()),
+                        description: None,
+                    }],
+                },
+                aionui_api_types::AcpConfigOptionDto {
+                    id: "mode".to_owned(),
+                    name: Some("Mode".to_owned()),
+                    label: None,
+                    description: None,
+                    category: Some("mode".to_owned()),
+                    option_type: "select".to_owned(),
+                    current_value: Some("mock-mode".to_owned()),
+                    options: vec![aionui_api_types::AcpConfigSelectOptionDto {
+                        value: "mock-mode".to_owned(),
+                        name: Some("Mock Mode".to_owned()),
+                        label: Some("Mock Mode".to_owned()),
+                        description: None,
+                    }],
+                },
+            ],
         })
     }
 

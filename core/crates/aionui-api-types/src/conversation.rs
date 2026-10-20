@@ -251,6 +251,21 @@ pub struct EnsureConversationRuntimeResponse {
     pub runtime: ConversationRuntimeSummary,
 }
 
+/// Response of `GET /api/conversations/{id}/runtime/mode`: the mode of the conversation's
+/// already-running runtime, read without starting one. With no running runtime (and for a
+/// team-owned conversation) it is `{ "mode": null, "live": false }`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConversationRuntimeModeResponse {
+    /// The running runtime's current `mode` config option; `None` when not live or when the
+    /// runtime has no mode option.
+    pub mode: Option<String>,
+    pub live: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConversationAssistantIdentityResponse {
     pub id: String,

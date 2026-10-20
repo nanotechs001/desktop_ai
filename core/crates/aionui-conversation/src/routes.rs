@@ -10,9 +10,10 @@ use aionui_api_types::{
     ActiveCountResponse, ApiResponse, ApprovalCheckQuery, ApprovalCheckResponse, CancelConversationRequest,
     CancelConversationResponse, CloneConversationRequest, ConfirmRequest, ConfirmationListResponse,
     ConversationArtifactListResponse, ConversationArtifactResponse, ConversationListResponse, ConversationResponse,
-    CreateConversationRequest, EnsureConversationRuntimeResponse, ForkConversationRequest, ListConversationsQuery,
-    ListMessagesQuery, MessageListResponse, MessageResponse, MessageSearchResponse, SearchMessagesQuery,
-    SendMessageRequest, SendMessageResponse, UpdateConversationArtifactRequest, UpdateConversationRequest,
+    ConversationRuntimeModeResponse, CreateConversationRequest, EnsureConversationRuntimeResponse,
+    ForkConversationRequest, ListConversationsQuery, ListMessagesQuery, MessageListResponse, MessageResponse,
+    MessageSearchResponse, SearchMessagesQuery, SendMessageRequest, SendMessageResponse,
+    UpdateConversationArtifactRequest, UpdateConversationRequest,
 };
 use aionui_auth::CurrentUser;
 use aionui_common::ApiError;
@@ -135,6 +136,7 @@ pub fn conversation_routes(state: ConversationRouterState) -> Router {
         )
         .route("/api/conversations/{id}/runtime/ensure", post(ensure_runtime))
         .route("/api/conversations/{id}/runtime/restart", post(restart_runtime))
+        .route("/api/conversations/{id}/runtime/mode", get(runtime_mode))
         .route("/api/conversations/{id}/active-lease", post(active_lease))
         // Confirmation system
         .route("/api/conversations/{id}/confirmations", get(list_confirmations))
@@ -394,6 +396,19 @@ async fn ensure_runtime(
     let response = state
         .service
         .ensure_runtime(&user.id, &id, &state.task_manager)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(ApiResponse::ok(response)))
+}
+
+async fn runtime_mode(
+    State(state): State<ConversationRouterState>,
+    Extension(user): Extension<CurrentUser>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<ConversationRuntimeModeResponse>>, ApiError> {
+    let response = state
+        .service
+        .runtime_mode(&user.id, &id, &state.task_manager)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(ApiResponse::ok(response)))

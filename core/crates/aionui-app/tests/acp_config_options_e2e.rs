@@ -227,3 +227,119 @@ async fn old_mode_and_model_routes_are_removed() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
+
+// ── runtime/mode: read-only mode of an already-running runtime ──────
+
+#[tokio::test]
+async fn runtime_mode_requires_auth() {
+    let (app, _services) = build_app_with_mock_agents().await;
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/conversations/conv-1/runtime/mode")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    let json = body_json(resp).await;
+    assert_eq!(json["code"], "UNAUTHORIZED");
+}
+
+#[tokio::test]
+async fn runtime_mode_unknown_conversation_is_404() {
+    let (mut app, services) = build_app_with_mock_agents().await;
+    let (token, _csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+
+    let resp = app
+        .oneshot(get_with_token("/api/conversations/no-such-chat/runtime/mode", &token))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    let json = body_json(resp).await;
+    assert_eq!(json["success"], false);
+    assert_eq!(json["code"], "NOT_FOUND");
+}
+
+/// An idle chat reports not live, and the GET (no CSRF token) starts no runtime.
+#[tokio::test]
+async fn runtime_mode_of_idle_chat_is_not_live_and_starts_nothing() {
+    let (mut app, services) = build_app_with_mock_agents().await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+    let id = create_conversation(&mut app, &token, &csrf).await;
+
+    let resp = app
+        .clone()
+        .oneshot(get_with_token(&format!("/api/conversations/{id}/runtime/mode"), &token))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let json = body_json(resp).await;
+    assert_eq!(json["data"], json!({ "mode": null, "live": false }));
+    assert!(
+        services.worker_task_manager.get_task(&id).is_none(),
+        "reading the mode must not start a runtime"
+    );
+}
+
+#[tokio::test]
+async fn runtime_mode_reports_the_live_runtime_mode() {
+    let (mut app, services) = build_app_with_mock_agents().await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+    let req = json_with_token(
+        "POST",
+        "/api/conversations",
+        json!({ "type": "acp", "name": "Mode", "extra": { "backend": "claude", "agent_id": "agent-x" } }),
+        &token,
+        &csrf,
+    );
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let id = body_json(resp).await["data"]["id"].as_str().unwrap().to_owned();
+    let ensure = json_with_token(
+        "POST",
+        &format!("/api/conversations/{id}/runtime/ensure"),
+        json!(null),
+        &token,
+        &csrf,
+    );
+    assert_eq!(app.clone().oneshot(ensure).await.unwrap().status(), StatusCode::OK);
+
+    let resp = app
+        .oneshot(get_with_token(&format!("/api/conversations/{id}/runtime/mode"), &token))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let json = body_json(resp).await;
+    assert_eq!(
+        json["data"],
+        json!({ "mode": "mock-mode", "live": true, "agent_id": "agent-x", "backend": "claude" })
+    );
+}
+
+#[tokio::test]
+async fn runtime_mode_of_another_users_live_chat_is_404() {
+    let (mut app, services) = build_app_with_mock_agents().await;
+    let (owner_token, owner_csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+    let id = create_and_ensure_runtime_conversation(&mut app, &owner_token, &owner_csrf).await;
+    let (other_token, _other_csrf) = setup_and_login(&mut app, &services, "other", "StrongP@ss2").await;
+
+    let resp = app
+        .oneshot(get_with_token(
+            &format!("/api/conversations/{id}/runtime/mode"),
+            &other_token,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    let json = body_json(resp).await;
+    assert_eq!(json["code"], "NOT_FOUND");
+}

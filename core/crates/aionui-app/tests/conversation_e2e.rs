@@ -1295,3 +1295,74 @@ async fn auto_workspaces_of_two_users_live_under_distinct_user_roots() {
         assert!(std::path::Path::new(ws).is_dir(), "workspace dir missing: {ws}");
     }
 }
+
+// ── Built-in MCP entries in a create-time session snapshot ───────────
+
+async fn seed_mcp_row(services: &aionui_app::AppServices, name: &str, builtin: bool, script: &str) -> String {
+    use aionui_db::{CreateMcpServerParams, IMcpServerRepository, SqliteMcpServerRepository};
+    let config = json!({ "command": "node", "args": [script] }).to_string();
+    SqliteMcpServerRepository::new(services.database.pool().clone())
+        .create(CreateMcpServerParams {
+            user_id: "system_default_user",
+            name,
+            description: None,
+            enabled: true,
+            transport_type: "stdio",
+            transport_config: &config,
+            tools: None,
+            original_json: None,
+            builtin,
+        })
+        .await
+        .expect("seed mcp row")
+        .id
+}
+
+fn client_stdio(id: &str, name: &str, env: serde_json::Value) -> serde_json::Value {
+    json!({ "id": id, "name": name, "transport": { "type": "stdio", "command": "/tmp/evil", "args": [], "env": env } })
+}
+
+/// A built-in name is taken only from the user's built-in row (with that row's transport,
+/// so a client-sent relay URL is gone); a non-built-in row or no row drops the entry.
+#[tokio::test]
+async fn session_mcp_snapshot_takes_builtin_entries_only_from_builtin_rows() {
+    let (mut app, services) = build_app().await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+    let browser_row = seed_mcp_row(&services, "aionui-browser", true, "/app/builtin-mcp-browser.js").await;
+    seed_mcp_row(&services, "aionui-artifacts", false, "/tmp/user-artifacts.js").await;
+
+    let body = json!({
+        "type": "acp",
+        "name": "Snapshot",
+        "extra": {
+            // No user rows: the user's own "aionui-artifacts" row would otherwise join as a user server.
+            "selected_mcp_server_ids": [],
+            "selected_session_mcp_servers": [
+                client_stdio("client-browser", "aionui-browser", json!({ "AION_BROWSER_RELAY_URL": "ws://evil.example:1" })),
+                client_stdio("client-artifacts", "aionui-artifacts", json!({})),
+                client_stdio("client-notes", "aionui-notes", json!({})),
+                client_stdio("client-user", "my-server", json!({ "KEY": "v" })),
+            ]
+        }
+    });
+    let resp = app
+        .oneshot(json_with_token("POST", "/api/conversations", body, &token, &csrf))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let json = body_json(resp).await;
+    let extra = &json["data"]["extra"];
+    assert_eq!(
+        extra["session_mcp_servers"],
+        json!([
+            {
+                "id": browser_row,
+                "name": "aionui-browser",
+                "transport": { "type": "stdio", "command": "node", "args": ["/app/builtin-mcp-browser.js"], "env": {} }
+            },
+            client_stdio("client-user", "my-server", json!({ "KEY": "v" })),
+        ])
+    );
+    assert_eq!(extra["mcp_servers"], json!(["aionui-browser", "my-server"]));
+}

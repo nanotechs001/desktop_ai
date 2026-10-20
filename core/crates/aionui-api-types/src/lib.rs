@@ -98,12 +98,12 @@ pub use conversation::{
     CloneConversationRequest, ConversationArtifactKind, ConversationArtifactListResponse, ConversationArtifactResponse,
     ConversationArtifactStatus, ConversationAssistantIdentityResponse, ConversationListResponse, ConversationMcpStatus,
     ConversationMcpStatusKind, ConversationNameUpdatedPayload, ConversationRateLimitUpdatedPayload,
-    ConversationResponse, ConversationRuntimeStateKind, ConversationRuntimeSummary, CreateConversationRequest,
-    EnsureConversationRuntimeResponse, ForkCapabilityView, ForkConversationRequest, ListConversationsQuery,
-    ListMessagesQuery, McpRuntimeSnapshot, MessageListResponse, MessageResponse, MessageSearchItem,
-    MessageSearchResponse, MessageStatusChangedPayload, PromptCapabilityView, RateLimitStatus, RateLimitWindowKind,
-    RateLimitWindowReading, SearchMessagesQuery, SendMessageRequest, SendMessageResponse, SessionRef,
-    UpdateConversationArtifactRequest, UpdateConversationRequest,
+    ConversationResponse, ConversationRuntimeModeResponse, ConversationRuntimeStateKind, ConversationRuntimeSummary,
+    CreateConversationRequest, EnsureConversationRuntimeResponse, ForkCapabilityView, ForkConversationRequest,
+    ListConversationsQuery, ListMessagesQuery, McpRuntimeSnapshot, MessageListResponse, MessageResponse,
+    MessageSearchItem, MessageSearchResponse, MessageStatusChangedPayload, PromptCapabilityView, RateLimitStatus,
+    RateLimitWindowKind, RateLimitWindowReading, SearchMessagesQuery, SendMessageRequest, SendMessageResponse,
+    SessionRef, UpdateConversationArtifactRequest, UpdateConversationRequest,
 };
 pub use conversation_tools::{
     CONVERSATION_TOOLS_SCHEMA_VERSION, ConversationCliEnvelope, ConversationCliMeta, ConversationCreateAssistant,
