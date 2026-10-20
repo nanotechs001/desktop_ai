@@ -16,6 +16,8 @@ import {
   profileOfSession,
 } from '@process/services/browserSession/profiles/browserProfiles';
 import { PendingConfirms } from './confirmGate';
+import { createBrowserViewService, type BrowserViewService } from './relay/browserView';
+import { createDebuggerSessions } from './relay/debuggerSessions';
 import { startRelayServer, type ProfileLookup } from './relay/relayServer';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
 import { parseConversationId } from './relay/relayTransport';
@@ -53,6 +55,11 @@ const MAX_REPORTED_TAB_CAP = 100;
 /** What an agent is told when the pane refuses its new tab at the tab cap. */
 const tabCapMessage = (max: number): string =>
   `The browser has too many tabs open (max ${max}). Close some tabs and try again.`;
+
+let browserView: BrowserViewService | null = null;
+
+/** The WebUI's live view of agent tabs; null while agent browser control is off. */
+export const getBrowserViewService = (): BrowserViewService | null => browserView;
 
 /** Pauses agent input on a tab the user types or clicks in (agent-owned or shared tabs only). */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
@@ -218,8 +225,11 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
   confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));
 
+  // One set of debugger sessions: a tab's debugger attaches once, for the agent and the WebUI viewer alike.
+  const sessions = createDebuggerSessions();
   const relay = await startRelayServer({
     registry,
+    sessions,
     openTab: (url, conversationId, profile) =>
       ipcBridge.browser.openTabRequested.emit({
         url,
@@ -238,5 +248,13 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   });
   active = registry;
   activeWaiter = waiter;
-  return { url: relay.url, token: relay.token, close: relay.close };
+  browserView = createBrowserViewService({ registry, sessions });
+  return {
+    url: relay.url,
+    token: relay.token,
+    close: () => {
+      browserView = null;
+      return relay.close();
+    },
+  };
 }

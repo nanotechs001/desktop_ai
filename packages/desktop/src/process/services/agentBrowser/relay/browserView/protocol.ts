@@ -70,7 +70,7 @@ export const parseClientMessage = (raw: string): ClientMessage | null => {
 };
 
 const finite = z.number().finite();
-const frameMetaSchema = z.object({
+export const frameMetaSchema = z.object({
   offsetTop: finite,
   pageScaleFactor: finite.positive(),
   deviceWidth: finite,

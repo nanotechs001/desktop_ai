@@ -52,7 +52,7 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
   },
 }));
 
-const { agentTabProfile, liveAgentProfile, startAgentBrowserServices } =
+const { agentTabProfile, getBrowserViewService, liveAgentProfile, startAgentBrowserServices } =
   await import('@process/services/agentBrowser/services');
 const { agentPartition, deleteAgentBrowserData, rememberBrowserSession, temporaryPartition } =
   await import('@process/services/browserSession/profiles/browserProfiles');
@@ -523,5 +523,26 @@ describe('Agent IPC', () => {
     );
     expect(await call('ensureDefaultAgent')).toEqual({ success: true });
     expect(h.ipcBridge.agentBrowser.defaultAgentReady.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('agent browser services: WebUI browser view', () => {
+  it('streams a tab the agent is attached to over the same debugger, and goes away with the relay', async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude');
+    const tab = newTab(40);
+    await call('share', { webContentsId: 40, on: true });
+    expect((await send('Target.attachToTarget', { targetId: 'wc-40', flatten: true })).error).toBeUndefined();
+    const peer = { sendBinary: vi.fn(), sendText: vi.fn(), close: vi.fn() };
+
+    const stream = await getBrowserViewService()?.openStream('wc-40', peer);
+
+    expect(stream).toBeDefined();
+    expect(stream && 'error' in stream).toBe(false);
+    expect(tab.debugger.isAttached()).toBe(true);
+    if (stream && 'close' in stream) stream.close();
+    await services?.close();
+    services = null;
+    expect(getBrowserViewService()).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { connect as netConnect } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
+import { createDebuggerSessions, type DebuggerSessions } from '@process/services/agentBrowser/relay/debuggerSessions';
 import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
 import {
@@ -77,10 +78,11 @@ const resolveProfile = vi.fn(async (conversationId?: string) => ({
   final: true,
 }));
 
-const start = async (limits: Partial<RelayLimits> = {}): Promise<RelayHandle> => {
+const start = async (limits: Partial<RelayLimits> = {}, sessions?: DebuggerSessions): Promise<RelayHandle> => {
   registry = createTargetRegistry();
   relay = await startRelayServer({
     registry,
+    sessions,
     openTab,
     closeTab,
     onAgentAction,
@@ -1228,5 +1230,46 @@ describe('relay server: OOPIF contexts', () => {
     announce('CDP-2');
     const second = String((await client.waitForEvent('Target.attachedToTarget')).params?.sessionId);
     expect((await client.send('Runtime.evaluate', evaluate, second)).error?.message).toMatch(/isolated-world/);
+  });
+});
+
+describe('relay server: shared debugger sessions', () => {
+  /** A non-relay client (the WebUI browser view) on the same tab debugger. */
+  const viewer = async (sessions: DebuggerSessions, contents: FakeContents) => {
+    const emit = vi.fn();
+    const id = await sessions.attach(contents, { id: 'browser-view-1', emit });
+    sessions.ready(id);
+    return { id, emit };
+  };
+
+  it("an ownership change prunes only the relay's own clients' sessions", async () => {
+    const sessions = createDebuggerSessions();
+    const handle = await start({}, sessions);
+    const client = await connect(handle);
+    const tab = ownedTab(60, 'claude');
+    await attach(client, 60);
+    const view = await viewer(sessions, tab);
+
+    registry.setPaused(60, true);
+    registry.share(60, true);
+
+    expect(sessions.session(view.id)).not.toBeNull();
+    expect(view.emit).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'Target.detachedFromTarget' }));
+  });
+
+  it("agents never receive the viewer's screencast frames", async () => {
+    const sessions = createDebuggerSessions();
+    const handle = await start({}, sessions);
+    const client = await connect(handle);
+    const tab = ownedTab(61, 'claude');
+    const session = await attach(client, 61);
+    const view = await viewer(sessions, tab);
+
+    tab.debugger.message('Page.screencastFrame', { data: '', metadata: {}, sessionId: 1 });
+    tab.debugger.message('Page.loadEventFired', { timestamp: 1 });
+
+    await client.waitForEvent('Page.loadEventFired', session);
+    expect(client.events.map((e) => e.method)).not.toContain('Page.screencastFrame');
+    expect(view.emit).toHaveBeenCalledWith(expect.objectContaining({ method: 'Page.screencastFrame' }));
   });
 });

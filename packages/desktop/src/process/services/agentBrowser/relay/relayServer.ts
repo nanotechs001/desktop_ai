@@ -12,7 +12,7 @@ import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/comm
 import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
-import { createDebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
+import { createDebuggerSessions, type DebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
 import { POLICY_ERROR_CODE, decideRelayCommand, mayAct } from './relayPolicy';
 import {
   DEFAULT_RELAY_LIMITS,
@@ -37,6 +37,8 @@ import {
 
 export type RelayServerDeps = {
   registry: TargetRegistry;
+  /** The tabs' debugger sessions, shared with the WebUI browser view (a tab's debugger attaches only once). */
+  sessions?: DebuggerSessions;
   /** Asks the pane to open a browser tab (ipcBridge.browser.openTabRequested) in the agent's chat, when known. */
   openTab(url: string, conversationId: string | undefined, profile: BrowserTabProfile): void;
   /** Resolves with the next browser tab of `profile` that attaches, in request order; rejects on timeout or refusal. */
@@ -95,6 +97,8 @@ const MAX_DIALOGS_IN_FLIGHT = 2;
 const MAX_CONFIRMS_IN_FLIGHT = 2;
 const MAX_CONFIRM_LABEL_LENGTH = 120;
 const FRAME_LOOKUP_TIMEOUT_MS = 5000;
+/** Agents may not start a screencast, so these events are the WebUI viewer's and never reach an agent. */
+const VIEWER_ONLY_EVENTS = new Set(['Page.screencastFrame', 'Page.screencastVisibilityChanged']);
 /** A client whose profile lookup failed (or fell back on an error) looks it up again at most this often. */
 const PROFILE_RETRY_MS = 10_000;
 
@@ -130,7 +134,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   const { registry } = deps;
   const limits: RelayLimits = { ...DEFAULT_RELAY_LIMITS, ...deps.limits };
   const token = randomBytes(32).toString('hex');
-  const sessions = createDebuggerSessions();
+  const sessions = deps.sessions ?? createDebuggerSessions();
   const connections = new Map<string, Connection>();
   const wss = new WebSocketServer({ noServer: true, maxPayload: limits.maxPayloadBytes });
 
@@ -239,7 +243,12 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     if (sessions.count(conn.client.clientId) >= limits.maxSessionsPerClient) {
       throw new Error(`An agent may hold at most ${limits.maxSessionsPerClient} sessions; detach one first`);
     }
-    const sink = { id: conn.client.clientId, emit: (event: RelayEvent) => send(conn, event) };
+    const sink = {
+      id: conn.client.clientId,
+      emit: (event: RelayEvent) => {
+        if (!VIEWER_ONLY_EVENTS.has(event.method)) send(conn, event);
+      },
+    };
     let sessionId: string;
     try {
       sessionId = await sessions.attach(contents, sink);
@@ -586,11 +595,13 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       for (const conn of connections.values()) if (mayAct(last, conn.client)) send(conn, event);
       sessions.dropContents(last.webContentsId);
     }),
-    // Unsharing (or any ownership change) ends sessions their client may no longer drive.
+    // Unsharing (or any ownership change) ends sessions their client may no longer drive. Sinks that are not relay
+    // clients (the WebUI browser view) share the sessions and police themselves; a gone client's sessions were
+    // dropped with its socket.
     registry.onChange(() =>
       sessions.prune((webContentsId, sinkId) => {
         const conn = connections.get(sinkId);
-        return conn !== undefined && mayAct(registry.ownership(webContentsId), conn.client);
+        return conn === undefined || mayAct(registry.ownership(webContentsId), conn.client);
       })
     ),
   ];
