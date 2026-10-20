@@ -253,6 +253,8 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     url: relay.url,
     token: relay.token,
     close: () => {
+      // The relay's sessions no longer own the tabs' debuggers alone: phone streams must end with agent control.
+      browserView?.closeAll('not-allowed');
       browserView = null;
       return relay.close();
     },

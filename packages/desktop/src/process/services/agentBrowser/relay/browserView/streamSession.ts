@@ -4,12 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { DebuggerSessions, RelayEvent } from '../debuggerSessions';
 import { targetIdFor, type RelayContents, type TargetRegistry } from '../targetRegistry';
 import {
-  ALLOWED_VIEWER_METHODS,
   encodeFrame,
-  frameMetaSchema,
   mapTap,
   parseClientMessage,
   type ALLOWED_KEYS,
@@ -17,6 +14,7 @@ import {
   type FrameMeta,
 } from './protocol';
 import { isViewable } from './rules';
+import type { CastViewer, TabCast } from './tabCast';
 
 /** The phone's socket, as the web host adapts it. */
 export type StreamPeer = {
@@ -30,29 +28,24 @@ export type StreamHandle = { onMessage(raw: string): void; close(): void };
 /** Why a stream was refused or ended. */
 export type StreamRefusal = 'tab-closed' | 'not-allowed';
 
-/** How a stream shares its tab's one screencast (one CDP client per tab) with the tab's other streams. */
-export type TabShare = {
-  /** True for the tab's oldest stream: only it acks CDP frames, so the screencast is paced once. */
-  paces(): boolean;
-  /** True when no other stream is on the tab, so stopping the screencast stops nobody else's. */
-  alone(): boolean;
-  leave(): void;
+/** A stream as its service holds it: started once its tab's cast is ready, ended by the service on shutdown. */
+export type Stream = StreamHandle & {
+  start(): void;
+  end(reason: StreamRefusal): void;
+  isDone(): boolean;
 };
 
-export type StreamSessionDeps = {
+export type StreamDeps = {
   registry: TargetRegistry;
-  sessions: DebuggerSessions;
-  contents: RelayContents;
-  sinkId: string;
+  cast: TabCast;
+  webContentsId: number;
   peer: StreamPeer;
-  share: TabShare;
+  /** The stream ended; its service forgets it. */
+  onClose(): void;
 };
 
 type AllowedKey = (typeof ALLOWED_KEYS)[number];
-type Frame = { meta: FrameMeta; jpeg: Buffer; ackId: number };
 
-const MAX_WIDTH_PX = 1280;
-const JPEG_QUALITY = 55;
 const NO_FRAMES_MS = 5000;
 const TAB_POLL_MS = 1000;
 const CLOSE_CODES: Record<StreamRefusal, number> = { 'tab-closed': 1001, 'not-allowed': 1008 };
@@ -70,17 +63,6 @@ const KEY_CODES: Record<AllowedKey, number> = {
 /** Inserted text has no key of its own; any non-agent key report pauses the agent. */
 const TEXT_INPUT = { kind: 'key', key: 'Unidentified', code: '' } as const;
 
-const logCommandError = (error: unknown): void => {
-  console.warn('[BrowserView] viewer command failed:', error);
-};
-
-const frameOf = (params: Record<string, unknown>): Frame | null => {
-  const meta = frameMetaSchema.safeParse(params.metadata);
-  const { data, sessionId } = params;
-  if (!meta.success || typeof data !== 'string' || typeof sessionId !== 'number') return null;
-  return { meta: meta.data, jpeg: Buffer.from(data, 'base64'), ackId: sessionId };
-};
-
 /** The tab's contents when a phone may stream it, else why not. */
 export const viewableContents = (registry: TargetRegistry, webContentsId: number): RelayContents | StreamRefusal => {
   const ownership = registry.ownership(webContentsId);
@@ -90,34 +72,19 @@ export const viewableContents = (registry: TargetRegistry, webContentsId: number
 };
 
 /**
- * Streams one tab to a phone over the tab's shared debugger: a jpeg screencast paced by the phone's acks (one frame
- * in flight), the phone's taps, scrolls and keys as CDP input (pausing the agent like a desktop take-over), and the
- * tab's title, url and pause state. Ends itself when the tab closes or stops being viewable.
+ * One phone watching one tab: its frames come from the tab's shared {@link TabCast}; its taps, scrolls and keys go
+ * out as CDP input (pausing the agent like a desktop take-over); it hears the tab's title, url and pause state. Ends
+ * itself when the tab closes or stops being viewable. Joins the cast at once, so the cast outlives its attach.
  */
-export async function openStreamSession(deps: StreamSessionDeps): Promise<StreamHandle | { error: StreamRefusal }> {
-  const { registry, sessions, contents, peer, share } = deps;
-  const webContentsId = contents.id;
-  let relayId = '';
+export function createStream({ registry, cast, webContentsId, peer, onClose }: StreamDeps): Stream {
+  let started = false;
   let done = false;
-  let casting = false;
   /** Metadata of the frame the phone shows, for mapping its taps. */
   let shown: FrameMeta | null = null;
-  /** CDP ack id of the frame the phone has not acked yet. */
-  let inFlight: number | null = null;
-  /** The newest frame waiting for the phone's ack. */
-  let held: Frame | null = null;
   let lastTab = '';
   let noFrames: NodeJS.Timeout | undefined;
   let poll: NodeJS.Timeout | undefined;
   let unsubscribe: Array<() => void> = [];
-
-  const cdp = (method: string, params: Record<string, unknown>): void => {
-    if (!ALLOWED_VIEWER_METHODS.has(method)) throw new Error(`${method} is not allowed for the browser view`);
-    sessions.send(relayId, method, params).catch(logCommandError);
-  };
-  const ackCdp = (ackId: number): void => {
-    if (share.paces()) cdp('Page.screencastFrameAck', { sessionId: ackId });
-  };
 
   const syncTab = (): void => {
     const target = registry.listTargets().find((t) => t.targetId === targetIdFor(webContentsId));
@@ -129,72 +96,47 @@ export async function openStreamSession(deps: StreamSessionDeps): Promise<Stream
     peer.sendText(text);
   };
 
-  const forward = (frame: Frame): void => {
-    peer.sendBinary(encodeFrame(frame.meta, frame.jpeg));
-    shown = frame.meta;
-    inFlight = frame.ackId;
-  };
-  const onFrame = (frame: Frame): void => {
-    clearTimeout(noFrames);
-    // Another stream's screencast: this phone has not asked yet, but the frame must not stall the tab.
-    if (!casting) return ackCdp(frame.ackId);
-    if (inFlight === null) return forward(frame);
-    if (held) ackCdp(held.ackId);
-    held = frame;
-  };
-  const onAck = (): void => {
-    if (inFlight === null) return;
-    ackCdp(inFlight);
-    inFlight = null;
-    const next = held;
-    held = null;
-    if (next) forward(next);
-  };
-
-  const startCast = (width: number, dpr: number): void => {
-    casting = true;
-    const maxWidth = Math.min(MAX_WIDTH_PX, Math.round(width * dpr));
-    cdp('Page.startScreencast', { format: 'jpeg', quality: JPEG_QUALITY, maxWidth });
+  const hello = (width: number, dpr: number): void => {
+    cast.hello(viewer, width, dpr);
     if (shown || noFrames) return;
     noFrames = setTimeout(() => {
-      if (!done) peer.sendText(JSON.stringify({ type: 'no-frames' }));
+      if (!done && !shown) peer.sendText(JSON.stringify({ type: 'no-frames' }));
     }, NO_FRAMES_MS);
   };
-
   const tap = (nx: number, ny: number): void => {
     if (!shown) return;
     const { x, y } = mapTap(nx, ny, shown);
     registry.noteUserInput(webContentsId, { kind: 'mouse', x, y });
     const click = { x, y, button: 'left', clickCount: 1 };
-    cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-    cdp('Input.dispatchMouseEvent', { type: 'mousePressed', ...click });
-    cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', ...click });
+    cast.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    cast.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...click });
+    cast.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...click });
   };
   const scroll = (nx: number, ny: number, dy: number): void => {
     if (!shown) return;
     const { x, y } = mapTap(nx, ny, shown);
-    cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: dy });
+    cast.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: dy });
   };
   const key = (name: AllowedKey): void => {
     registry.noteUserInput(webContentsId, { kind: 'key', key: name, code: name });
     const base = { key: name, code: name, windowsVirtualKeyCode: KEY_CODES[name] };
-    cdp('Input.dispatchKeyEvent', { type: 'keyDown', ...base, ...(name === 'Enter' ? { text: '\r' } : {}) });
-    cdp('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+    cast.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, ...(name === 'Enter' ? { text: '\r' } : {}) });
+    cast.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
   };
 
   const handle = (message: ClientMessage): void => {
     switch (message.type) {
       case 'hello':
-        return startCast(message.width, message.dpr);
+        return hello(message.width, message.dpr);
       case 'ack':
-        return onAck();
+        return cast.ack(viewer);
       case 'tap':
         return tap(message.nx, message.ny);
       case 'scroll':
         return scroll(message.nx, message.ny, message.dy);
       case 'text':
         registry.noteUserInput(webContentsId, TEXT_INPUT);
-        return cdp('Input.insertText', { text: message.value });
+        return cast.send('Input.insertText', { text: message.value });
       case 'key':
         return key(message.key);
       case 'resume':
@@ -202,75 +144,58 @@ export async function openStreamSession(deps: StreamSessionDeps): Promise<Stream
     }
   };
 
-  /** Stops the screencast when no other stream watches it, else hands its pacing on; then drops the session. */
   const teardown = (): void => {
     if (done) return;
     done = true;
     clearTimeout(noFrames);
     clearInterval(poll);
     unsubscribe.forEach((off) => off());
-    if (sessions.session(relayId)) {
-      if (!contents.isDestroyed()) {
-        if (share.alone()) cdp('Page.stopScreencast', {});
-        else [inFlight, held?.ackId].forEach((ackId) => typeof ackId === 'number' && ackCdp(ackId));
-      }
-      sessions.detachSession(relayId);
-    }
-    share.leave();
+    cast.leave(viewer);
+    onClose();
   };
   const end = (reason: StreamRefusal): void => {
     if (done) return;
+    // Before start the opener refuses instead, so the phone hears nothing yet.
+    if (!started) return teardown();
     peer.sendText(JSON.stringify({ type: 'closed', reason }));
     teardown();
     peer.close(CLOSE_CODES[reason], reason);
   };
 
-  const sink = {
-    id: deps.sinkId,
-    emit(event: RelayEvent): void {
+  const viewer: CastViewer = {
+    show(frame) {
       if (done) return;
-      if (event.method === 'Target.detachedFromTarget' && event.params.sessionId === relayId) return end('tab-closed');
-      if (event.method !== 'Page.screencastFrame' || event.sessionId !== relayId) return;
-      const frame = frameOf(event.params);
-      if (frame) onFrame(frame);
+      shown = frame.meta;
+      peer.sendBinary(encodeFrame(frame.meta, frame.jpeg));
     },
+    gone: () => end('tab-closed'),
   };
-
-  try {
-    relayId = await sessions.attach(contents, sink);
-  } catch (error) {
-    console.warn('[BrowserView] could not attach to the tab:', error);
-    share.leave();
-    return { error: 'tab-closed' };
-  }
-  // The tab may have closed or been unshared while the debugger attached.
-  const refusal = viewableContents(registry, webContentsId);
-  if (typeof refusal === 'string') {
-    sessions.detachSession(relayId);
-    share.leave();
-    return { error: refusal };
-  }
-
-  unsubscribe = [
-    registry.onChange(() => {
-      const ownership = registry.ownership(webContentsId);
-      if (!ownership || done) return;
-      if (!isViewable(ownership)) return end('not-allowed');
-      syncTab();
-    }),
-    registry.onDestroyed((last) => {
-      if (last.webContentsId === webContentsId) end('tab-closed');
-    }),
-  ];
-  // Electron's contents expose no title event to the relay, so title and url changes are polled.
-  poll = setInterval(syncTab, TAB_POLL_MS);
-  poll.unref?.();
-  sessions.ready(relayId);
-  syncTab();
+  cast.join(viewer);
 
   return {
+    start() {
+      if (started || done) return;
+      started = true;
+      unsubscribe = [
+        registry.onChange(() => {
+          const ownership = registry.ownership(webContentsId);
+          if (!ownership || done) return;
+          if (!isViewable(ownership)) return end('not-allowed');
+          syncTab();
+        }),
+        registry.onDestroyed((last) => {
+          if (last.webContentsId === webContentsId) end('tab-closed');
+        }),
+      ];
+      // Electron's contents expose no title event to the relay, so title and url changes are polled.
+      poll = setInterval(syncTab, TAB_POLL_MS);
+      poll.unref?.();
+      syncTab();
+    },
+    end,
+    isDone: () => done,
     onMessage(raw) {
-      if (done) return;
+      if (done || !started) return;
       const message = parseClientMessage(raw);
       if (message) handle(message);
     },

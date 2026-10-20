@@ -5,16 +5,17 @@
  */
 
 import type { DebuggerSessions } from '../debuggerSessions';
-import { webContentsIdFromTargetId, type TargetRegistry } from '../targetRegistry';
+import { webContentsIdFromTargetId, type RelayContents, type TargetRegistry } from '../targetRegistry';
 import { viewableTabs, type ViewTab } from './rules';
 import {
-  openStreamSession,
+  createStream,
   viewableContents,
+  type Stream,
   type StreamHandle,
   type StreamPeer,
   type StreamRefusal,
-  type TabShare,
 } from './streamSession';
+import { createTabCast, type TabCast } from './tabCast';
 
 export type { StreamHandle, StreamPeer, StreamRefusal } from './streamSession';
 
@@ -22,28 +23,32 @@ export type { StreamHandle, StreamPeer, StreamRefusal } from './streamSession';
 export type BrowserViewService = {
   listTabs(conversationId: string): ViewTab[];
   openStream(tabId: string, peer: StreamPeer): Promise<StreamHandle | { error: StreamRefusal }>;
+  /** Ends every open stream, e.g. when agent browser control turns off. */
+  closeAll(reason: StreamRefusal): void;
 };
 
 export type BrowserViewDeps = { registry: TargetRegistry; sessions: DebuggerSessions };
 
 export function createBrowserViewService({ registry, sessions }: BrowserViewDeps): BrowserViewService {
-  /** Open streams per tab, oldest first. */
-  const streams = new Map<number, object[]>();
+  /** One cast (one debugger session) per tab, while any stream watches it. */
+  const casts = new Map<number, TabCast>();
+  const streams = new Set<Stream>();
   let nextSink = 0;
 
-  const join = (webContentsId: number): TabShare => {
-    const me = {};
-    const list = (): object[] => streams.get(webContentsId) ?? [];
-    streams.set(webContentsId, [...list(), me]);
-    return {
-      paces: () => list()[0] === me,
-      alone: () => list().length === 1 && list()[0] === me,
-      leave() {
-        const left = list().filter((s) => s !== me);
-        if (left.length > 0) streams.set(webContentsId, left);
-        else streams.delete(webContentsId);
+  const castFor = (contents: RelayContents): TabCast => {
+    const existing = casts.get(contents.id);
+    if (existing) return existing;
+    nextSink += 1;
+    const cast = createTabCast({
+      sessions,
+      contents,
+      sinkId: `browser-view-${nextSink}`,
+      onEnd: () => {
+        if (casts.get(contents.id) === cast) casts.delete(contents.id);
       },
-    };
+    });
+    casts.set(contents.id, cast);
+    return cast;
   };
 
   return {
@@ -53,9 +58,22 @@ export function createBrowserViewService({ registry, sessions }: BrowserViewDeps
       if (webContentsId === null) return { error: 'tab-closed' };
       const contents = viewableContents(registry, webContentsId);
       if (typeof contents === 'string') return { error: contents };
-      nextSink += 1;
-      const sinkId = `browser-view-${nextSink}`;
-      return openStreamSession({ registry, sessions, contents, sinkId, peer, share: join(webContentsId) });
+      const cast = castFor(contents);
+      const stream = createStream({ registry, cast, webContentsId, peer, onClose: () => streams.delete(stream) });
+      const ready = await cast.ready;
+      // The tab may have closed or been unshared while the debugger attached.
+      const now = viewableContents(registry, webContentsId);
+      const refusal = !ready || stream.isDone() ? 'tab-closed' : typeof now === 'string' ? now : null;
+      if (refusal) {
+        stream.close();
+        return { error: refusal };
+      }
+      streams.add(stream);
+      stream.start();
+      return { onMessage: stream.onMessage, close: stream.close };
+    },
+    closeAll(reason) {
+      Array.from(streams).forEach((stream) => stream.end(reason));
     },
   };
 }

@@ -47,6 +47,8 @@ const commands = (): Array<{ method: string; params: Record<string, unknown> }> 
     params: (params ?? {}) as Record<string, unknown>,
   }));
 const sent = (method: string) => commands().filter((c) => c.method === method);
+const acks = (): number => sent('Page.screencastFrameAck').length;
+const metaOf = (b: Buffer) => decodeFrame(new Uint8Array(b).buffer).meta;
 
 const frame = (contents: FakeContents, meta: Record<string, unknown> = META, sessionId = 1): void =>
   contents.debugger.message('Page.screencastFrame', {
@@ -60,6 +62,13 @@ const agentSession = async (contents: FakeContents): Promise<string> => {
   const id = await sessions.attach(contents, { id: 'agent-client', emit: vi.fn() });
   sessions.ready(id);
   return id;
+};
+
+const hello = (handle: Handle, width = 390, dpr = 3): void => send(handle, { type: 'hello', width, dpr });
+const casting = async (tabId = 'wc-7', width = 390, dpr = 3) => {
+  const s = await stream(tabId);
+  hello(s.handle, width, dpr);
+  return s;
 };
 
 const stream = async (tabId: string, peer = new FakePeer()): Promise<{ handle: Handle; peer: FakePeer }> => {
@@ -134,7 +143,7 @@ describe('browser view: frames', () => {
     expect(sent('Page.screencastFrameAck')).toHaveLength(0);
 
     send(handle, { type: 'ack' });
-    expect(sent('Page.screencastFrameAck').map((c) => c.params)).toEqual([{ sessionId: 1 }]);
+    expect(sent('Page.screencastFrameAck').map((c) => c.params)).toEqual([{ sessionId: 1 }, { sessionId: 1 }]);
     expect(peer.frames).toHaveLength(2);
     expect(decodeFrame(new Uint8Array(peer.frames[1]).buffer).meta.scrollOffsetY).toBe(50);
   });
@@ -321,5 +330,121 @@ describe('browser view: registry changes', () => {
     const count = peer.texts.length;
     vi.advanceTimersByTime(3000);
     expect(peer.texts).toHaveLength(count);
+  });
+});
+
+describe('browser view: back-pressure (owed acks)', () => {
+  it('owes every frame until a phone acks, then acks them all and forwards the newest', async () => {
+    const { handle, peer } = await casting();
+    frame(tab, { ...META, scrollOffsetY: 1 });
+    frame(tab, { ...META, scrollOffsetY: 2 });
+    frame(tab, { ...META, scrollOffsetY: 3 });
+    expect(acks()).toBe(0);
+    expect(peer.frames).toHaveLength(1);
+
+    send(handle, { type: 'ack' });
+
+    expect(acks()).toBe(3);
+    expect(peer.frames).toHaveLength(2);
+    expect(metaOf(peer.frames[1]).scrollOffsetY).toBe(3);
+  });
+
+  it('the fastest phone paces; the slow one never causes a CDP ack', async () => {
+    const fast = await casting();
+    const slow = await casting();
+    frame(tab, { ...META, scrollOffsetY: 1 });
+    expect(slow.peer.frames).toHaveLength(1);
+
+    send(fast.handle, { type: 'ack' });
+    expect(acks()).toBe(1);
+    frame(tab, { ...META, scrollOffsetY: 2 });
+    expect(fast.peer.frames).toHaveLength(2);
+
+    send(slow.handle, { type: 'ack' });
+    expect(acks()).toBe(1);
+    expect(metaOf(slow.peer.frames[1]).scrollOffsetY).toBe(2);
+
+    send(fast.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+    send(slow.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+  });
+
+  it('a stream that never said hello gets no frames and sends no acks', async () => {
+    const idle = await stream('wc-7');
+    await casting();
+    frame(tab);
+    send(idle.handle, { type: 'ack' });
+    expect(idle.peer.frames).toHaveLength(0);
+    expect(acks()).toBe(0);
+  });
+
+  it('owed acks go out once when the pacing stream leaves and another phone acks', async () => {
+    const first = await casting();
+    const second = await casting();
+    frame(tab, { ...META, scrollOffsetY: 1 });
+    frame(tab, { ...META, scrollOffsetY: 2 });
+
+    first.handle.close();
+    expect(acks()).toBe(0);
+    send(second.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+    send(second.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+  });
+
+  it('the last casting stream leaving acks what is owed once, then stops', async () => {
+    const { handle } = await casting();
+    frame(tab);
+    frame(tab);
+    handle.close();
+    expect(acks()).toBe(2);
+    expect(sent('Page.stopScreencast')).toHaveLength(1);
+  });
+});
+
+describe('browser view: screencast width and stop', () => {
+  it('casts at the widest phone and restarts only when that changes', async () => {
+    const a = await casting('wc-7', 390, 3);
+    const b = await casting('wc-7', 300, 2);
+    b.handle.close();
+    const c = await casting('wc-7', 800, 2);
+    c.handle.close();
+    expect(a).toBeDefined();
+    expect(sent('Page.startScreencast').map((x) => x.params.maxWidth)).toEqual([1170, 1280, 1170]);
+  });
+
+  it('stops when no casting stream remains, even with a non-casting one open', async () => {
+    const idle = await stream('wc-7');
+    const { handle } = await casting();
+    handle.close();
+    expect(sent('Page.stopScreencast')).toHaveLength(1);
+    expect(idle.peer.closes).toHaveLength(0);
+  });
+});
+
+describe('browser view: lifecycle', () => {
+  it('a debugger detaching during the attach refuses the stream as tab-closed', async () => {
+    tab.debugger.handler = (method) => {
+      if (method !== 'Page.enable') return {};
+      tab.debugger.attached = false;
+      tab.debugger.emit('detach', {}, 'target closed');
+      return {};
+    };
+    const peer = new FakePeer();
+    expect(await service.openStream('wc-7', peer)).toEqual({ error: 'tab-closed' });
+    expect(peer.texts).toEqual([]);
+
+    tab.debugger.handler = () => ({});
+    const again = await stream('wc-7');
+    expect(again.peer.texts[0]).toMatchObject({ type: 'tab' });
+  });
+
+  it('closeAll ends every stream and detaches its session', async () => {
+    const { peer } = await casting();
+    service.closeAll('not-allowed');
+    expect(peer.texts.at(-1)).toEqual({ type: 'closed', reason: 'not-allowed' });
+    expect(peer.closes).toHaveLength(1);
+    expect(tab.debugger.isAttached()).toBe(false);
   });
 });

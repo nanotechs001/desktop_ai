@@ -546,3 +546,22 @@ describe('agent browser services: WebUI browser view', () => {
     expect(getBrowserViewService()).toBeNull();
   });
 });
+
+describe('agent browser services: closing', () => {
+  it('turning agent control off closes open phone streams and detaches them', async () => {
+    await start();
+    const tab = newTab(41);
+    await call('share', { webContentsId: 41, on: true });
+    const peer = { sendBinary: vi.fn(), sendText: vi.fn(), close: vi.fn() };
+    const stream = await getBrowserViewService()?.openStream('wc-41', peer);
+    expect(stream && 'error' in stream).toBe(false);
+    expect(tab.debugger.isAttached()).toBe(true);
+
+    await services?.close();
+    services = null;
+
+    expect(peer.sendText).toHaveBeenLastCalledWith(JSON.stringify({ type: 'closed', reason: 'not-allowed' }));
+    expect(peer.close).toHaveBeenCalledTimes(1);
+    expect(tab.debugger.isAttached()).toBe(false);
+  });
+});
