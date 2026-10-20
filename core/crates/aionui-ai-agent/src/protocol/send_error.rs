@@ -264,7 +264,7 @@ impl AgentSendError {
                     Some(AgentErrorResolutionTarget::AgentSettings),
                 ),
             ),
-            AcpError::Disconnected { stderr, .. } if is_usage_limit_text(&stderr.to_ascii_lowercase()) => Self::new(
+            AcpError::Disconnected { stderr, .. } if is_usage_limit_stderr(&stderr.to_ascii_lowercase()) => Self::new(
                 "The plan usage limit was reached",
                 AgentErrorCode::UserLlmProviderUsageLimited,
                 AgentErrorOwnership::UserLlmProvider,
@@ -966,11 +966,6 @@ fn is_usage_limit_text(lower: &str) -> bool {
             // ("You've hit your usage limit. …"); claude-code 2.1.301 binary string
             // "usage limit reached".
             "usage limit",
-            // claude-code 2.1.301 binary: its limit-message prefix list
-            // `["You've hit your","You've reached your",…]` and the template
-            // `You've hit your ${"session limit"|"weekly limit"|"Opus limit"|…}`.
-            "you've hit your",
-            "you've reached your",
             // claude-code 2.1.301 binary string `"You've hit your limit"`.
             "hit your limit",
             // claude-code 2.1.301 binary limit-name map `seven_day:"weekly limit"`.
@@ -981,9 +976,31 @@ fn is_usage_limit_text(lower: &str) -> bool {
             "usagelimitexceeded",
         ],
     )
+    || has_claude_limit_clause(lower)
     // claude-code 2.1.301 binary: "Fast limit reached … · resets in …",
     // "spend limit reached (daily; resets …)".
     || (lower.contains("limit reached") && lower.contains("resets"))
+}
+
+/// A crashed agent's stderr tail is arbitrary log text, so only the definitive sourced
+/// phrases count there: the codex `UsageLimitExceeded` marker and its "You've hit your
+/// usage limit" line (both in the STDERR_USAGE_LIMIT fixture), and a claude limit clause.
+fn is_usage_limit_stderr(lower: &str) -> bool {
+    contains_any(lower, &["usagelimitexceeded", "you've hit your usage limit"]) || has_claude_limit_clause(lower)
+}
+
+/// claude-code 2.1.301 binary: the limit-message prefixes `["You've hit your","You've
+/// reached your",…]` always name a limit in the same clause (`You've hit your ${"session
+/// limit"|"weekly limit"|"Opus limit"|…}`), so the prefix only counts with "limit" before
+/// the clause ends.
+fn has_claude_limit_clause(lower: &str) -> bool {
+    ["you've hit your", "you've reached your"].iter().any(|prefix| {
+        lower.match_indices(prefix).any(|(at, _)| {
+            let rest = &lower[at + prefix.len()..];
+            let clause = rest.split(['.', '!', '\n', '\u{b7}', ':', ';']).next().unwrap_or(rest);
+            clause.contains("limit")
+        })
+    })
 }
 
 /// Provider quota exhausted (as opposed to a transient 429). `lower` must be lowercased.
@@ -1978,6 +1995,59 @@ mod tests {
             stderr: String::new(),
         });
         assert_eq!(plain.code(), Some(AgentErrorCode::UserAgentDisconnected));
+    }
+
+    #[test]
+    fn limit_prefix_without_a_limit_is_not_usage_limited() {
+        for (detail, code) in [
+            (
+                "You've hit your stride: build finished",
+                AgentErrorCode::UnknownUpstreamError,
+            ),
+            (
+                "You've reached your destination. Bye",
+                AgentErrorCode::UnknownUpstreamError,
+            ),
+            // The limit word is in a later clause: only the transient rate-limit arm applies.
+            (
+                "you've hit your quota of retries.\nrate limit docs: https://example.com",
+                AgentErrorCode::UserLlmProviderRateLimited,
+            ),
+        ] {
+            let err = AgentSendError::from_agent_error(AgentError::bad_gateway(detail));
+            assert_eq!(err.code(), Some(code), "detail: {detail}");
+        }
+    }
+
+    #[test]
+    fn crash_stderr_that_only_mentions_limits_stays_disconnected() {
+        for stderr in [
+            "You've hit your stride\npanic: index out of bounds",
+            "warn: usage limit telemetry disabled\nthread 'main' panicked",
+            "weekly limit config missing; Fast limit reached? no, resets nothing",
+        ] {
+            let err = AgentSendError::from(AcpError::Disconnected {
+                exit_code: Some(1),
+                signal: None,
+                stderr: stderr.into(),
+            });
+            assert_eq!(
+                err.code(),
+                Some(AgentErrorCode::UserAgentDisconnected),
+                "stderr: {stderr}"
+            );
+            assert_eq!(err.stream_error().retryable, Some(true), "stderr: {stderr}");
+        }
+    }
+
+    #[test]
+    fn crash_stderr_with_codex_usage_limit_marker_is_usage_limited() {
+        let err = AgentSendError::from(AcpError::Disconnected {
+            exit_code: Some(1),
+            signal: None,
+            stderr: "Unhandled error during turn: Some(UsageLimitExceeded)".into(),
+        });
+        assert_eq!(err.code(), Some(AgentErrorCode::UserLlmProviderUsageLimited));
     }
 
     #[test]
