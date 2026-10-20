@@ -8,7 +8,8 @@
  */
 
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Message } from '@arco-design/web-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', () => ({
@@ -16,6 +17,8 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/renderer/pages/conversation/components/ConversationChatBody', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar/HistoryPanel', () => ({ HistoryPanelBody: () => null }));
+const startNewChatLike = vi.hoisted(() => vi.fn());
+vi.mock('@/renderer/pages/conversation/utils/startNewChatLike', () => ({ startNewChatLike }));
 vi.mock('@/renderer/hooks/context/ConversationHistoryContext', () => ({
   ConversationHistoryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -28,7 +31,8 @@ const LAYOUT = { bot_offset_x: 0, bot_size: 64 };
 
 const renderPopup = (
   assistant: { id: string; name: string; source?: string } | undefined,
-  onOpenBotSettings = vi.fn()
+  onOpenBotSettings = vi.fn(),
+  onShowConversation = vi.fn()
 ) => {
   render(
     <WidgetChatPopup
@@ -42,7 +46,7 @@ const renderPopup = (
       onClose={vi.fn()}
       onReturnToMain={vi.fn()}
       onHideWidget={vi.fn()}
-      onShowConversation={vi.fn()}
+      onShowConversation={onShowConversation}
       onOpenBotSettings={onOpenBotSettings}
     />
   );
@@ -107,5 +111,46 @@ describe('WidgetChatPopup header', () => {
     configService.setLocal('agent.colors', { 'bot-1': '#3e63dd' });
     renderPopup({ id: 'bot-1', name: 'Bot', source: 'user' });
     expect(colorDots()).toHaveLength(0);
+  });
+});
+
+describe('WidgetChatPopup new chat', () => {
+  const NEW_CHAT = 'conversation.welcome.newConversation';
+
+  afterEach(() => {
+    startNewChatLike.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it('sits next to the history button and has an accessible name', () => {
+    renderPopup({ id: 'bot-1', name: 'Bot' });
+    const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(labels.indexOf(NEW_CHAT)).toBe(labels.indexOf('conversation.history.botChatHistory') + 1);
+  });
+
+  it('starts a new chat with the same bot and moves the robot to it', async () => {
+    startNewChatLike.mockResolvedValue('c2');
+    const onShowConversation = vi.fn();
+    renderPopup({ id: 'bot-1', name: 'Bot' }, vi.fn(), onShowConversation);
+    fireEvent.click(screen.getByRole('button', { name: NEW_CHAT }));
+
+    await waitFor(() => expect(onShowConversation).toHaveBeenCalledWith('c2'));
+    expect(startNewChatLike).toHaveBeenCalledWith(expect.objectContaining({ assistant: { id: 'bot-1', name: 'Bot' } }));
+  });
+
+  it('shows an error and keeps the robot where it is when the chat cannot be made', async () => {
+    startNewChatLike.mockRejectedValue(new Error('boom'));
+    const error = vi.spyOn(Message, 'error').mockImplementation(() => () => {});
+    const onShowConversation = vi.fn();
+    renderPopup({ id: 'bot-1', name: 'Bot' }, vi.fn(), onShowConversation);
+    fireEvent.click(screen.getByRole('button', { name: NEW_CHAT }));
+
+    await waitFor(() => expect(error).toHaveBeenCalled());
+    expect(onShowConversation).not.toHaveBeenCalled();
+  });
+
+  it('is absent without a VA Bot', () => {
+    renderPopup(undefined);
+    expect(screen.queryByRole('button', { name: NEW_CHAT })).toBeNull();
   });
 });

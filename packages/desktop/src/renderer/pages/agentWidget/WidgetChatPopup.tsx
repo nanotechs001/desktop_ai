@@ -7,13 +7,14 @@
 import React, { useCallback, useState } from 'react';
 import classNames from 'classnames';
 import { Button, Spin, Tooltip } from '@arco-design/web-react';
-import { Close, History, Left, Minus, PreviewCloseOne, SettingTwo, Tv } from '@icon-park/react';
+import { Close, History, Left, Minus, Plus, PreviewCloseOne, SettingTwo, Tv } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
 import ConversationChatBody from '@/renderer/pages/conversation/components/ConversationChatBody';
 import { HistoryPanelBody } from '@/renderer/components/layout/Titlebar/HistoryPanel';
 import { ConversationHistoryProvider } from '@/renderer/hooks/context/ConversationHistoryContext';
+import { useStartNewChat } from '@/renderer/pages/conversation/components/NewChatButton';
 import styles from './AgentWidget.module.css';
 
 type WidgetChatPopupProps = {
@@ -56,6 +57,8 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
   const historyLabel = t('conversation.history.botChatHistory', {
     name: props.conversation?.assistant?.name || props.name,
   });
+  // A new chat with this bot; the robot moves to it the same way as to a chat picked from its history.
+  const startNewChat = useStartNewChat(props.conversation, props.onShowConversation);
 
   return (
     <section
@@ -76,6 +79,12 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
           </div>
         </div>
         {agentId && action(historyLabel, <History theme='outline' size='14' />, () => setHistoryOpen(true))}
+        {agentId &&
+          action(
+            t('conversation.welcome.newConversation'),
+            <Plus theme='outline' size='14' />,
+            () => void startNewChat()
+          )}
         {action(t('pet.widget.returnToMain'), <Tv theme='outline' size='14' />, props.onReturnToMain)}
         {agentId &&
           action(t('pet.widget.botSettings'), <SettingTwo theme='outline' size='14' />, () =>

@@ -6,21 +6,18 @@
 
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
-import { uuid } from '@/common/utils';
-import addChatIcon from '@/renderer/assets/icons/add-chat.svg';
 import { CronJobManager } from '@/renderer/pages/cron';
 import { resolveCronJobId } from '@/renderer/pages/cron/cronUtils';
 import { classifyConfigSetError, useAcpConfigOptions } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { iconColors } from '@/renderer/styles/colors';
-import { Button, Dropdown, Menu, Message, Tooltip, Typography } from '@arco-design/web-react';
+import { Button, Dropdown, Menu, Message, Typography } from '@arco-design/web-react';
 import { History } from '@icon-park/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
-import { emitter } from '../../../utils/emitter';
 import { useChatLocation } from '@/renderer/pages/agentWidget/chatLocation';
 import { useRestoreHiddenAgentWidget, useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 import WidgetChatPlaceholder, { ShowAgentWidgetButton } from '@/renderer/pages/agentWidget/WidgetChatPlaceholder';
@@ -32,11 +29,10 @@ import {
   useAionrsConversationModel,
 } from './ConversationChatBody';
 import ChatLayout from './ChatLayout';
+import { ConversationNewChatButton } from './NewChatButton';
 import ChatSlider from './ChatSlider.tsx';
 import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
 import AcpRuntimeRestartButton from '@/renderer/components/agent/AcpRuntimeRestartButton';
-import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import GoogleModelSelector from '../platforms/gemini/GoogleModelSelector';
 import AionrsModelSelector from '../platforms/aionrs/AionrsModelSelector';
 import { isLegacyReadOnlyConversationType } from '../utils/conversationRuntime';
@@ -102,54 +98,6 @@ const _AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conver
   );
 };
 
-const _AddNewConversation: React.FC<{ conversation: TChatConversation }> = ({ conversation }) => {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const isCreatingRef = useRef(false);
-  if (!conversation.extra?.workspace) return null;
-  return (
-    <Tooltip content={t('conversation.workspace.createNewConversation')}>
-      <Button
-        size='mini'
-        icon={<img src={addChatIcon} alt='Add chat' className='w-14px h-14px block m-auto' />}
-        onClick={async () => {
-          if (isCreatingRef.current) return;
-          isCreatingRef.current = true;
-          try {
-            const id = uuid();
-            // Fetch latest conversation from DB to ensure session_mode is current
-            const latest = await getConversationOrNull(conversation.id);
-            const source = latest || conversation;
-            await ipcBridge.conversation.createWithConversation.invoke({
-              conversation: {
-                ...source,
-                id,
-                created_at: Date.now(),
-                modified_at: Date.now(),
-                // Clear ACP session fields to prevent new conversation from inheriting old session context
-                extra:
-                  // Antigravity stores its resume anchor in the same fields, so
-                  // it must be cleared too — otherwise the clone resumes the
-                  // source conversation's agy session instead of starting clean.
-                  source.type === 'acp' || source.type === 'antigravity'
-                    ? { ...source.extra, acp_session_id: undefined, acp_session_updated_at: undefined }
-                    : source.extra,
-              } as TChatConversation,
-            });
-            void navigate(`/conversation/${id}`);
-            emitter.emit('chat.history.refresh');
-          } catch (error) {
-            console.error('Failed to create conversation:', error);
-            Message.error(getConversationCreateErrorMessage(error, t));
-          } finally {
-            isCreatingRef.current = false;
-          }
-        }}
-      />
-    </Tooltip>
-  );
-};
-
 type AionrsConversation = Extract<TChatConversation, { type: 'aionrs' }>;
 
 const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; sliderTitle: React.ReactNode }> = ({
@@ -202,6 +150,7 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
             <ShowAgentWidgetButton conversationId={conversation.id} agentId={conversation.assistant?.id} />
           </>
         )}
+        {conversation.assistant && <ConversationNewChatButton conversation={conversation} />}
         {!isMobile && (
           <AionrsModelSelector
             selection={modelSelection}
@@ -362,6 +311,9 @@ const ChatConversation: React.FC<{
       )}
       {conversation?.assistant && isVaBot && (
         <AgentHistoryButton agentId={conversation.assistant.id} agentName={conversation.assistant.name} />
+      )}
+      {conversation?.assistant && !isLegacyReadOnlyConversation && (
+        <ConversationNewChatButton conversation={conversation} />
       )}
       {conversation && isVaBot && !isLegacyReadOnlyConversation && (
         <ShowAgentWidgetButton conversationId={conversation.id} agentId={conversation.assistant?.id} />
