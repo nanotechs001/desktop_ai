@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   popup: vi.fn(),
   buildFromTemplate: vi.fn(),
   fromWebContents: vi.fn(),
-  writeText: vi.fn(),
+  writeText: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('electron', () => ({

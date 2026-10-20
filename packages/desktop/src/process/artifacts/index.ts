@@ -37,10 +37,11 @@ const MAX_PAGES = 1000;
  * `out/main/artifact-libs`, where scripts/build-mcp-servers.js puts the bundled libraries: next to the main
  * entry, inside app.asar once packaged (Electron's fs reads it there). Null outside the bundled main process.
  */
-const artifactLibsDir = (): string | null =>
-  typeof require !== 'undefined' && require.main
-    ? path.join(path.dirname(require.main.filename), 'artifact-libs')
-    : null;
+const artifactLibsDir = (): string | null => {
+  // Under Electron's default_app (dev), Electron 44 sets require.main to a stub named 'electron'.
+  const mainFile = typeof require !== 'undefined' ? require.main?.filename : undefined;
+  return mainFile && path.isAbsolute(mainFile) ? path.join(path.dirname(mainFile), 'artifact-libs') : null;
+};
 
 /** The last port the server bound, so artifact links in old chats keep working after a restart. */
 const PORT_FILE = 'server.json';
