@@ -8140,6 +8140,57 @@ async fn assistant_backed_acp_build_options_include_snapshot_rule_as_preset_cont
     }
 }
 
+/// "+ New chat" with a VA Bot clones the open chat's request shape; the new chat must start from the bot's own rule
+/// (with the notes block the app syncs into it), not from anything carried over from the old chat.
+#[tokio::test]
+async fn new_chat_with_same_assistant_gets_the_bot_rule_with_its_notes_block() {
+    let rule = "Be brief.\n<!-- aion-notes:start -->\n- User prefers aisle seats\n<!-- aion-notes:end -->";
+    let resolver = Arc::new(FixedSkillResolver { names: vec![] });
+    let dispatcher = Arc::new(StaticAssistantDispatcher {
+        rules: std::collections::HashMap::from([("va-bot".to_string(), rule.to_string())]),
+    });
+    let (svc, _broadcaster, repo, definition_repo, state_repo, _preference_repo) =
+        make_service_with_assistant_support(resolver, dispatcher).await;
+    upsert_test_assistant_definition(&definition_repo, "asstdef_va_bot", "va-bot", "codex", "auto", "auto").await;
+    state_repo
+        .upsert(&UpsertAssistantOverlayParams {
+            assistant_definition_id: "asstdef_va_bot",
+            enabled: true,
+            sort_order: 0,
+            agent_id_override: None,
+            last_used_at: None,
+        })
+        .await
+        .unwrap();
+
+    let first = create_assistant_backed_conversation(&svc, "user_1", Some("acp"), "codex", "va-bot").await;
+    // The renderer sends the stored conversation back: identity fields and per-chat extra the backend must ignore.
+    let req: CloneConversationRequest = serde_json::from_value(json!({
+        "conversation": {
+            "type": "acp",
+            "name": "",
+            "assistant": { "id": "va-bot", "source": "user", "name": "Travel Bot", "avatar": "", "backend": "codex" },
+            "extra": { "workspace": first.extra["workspace"].clone(), "backend": "codex", "preset_context": "stale" }
+        }
+    }))
+    .unwrap();
+    let second = svc.clone_create("user_1", req).await.unwrap();
+    assert_ne!(first.id, second.id);
+
+    for id in [&first.id, &second.id] {
+        let snapshot = repo.get_assistant_snapshot("user_1", id).await.unwrap().unwrap();
+        assert_eq!(snapshot.assistant_id, "va-bot");
+        assert_eq!(snapshot.rules_content, rule);
+        let row = repo.get("user_1", id).await.unwrap().unwrap();
+        match svc.build_task_options(&row).await.unwrap().context.kind {
+            AgentSessionKind::Acp(ctx) => assert_eq!(ctx.config.preset_context.as_deref(), Some(rule)),
+            AgentSessionKind::Aionrs(_) | AgentSessionKind::Antigravity(_) => {
+                panic!("test conversation should build ACP options")
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn assistant_backed_aionrs_build_options_include_snapshot_rule_as_preset_rules() {
     let resolver = Arc::new(FixedSkillResolver { names: vec![] });
