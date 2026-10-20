@@ -264,6 +264,21 @@ describe('browser view: phone input', () => {
     ]);
   });
 
+  it('sends a non-text key as rawKeyDown, as the agent does', async () => {
+    const { handle } = await streaming();
+    send(handle, { type: 'key', key: 'Backspace' });
+    expect(sent('Input.dispatchKeyEvent').map((c) => c.params)).toEqual([
+      { type: 'rawKeyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
+      { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
+    ]);
+  });
+
+  it('turns focus emulation on once per tab, so typed text reaches an unfocused page', async () => {
+    await stream('wc-7');
+    await stream('wc-7');
+    expect(sent('Emulation.setFocusEmulationEnabled').map((c) => c.params)).toEqual([{ enabled: true }]);
+  });
+
   it('never sends a method outside the viewer allowlist', async () => {
     const { handle } = await streaming();
     for (const raw of [

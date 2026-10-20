@@ -14,6 +14,7 @@ export const ALLOWED_VIEWER_METHODS: ReadonlySet<string> = new Set([
   'Input.dispatchMouseEvent',
   'Input.dispatchKeyEvent',
   'Input.insertText',
+  'Emulation.setFocusEmulationEnabled',
 ]);
 
 export const ALLOWED_KEYS = [

@@ -142,6 +142,9 @@ export function createTabCast({ sessions, contents, sinkId, onEnd }: TabCastDeps
       // The debugger may have detached while it attached; and everyone may have left meanwhile.
       if (sessions.session(id) === null) end();
       else if (viewers.size === 0) leaveLast();
+      // Input.insertText only types into a focused page. Every relay session shares the tab's one CDP session, so
+      // this is a no-op when the agent's MCP already turned it on.
+      else send('Emulation.setFocusEmulationEnabled', { enabled: true });
       return !ended;
     },
     (error: unknown) => {

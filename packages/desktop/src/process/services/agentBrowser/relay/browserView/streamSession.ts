@@ -121,7 +121,9 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
   const key = (name: AllowedKey): void => {
     registry.noteUserInput(webContentsId, { kind: 'key', key: name, code: name });
     const base = { key: name, code: name, windowsVirtualKeyCode: KEY_CODES[name] };
-    cast.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, ...(name === 'Enter' ? { text: '\r' } : {}) });
+    // As the agent's pressKey: only a key that types text is a keyDown; the rest are rawKeyDown.
+    const down = name === 'Enter' ? { type: 'keyDown', text: '\r' } : { type: 'rawKeyDown' };
+    cast.send('Input.dispatchKeyEvent', { ...down, ...base });
     cast.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
   };
 

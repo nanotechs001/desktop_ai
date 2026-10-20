@@ -86,8 +86,9 @@ describe('frame encoding', () => {
 });
 
 describe('ALLOWED_VIEWER_METHODS', () => {
-  it('is exactly the screencast and input methods the viewer needs', () => {
+  it('is exactly the screencast, input and focus-emulation methods the viewer needs', () => {
     expect([...ALLOWED_VIEWER_METHODS].sort()).toEqual([
+      'Emulation.setFocusEmulationEnabled',
       'Input.dispatchKeyEvent',
       'Input.dispatchMouseEvent',
       'Input.insertText',
