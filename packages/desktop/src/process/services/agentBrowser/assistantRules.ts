@@ -10,10 +10,14 @@ import { createSerialiser } from '@process/artifacts/store';
 import type { UpsertManagedBlockResult } from '@/common/types/agent/managedRuleBlock';
 import { upsertBrowserRule } from './browserRule';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { DEFAULT_AGENT_NAME } from '@/common/types/agent/defaultAgent';
 import type { Note } from '@/common/types/agent/artifacts';
 
 export type AssistantRuleDeps = {
-  listAssistants(): Promise<{ id: string; locales: string[] }[]>;
+  /** Each assistant with its rule locales and the name the user gave it, shown in its browser block. */
+  listAssistants(): Promise<{ id: string; locales: string[]; name?: string }[]>;
+  /** One assistant's current name, so a rename reaches its block on the next save or note sync. */
+  assistantName?(id: string): Promise<string | undefined>;
   readRule(id: string, locale: string): Promise<string>;
   writeRule(id: string, locale: string, content: string): Promise<void>;
   /** Deletes the assistant's rule in every locale (the user cleared the instructions). */
@@ -31,6 +35,9 @@ const DEFAULT_LOCALE = '';
 
 const localeBody = (locale: string) => (locale ? { locale } : {});
 
+/** The name the user gave the bot; the default Agent's placeholder name is none, so it never says "I'm Agent". */
+const userSetName = ({ name }: Assistant): string | undefined => (name === DEFAULT_AGENT_NAME ? undefined : name);
+
 /**
  * Backend-wired deps. Built-in assistants are skipped: the backend rejects writes to their ids.
  * They are covered by the aionui-browser MCP server instructions instead (Task 6).
@@ -38,7 +45,14 @@ const localeBody = (locale: string) => (locale ? { locale } : {});
 export const backendAssistantRuleDeps: AssistantRuleDeps = {
   async listAssistants() {
     const all = await httpRequest<Assistant[]>('GET', '/api/assistants');
-    return (all ?? []).filter((a) => a.source !== 'builtin').map((a) => ({ id: a.id, locales: [DEFAULT_LOCALE] }));
+    return (all ?? [])
+      .filter((a) => a.source !== 'builtin')
+      .map((a) => ({ id: a.id, locales: [DEFAULT_LOCALE], name: userSetName(a) }));
+  },
+  async assistantName(id) {
+    const all = await httpRequest<Assistant[]>('GET', '/api/assistants');
+    const assistant = (all ?? []).find((a) => a.id === id);
+    return assistant && userSetName(assistant);
   },
   async readRule(id, locale) {
     const text = await httpRequest<string>('POST', '/api/skills/assistant-rule/read', {
@@ -99,9 +113,17 @@ const ruleQueue = <T>(id: string, task: () => Promise<T>): Promise<T> =>
       })
   );
 
-/** The user's text plus the browser block plus the notes block. A notebook that can't be read is left as it is. */
-async function composeRule(deps: AssistantRuleDeps, id: string, text: string): Promise<UpsertManagedBlockResult> {
-  const browser = upsertBrowserRule(text);
+/**
+ * The user's text plus the browser block (naming the bot `name`) plus the notes block. A notebook that can't be read
+ * is left as it is.
+ */
+async function composeRule(
+  deps: AssistantRuleDeps,
+  id: string,
+  text: string,
+  name: string | undefined
+): Promise<UpsertManagedBlockResult> {
+  const browser = upsertBrowserRule(text, name);
   if (!browser.ok || !deps.listNotes) return browser;
   try {
     return upsertNotesBlock(browser.content, await deps.listNotes(id));
@@ -116,10 +138,15 @@ async function composeRule(deps: AssistantRuleDeps, id: string, text: string): P
  * text is `content` instead of what is stored. Broken markers leave a stored rule untouched, but a saved text is still
  * written as the user typed it. Never throws. Call only inside `ruleQueue`.
  */
-async function syncRule(deps: AssistantRuleDeps, id: string, locale: string, content?: string): Promise<SyncOutcome> {
+async function syncRule(
+  deps: AssistantRuleDeps,
+  target: { id: string; locale: string; name?: string },
+  content?: string
+): Promise<SyncOutcome> {
+  const { id, locale, name } = target;
   try {
     const current = await deps.readRule(id, locale);
-    const result = await composeRule(deps, id, content ?? current);
+    const result = await composeRule(deps, id, content ?? current, name);
     if (result.ok === false) {
       console.warn(`[AionUi] Browser rule left untouched for assistant '${id}': ${result.reason}`);
       if (content !== undefined && content !== current) await deps.writeRule(id, locale, content);
@@ -144,6 +171,19 @@ async function targetLocales(deps: AssistantRuleDeps, locale?: string): Promise<
   return [...new Set([DEFAULT_LOCALE, current ?? DEFAULT_LOCALE])];
 }
 
+/**
+ * The Agent's current name, read on every sync so a rename shows up. A failed lookup only leaves the name out of the
+ * block until the next sync: it must never stop the user's text from being saved.
+ */
+const nameOf = async (deps: AssistantRuleDeps, id: string): Promise<string | undefined> => {
+  try {
+    return await deps.assistantName?.(id);
+  } catch (error) {
+    console.warn(`[AionUi] Could not read the name of assistant '${id}'; its rule names no one this time:`, error);
+    return undefined;
+  }
+};
+
 /** Make sure every assistant rule carries the managed blocks. One failure never stops the rest. */
 export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Promise<AssistantRuleSyncSummary> {
   const summary = { updated: 0, skipped: 0, failed: 0 };
@@ -156,12 +196,12 @@ export async function ensureBrowserRuleInAssistants(deps: AssistantRuleDeps): Pr
   }
   const current = await currentLocaleOf(deps);
   const extra = current ? [current] : [];
-  for (const { id, locales } of assistants) {
+  for (const { id, locales, name } of assistants) {
     // eslint-disable-next-line no-await-in-loop -- one Agent at a time keeps the startup load on the backend low
     const outcomes = await ruleQueue(id, async () => {
       const done: SyncOutcome[] = [];
       // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
-      for (const locale of new Set([...locales, ...extra])) done.push(await syncRule(deps, id, locale));
+      for (const locale of new Set([...locales, ...extra])) done.push(await syncRule(deps, { id, locale, name }));
       return done;
     }).catch((error: unknown): SyncOutcome[] => {
       console.warn(`[AionUi] Browser rule sync gave up on assistant '${id}':`, error);
@@ -192,8 +232,11 @@ export async function ensureBrowserRuleForAssistant(
         summary.failed += 1;
       });
     }
-    // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
-    for (const target of await targetLocales(deps, locale)) summary[await syncRule(deps, id, target, content)] += 1;
+    const name = await nameOf(deps, id);
+    for (const target of await targetLocales(deps, locale)) {
+      // eslint-disable-next-line no-await-in-loop -- one locale after another, inside this Agent's queue slot
+      summary[await syncRule(deps, { id, locale: target, name }, content)] += 1;
+    }
     return summary;
   });
 }

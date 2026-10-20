@@ -12,8 +12,8 @@ vi.mock('@/common/adapter/httpBridge', () => ({ httpRequest: vi.fn() }));
 
 const httpRequestMock = vi.mocked(httpRequest);
 
-const withBlock = (text: string): string => {
-  const result = upsertBrowserRule(text);
+const withBlock = (text: string, name?: string): string => {
+  const result = upsertBrowserRule(text, name);
   if (!result.ok) throw new Error('unexpected unbalanced markers');
   return result.content;
 };
@@ -108,6 +108,25 @@ describe('ensureBrowserRuleInAssistants', () => {
   });
 });
 
+describe('ensureBrowserRuleInAssistants: names', () => {
+  it("names each assistant's block after the name it is listed with", async () => {
+    const rules: Record<string, string> = {};
+    await ensureBrowserRuleInAssistants({
+      listAssistants: async () => [
+        { id: 'a', locales: [''], name: 'Ava' },
+        { id: 'b', locales: [''] },
+      ],
+      readRule: async (id) => rules[id] ?? '',
+      writeRule: async (id, _locale, content) => {
+        rules[id] = content;
+      },
+    });
+    expect(rules.a).toBe(withBlock('', 'Ava'));
+    expect(rules.a).toContain("You are Ava, the user's personal assistant.");
+    expect(rules.b).toBe(withBlock(''));
+  });
+});
+
 describe('ensureBrowserRuleForAssistant', () => {
   it('upserts the block into the default rule and the rule of the locale the editor wrote', async () => {
     const rules: Record<string, string> = { ':': '', 'zh-CN:': 'my notes' };
@@ -180,6 +199,38 @@ describe('handleEnsureAgentRule', () => {
     expect(d.writeRule).not.toHaveBeenCalled();
   });
 
+  it("a rename updates the bot's block on the next save, keeping the user's text", async () => {
+    let name = 'Ava';
+    let rule = '';
+    const d = {
+      listAssistants: async () => [],
+      assistantName: vi.fn(async () => name),
+      readRule: async () => rule,
+      writeRule: vi.fn(async (_id: string, _locale: string, content: string) => {
+        rule = content;
+      }),
+    };
+    await handleEnsureAgentRule({ assistantId: 'bare:1', content: 'Be brief.' }, d);
+    expect(rule).toBe(withBlock('Be brief.', 'Ava'));
+
+    name = 'Bo'; // the editor saves the new name, then the rule
+    await expect(handleEnsureAgentRule({ assistantId: 'bare:1', content: 'Be brief.' }, d)).resolves.toEqual({
+      success: true,
+    });
+    expect(rule).toBe(withBlock('Be brief.', 'Bo'));
+    expect(rule).not.toContain('Ava');
+    expect(d.assistantName).toHaveBeenLastCalledWith('bare:1');
+  });
+
+  it("still saves the user's text when the name lookup fails, with a nameless block", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const d = { ...deps(), assistantName: vi.fn(async () => Promise.reject(new Error('down'))) };
+    await expect(handleEnsureAgentRule({ assistantId: 'a', content: 'Mine.' }, d)).resolves.toEqual({
+      success: true,
+    });
+    expect(d.writeRule).toHaveBeenCalledWith('a', '', withBlock('Mine.'));
+  });
+
   it('reports a backend failure as a plain failure', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const d = deps();
@@ -203,6 +254,28 @@ describe('backendAssistantRuleDeps', () => {
       { id: 'custom-1', locales: [''] },
     ]);
     expect(httpRequestMock).toHaveBeenCalledWith('GET', '/api/assistants');
+  });
+
+  it("carries each assistant's name, and looks one up by id", async () => {
+    const list = [
+      { id: 'bare:1', source: 'user', name: 'Ava' },
+      { id: 'custom-1', source: 'user', name: 'Bo' },
+    ];
+    httpRequestMock.mockResolvedValue(list);
+    await expect(backendAssistantRuleDeps.listAssistants()).resolves.toEqual([
+      { id: 'bare:1', locales: [''], name: 'Ava' },
+      { id: 'custom-1', locales: [''], name: 'Bo' },
+    ]);
+    await expect(backendAssistantRuleDeps.assistantName?.('custom-1')).resolves.toBe('Bo');
+    await expect(backendAssistantRuleDeps.assistantName?.('gone')).resolves.toBeUndefined();
+  });
+
+  it("leaves the default Agent's placeholder name out, so it never introduces itself as Agent", async () => {
+    httpRequestMock.mockResolvedValue([{ id: 'aion-default-agent', source: 'user', name: 'Agent' }]);
+    await expect(backendAssistantRuleDeps.listAssistants()).resolves.toEqual([
+      { id: 'aion-default-agent', locales: [''], name: undefined },
+    ]);
+    await expect(backendAssistantRuleDeps.assistantName?.('aion-default-agent')).resolves.toBeUndefined();
   });
 
   it('treats a null assistant list as empty', async () => {
