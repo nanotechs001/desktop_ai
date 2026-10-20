@@ -122,7 +122,8 @@
     "title": "Document PDF",
     "pathMissing": "Chemin du fichier PDF manquant",
     "loadFailed": "Échec du chargement du document PDF",
-    "unableDisplay": "Impossible d'afficher le fichier PDF"
+    "unableDisplay": "Impossible d'afficher le fichier PDF",
+    "open": "Ouvrir le PDF"
   },
   "html": {
     "elementSelected": "Élément sélectionné : {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "Zoom avant",
     "liveZoomOut": "Zoom arrière",
     "liveZoomReset": "Réinitialiser le zoom",
-    "watchBrowser": "Voir le navigateur"
+    "watchBrowser": "Voir le navigateur",
+    "openLink": "Ouvrir"
   },
   "saveConflict": "Échec de l'enregistrement : ce fichier a changé sur le disque depuis que vous l'avez ouvert. Rechargez pour voir les autres modifications — vos modifications sont toujours là, non enregistrées.",
   "persistQuotaExceeded": "Le stockage local est plein : les onglets ouverts de ce projet ne peuvent plus être mémorisés. Fermez des onglets ou effacez les données du site.",

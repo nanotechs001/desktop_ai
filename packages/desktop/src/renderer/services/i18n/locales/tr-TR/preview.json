@@ -122,7 +122,8 @@
     "title": "PDF Belgesi",
     "pathMissing": "PDF dosya yolu eksik",
     "loadFailed": "PDF belgesi yüklenemedi",
-    "unableDisplay": "PDF dosyası görüntülenemiyor"
+    "unableDisplay": "PDF dosyası görüntülenemiyor",
+    "open": "PDF'yi aç"
   },
   "html": {
     "elementSelected": "Seçilen öğe: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "Yakınlaştır",
     "liveZoomOut": "Uzaklaştır",
     "liveZoomReset": "Yakınlaştırmayı sıfırla",
-    "watchBrowser": "Tarayıcıyı izle"
+    "watchBrowser": "Tarayıcıyı izle",
+    "openLink": "Aç"
   },
   "saveConflict": "Kaydedilemedi: bu dosya siz açtıktan sonra diskte değişti. Diğer değişiklikleri görmek için yeniden yükleyin — düzenlemeleriniz kaydedilmemiş olarak duruyor.",
   "persistQuotaExceeded": "Yerel depolama dolu, bu proje için açık sekmeler artık hatırlanamıyor. Bazı sekmeleri kapatın veya site verilerini temizleyin.",

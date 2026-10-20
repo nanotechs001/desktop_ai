@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import type { ChatFileRef } from '@/common/types/chatFile';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { buildPdfSrc } from '../../previewUrls';
 import { registerTabReloader } from '../../context/tabReloaderRegistry';
 import { usePreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
@@ -50,6 +51,12 @@ interface ElectronWebView extends HTMLElement {
    */
   reload: () => void;
 }
+
+/** The file's name for the WebUI panel: from the path on disk, else from the ref. */
+const pdfName = (fileRef?: ChatFileRef, filePath?: string): string => {
+  const source = filePath ?? (fileRef ? (fileRef.kind === 'project' ? fileRef.relative_path : fileRef.path) : '');
+  return source.split(/[\\/]/).pop() ?? '';
+};
 
 const PDFPreview: React.FC<PDFPreviewProps> = ({ tabId, fileRef, file_path, content, hideToolbar = false }) => {
   const { t } = useTranslation();
@@ -186,14 +193,24 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ tabId, fileRef, file_path, cont
       )}
       {/* PDF 内容区域 / PDF content area */}
       <div className='flex-1 overflow-hidden bg-bg-1'>
-        {/* key 确保文件路径改变时 webview 重新挂载 / key ensures webview remounts when file path changes */}
-        <webview
-          key={pdfSrc}
-          ref={webviewRef}
-          src={pdfSrc}
-          className='w-full h-full'
-          style={{ display: 'inline-flex' }}
-        />
+        {isElectronDesktop() ? (
+          // key 确保文件路径改变时 webview 重新挂载 / key ensures webview remounts when file path changes
+          <webview
+            key={pdfSrc}
+            ref={webviewRef}
+            src={pdfSrc}
+            className='w-full h-full'
+            style={{ display: 'inline-flex' }}
+          />
+        ) : (
+          // The WebUI has no <webview>: the phone's browser opens the same-origin stream URL itself.
+          <div className='flex flex-col items-center justify-center gap-12px h-full p-16px'>
+            <span className='text-13px text-t-secondary break-all text-center'>{pdfName(fileRef, file_path)}</span>
+            <Button type='primary' onClick={() => window.open(pdfSrc, '_blank')}>
+              {t('preview.pdf.open')}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

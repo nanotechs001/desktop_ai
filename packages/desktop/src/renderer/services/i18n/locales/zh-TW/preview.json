@@ -122,7 +122,8 @@
     "title": "PDF 文件",
     "pathMissing": "PDF 檔案路徑為空",
     "loadFailed": "載入 PDF 失敗",
-    "unableDisplay": "無法載入 PDF 文件"
+    "unableDisplay": "無法載入 PDF 文件",
+    "open": "開啟 PDF"
   },
   "html": {
     "elementSelected": "已選取元素: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "放大",
     "liveZoomOut": "縮小",
     "liveZoomReset": "重設縮放",
-    "watchBrowser": "查看瀏覽器"
+    "watchBrowser": "查看瀏覽器",
+    "openLink": "開啟"
   },
   "saveConflict": "儲存失敗：該檔案在你開啟後已被變更。可重新載入查看其他變更——你的編輯仍在，尚未儲存。",
   "persistQuotaExceeded": "本機儲存空間已滿，無法再記住該專案開啟的標籤頁。請關閉一些標籤頁或清理網站資料。",

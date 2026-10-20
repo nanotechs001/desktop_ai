@@ -122,7 +122,8 @@
     "title": "Documento PDF",
     "pathMissing": "O caminho do arquivo PDF está ausente",
     "loadFailed": "Falha ao carregar o documento PDF",
-    "unableDisplay": "Não é possível exibir o arquivo PDF"
+    "unableDisplay": "Não é possível exibir o arquivo PDF",
+    "open": "Abrir PDF"
   },
   "html": {
     "elementSelected": "Elemento selecionado: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "Ampliar",
     "liveZoomOut": "Reduzir",
     "liveZoomReset": "Redefinir zoom",
-    "watchBrowser": "Ver navegador"
+    "watchBrowser": "Ver navegador",
+    "openLink": "Abrir"
   },
   "saveConflict": "Não foi possível salvar: este arquivo mudou no disco depois que você o abriu. Recarregue para ver as outras alterações — suas edições continuam aqui, não salvas.",
   "persistQuotaExceeded": "O armazenamento local está cheio, então as abas abertas deste projeto não podem mais ser lembradas. Feche algumas abas ou limpe os dados do site.",

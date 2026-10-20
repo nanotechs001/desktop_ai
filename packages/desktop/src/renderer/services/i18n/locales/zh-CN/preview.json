@@ -122,7 +122,8 @@
     "title": "PDF 文档",
     "pathMissing": "PDF 文件路径为空",
     "loadFailed": "加载 PDF 失败",
-    "unableDisplay": "无法加载 PDF 文件"
+    "unableDisplay": "无法加载 PDF 文件",
+    "open": "打开 PDF"
   },
   "html": {
     "elementSelected": "已选中元素: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "放大",
     "liveZoomOut": "缩小",
     "liveZoomReset": "重置缩放",
-    "watchBrowser": "查看浏览器"
+    "watchBrowser": "查看浏览器",
+    "openLink": "打开"
   },
   "saveConflict": "保存失败：该文件在你打开后已被改动。可重新加载查看其他改动——你的编辑仍在，尚未保存。",
   "persistQuotaExceeded": "本地存储已满，无法再记住该项目打开的标签页。请关闭一些标签页或清理站点数据。",

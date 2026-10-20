@@ -122,7 +122,8 @@
     "title": "PDF Document",
     "pathMissing": "PDF file path is missing",
     "loadFailed": "Failed to load PDF document",
-    "unableDisplay": "Unable to display PDF file"
+    "unableDisplay": "Unable to display PDF file",
+    "open": "Open PDF"
   },
   "html": {
     "elementSelected": "Selected element: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "Zoom in",
     "liveZoomOut": "Zoom out",
     "liveZoomReset": "Reset zoom",
-    "watchBrowser": "Watch browser"
+    "watchBrowser": "Watch browser",
+    "openLink": "Open"
   },
   "saveConflict": "Could not save: this file changed on disk since you opened it. Reload to see the other changes — your edits are still here, unsaved.",
   "persistQuotaExceeded": "Local storage is full, so open tabs can no longer be remembered for this project. Close some tabs or clear site data.",

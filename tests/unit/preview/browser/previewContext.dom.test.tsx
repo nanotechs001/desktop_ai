@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { act, render } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserTabProfile } from '@/common/types/browser';
 
 type OpenTabRequest = { url: string; background: boolean; profile?: BrowserTabProfile };
@@ -97,6 +97,45 @@ describe('PreviewContext links in a robot widget window', () => {
     act(() => ctx.openBrowserTab('https://example.com/a'));
 
     expect(openLinkInMain).not.toHaveBeenCalled();
+    expect(browserTabs()).toHaveLength(1);
+  });
+});
+
+describe('PreviewContext links in the WebUI', () => {
+  const electronAPI = window.electronAPI;
+  afterEach(() => {
+    window.electronAPI = electronAPI;
+    vi.restoreAllMocks();
+  });
+
+  it('opens a web link in a new tab of the phone browser instead of a preview tab', () => {
+    // @ts-expect-error -- a plain browser has no preload bridge
+    delete window.electronAPI;
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderProvider();
+    act(() => ctx.openBrowserTab('https://example.com/a'));
+
+    expect(open).toHaveBeenCalledWith('https://example.com/a', '_blank', 'noopener,noreferrer');
+    expect(browserTabs()).toHaveLength(0);
+  });
+
+  it('still opens the browser preview when no address is given', () => {
+    // @ts-expect-error -- a plain browser has no preload bridge
+    delete window.electronAPI;
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderProvider();
+    act(() => ctx.openBrowserTab());
+
+    expect(open).not.toHaveBeenCalled();
+    expect(browserTabs()).toHaveLength(1);
+  });
+
+  it('keeps opening a preview tab in Electron', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderProvider();
+    act(() => ctx.openBrowserTab('https://example.com/a'));
+
+    expect(open).not.toHaveBeenCalled();
     expect(browserTabs()).toHaveLength(1);
   });
 });

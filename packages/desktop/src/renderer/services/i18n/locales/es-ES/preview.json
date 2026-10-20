@@ -122,7 +122,8 @@
     "title": "Documento PDF",
     "pathMissing": "Falta la ruta del archivo PDF",
     "loadFailed": "Error al cargar el documento PDF",
-    "unableDisplay": "No se puede mostrar el archivo PDF"
+    "unableDisplay": "No se puede mostrar el archivo PDF",
+    "open": "Abrir PDF"
   },
   "html": {
     "elementSelected": "Elemento seleccionado: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "Acercar",
     "liveZoomOut": "Alejar",
     "liveZoomReset": "Restablecer zoom",
-    "watchBrowser": "Ver navegador"
+    "watchBrowser": "Ver navegador",
+    "openLink": "Abrir"
   },
   "saveConflict": "No se pudo guardar: este archivo cambió en el disco después de que lo abrieras. Vuelve a cargarlo para ver los otros cambios; tus ediciones siguen aquí, sin guardar.",
   "persistQuotaExceeded": "El almacenamiento local está lleno, así que ya no se pueden recordar las pestañas abiertas de este proyecto. Cierra algunas pestañas o borra los datos del sitio.",

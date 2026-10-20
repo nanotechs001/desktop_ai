@@ -10,7 +10,7 @@ import type { BrowserTabProfile } from '@/common/types/browser';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import { chatFileRefKey, isChatFileRef } from '@/common/types/chatFile';
 import { emitter } from '@/renderer/utils/emitter';
-import { isElectronDesktop } from '@/renderer/utils/platform';
+import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from '../browser/constants';
@@ -1171,6 +1171,11 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .catch((error: unknown) =>
             console.warn('[PreviewContext] could not open the link in the main window:', error)
           );
+        return;
+      }
+      // The WebUI has no <webview>: a web link opens in a new tab of the phone's own browser.
+      if (!isElectronDesktop() && url && /^https?:\/\//i.test(url)) {
+        void openExternalUrl(url);
         return;
       }
       openBrowserTab(url, profile);

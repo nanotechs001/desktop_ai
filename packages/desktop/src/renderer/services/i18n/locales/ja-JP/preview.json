@@ -122,7 +122,8 @@
     "title": "PDF ドキュメント",
     "pathMissing": "PDF ファイルパスが空です",
     "loadFailed": "PDF の読み込みに失敗しました",
-    "unableDisplay": "PDF ファイルを表示できません"
+    "unableDisplay": "PDF ファイルを表示できません",
+    "open": "PDF を開く"
   },
   "html": {
     "elementSelected": "選択中の要素: {{path}}",
@@ -165,7 +166,8 @@
     "liveZoomIn": "拡大",
     "liveZoomOut": "縮小",
     "liveZoomReset": "ズームをリセット",
-    "watchBrowser": "ブラウザーを見る"
+    "watchBrowser": "ブラウザーを見る",
+    "openLink": "開く"
   },
   "saveConflict": "保存できませんでした：このファイルは開いた後に変更されています。再読み込みで他の変更を確認できます——あなたの編集は未保存のまま残っています。",
   "persistQuotaExceeded": "ローカルストレージが満杯のため、このプロジェクトで開いているタブを記憶できません。タブを閉じるか、サイトデータを消去してください。",

@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Button } from '@arco-design/web-react';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 
 interface URLViewerProps {
   /** URL to display */
@@ -21,7 +24,17 @@ interface URLViewerProps {
  * Delegates to the shared WebviewHost with navigation bar enabled.
  */
 const URLViewer: React.FC<URLViewerProps> = ({ url }) => {
-  return <WebviewHost url={url} showNavBar className='bg-bg-1' />;
+  const { t } = useTranslation();
+  if (isElectronDesktop()) return <WebviewHost url={url} showNavBar className='bg-bg-1' />;
+  // The WebUI has no <webview>: offer the page in a new tab of the phone's own browser.
+  return (
+    <div className='flex flex-col items-center justify-center gap-12px h-full p-16px bg-bg-1'>
+      <span className='text-13px text-t-secondary break-all text-center'>{url}</span>
+      <Button type='primary' onClick={() => void openExternalUrl(url)}>
+        {t('preview.browser.openLink')}
+      </Button>
+    </div>
+  );
 };
 
 export default URLViewer;
