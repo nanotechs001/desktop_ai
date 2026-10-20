@@ -8,6 +8,7 @@ import { Button, Result, Spin } from '@arco-design/web-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { reconnectWs } from '@/common/adapter/httpBridge';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 
 type QrLoginState = 'signingIn' | 'expired';
@@ -20,15 +21,29 @@ type WindowWithReconnect = Window & { __websocketReconnect?: () => void };
 const QrLoginPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { refresh, status } = useAuth();
   const token = useSearchParams()[0].get('token');
   const [state, setState] = useState<QrLoginState>(token ? 'signingIn' : 'expired');
   // The token is single-use, so a re-run of the effect must not spend it twice.
   const startedRef = useRef(false);
+  // Read through a ref so a status change never re-runs the effect.
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   useEffect(() => {
     if (!token || startedRef.current) return;
     startedRef.current = true;
+    // Already signed in (e.g. the page reloaded on this URL): the token is spent, just go home.
+    if (statusRef.current === 'authenticated') {
+      void navigate('/', { replace: true });
+      return;
+    }
+
+    // A session that appeared meanwhile wins over the spent code.
+    const showExpiredUnlessSignedIn = () => {
+      if (statusRef.current === 'authenticated') void navigate('/', { replace: true });
+      else setState('expired');
+    };
 
     const signIn = async () => {
       try {
@@ -39,16 +54,17 @@ const QrLoginPage: React.FC = () => {
           body: JSON.stringify({ qr_token: token }),
         });
         if (!response.ok) {
-          setState('expired');
+          showExpiredUnlessSignedIn();
           return;
         }
         await refresh();
         // Re-enable WebSocket reconnection after a successful sign-in, as the password login does.
         (window as WindowWithReconnect).__websocketReconnect?.();
+        reconnectWs();
         void navigate('/', { replace: true });
       } catch (error) {
         console.error('QR login request failed:', error);
-        setState('expired');
+        showExpiredUnlessSignedIn();
       }
     };
     void signIn();

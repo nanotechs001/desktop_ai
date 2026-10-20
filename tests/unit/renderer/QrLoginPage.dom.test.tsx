@@ -9,10 +9,18 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ refresh: vi.fn(), reconnect: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  reconnect: vi.fn(),
+  reconnectWs: vi.fn(),
+  status: 'unauthenticated' as 'checking' | 'authenticated' | 'unauthenticated',
+}));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@renderer/hooks/context/AuthContext', () => ({ useAuth: () => ({ refresh: mocks.refresh }) }));
+vi.mock('@renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ refresh: mocks.refresh, status: mocks.status }),
+}));
+vi.mock('@/common/adapter/httpBridge', () => ({ reconnectWs: mocks.reconnectWs }));
 
 import QrLoginPage from '@/renderer/pages/login/QrLoginPage';
 
@@ -34,6 +42,7 @@ describe('QrLoginPage', () => {
 
   beforeEach(() => {
     mocks.refresh.mockResolvedValue(undefined);
+    mocks.status = 'unauthenticated';
     vi.stubGlobal('fetch', fetchMock);
     (window as WindowWithReconnect).__websocketReconnect = mocks.reconnect;
   });
@@ -58,6 +67,37 @@ describe('QrLoginPage', () => {
     expect(JSON.parse(init.body)).toEqual({ qr_token: 'abc 123' });
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
     expect(mocks.reconnect).toHaveBeenCalledTimes(1);
+    expect(mocks.reconnectWs).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes home without spending the token when already signed in (e.g. the page reloaded)', async () => {
+    mocks.status = 'authenticated';
+    renderAt('/qr-login?token=spent');
+
+    expect(await screen.findByText('home')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('login.qrExpired')).not.toBeInTheDocument();
+  });
+
+  it('goes home instead of showing the expired code when a session appeared meanwhile', async () => {
+    let answerToken: (value: { ok: boolean; status: number }) => void = () => {};
+    fetchMock.mockReturnValue(new Promise((resolve) => (answerToken = resolve)));
+    const view = renderAt('/qr-login?token=spent');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    mocks.status = 'authenticated';
+    view.rerender(
+      <MemoryRouter initialEntries={['/qr-login?token=spent']}>
+        <Routes>
+          <Route path='/qr-login' element={<QrLoginPage />} />
+          <Route path='/' element={<div>home</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    answerToken({ ok: false, status: 401 });
+
+    expect(await screen.findByText('home')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows the expired message and a way back to sign in on 401', async () => {
