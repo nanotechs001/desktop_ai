@@ -220,10 +220,12 @@ describe('BrowserLiveView tabs', () => {
     expect(screen.getByText('One')).toBeInTheDocument();
   });
 
-  it('switches the stream with a Select when there are two tabs', async () => {
+  it('switches the stream with a Select when there are two tabs, dropping the old frame', async () => {
     tabs = [TAB_ONE, TAB_TWO];
-    await connected();
+    const ws = await connected();
+    await showFrame(ws);
 
+    expect(screen.getByRole('combobox', { name: 'preview.browser.liveTabSelect' })).toBeInTheDocument();
     fireEvent.click(document.querySelector('.arco-select-view') as Element);
     const option = await waitFor(() => {
       const found = [...document.querySelectorAll('.arco-select-option')].find((el) => el.textContent === 'Two');
@@ -235,6 +237,22 @@ describe('BrowserLiveView tabs', () => {
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
     expect(FakeWebSocket.instances[0].closed).toBe(true);
     expect(FakeWebSocket.instances[1].url).toMatch(/\?tab=wc-2$/);
+    expect(liveImage().hasAttribute('src')).toBe(false);
+  });
+
+  it('picks up a tab the agent opens later', async () => {
+    // Faked before render so the 5 s poll is on the fake clock; it still runs in real time for waitFor.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await connected();
+    expect(document.querySelector('.arco-select-view')).toBeNull();
+
+    tabs = [TAB_ONE, TAB_TWO];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByRole('combobox', { name: 'preview.browser.liveTabSelect' })).toBeInTheDocument();
+    expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
   it('has a way back to the chat', async () => {
@@ -328,6 +346,62 @@ describe('BrowserLiveView input', () => {
     expect(ws.messages().some((m) => m.type === 'tap')).toBe(false);
   });
 
+  it('captures the pointer, so a drag released outside still ends', async () => {
+    const ws = await connected();
+    await showFrame(ws);
+    const surface = screen.getByRole('img');
+    const setPointerCapture = vi.fn();
+    surface.setPointerCapture = setPointerCapture;
+
+    fireEvent.pointerDown(surface, { pointerId: 7, clientX: 100, clientY: 50 });
+
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
+  });
+
+  it('lifting the finger cancels the pending frame and sends the scroll at once', async () => {
+    const ws = await connected();
+    await showFrame(ws);
+    layOutImage(liveImage());
+    vi.stubGlobal('requestAnimationFrame', () => 42);
+    const cancelAnimationFrame = vi.fn();
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
+    const surface = screen.getByRole('img');
+
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 100, clientY: 80 });
+    fireEvent.pointerMove(surface, { pointerId: 1, clientX: 100, clientY: 55 });
+    expect(ws.messages().some((m) => m.type === 'scroll')).toBe(false);
+    fireEvent.pointerUp(surface, { pointerId: 1, clientX: 100, clientY: 55 });
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
+    expect(ws.messages().filter((m) => m.type === 'scroll')).toEqual([{ type: 'scroll', nx: 0.5, ny: 0.8, dy: 50 }]);
+  });
+
+  it('the hidden input is 16px, so iOS does not zoom when it is focused', async () => {
+    await connected();
+
+    expect((screen.getByRole('textbox') as HTMLInputElement).style.fontSize).toBe('16px');
+  });
+
+  it('Android Backspace (key Unidentified) is sent from beforeinput, never twice', async () => {
+    const ws = await connected();
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    const deleteBackward = () =>
+      act(() => {
+        input.dispatchEvent(Object.assign(new Event('beforeinput'), { inputType: 'deleteContentBackward' }));
+      });
+
+    fireEvent.keyDown(input, { key: 'Unidentified', keyCode: 229 });
+    deleteBackward();
+    fireEvent.keyDown(input, { key: 'Backspace', keyCode: 8 });
+    deleteBackward();
+    fireEvent.keyUp(input, { key: 'Backspace', keyCode: 8 });
+
+    expect(ws.messages().filter((m) => m.type === 'key')).toEqual([
+      { type: 'key', key: 'Backspace' },
+      { type: 'key', key: 'Backspace' },
+    ]);
+  });
+
   it('typing sends text and clears the input; Enter and Backspace send key', async () => {
     const ws = await connected();
     const input = screen.getByRole('textbox') as HTMLInputElement;
@@ -399,11 +473,12 @@ describe('BrowserLiveView status', () => {
     act(() => vi.advanceTimersByTime(60_000));
     expect(FakeWebSocket.instances).toHaveLength(1);
     vi.useRealTimers();
+    const fetchesBefore = fetchMock.mock.calls.length;
 
     fireEvent.click(screen.getByRole('button', { name: 'preview.browser.liveStopped' }));
 
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(fetchesBefore);
   });
 });
 

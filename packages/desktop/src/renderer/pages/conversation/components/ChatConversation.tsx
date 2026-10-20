@@ -25,6 +25,7 @@ import { useChatLocation } from '@/renderer/pages/agentWidget/chatLocation';
 import { useRestoreHiddenAgentWidget, useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 import WidgetChatPlaceholder, { ShowAgentWidgetButton } from '@/renderer/pages/agentWidget/WidgetChatPlaceholder';
 import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
+import WatchBrowserButton from '@/renderer/components/media/browserLive/WatchBrowserButton';
 import {
   renderAcpConversationChat,
   renderAionrsConversationChat,
@@ -365,6 +366,7 @@ const ChatConversation: React.FC<{
       {conversation && isVaBot && !isLegacyReadOnlyConversation && (
         <ShowAgentWidgetButton conversationId={conversation.id} agentId={conversation.assistant?.id} />
       )}
+      {conversation && <WatchBrowserButton conversationId={conversation.id} />}
       {modelSelector && <div className='shrink-0'>{modelSelector}</div>}
       {conversation && conversation.type === 'acp' && !isMobile && !isLegacyReadOnlyConversation && (
         <div className='shrink-0'>

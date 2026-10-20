@@ -10,6 +10,7 @@ import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { BrowserTabProfile } from '@/common/types/browser';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 /** The SWR key every assistant-list reader shares, so the profile UI reuses the cached list. */
 const ASSISTANTS_KEY = 'assistants.list';
@@ -46,7 +47,9 @@ export type ProfilePartition = { partition: string | null; error: string | null;
 export function useProfilePartition(profile: BrowserTabProfile | undefined): ProfilePartition {
   // Personal is always ready; an Agent's or a temporary chat session is set up by main on first use.
   const key = profileKeyOf(profile);
-  const remote = profile && profile.kind !== 'personal' ? profile : null;
+  // Outside Electron there is no webview and main sets no profile up (the IPC never settles), so the default partition
+  // lets the tab render: in the WebUI that is the live view of the desktop tab.
+  const remote = isElectronDesktop() && profile && profile.kind !== 'personal' ? profile : null;
   const [, refresh] = useReducer((count: number) => count + 1, 0);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [attempt, setAttempt] = useState(0);

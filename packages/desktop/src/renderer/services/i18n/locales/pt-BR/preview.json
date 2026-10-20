@@ -159,7 +159,9 @@
     "livePaused": "Você está no controle. Retomar o agente.",
     "liveNoFrames": "Não é possível ver o navegador do desktop. Mantenha a janela do Pixebot aberta no seu computador.",
     "liveStopped": "Visualização ao vivo interrompida. Toque para tentar novamente.",
-    "liveKeyboard": "Teclado"
+    "liveKeyboard": "Teclado",
+    "liveTabSelect": "Aba do navegador",
+    "watchBrowser": "Ver navegador"
   },
   "saveConflict": "Não foi possível salvar: este arquivo mudou no disco depois que você o abriu. Recarregue para ver as outras alterações — suas edições continuam aqui, não salvas.",
   "persistQuotaExceeded": "O armazenamento local está cheio, então as abas abertas deste projeto não podem mais ser lembradas. Feche algumas abas ou limpe os dados do site.",

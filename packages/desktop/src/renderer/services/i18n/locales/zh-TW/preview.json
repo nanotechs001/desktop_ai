@@ -159,7 +159,9 @@
     "livePaused": "你正在控制。恢復 Agent",
     "liveNoFrames": "看不到桌面瀏覽器。請在電腦上保持 Pixebot 視窗開啟。",
     "liveStopped": "即時畫面已停止。輕觸以重試。",
-    "liveKeyboard": "鍵盤"
+    "liveKeyboard": "鍵盤",
+    "liveTabSelect": "瀏覽器分頁",
+    "watchBrowser": "查看瀏覽器"
   },
   "saveConflict": "儲存失敗：該檔案在你開啟後已被變更。可重新載入查看其他變更——你的編輯仍在，尚未儲存。",
   "persistQuotaExceeded": "本機儲存空間已滿，無法再記住該專案開啟的標籤頁。請關閉一些標籤頁或清理網站資料。",

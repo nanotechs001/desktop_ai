@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/common', () => ({
@@ -31,6 +31,8 @@ vi.mock('@/common', () => ({
       downloadsChanged: { on: () => () => {} },
       shortcut: { on: () => () => {} },
       closeTabRequested: { on: () => () => {} },
+      // Never settles, as in the WebUI, where main has no browser profile to set up.
+      profilePartition: { invoke: vi.fn(() => new Promise(() => {})) },
     },
   },
 }));
@@ -47,6 +49,10 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', async (i
 }));
 
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import {
+  resetCurrentConversationForTest,
+  setCurrentConversation,
+} from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import BrowserViewer from '@/renderer/pages/conversation/Preview/browser/BrowserViewer';
 
 const executeJavaScript = vi.fn((_script: string) => Promise.resolve());
@@ -360,6 +366,50 @@ describe('WebviewHost outside Electron', () => {
     render(<WebviewHost url='https://example.com' />);
 
     expect(screen.queryByRole('button', { name: 'common.back' })).toBeNull();
+  });
+
+  it("an Agent profile's tab streams live without waiting for main's browser profile", async () => {
+    const sockets: string[] = [];
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        static readonly OPEN = 1;
+        readyState = 0;
+        constructor(url: string) {
+          sockets.push(url);
+        }
+        close(): void {}
+      }
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ tabs: [{ id: 'wc-3', title: 'Agent', url: 'https://example.com', paused: false }] }),
+      }))
+    );
+    optionalPreview.value = { closePreview: vi.fn() };
+    setCurrentConversation('conv-1');
+    try {
+      render(
+        <BrowserViewer
+          url='https://example.com'
+          tabId='tab-1'
+          active
+          profile={{ kind: 'agent', agentId: 'a' }}
+          onUrlChange={vi.fn()}
+          onTitleChange={vi.fn()}
+          onFaviconChange={vi.fn()}
+        />
+      );
+
+      await waitFor(() => expect(sockets).toHaveLength(1));
+      expect(sockets[0]).toMatch(/\/api\/browser-view\/stream\?tab=wc-3$/);
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+      resetCurrentConversationForTest();
+    }
   });
 });
 

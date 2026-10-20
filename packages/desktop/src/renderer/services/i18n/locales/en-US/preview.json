@@ -159,7 +159,9 @@
     "livePaused": "You're in control. Resume agent.",
     "liveNoFrames": "Can't see the desktop browser. Keep the Pixebot window open on your computer.",
     "liveStopped": "Live view stopped. Tap to retry.",
-    "liveKeyboard": "Keyboard"
+    "liveKeyboard": "Keyboard",
+    "liveTabSelect": "Browser tab",
+    "watchBrowser": "Watch browser"
   },
   "saveConflict": "Could not save: this file changed on disk since you opened it. Reload to see the other changes — your edits are still here, unsaved.",
   "persistQuotaExceeded": "Local storage is full, so open tabs can no longer be remembered for this project. Close some tabs or clear site data.",

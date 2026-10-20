@@ -141,6 +141,8 @@ export const useBrowserLiveStream = (
         socket.close();
       }
       if (blobUrl) URL.revokeObjectURL(blobUrl);
+      // The next tab's stream must not open on this tab's last frame.
+      imgRef.current?.removeAttribute('src');
     };
   }, [tabId, imgRef, surfaceRef]);
 

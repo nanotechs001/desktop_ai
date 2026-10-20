@@ -12,8 +12,7 @@ import { Keyboard } from '@icon-park/react';
 import { useCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { useBrowserLiveStream } from './useBrowserLiveStream';
-
-type LiveTab = { id: string; title: string; url: string; paused: boolean };
+import { isWatchableConversation, useLiveTabs } from './useLiveTabs';
 
 type BrowserLiveViewProps = {
   /** Shown instead when there is no conversation, no preview, or the conversation has no tab to watch. */
@@ -22,22 +21,13 @@ type BrowserLiveViewProps = {
   style?: React.CSSProperties;
 };
 
-const CONVERSATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const TAB_ID = /^wc-\d{1,9}$/;
 const TAP_SLOP_PX = 10;
 const TAP_MAX_MS = 500;
 const MAX_TEXT_CHARS = 2000;
 const MAX_SCROLL_DELTA_PX = 10_000;
-
-const parseTabs = (body: unknown): LiveTab[] => {
-  const tabs = (body as { tabs?: unknown } | null)?.tabs;
-  if (!Array.isArray(tabs)) return [];
-  return tabs.flatMap((tab: Record<string, unknown>) =>
-    typeof tab?.id === 'string' && TAB_ID.test(tab.id)
-      ? [{ id: tab.id, title: String(tab.title ?? ''), url: String(tab.url ?? ''), paused: tab.paused === true }]
-      : []
-  );
-};
+/** iOS zooms the page into a focused input whose font is smaller than this. */
+const IOS_NO_ZOOM_FONT_PX = 16;
+const HIDDEN_INPUT_STYLE: React.CSSProperties = { fontSize: IOS_NO_ZOOM_FONT_PX };
 
 /** Where `object-fit: contain` drew the frame inside the img box; null before a frame. */
 const drawnRect = (img: HTMLImageElement): { left: number; top: number; width: number; height: number } | null => {
@@ -76,60 +66,76 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
   const { t } = useTranslation();
   const preview = useOptionalPreviewContext();
   const conversationId = useCurrentConversation();
-  const [tabs, setTabs] = useState<LiveTab[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<RefInputType>(null);
   const gestureRef = useRef<Gesture | null>(null);
-  const canWatch = Boolean(preview && conversationId && CONVERSATION_ID.test(conversationId));
-
-  useEffect(() => {
-    if (!canWatch || !conversationId) return;
-    let live = true;
-    setTabs(null);
-    fetch(`/api/browser-view/tabs?conversation=${encodeURIComponent(conversationId)}`, { credentials: 'include' })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<unknown>;
-      })
-      .then((body) => {
-        if (live) setTabs(parseTabs(body));
-      })
-      .catch((error: unknown) => {
-        console.warn('[BrowserLiveView] could not list the browser tabs:', error);
-        if (live) setTabs([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, [canWatch, conversationId, generation]);
+  /** A Backspace keydown already sent this press, so its beforeinput must not send it again. */
+  const backspaceSentRef = useRef(false);
+  const canWatch = Boolean(preview) && isWatchableConversation(conversationId);
+  const tabs = useLiveTabs(canWatch ? conversationId : null, generation);
 
   const listed = tabs?.find((tab) => tab.id === selectedId) ?? tabs?.[0] ?? null;
   const { status, tab, metaRef, send } = useBrowserLiveStream(listed?.id ?? null, imgRef, surfaceRef);
   const shown = tab ?? listed;
+  const hasTabs = Boolean(tabs?.length);
 
   const retry = useCallback(() => setGeneration((count) => count + 1), []);
 
+  const sendScroll = useCallback(
+    (gesture: Gesture) => {
+      const img = imgRef.current;
+      const meta = metaRef.current;
+      const point = img && pointOnFrame(img, gesture.x, gesture.y);
+      if (!point || !meta || gesture.pendingDy === 0) return;
+      // Phone px over the drawn frame -> page CSS px (the frame spans deviceHeight / pageScaleFactor of them).
+      const pageDy = (-gesture.pendingDy / point.height) * (meta.deviceHeight / meta.pageScaleFactor);
+      gesture.pendingDy = 0;
+      const dy = Math.max(-MAX_SCROLL_DELTA_PX, Math.min(MAX_SCROLL_DELTA_PX, pageDy));
+      send({ type: 'scroll', nx: point.nx, ny: point.ny, dy });
+    },
+    [metaRef, send]
+  );
+
   const flushScroll = useCallback(() => {
     const gesture = gestureRef.current;
-    const img = imgRef.current;
-    const meta = metaRef.current;
-    if (!gesture || !img || !meta) return;
+    if (!gesture) return;
     gesture.frame = 0;
-    const point = pointOnFrame(img, gesture.x, gesture.y);
-    if (!point || gesture.pendingDy === 0) return;
-    // Phone px over the drawn frame -> page CSS px (the frame spans deviceHeight / pageScaleFactor of them).
-    const pageDy = (-gesture.pendingDy / point.height) * (meta.deviceHeight / meta.pageScaleFactor);
-    gesture.pendingDy = 0;
-    const dy = Math.max(-MAX_SCROLL_DELTA_PX, Math.min(MAX_SCROLL_DELTA_PX, pageDy));
-    send({ type: 'scroll', nx: point.nx, ny: point.ny, dy });
-  }, [metaRef, send]);
+    sendScroll(gesture);
+  }, [sendScroll]);
 
-  const handlePointerDown = (event: React.PointerEvent) => {
-    const { clientX: x, clientY: y, timeStamp: at } = event;
+  const endGesture = useCallback(() => {
+    const gesture = gestureRef.current;
+    if (gesture?.frame) cancelAnimationFrame(gesture.frame);
+    gestureRef.current = null;
+  }, []);
+  useEffect(() => endGesture, [endGesture]);
+
+  // React's onBeforeInput carries no inputType; Gboard's Backspace is only visible there (its keydown is Unidentified).
+  useEffect(() => {
+    const input = inputRef.current?.dom;
+    if (!input) return;
+    const onBeforeInput = (event: Event) => {
+      if ((event as InputEvent).inputType !== 'deleteContentBackward' || input.value) return;
+      if (backspaceSentRef.current) backspaceSentRef.current = false;
+      else send({ type: 'key', key: 'Backspace' });
+    };
+    input.addEventListener('beforeinput', onBeforeInput);
+    return () => input.removeEventListener('beforeinput', onBeforeInput);
+  }, [canWatch, hasTabs, send]);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    endGesture();
+    const { clientX: x, clientY: y, timeStamp: at, pointerId } = event;
     gestureRef.current = { x, y, lastY: y, at, scrolling: false, pendingDy: 0, frame: 0 };
+    // Keeps pointerup coming here when a mouse drag is released outside the view.
+    try {
+      event.currentTarget.setPointerCapture(pointerId);
+    } catch (error) {
+      console.warn('[BrowserLiveView] could not capture the pointer:', error);
+    }
   };
 
   const handlePointerMove = (event: React.PointerEvent) => {
@@ -144,10 +150,13 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
 
   const handlePointerUp = (event: React.PointerEvent) => {
     const gesture = gestureRef.current;
-    if (gesture?.scrolling) flushScroll();
-    gestureRef.current = null;
+    endGesture();
     const img = imgRef.current;
-    if (!gesture || !img || gesture.scrolling) return;
+    if (!gesture || !img) return;
+    if (gesture.scrolling) {
+      sendScroll(gesture);
+      return;
+    }
     const moved = Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y);
     if (moved > TAP_SLOP_PX || event.timeStamp - gesture.at > TAP_MAX_MS) return;
     const point = pointOnFrame(img, gesture.x, gesture.y);
@@ -161,7 +170,9 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Backspace' && !event.currentTarget.value) send({ type: 'key', key: 'Backspace' });
+    if (event.key !== 'Backspace' || event.currentTarget.value) return;
+    backspaceSentRef.current = true;
+    send({ type: 'key', key: 'Backspace' });
   };
 
   if (!canWatch || tabs?.length === 0) return <>{fallback}</>;
@@ -191,6 +202,7 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
           {tabs && tabs.length > 1 ? (
             <Select
               size='small'
+              aria-label={t('preview.browser.liveTabSelect')}
               value={listed?.id}
               onChange={(id: string) => setSelectedId(id)}
               options={tabs.map((item) => ({ value: item.id, label: item.title || item.url }))}
@@ -213,18 +225,20 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={() => (gestureRef.current = null)}
+        onPointerCancel={endGesture}
       >
         <img ref={imgRef} alt='' draggable={false} className='block w-full h-full object-contain' />
       </div>
       <Input
         ref={inputRef}
         className='sr-only'
+        style={HIDDEN_INPUT_STYLE}
         value=''
         aria-label={t('preview.browser.liveKeyboard')}
         onChange={handleText}
         onPressEnter={() => send({ type: 'key', key: 'Enter' })}
         onKeyDown={handleKeyDown}
+        onKeyUp={() => (backspaceSentRef.current = false)}
       />
     </div>
   );

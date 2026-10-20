@@ -159,7 +159,9 @@
     "livePaused": "Vous avez la main. Reprendre l'agent.",
     "liveNoFrames": "Impossible de voir le navigateur de bureau. Laissez la fenêtre Pixebot ouverte sur votre ordinateur.",
     "liveStopped": "Vue en direct arrêtée. Touchez pour réessayer.",
-    "liveKeyboard": "Clavier"
+    "liveKeyboard": "Clavier",
+    "liveTabSelect": "Onglet du navigateur",
+    "watchBrowser": "Voir le navigateur"
   },
   "saveConflict": "Échec de l'enregistrement : ce fichier a changé sur le disque depuis que vous l'avez ouvert. Rechargez pour voir les autres modifications — vos modifications sont toujours là, non enregistrées.",
   "persistQuotaExceeded": "Le stockage local est plein : les onglets ouverts de ce projet ne peuvent plus être mémorisés. Fermez des onglets ou effacez les données du site.",
