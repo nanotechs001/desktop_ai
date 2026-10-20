@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Button, Dropdown, Link, Menu, Message, Tooltip } from '@arco-design/web-react';
+import { Button, Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,10 +28,13 @@ const PREFIX = 'conversation.agentError.switch';
 const ENGINE_SETTINGS_PATH = '/settings/agent';
 const MODEL_SETTINGS_PATH = '/settings/model';
 
-const useHandoffLabels = (): HandoffLabels => {
+/** Why the chat is moving on: the limit was hit, or it is close (the near-limit warning). */
+export type SwitchReason = 'limitHit' | 'nearLimit';
+
+const useHandoffLabels = (reason: SwitchReason): HandoffLabels => {
   const { t } = useTranslation();
   return {
-    header: t(`${PREFIX}.handoff.header`),
+    header: t(reason === 'nearLimit' ? `${PREFIX}.handoff.headerNearLimit` : `${PREFIX}.handoff.header`),
     quoteStart: t(`${PREFIX}.handoff.quoteStart`),
     quoteEnd: t(`${PREFIX}.handoff.quoteEnd`),
     user: t(`${PREFIX}.handoff.user`),
@@ -45,14 +48,18 @@ const currentEngineId = (conversation: TChatConversation): string | undefined =>
   (conversation.extra as { agent_id?: string } | undefined)?.agent_id;
 
 /**
- * Shown on an error whose resolution is `switch_engine` (a usage limit, exhausted credits or quota): one button per
- * other connected engine and one menu per configured provider, each of which moves this bot (only) there and
- * continues in a new chat. Without any alternative it points to the settings page that adds one.
+ * Shown on an error whose resolution is `switch_engine` (a usage limit, exhausted credits or quota) and on the
+ * near-limit warning: one button per other connected engine and one menu per configured provider, each of which moves
+ * this bot (only) there and continues in a new chat. Without any alternative it shows the backup notice, which points
+ * to the settings page that adds one.
  */
-const LimitSwitchActions: React.FC<{ conversationId: string }> = ({ conversationId }) => {
+const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReason }> = ({
+  conversationId,
+  reason = 'limitHit',
+}) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const labels = useHandoffLabels();
+  const labels = useHandoffLabels(reason);
   const [busy, setBusy] = useState(false);
   const { data: conversation } = useSWR(`conversation/${conversationId}`, () => getConversationOrNull(conversationId));
   const { data: engines } = useSWR<ManagedAgent[]>(ENGINE_CATALOG_SWR_KEY, fetchManagedAgentsOrThrow);
@@ -89,11 +96,11 @@ const LimitSwitchActions: React.FC<{ conversationId: string }> = ({ conversation
   if (targets.engines.length === 0 && targets.providers.length === 0) {
     const onModelEngine = conversation.type === 'aionrs';
     return (
-      <div className='text-t-secondary text-12px'>
-        {t(`${PREFIX}.noAlternatives`)}{' '}
-        <Link onClick={() => void navigate(onModelEngine ? MODEL_SETTINGS_PATH : ENGINE_SETTINGS_PATH)}>
+      <div className='flex flex-wrap items-center gap-6px text-t-secondary text-12px'>
+        <span>{t(`${PREFIX}.noAlternatives`)}</span>
+        <Button size='mini' onClick={() => void navigate(onModelEngine ? MODEL_SETTINGS_PATH : ENGINE_SETTINGS_PATH)}>
           {t(onModelEngine ? `${PREFIX}.openModelSettings` : `${PREFIX}.openEngineSettings`)}
-        </Link>
+        </Button>
       </div>
     );
   }

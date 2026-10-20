@@ -47,6 +47,7 @@ import { Message, Tag } from '@arco-design/web-react';
 import { Brain, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import UsageWarningBar from '../../components/limitSwitch/UsageWarningBar';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { buildSendFailureError } from './buildSendFailureError';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
@@ -746,6 +747,7 @@ Check Settings → Engine.`,
         onStop={handleStop}
       />
       <CrossSessionDisabledBanner />
+      <UsageWarningBar conversationId={conversation_id} />
       <SendBox
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
         value={content}

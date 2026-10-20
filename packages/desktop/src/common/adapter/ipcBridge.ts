@@ -433,6 +433,8 @@ export const conversation = {
     status: 'finish' | 'pending' | 'error';
   }>('message.statusChanged'),
   artifactStream: wsEmitter<IConversationArtifact>('conversation.artifact'),
+  /** The latest plan usage-limit reading the conversation's agent reported (claude only today). */
+  rateLimitUpdated: wsEmitter<IConversationRateLimitUpdatedEvent>('conversation.rateLimitUpdated'),
   turnCompleted: wsMappedEmitter<IConversationTurnCompletedEvent>('turn.completed', (raw) => {
     const r = raw as Record<string, unknown>;
     const rawLast = (r.last_message ?? r.lastMessage) as Record<string, unknown> | undefined;
@@ -2074,6 +2076,27 @@ export type ISkillSuggestArtifact = IConversationArtifactBase<
 >;
 
 export type IConversationArtifact = ICronTriggerArtifact | ISkillSuggestArtifact;
+
+export type RateLimitStatus = 'allowed' | 'allowed_warning' | 'rejected';
+export type RateLimitWindowKind =
+  | 'five_hour'
+  | 'seven_day'
+  | 'seven_day_opus'
+  | 'seven_day_sonnet'
+  | 'seven_day_overage_included'
+  | 'overage';
+
+/** Payload of `conversation.rateLimitUpdated`. Fractions are 0..1 and may exceed 1; times are epoch seconds. */
+export type IConversationRateLimitUpdatedEvent = {
+  user_id: string;
+  conversation_id: string;
+  status: RateLimitStatus | null;
+  rate_limit_type: RateLimitWindowKind | null;
+  resets_at: number | null;
+  utilization: number | null;
+  windows: { kind: RateLimitWindowKind; utilization: number | null; resets_at: number | null }[];
+  surpassed_threshold: number | null;
+};
 
 export interface IConversationTurnCompletedEvent {
   session_id: string;

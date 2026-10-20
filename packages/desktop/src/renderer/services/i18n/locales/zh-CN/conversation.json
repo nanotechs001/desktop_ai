@@ -339,7 +339,7 @@
     },
     "switch": {
       "title": "切换并继续：",
-      "noAlternatives": "尚未设置其他引擎或模型。",
+      "noAlternatives": "你只连接了一个 AI。请在设置中再添加一个引擎或模型，这样达到限额时就能切换。",
       "openEngineSettings": "在设置中添加引擎",
       "openModelSettings": "在设置中添加模型服务商",
       "tooltipBot": "将 {{name}} 切换到此选项（仅此助手，默认引擎不变），并带着最近的对话在新对话中继续。",
@@ -347,6 +347,7 @@
       "failed": "无法切换并继续，未做任何更改。",
       "handoff": {
         "header": "继续之前的对话（之前的 AI 已达到用量上限）。上下文：",
+        "headerNearLimit": "继续之前的对话（上一个 AI 接近其用量限额）。上下文：",
         "quoteStart": "--- 引用的先前对话（仅供参考） ---",
         "quoteEnd": "--- 引用结束 ---",
         "user": "用户",
@@ -550,6 +551,21 @@
     "thought": "思考",
     "cachedRead": "缓存读",
     "cachedWrite": "缓存写"
+  },
+  "usageWarning": {
+    "used": "你已用掉 Claude {{window}}限额的 {{pct}}%",
+    "near": "你的 Claude {{window}}限额即将用完",
+    "resets": "{{time}} 重置",
+    "dismiss": "关闭",
+    "windows": {
+      "fiveHour": "5 小时",
+      "sevenDay": "每周",
+      "sevenDayOpus": "每周 Opus ",
+      "sevenDaySonnet": "每周 Sonnet ",
+      "sevenDayOverageIncluded": "每周 Fable ",
+      "overage": "额外用量",
+      "unknown": "用量"
+    }
   },
   "skill_generator": {
     "title": "生成 Skill/规则",

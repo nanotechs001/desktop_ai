@@ -345,7 +345,7 @@
     },
     "switch": {
       "title": "Mudar e continuar:",
-      "noAlternatives": "Nenhum outro mecanismo ou modelo foi configurado ainda.",
+      "noAlternatives": "Você tem apenas uma IA conectada. Adicione outro mecanismo ou modelo nas Configurações para poder trocar quando atingir um limite.",
       "openEngineSettings": "Adicionar um mecanismo nas Configurações",
       "openModelSettings": "Adicionar um provedor de modelos nas Configurações",
       "tooltipBot": "Move {{name}} para esta opção (só este bot; seu mecanismo padrão continua o mesmo) e continua em um novo chat com a conversa recente.",
@@ -353,6 +353,7 @@
       "failed": "Não foi possível mudar e continuar. Nada foi alterado.",
       "handoff": {
         "header": "Continuando um chat anterior (a IA anterior atingiu o limite de uso). Contexto:",
+        "headerNearLimit": "Continuando um chat anterior (a IA anterior estava perto do limite de uso). Contexto:",
         "quoteStart": "--- Conversa anterior citada (apenas como contexto) ---",
         "quoteEnd": "--- Fim da citação ---",
         "user": "Usuário",
@@ -556,6 +557,21 @@
     "thought": "Raciocínio",
     "cachedRead": "Leitura de cache",
     "cachedWrite": "Escrita de cache"
+  },
+  "usageWarning": {
+    "used": "Você usou {{pct}}% do seu limite {{window}} do Claude",
+    "near": "Você está perto do seu limite {{window}} do Claude",
+    "resets": "redefine {{time}}",
+    "dismiss": "Fechar",
+    "windows": {
+      "fiveHour": "de 5 horas",
+      "sevenDay": "semanal",
+      "sevenDayOpus": "semanal do Opus",
+      "sevenDaySonnet": "semanal do Sonnet",
+      "sevenDayOverageIncluded": "semanal do Fable",
+      "overage": "de uso extra",
+      "unknown": "de uso"
+    }
   },
   "skill_generator": {
     "title": "Gerar Habilidade/Regra",

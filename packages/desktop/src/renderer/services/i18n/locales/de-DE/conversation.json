@@ -339,7 +339,7 @@
     },
     "switch": {
       "title": "Wechseln und fortfahren:",
-      "noAlternatives": "Es ist noch keine andere Engine und kein anderes Modell eingerichtet.",
+      "noAlternatives": "Du hast nur eine KI verbunden. Füge in den Einstellungen eine weitere Engine oder ein Modell hinzu, damit du wechseln kannst, wenn du ein Limit erreichst.",
       "openEngineSettings": "Engine in den Einstellungen hinzufügen",
       "openModelSettings": "Modellanbieter in den Einstellungen hinzufügen",
       "tooltipBot": "Stellt {{name}} auf diese Auswahl um (nur diesen Bot; deine Standard-Engine bleibt) und fährt in einem neuen Chat mit dem bisherigen Gespräch fort.",
@@ -347,6 +347,7 @@
       "failed": "Wechseln und Fortfahren ist fehlgeschlagen. Es wurde nichts geändert.",
       "handoff": {
         "header": "Fortsetzung eines früheren Chats (die vorherige KI hat ihr Nutzungslimit erreicht). Kontext:",
+        "headerNearLimit": "Fortsetzung eines früheren Chats (die vorherige KI war nah an ihrem Nutzungslimit). Kontext:",
         "quoteStart": "--- Zitiertes früheres Gespräch (nur als Kontext) ---",
         "quoteEnd": "--- Ende des Zitats ---",
         "user": "Nutzer",
@@ -551,6 +552,21 @@
     "thought": "Denken",
     "cachedRead": "Cache-Lesen",
     "cachedWrite": "Cache-Schreiben"
+  },
+  "usageWarning": {
+    "used": "Du hast {{pct}} % deines Claude-Limits ({{window}}) verbraucht",
+    "near": "Du bist nah an deinem Claude-Limit ({{window}})",
+    "resets": "wird {{time}} zurückgesetzt",
+    "dismiss": "Schließen",
+    "windows": {
+      "fiveHour": "5 Stunden",
+      "sevenDay": "wöchentlich",
+      "sevenDayOpus": "wöchentlich Opus",
+      "sevenDaySonnet": "wöchentlich Sonnet",
+      "sevenDayOverageIncluded": "wöchentlich Fable",
+      "overage": "Zusatznutzung",
+      "unknown": "Nutzung"
+    }
   },
   "skill_generator": {
     "title": "Skill/Regel generieren",

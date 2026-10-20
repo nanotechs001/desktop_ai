@@ -339,7 +339,7 @@
     },
     "switch": {
       "title": "Changer et continuer :",
-      "noAlternatives": "Aucun autre moteur ni modèle n’est encore configuré.",
+      "noAlternatives": "Vous n'avez qu'une seule IA connectée. Ajoutez un autre moteur ou modèle dans les Paramètres pour pouvoir changer lorsque vous atteignez une limite.",
       "openEngineSettings": "Ajouter un moteur dans les Paramètres",
       "openModelSettings": "Ajouter un fournisseur de modèles dans les Paramètres",
       "tooltipBot": "Fait passer {{name}} sur ce choix (ce bot uniquement ; votre moteur par défaut ne change pas) et continue dans une nouvelle discussion avec la conversation récente.",
@@ -347,6 +347,7 @@
       "failed": "Impossible de changer et de continuer. Rien n’a été modifié.",
       "handoff": {
         "header": "Suite d’une discussion précédente (l’IA précédente a atteint sa limite d’utilisation). Contexte :",
+        "headerNearLimit": "Suite d'une conversation précédente (l'IA précédente approchait de sa limite d'utilisation). Contexte :",
         "quoteStart": "--- Conversation précédente citée (pour le contexte uniquement) ---",
         "quoteEnd": "--- Fin de la citation ---",
         "user": "Utilisateur",
@@ -550,6 +551,21 @@
     "thought": "Réflexion",
     "cachedRead": "Lecture du cache",
     "cachedWrite": "Écriture du cache"
+  },
+  "usageWarning": {
+    "used": "Vous avez utilisé {{pct}} % de votre limite Claude {{window}}",
+    "near": "Vous approchez de votre limite Claude {{window}}",
+    "resets": "réinitialisation {{time}}",
+    "dismiss": "Fermer",
+    "windows": {
+      "fiveHour": "sur 5 heures",
+      "sevenDay": "hebdomadaire",
+      "sevenDayOpus": "hebdomadaire Opus",
+      "sevenDaySonnet": "hebdomadaire Sonnet",
+      "sevenDayOverageIncluded": "hebdomadaire Fable",
+      "overage": "d'utilisation supplémentaire",
+      "unknown": "d'utilisation"
+    }
   },
   "skill_generator": {
     "title": "Générer une compétence/règle",

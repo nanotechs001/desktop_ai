@@ -327,7 +327,7 @@
     },
     "switch": {
       "title": "Geç ve devam et:",
-      "noAlternatives": "Henüz başka bir motor veya model ayarlanmadı.",
+      "noAlternatives": "Yalnızca bir yapay zekâ bağlı. Bir sınıra ulaştığınızda geçiş yapabilmek için Ayarlar'dan başka bir motor veya model ekleyin.",
       "openEngineSettings": "Ayarlar’dan motor ekle",
       "openModelSettings": "Ayarlar’dan model sağlayıcı ekle",
       "tooltipBot": "{{name}} bu seçeneğe taşınır (yalnızca bu bot; varsayılan motorunuz değişmez) ve son konuşmayla yeni bir sohbette devam edilir.",
@@ -335,6 +335,7 @@
       "failed": "Geçiş yapılıp devam edilemedi. Hiçbir şey değiştirilmedi.",
       "handoff": {
         "header": "Önceki bir sohbete devam ediliyor (önceki yapay zekâ kullanım sınırına ulaştı). Bağlam:",
+        "headerNearLimit": "Önceki bir sohbetin devamı (önceki yapay zekâ kullanım sınırına yaklaşmıştı). Bağlam:",
         "quoteStart": "--- Alıntılanan önceki konuşma (yalnızca bağlam için) ---",
         "quoteEnd": "--- Alıntı sonu ---",
         "user": "Kullanıcı",
@@ -540,6 +541,21 @@
     "thought": "Düşünme",
     "cachedRead": "Önbellek okuma",
     "cachedWrite": "Önbellek yazma"
+  },
+  "usageWarning": {
+    "used": "Claude {{window}} sınırınızın %{{pct}} kadarını kullandınız",
+    "near": "Claude {{window}} sınırınıza yaklaştınız",
+    "resets": "{{time}} sıfırlanır",
+    "dismiss": "Kapat",
+    "windows": {
+      "fiveHour": "5 saatlik",
+      "sevenDay": "haftalık",
+      "sevenDayOpus": "haftalık Opus",
+      "sevenDaySonnet": "haftalık Sonnet",
+      "sevenDayOverageIncluded": "haftalık Fable",
+      "overage": "ek kullanım",
+      "unknown": "kullanım"
+    }
   },
   "skill_generator": {
     "title": "Yetenek/Kural Oluştur",

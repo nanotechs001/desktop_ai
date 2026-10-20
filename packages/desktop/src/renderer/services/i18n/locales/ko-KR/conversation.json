@@ -339,7 +339,7 @@
     },
     "switch": {
       "title": "전환하고 계속하기:",
-      "noAlternatives": "아직 설정된 다른 엔진이나 모델이 없습니다.",
+      "noAlternatives": "연결된 AI가 하나뿐입니다. 한도에 도달했을 때 전환할 수 있도록 설정에서 다른 엔진이나 모델을 추가하세요.",
       "openEngineSettings": "설정에서 엔진 추가",
       "openModelSettings": "설정에서 모델 제공자 추가",
       "tooltipBot": "{{name}}을(를) 이 선택으로 전환하고(이 봇만, 기본 엔진은 유지) 최근 대화를 가지고 새 채팅에서 계속합니다.",
@@ -347,6 +347,7 @@
       "failed": "전환하고 계속할 수 없습니다. 아무것도 변경되지 않았습니다.",
       "handoff": {
         "header": "이전 채팅을 이어갑니다(이전 AI가 사용 한도에 도달했습니다). 컨텍스트:",
+        "headerNearLimit": "이전 채팅을 이어갑니다(이전 AI가 사용 한도에 가까웠습니다). 컨텍스트:",
         "quoteStart": "--- 이전 대화 인용(참고용) ---",
         "quoteEnd": "--- 인용 끝 ---",
         "user": "사용자",
@@ -550,6 +551,21 @@
     "thought": "사고",
     "cachedRead": "캐시 읽기",
     "cachedWrite": "캐시 쓰기"
+  },
+  "usageWarning": {
+    "used": "Claude {{window}} 한도의 {{pct}}%를 사용했습니다",
+    "near": "Claude {{window}} 한도에 가까워졌습니다",
+    "resets": "{{time}}에 초기화",
+    "dismiss": "닫기",
+    "windows": {
+      "fiveHour": "5시간",
+      "sevenDay": "주간",
+      "sevenDayOpus": "주간 Opus",
+      "sevenDaySonnet": "주간 Sonnet",
+      "sevenDayOverageIncluded": "주간 Fable",
+      "overage": "추가 사용량",
+      "unknown": "사용량"
+    }
   },
   "skill_generator": {
     "title": "스킬/규칙 생성",
