@@ -206,7 +206,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ tabId, fileRef, file_path, cont
           // The WebUI has no <webview>: the phone's browser opens the same-origin stream URL itself.
           <div className='flex flex-col items-center justify-center gap-12px h-full p-16px'>
             <span className='text-13px text-t-secondary break-all text-center'>{pdfName(fileRef, file_path)}</span>
-            <Button type='primary' onClick={() => window.open(pdfSrc, '_blank')}>
+            <Button type='primary' onClick={() => window.open(pdfSrc, '_blank', 'noopener,noreferrer')}>
               {t('preview.pdf.open')}
             </Button>
           </div>

@@ -30,9 +30,11 @@ const URLViewer: React.FC<URLViewerProps> = ({ url }) => {
   return (
     <div className='flex flex-col items-center justify-center gap-12px h-full p-16px bg-bg-1'>
       <span className='text-13px text-t-secondary break-all text-center'>{url}</span>
-      <Button type='primary' onClick={() => void openExternalUrl(url)}>
-        {t('preview.browser.openLink')}
-      </Button>
+      {/^https?:\/\//i.test(url) && (
+        <Button type='primary' onClick={() => void openExternalUrl(url)}>
+          {t('preview.browser.openLink')}
+        </Button>
+      )}
     </div>
   );
 };

@@ -46,6 +46,14 @@ describe('URLViewer', () => {
     expect(open).toHaveBeenCalledWith('https://example.com/a', '_blank', 'noopener,noreferrer');
   });
 
+  it('offers no Open button for a non-web address in the WebUI', () => {
+    asWebUI();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<URLViewer url='javascript:alert(1)' />);
+    expect(screen.queryByRole('button', { name: 'preview.browser.openLink' })).toBeNull();
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it('keeps the webview in Electron', () => {
     render(<URLViewer url='https://example.com/a' />);
     expect(screen.getByTestId('webview-host')).toHaveTextContent('https://example.com/a');
@@ -66,7 +74,7 @@ describe('PDFPreview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'preview.pdf.open' }));
     const src = buildPdfSrc(fileRef);
     expect(src).toMatch(/^\/api\/fs\/stream\?/);
-    expect(open).toHaveBeenCalledWith(src, '_blank');
+    expect(open).toHaveBeenCalledWith(src, '_blank', 'noopener,noreferrer');
   });
 
   it('keeps the webview in Electron', () => {
