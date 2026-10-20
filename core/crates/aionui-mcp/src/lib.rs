@@ -5,6 +5,8 @@ pub mod adapter;
 pub mod adapters;
 pub mod connection_test;
 pub mod error;
+mod oauth_discovery;
+mod oauth_registration;
 pub mod oauth_service;
 pub mod routes;
 pub mod service;

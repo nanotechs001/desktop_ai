@@ -32,7 +32,14 @@ impl From<McpError> for ApiError {
             McpError::AgentNotInstalled(msg) => ApiError::BadRequest(msg),
             McpError::AgentOperationFailed(msg) => ApiError::Internal(msg),
             McpError::ConnectionFailed(msg) => ApiError::BadGateway(msg),
-            McpError::OAuth(msg) => ApiError::Internal(format!("OAuth error: {msg}")),
+            // Discovery, registration and token failures come from the remote
+            // server and carry no secrets; surface them instead of a bare 500.
+            McpError::OAuth(msg) => ApiError::coded(
+                StatusCode::BAD_GATEWAY,
+                "MCP_OAUTH_FAILED",
+                format!("OAuth error: {msg}"),
+                None,
+            ),
             McpError::Database(db_err) => ApiError::Internal(db_err.to_string()),
             McpError::Json(e) => ApiError::Internal(format!("JSON error: {e}")),
         }
@@ -383,9 +390,11 @@ mod error_mapping_tests {
     }
 
     #[test]
-    fn oauth_maps_to_internal() {
+    fn oauth_maps_to_bad_gateway_with_visible_message() {
         let err = ApiError::from(McpError::OAuth("discovery failed".into()));
-        assert!(matches!(err, ApiError::Internal(_)));
+        assert_eq!(err.status_code(), StatusCode::BAD_GATEWAY);
+        assert_eq!(err.error_code(), "MCP_OAUTH_FAILED");
+        assert_eq!(err.public_message(), "OAuth error: discovery failed");
     }
 
     #[test]

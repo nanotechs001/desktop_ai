@@ -42,6 +42,7 @@ pub use repository::cron::{
     ClaimCronRunParams, CronRunClaimResult, FinishCronRunParams, RecoverableCronRun, UpdateCronJobParams,
 };
 pub use repository::mcp_server::{CreateMcpServerParams, UpdateMcpServerParams};
+pub use repository::oauth_client::UpsertOAuthClientParams;
 pub use repository::oauth_token::UpsertOAuthTokenParams;
 pub use repository::provider::{CreateProviderParams, UpdateProviderParams};
 pub use repository::remote_agent::{CreateRemoteAgentParams, UpdateRemoteAgentParams};
@@ -53,16 +54,17 @@ pub use repository::{
     IAgentMetadataRepository, IAssistantDefinitionRepository, IAssistantOverlayRepository,
     IAssistantOverrideRepository, IAssistantPreferenceRepository, IAssistantRepository, IChannelRepository,
     IClientPreferenceRepository, IConversationRepository, ICronRepository, IFeedbackDiagnosticsRepository,
-    IMcpServerRepository, IOAuthTokenRepository, IProjectStore, IProviderRepository, IRemoteAgentRepository,
-    ISettingsRepository, ISidebarStore, ISkillRepository, ITeamRepository, IUserOrderStore, IUserRepository,
-    MoveOutcome, OrderItemRef, PageDirection, PersistedSessionState, PinOutcome, PinnedCursor, SaveRuntimeStateParams,
-    SidebarConversationThin, SidebarProjectMeta, SidebarTeamThin, SqliteAcpSessionRepository,
+    IMcpServerRepository, IOAuthClientRepository, IOAuthTokenRepository, IProjectStore, IProviderRepository,
+    IRemoteAgentRepository, ISettingsRepository, ISidebarStore, ISkillRepository, ITeamRepository, IUserOrderStore,
+    IUserRepository, MoveOutcome, OrderItemRef, PageDirection, PersistedSessionState, PinOutcome, PinnedCursor,
+    SaveRuntimeStateParams, SidebarConversationThin, SidebarProjectMeta, SidebarTeamThin, SqliteAcpSessionRepository,
     SqliteAgentMetadataRepository, SqliteAssistantDefinitionRepository, SqliteAssistantOverlayRepository,
     SqliteAssistantOverrideRepository, SqliteAssistantPreferenceRepository, SqliteAssistantRepository,
     SqliteChannelRepository, SqliteClientPreferenceRepository, SqliteConversationRepository, SqliteCronRepository,
-    SqliteFeedbackDiagnosticsRepository, SqliteMcpServerRepository, SqliteOAuthTokenRepository, SqliteProjectStore,
-    SqliteProviderRepository, SqliteRemoteAgentRepository, SqliteSettingsRepository, SqliteSidebarStore,
-    SqliteSkillRepository, SqliteTeamRepository, SqliteUserOrderStore, SqliteUserRepository,
+    SqliteFeedbackDiagnosticsRepository, SqliteMcpServerRepository, SqliteOAuthClientRepository,
+    SqliteOAuthTokenRepository, SqliteProjectStore, SqliteProviderRepository, SqliteRemoteAgentRepository,
+    SqliteSettingsRepository, SqliteSidebarStore, SqliteSkillRepository, SqliteTeamRepository, SqliteUserOrderStore,
+    SqliteUserRepository,
 };
 
 // Re-export sqlx pool type for downstream crates

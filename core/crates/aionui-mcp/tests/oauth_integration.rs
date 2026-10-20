@@ -15,7 +15,8 @@ const TEST_USER_ID: &str = "system_default_user";
 async fn make_service() -> (McpOAuthService, Arc<dyn IOAuthTokenRepository>) {
     let db = aionui_db::init_database_memory().await.unwrap();
     let repo: Arc<dyn IOAuthTokenRepository> = Arc::new(SqliteOAuthTokenRepository::new(db.pool().clone()));
-    let svc = McpOAuthService::new(repo.clone(), reqwest::Client::new());
+    let client_repo = Arc::new(aionui_db::SqliteOAuthClientRepository::new(db.pool().clone()));
+    let svc = McpOAuthService::new(repo.clone(), client_repo);
     // Keep db alive by leaking it (integration test only).
     std::mem::forget(db);
     (svc, repo)
@@ -295,4 +296,18 @@ async fn get_token_returns_no_expiry_token() {
 
     let token = svc.get_token(TEST_USER_ID, "https://noexp.example.com").await.unwrap();
     assert_eq!(token.as_deref(), Some("forever_token"));
+}
+
+// ---------------------------------------------------------------------------
+// OA-8: Login on a non-https server fails with a readable error
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn login_rejects_non_https_server_url_with_readable_error() {
+    let (svc, _repo) = make_service().await;
+    let err = svc.login(TEST_USER_ID, "http://mcp.example.com/mcp").await.unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "OAuth error: MCP server URL 'http://mcp.example.com/mcp' must use https"
+    );
 }

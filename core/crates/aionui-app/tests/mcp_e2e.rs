@@ -122,6 +122,34 @@ async fn oauth_check_status_unauthenticated_server() {
 }
 
 // ===========================================================================
+// OA-8: Login failure is a readable 502, not a bare INTERNAL_ERROR
+// ===========================================================================
+
+#[tokio::test]
+async fn oauth_login_failure_returns_readable_bad_gateway() {
+    let (mut app, services) = build_app().await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+
+    let req = json_with_token(
+        "POST",
+        "/api/mcp/oauth/login",
+        json!({ "server_url": "http://mcp.example.com/mcp" }),
+        &token,
+        &csrf,
+    );
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+
+    let json = body_json(resp).await;
+    assert!(!json["success"].as_bool().unwrap());
+    assert_eq!(json["code"], "MCP_OAUTH_FAILED");
+    assert_eq!(
+        json["error"],
+        "OAuth error: MCP server URL 'http://mcp.example.com/mcp' must use https"
+    );
+}
+
+// ===========================================================================
 // OA-3: Get all authenticated servers (empty at start)
 // ===========================================================================
 
