@@ -60,6 +60,30 @@ export const enterScope = (
   };
 };
 
+/** A live tab an agent opened in the VA Bot's own browser profile (not the user's tab in that profile). */
+const isBotAgentTab = (tab: PreviewTab, agentId: string): boolean =>
+  isBrowserTab(tab) &&
+  tab.metadata?.agentOwned === true &&
+  tab.metadata.profile?.kind === 'agent' &&
+  tab.metadata.profile.agentId === agentId;
+
+/**
+ * A VA Bot's agent tabs belong to the bot, not one chat: those parked under other scopes move to `scope`, where a
+ * chat of that bot is being entered. Their webviews stay as they are (same tab ids). `moved` keeps the scopes they
+ * left, whose stored copies must go.
+ */
+export const moveBotTabs = (
+  background: readonly BackgroundTab[],
+  agentId: string,
+  scope: string
+): { background: BackgroundTab[]; moved: BackgroundTab[] } => {
+  const moved = background.filter((entry) => entry.scope !== scope && isBotAgentTab(entry.tab, agentId));
+  return {
+    background: background.map((entry) => (moved.includes(entry) ? { ...entry, scope } : entry)),
+    moved,
+  };
+};
+
 /**
  * The browser tabs whose webviews stay mounted: every tab of the scope on screen, then background
  * tabs until {@link MAX_LIVE_BROWSER_TABS}, dropping the least recently used user tabs (never an

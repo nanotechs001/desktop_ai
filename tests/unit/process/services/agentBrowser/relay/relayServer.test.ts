@@ -1514,3 +1514,98 @@ describe('relay server: runScript (write mode)', () => {
     }
   );
 });
+
+describe("relay server: a VA Bot's new chat takes over its tabs", () => {
+  const BOT: BrowserTabProfile = { kind: 'agent', agentId: 'bot-b' };
+  const OTHER_BOT: BrowserTabProfile = { kind: 'agent', agentId: 'bot-o' };
+  const botOf: Record<string, BrowserTabProfile> = { conv_C1: BOT, conv_C2: BOT, conv_O: OTHER_BOT };
+
+  /** A tab in `profile` that the connected client `label` opened. */
+  const botTab = (id: number, profile: BrowserTabProfile, label: string, conversationId: string): void => {
+    registry.track(new FakeContents(id), profile);
+    const client = relay?.clients().find((c) => c.label === label);
+    if (!client) throw new Error(`no client ${label}`);
+    registry.claim(id, { ...client, conversationId });
+  };
+
+  it("re-claims the bot's disconnected and other-chat tabs for the new chat; the old chat can no longer act", async () => {
+    resolveProfile.mockImplementation(async (conversationId?: string) => ({
+      profile: (conversationId && botOf[conversationId]) || agentProfileOf(conversationId),
+      final: true,
+    }));
+    const onAgentTab = vi.fn();
+    registry = createTargetRegistry();
+    relay = await startRelayServer({
+      registry,
+      openTab,
+      closeTab,
+      onAgentAction,
+      requestConfirm,
+      waitForTab,
+      resolveProfile,
+      onAgentTab,
+      limits: { maxTabsPerClient: 2 },
+    });
+    const first = await connect(relay, 'c1', { 'X-Aion-Conversation': 'conv_C1' });
+    const gone = await connect(relay, 'gone', { 'X-Aion-Conversation': 'conv_C1' });
+    const other = await connect(relay, 'o', { 'X-Aion-Conversation': 'conv_O' });
+    await Promise.all([first, gone, other].map((c) => c.send('AionRelay.listTabs')));
+    botTab(100, BOT, 'c1', 'conv_C1');
+    botTab(101, BOT, 'gone', 'conv_C1');
+    registry.track(new FakeContents(102), BOT); // the user's own tab in the bot's profile
+    botTab(103, OTHER_BOT, 'o', 'conv_O');
+    gone.ws.close();
+    await vi.waitFor(() => expect(registry.ownership(101)?.owner).toMatchObject({ label: 'agent (disconnected)' }));
+    const session = await attach(first, 100);
+    const later = Date.now() + 60_000;
+    vi.spyOn(Date, 'now').mockReturnValueOnce(later);
+    registry.touch(101); // the most recently used of the two
+    const onChange = vi.fn();
+    registry.onChange(onChange);
+
+    const next = await connect(relay, 'c2', { 'X-Aion-Conversation': 'conv_C2' });
+    const listed = (await next.send('AionRelay.listTabs')).result?.tabs as Array<{ targetId: string; owner: string }>;
+
+    expect(listed.map(({ targetId, owner }) => ({ targetId, owner }))).toEqual([
+      { targetId: 'wc-100', owner: 'agent' },
+      { targetId: 'wc-101', owner: 'agent' },
+    ]);
+    const newClient = relay.clients().find((c) => c.label === 'c2');
+    for (const id of [100, 101]) {
+      expect(registry.ownership(id)?.owner).toEqual({
+        clientId: newClient?.clientId,
+        label: 'c2',
+        conversationId: 'conv_C2',
+      });
+    }
+    expect(registry.ownership(102)?.owner).toBe('user');
+    expect(registry.ownership(103)?.owner).toMatchObject({ label: 'o', conversationId: 'conv_O' });
+    expect(onChange).toHaveBeenCalled();
+    // The old chat's session on the tab ends, and it cannot act on or re-attach to it.
+    expect((await first.waitForEvent('Target.detachedFromTarget')).params).toMatchObject({ sessionId: session });
+    expect((await first.send('Page.getFrameTree', {}, session)).error).toBeDefined();
+    expect((await first.send('Target.attachToTarget', { targetId: 'wc-100', flatten: true })).error?.message).toMatch(
+      /not shared/i
+    );
+    expect((await first.send('AionRelay.listTabs')).result?.tabs).toEqual([]);
+    // At the cap the connection stands; the re-claimed tabs count, and hygiene sees the newest first.
+    expect((await next.send('Target.createTarget', { url: 'https://example.com' })).error?.message).toMatch(
+      /at most 2 tabs/
+    );
+    expect(onAgentTab.mock.calls.map(([id]) => id)).toEqual([101, 100]);
+  });
+
+  it('takes nothing for a regular chat or a client with no chat', async () => {
+    const handle = await start();
+    registry.track(new FakeContents(110), agentProfileOf());
+    registry.claim(110, { clientId: 'old', label: 'old' });
+    registry.releaseClient('old');
+    resolveProfile.mockResolvedValueOnce({ profile: { kind: 'temporary', conversationId: 'conv_T' }, final: true });
+    const regular = await connect(handle, 'r', { 'X-Aion-Conversation': 'conv_T' });
+    const noChat = await connect(handle, 'n');
+
+    expect((await regular.send('AionRelay.listTabs')).result?.tabs).toEqual([]);
+    expect((await noChat.send('AionRelay.listTabs')).result?.tabs).toEqual([]);
+    expect(registry.ownership(110)?.owner).toMatchObject({ clientId: 'disconnected:old' });
+  });
+});

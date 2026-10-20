@@ -8,6 +8,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
@@ -59,7 +60,7 @@ export type RelayServerDeps = {
   resolveProfile(conversationId: string | undefined): Promise<ProfileLookup>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
-  /** An agent's new tab was claimed for it (Target.createTarget), e.g. for the per-chat tab cap. */
+  /** An agent's tab was claimed for it (Target.createTarget, or its bot's new chat took it over), e.g. for the tab cap. */
   onAgentTab?(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
   /** Asks the user to allow a risky action on a tab; resolves with the answer. `signal` aborts when the ask is moot. */
@@ -180,6 +181,20 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return { webContentsId, contents };
   };
 
+  /**
+   * A VA Bot's tabs belong to the bot, not one chat: its newest chat's client takes over the tabs its earlier chats'
+   * agents opened, and the old client's sessions on them end (the onChange prune). Hygiene then trims them to the
+   * chat's cap, keeping the most recently used. Regular chats (temporary profiles) and chat-less clients take nothing.
+   */
+  const takeOverBotTabs = (conn: Connection): void => {
+    const { profile } = conn.client;
+    if (!conn.conversationId || profile?.kind !== 'agent' || profile.agentId === DEFAULT_AGENT_ID) return;
+    if (!connections.has(conn.client.clientId)) return;
+    const taken = registry.reclaimAgentTabs(profile.agentId, { ...conn.client, conversationId: conn.conversationId });
+    const lastUsed = (id: number): number => registry.lastUse(id)?.at ?? 0;
+    for (const id of taken.toSorted((a, b) => lastUsed(b) - lastUsed(a))) deps.onAgentTab?.(id);
+  };
+
   /** Looks the client's Agent profile up and sets it on `client`; a rejection leaves the client as it was (logged). */
   const lookUpProfile = (conn: Connection): Promise<void> => {
     conn.lastLookupAt = Date.now();
@@ -189,6 +204,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         ({ profile, final }) => {
           conn.client = { ...conn.client, profile };
           conn.profileFinal = final;
+          takeOverBotTabs(conn);
         },
         (error: unknown) => console.warn("[AgentBrowserRelay] could not look up a client's browser profile:", error)
       )

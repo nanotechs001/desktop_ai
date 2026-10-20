@@ -73,7 +73,12 @@ export type TargetRegistry = {
   /** A tab or popup an agent-owned page opened: claimed for the opener's owner and chat. No-op for a user opener. */
   inherit(openerId: number, childId: number): void;
   share(webContentsId: number, on: boolean): void;
-  /** The client disconnected: its tabs stay open under a label nobody can reclaim. */
+  /**
+   * A VA Bot's new chat connected: every tab an agent opened in the bot's profile (a gone client's, or another chat's)
+   * is now `client`'s, in one change. User tabs and sharing stay as they are. Returns the ids taken.
+   */
+  reclaimAgentTabs(agentId: string, client: RelayClient): number[];
+  /** The client disconnected: its tabs stay open under a label only its bot's next chat can reclaim. */
   releaseClient(clientId: string): void;
   /** Marks a tab used now: by an agent command (with that agent's chat, when known) or by user input. */
   touch(webContentsId: number, conversationId?: string): void;
@@ -195,6 +200,24 @@ export function createTargetRegistry(): TargetRegistry {
       update(childId, { owner: { ...owner } });
     },
     share: (webContentsId, on) => update(webContentsId, { sharedWith: on ? 'all' : null }),
+    reclaimAgentTabs(agentId, { clientId, label, conversationId }) {
+      const owner = { clientId, label, ...(conversationId ? { conversationId } : {}) };
+      const taken = all()
+        .filter(
+          ({ owner: current, profile }) =>
+            current !== 'user' &&
+            current.clientId !== clientId &&
+            profile.kind === 'agent' &&
+            profile.agentId === agentId
+        )
+        .map(({ webContentsId }) => webContentsId);
+      for (const webContentsId of taken) {
+        const tab = tabs.get(webContentsId);
+        if (tab) tabs.set(webContentsId, { ...tab, ownership: { ...tab.ownership, owner: { ...owner } } });
+      }
+      if (taken.length > 0) notify();
+      return taken;
+    },
     releaseClient(clientId) {
       for (const { ownership } of tabs.values()) {
         if (ownership.owner !== 'user' && ownership.owner.clientId === clientId) {

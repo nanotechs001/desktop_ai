@@ -40,14 +40,21 @@ const ChatConversationIndex: React.FC = () => {
   const lastEnteredRef = useRef<{ conversationId: string; scope: string | null } | null>(null);
   const conversationId = data?.id;
   const scope = data ? previewScopeOfConversation(data) : null;
+  // A VA Bot's browser tabs belong to the bot: its new chat shows the tabs its earlier chats' agents opened.
+  const agentId = data?.assistant?.id;
   useEffect(() => {
     if (!conversationId) return;
     const last = lastEnteredRef.current;
     const carryFromScope = last?.conversationId === conversationId ? (last.scope ?? undefined) : undefined;
     lastEnteredRef.current = { conversationId, scope };
     // The WebUI cannot show a webview, so it gets no blank browser tab over the chat.
-    enterScopeRef.current(scope, { openBrowserIfEmpty: isElectronDesktop(), carryFromScope, conversationId });
-  }, [conversationId, scope]);
+    enterScopeRef.current(scope, {
+      openBrowserIfEmpty: isElectronDesktop(),
+      carryFromScope,
+      conversationId,
+      ...(agentId ? { agentId } : {}),
+    });
+  }, [conversationId, scope, agentId]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async

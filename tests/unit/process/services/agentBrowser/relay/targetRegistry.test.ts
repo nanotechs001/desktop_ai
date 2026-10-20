@@ -93,6 +93,30 @@ describe('targetRegistry', () => {
     expect(registry.ownership(3)?.owner).toEqual({ clientId: 'disconnected:c1', label: 'agent (disconnected)' });
   });
 
+  it("reclaimAgentTabs() hands a bot's agent tabs to a new client in one change, never user or other bots' tabs", () => {
+    const registry = createTargetRegistry();
+    const bot = { kind: 'agent', agentId: 'bot-b' } as const;
+    [1, 2, 3].forEach((id) => registry.track(new FakeContents(id), bot));
+    registry.track(new FakeContents(4), { kind: 'agent', agentId: 'bot-o' });
+    registry.claim(1, { ...agent, conversationId: 'c-old' });
+    registry.claim(4, { clientId: 'o', label: 'other' });
+    registry.share(1, true);
+    registry.releaseClient('c1');
+    const onChange = vi.fn();
+    registry.onChange(onChange);
+
+    const next = { clientId: 'c2', label: 'codex', conversationId: 'c-new' };
+    expect(registry.reclaimAgentTabs('bot-b', next)).toEqual([1]);
+
+    expect(registry.ownership(1)).toMatchObject({ owner: next, sharedWith: 'all' });
+    expect(registry.ownership(2)?.owner).toBe('user');
+    expect(registry.ownership(4)?.owner).toEqual({ clientId: 'o', label: 'other' });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // Nothing to take: no change to report.
+    expect(registry.reclaimAgentTabs('bot-b', next)).toEqual([]);
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
   it('forgets destroyed contents and reports their last ownership', () => {
     const registry = createTargetRegistry();
     const onDestroyed = vi.fn();

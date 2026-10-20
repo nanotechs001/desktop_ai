@@ -24,7 +24,7 @@ import {
   type PreviewScopeKey,
 } from './previewScope';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { enterScope, leaveScope, liveBrowserTabs, type BackgroundTab } from './backgroundTabs';
+import { enterScope, leaveScope, liveBrowserTabs, moveBotTabs, type BackgroundTab } from './backgroundTabs';
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { getCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
@@ -277,6 +277,17 @@ type ScopeChangeOptions = {
   carryFromScope?: string;
   /** The conversation entering the scope: a pending revealBrowserFor for it overrides a user close, once. */
   conversationId?: string;
+  /** The VA Bot of that conversation: the live tabs its agents opened in other chats come along. */
+  agentId?: string;
+};
+
+/** Drops tabs that moved to another scope from the stored state of the scopes they left. */
+const forgetMovedTabs = (moved: readonly BackgroundTab[]): void => {
+  for (const scope of new Set(moved.map((entry) => entry.scope))) {
+    const stored = loadScopeState(scope);
+    const ids = new Set(moved.filter((entry) => entry.scope === scope).map((entry) => entry.tab.id));
+    persistScopeState(scope, { ...stored, tabs: stored.tabs.filter((tab) => !ids.has(tab.id)) });
+  }
 };
 
 // 仅持久化小体积文本预览，避免大文本导致 localStorage 写入卡顿
@@ -1253,6 +1264,21 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         else autoOpenedTabIdRef.current = openBrowserTab();
       };
       if (prev === scopeKey) {
+        if (options?.agentId && scopeKey != null) {
+          const { background, moved } = moveBotTabs(backgroundRef.current, options.agentId, scopeKey);
+          if (moved.length > 0) {
+            forgetMovedTabs(moved);
+            const { tabs: botTabs, rest } = enterScope(background, scopeKey, []);
+            const merged = [...tabs, ...botTabs];
+            setBackground(rest);
+            setTabs(merged);
+            tabsRef.current = merged;
+            if (!activeTabId) {
+              setActiveTabId(botTabs[0].id);
+              activeTabIdRef.current = botTabs[0].id;
+            }
+          }
+        }
         reopenUnlessUserClosed();
         return;
       }
@@ -1306,8 +1332,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       currentScopeRef.current = scopeKey;
       const loaded = scopeKey != null ? loadScopeState(scopeKey) : EMPTY_SCOPE_STATE;
       // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return.
-      const background =
-        prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
+      const left = prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
+      const bot = options?.agentId && scopeKey != null ? moveBotTabs(left, options.agentId, scopeKey) : null;
+      if (bot) forgetMovedTabs(bot.moved);
+      const background = bot?.background ?? left;
       const entered = scopeKey != null ? enterScope(background, scopeKey, loaded.tabs) : { tabs: [], rest: background };
       const activeId = loaded.activeTabId ?? entered.tabs[0]?.id ?? null;
       setBackground(entered.rest);
