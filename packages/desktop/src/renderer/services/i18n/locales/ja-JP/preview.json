@@ -258,6 +258,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site",
+      "alwaysHint": "アプリ全体でこのサイトに適用されます。他のチャットで開いているこのサイトの確認にも回答します。",
       "timeoutHint": "2分以内に応答がない場合は自動的に拒否されます。"
     },
     "crash": {

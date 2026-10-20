@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
@@ -42,12 +43,13 @@ export type AgentBrowserOptions = {
   isYoloChat?: (conversationId: string) => Promise<boolean>;
 };
 
-/** A chat's current permission mode, from aioncore: its live runtime's mode and its agent's YOLO id in the catalog. */
+/** A chat's current permission mode, from aioncore's read-only runtime mode (it never starts a runtime). */
 export const chatIsYolo = createYoloLookup({
-  configOptions: async (conversationId) =>
-    (await ipcBridge.conversation.ensureRuntime.invoke({ conversation_id: conversationId })).config_options,
-  conversation: (id) => ipcBridge.conversation.get.invoke({ id }),
-  agents: () => ipcBridge.acpConversation.getManagedAgents.invoke(),
+  runtimeMode: (conversationId) =>
+    ipcBridge.conversation.runtimeMode.invoke({ conversation_id: conversationId }).catch((error: unknown): null => {
+      if (isBackendHttpError(error) && error.status === 404) return null; // an unknown chat: asked
+      throw error;
+    }),
 });
 
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
@@ -323,11 +325,12 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   const requestConfirm = async (
     request: Omit<ConfirmRequest, 'id'>,
     signal: AbortSignal,
-    webContentsId: number
+    webContentsId: number,
+    yoloChat?: string
   ): Promise<boolean> => {
     confirming.set(webContentsId, (confirming.get(webContentsId) ?? 0) + 1);
     try {
-      return await confirms.request(request, undefined, signal);
+      return await confirms.request(request, undefined, signal, yoloChat);
     } finally {
       const left = (confirming.get(webContentsId) ?? 1) - 1;
       if (left > 0) confirming.set(webContentsId, left);

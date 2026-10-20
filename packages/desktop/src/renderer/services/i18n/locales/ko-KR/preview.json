@@ -258,6 +258,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site",
+      "alwaysHint": "앱 전체에서 이 사이트에 적용됩니다. 다른 채팅에서 열려 있는 이 사이트의 확인 요청에도 응답합니다.",
       "timeoutHint": "2분 안에 응답하지 않으면 자동으로 거부됩니다."
     },
     "crash": {

@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } 
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { ConfirmRequest } from '@/common/types/browser';
-import type { AcpConfigOptionDto } from '@/common/types/platform/acpTypes';
+import type { ConversationRuntimeMode } from '@/common/types/platform/acpTypes';
 
 /** An unanswered confirm is denied after this long. */
 export const CONFIRM_TIMEOUT_MS = 120_000;
@@ -105,48 +105,30 @@ export const YOLO_CACHE_MS = 2000;
 /** A mode lookup slower than this answers "not YOLO", so the user is asked. */
 export const MODE_LOOKUP_TIMEOUT_MS = 5000;
 
-/** Aliases AionUi persists for an agent's YOLO mode (aioncore's `normalize_requested_mode` maps them to `yolo_id`). */
-const YOLO_ALIASES = new Set(['yolo', 'yoloNoSandbox']);
-/** Codex's full-access ids, current and legacy (aioncore `mode_normalize.rs`). */
-const CODEX_FULL_ACCESS = new Set(['agent-full-access', 'full-access']);
-
-type CatalogAgent = { id: string; backend?: string; yolo_id?: string };
-
 /**
- * True when `mode` is the chat's full-auto mode: `yolo` for the aionrs engine (its only auto-approve mode), else the
- * mode the chat's catalog agent names as its `yolo_id` (claude `bypassPermissions`, codex `agent-full-access`, ...).
+ * Mode ids that skip every permission ask (ruling R12). Catalog `yolo_id`s are not used: OpenCode's and MiMo's `build`
+ * and Cursor's `agent` are their everyday modes.
  */
-export const isYoloMode = (
-  mode: string | null | undefined,
-  { type, agent }: { type?: string; agent?: Omit<CatalogAgent, 'id'> }
-): boolean => {
-  if (!mode) return false;
-  if (type === 'aionrs') return mode === 'yolo';
-  const yoloId = agent?.yolo_id?.trim();
-  if (!yoloId) return false;
-  return mode === yoloId || YOLO_ALIASES.has(mode) || (agent?.backend === 'codex' && CODEX_FULL_ACCESS.has(mode));
-};
+export const TRUE_BYPASS_MODES: ReadonlySet<string> = new Set([
+  'bypassPermissions',
+  'agent-full-access',
+  'full-access',
+  'yolo',
+  'yoloNoSandbox',
+]);
+
+/** True when `mode` skips every permission ask, for any engine. */
+export const isYoloMode = (mode: string | null | undefined): boolean => !!mode && TRUE_BYPASS_MODES.has(mode);
 
 /** What main asks aioncore to learn a chat's current permission mode. */
 export type ChatModeDeps = {
-  /** The chat runtime's live config options; the mode one holds the mode in force (or just picked). */
-  configOptions(conversationId: string): Promise<readonly AcpConfigOptionDto[]>;
-  /** The chat: its engine type and, in `extra`, the catalog agent it runs. Null when it is gone. */
-  conversation(conversationId: string): Promise<{ type?: string; extra?: Record<string, unknown> | null } | null>;
-  /** The agent catalog, with each agent's YOLO mode id. */
-  agents(): Promise<readonly CatalogAgent[]>;
-};
-
-const agentOf = (agents: readonly CatalogAgent[], extra: Record<string, unknown>): CatalogAgent | undefined => {
-  const byId = typeof extra.agent_id === 'string' ? agents.find((a) => a.id === extra.agent_id) : undefined;
-  if (byId) return byId;
-  const sameBackend = agents.filter((a) => a.backend !== undefined && a.backend === extra.backend);
-  return sameBackend.length === 1 ? sameBackend[0] : undefined;
+  /** The chat's live runtime mode; null for an unknown chat (404). Idle and team chats answer `live: false`. */
+  runtimeMode(conversationId: string): Promise<ConversationRuntimeMode | null>;
 };
 
 /**
- * Whether a chat runs in YOLO mode right now, from aioncore, each answer kept `ttlMs` per chat. Fails safe: a failed
- * or slow lookup is "not YOLO" (and not kept), so the user is asked.
+ * Whether a chat runs in YOLO mode right now, from aioncore, each answer kept `ttlMs` per chat. Fails safe: no live
+ * runtime, an unknown chat, or a failed or slow lookup is "not YOLO" (and a failure is not kept), so the user is asked.
  */
 export function createYoloLookup(
   deps: ChatModeDeps,
@@ -154,18 +136,17 @@ export function createYoloLookup(
 ): (conversationId: string) => Promise<boolean> {
   const known = new Map<string, { at: number; yolo: boolean }>();
   const lookUp = async (conversationId: string): Promise<boolean> => {
-    const [options, conversation, agents] = await Promise.all([
-      deps.configOptions(conversationId),
-      deps.conversation(conversationId),
-      deps.agents(),
-    ]);
-    if (!conversation) return false;
-    const mode = (options.find((o) => o.category === 'mode') ?? options.find((o) => o.id === 'mode'))?.current_value;
-    return isYoloMode(mode, { type: conversation.type, agent: agentOf(agents, conversation.extra ?? {}) });
+    const runtime = await deps.runtimeMode(conversationId);
+    return runtime?.live === true && isYoloMode(runtime.mode);
   };
   return async (conversationId) => {
+    const at = now();
+    // Expired answers go on every lookup, so chats never asked about again do not pile up.
+    known.forEach((entry, id) => {
+      if (at - entry.at >= ttlMs) known.delete(id);
+    });
     const cached = known.get(conversationId);
-    if (cached && now() - cached.at < ttlMs) return cached.yolo;
+    if (cached) return cached.yolo;
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('mode lookup timed out')), MODE_LOOKUP_TIMEOUT_MS);
@@ -204,17 +185,23 @@ export class PendingConfirms {
   }
 
   /**
-   * Resolves with the user's answer at once when the origin is always allowed or the asking chat is in YOLO mode, else
+   * Resolves with the user's answer at once when the origin is always allowed or `yoloChat` is in YOLO mode, else
    * once they answer. Denies after `timeoutMs` and when `signal` aborts (the tab navigated or closed, the agent left).
+   * `yoloChat` is the asking connection's own chat, given only for its own unshared tab (rulings R13, R15); never
+   * `req.conversationId`, which may be the tab owner's chat and only says where the ask shows.
    */
-  request(req: Omit<ConfirmRequest, 'id'>, timeoutMs = CONFIRM_TIMEOUT_MS, signal?: AbortSignal): Promise<boolean> {
+  request(
+    req: Omit<ConfirmRequest, 'id'>,
+    timeoutMs = CONFIRM_TIMEOUT_MS,
+    signal?: AbortSignal,
+    yoloChat?: string
+  ): Promise<boolean> {
     if (signal?.aborted) return Promise.resolve(false);
     const key = allowKey(req);
     if (key !== null && this.allowLists()[kindOf(req)].has(key)) return Promise.resolve(true);
-    const { conversationId } = req;
     // "Leave site?" guards the user's own unsaved text, not an agent permission: YOLO never answers it.
-    if (req.kind === 'leave' || !conversationId || !this.isYolo) return this.ask(req, timeoutMs, signal);
-    return this.isYolo(conversationId)
+    if (req.kind === 'leave' || !yoloChat || !this.isYolo) return this.ask(req, timeoutMs, signal);
+    return this.isYolo(yoloChat)
       .catch(() => false)
       .then((yolo) => {
         if (signal?.aborted) return false;
@@ -242,7 +229,8 @@ export class PendingConfirms {
 
   /**
    * Answers an open confirm; `alwaysForSite` on an Allow remembers its origin for that kind of ask only, and allows the
-   * other open asks it covers too. False when the id is unknown.
+   * other open asks it covers too. The allow list is app-wide, not per chat (M9): it also settles other chats' open asks
+   * on that site. False when the id is unknown.
    */
   reply(id: string, allow: boolean, alwaysForSite: boolean): boolean {
     const entry = this.open.get(id);

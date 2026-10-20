@@ -258,6 +258,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site",
+      "alwaysHint": "對整個應用程式中的此網站生效：也會一併回答其他對話中針對此網站的待處理請求。",
       "timeoutHint": "2 分鐘內未回覆將自動拒絕。"
     },
     "crash": {

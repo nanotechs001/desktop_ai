@@ -258,6 +258,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site",
+      "alwaysHint": "Bu site için uygulamanın tamamında geçerlidir: diğer sohbetlerde bu sitenin bekleyen isteklerini de yanıtlar.",
       "timeoutHint": "2 dakika içinde yanıt verilmezse otomatik olarak reddedilir."
     },
     "crash": {

@@ -258,6 +258,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site",
+      "alwaysHint": "S'applique dans toute l'application pour ce site : répond aussi aux demandes en attente de ce site dans les autres discussions.",
       "timeoutHint": "Refusé automatiquement sans réponse sous 2 minutes."
     },
     "crash": {

@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox } from '@arco-design/web-react';
+import { Button, Checkbox, Tooltip } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { ConfirmRequest } from '@/common/types/browser';
 
@@ -89,9 +89,12 @@ const ConfirmBody: React.FC<ConfirmBodyProps> = ({ request, onAnswer, focusDeny 
       )}
       {/* A sandboxed frame has no origin to remember. */}
       {request.frameOrigin !== null && (
-        <Checkbox checked={always} onChange={setAlways}>
-          {t(`${CONFIRM_KEY}.always`)}
-        </Checkbox>
+        // The allow list is app-wide: it also answers other chats' open asks on this site.
+        <Tooltip content={t(`${CONFIRM_KEY}.alwaysHint`)}>
+          <Checkbox checked={always} onChange={setAlways}>
+            {t(`${CONFIRM_KEY}.always`)}
+          </Checkbox>
+        </Tooltip>
       )}
       <div className='flex justify-end gap-8px'>
         <Button ref={deny} onClick={() => onAnswer(false, false)}>

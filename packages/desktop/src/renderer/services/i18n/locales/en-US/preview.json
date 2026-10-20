@@ -258,6 +258,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "always": "Always allow on this site",
+      "alwaysHint": "Applies across the app for this site: it also answers this site's open asks in other chats.",
       "timeoutHint": "Denied automatically if not answered within 2 minutes."
     },
     "crash": {

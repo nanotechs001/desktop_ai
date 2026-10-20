@@ -65,7 +65,8 @@ const sockets: WebSocket[] = [];
 const openTab = vi.fn();
 const closeTab = vi.fn();
 const onAgentAction = vi.fn<(event: AgentActionEvent) => void>();
-const requestConfirm = vi.fn<(req: ConfirmAsk, signal: AbortSignal) => Promise<boolean>>();
+const requestConfirm =
+  vi.fn<(req: ConfirmAsk, signal: AbortSignal, webContentsId: number, yoloChat?: string) => Promise<boolean>>();
 let nextTab: () => Promise<FakeContents> = () => new Promise(() => {});
 const waitForTab = vi.fn((_url: string, _conversationId?: string, _profile?: BrowserTabProfile) => nextTab());
 /** Main's conversation → Agent lookup: each chat its own Agent, no chat the default Agent. */
@@ -805,6 +806,58 @@ describe('relay server: AionRelay methods', () => {
       expect(requestConfirm.mock.calls[0][0]).toMatchObject({
         origin: 'https://bank.test',
         conversationId: 'conv_B-2',
+      });
+    });
+
+    describe('which chat may answer by YOLO mode', () => {
+      const bankTree = {
+        frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } },
+      };
+      const yoloChatOfCall = (): unknown => requestConfirm.mock.calls[0][3];
+
+      it("is never the tab owner's chat: a client with no chat header is always asked (R13)", async () => {
+        const { ask } = await confirmTab(undefined, 40, 'conv_A-1');
+        requestConfirm.mockResolvedValue(true);
+        await ask();
+        expect(requestConfirm.mock.calls[0][0]).toMatchObject({ conversationId: 'conv_A-1' }); // still shown there
+        expect(yoloChatOfCall()).toBeUndefined();
+      });
+
+      const ownTab = async (shared: boolean) => {
+        const client = await connect(await start(), 'claude', { 'X-Aion-Conversation': 'conv_B-2' });
+        await client.send('AionRelay.listTabs');
+        const contents = new FakeContents(52, 'https://bank.test/');
+        contents.debugger.handler = (method) => (method === 'Page.getFrameTree' ? bankTree : {});
+        registry.track(contents, agentProfileOf('conv_B-2'));
+        registry.claim(52, { ...(relay?.clients()[0] as RelayClient), conversationId: 'conv_B-2' });
+        if (shared) registry.share(52, true);
+        const sessionId = await attach(client, 52);
+        requestConfirm.mockResolvedValue(true);
+        await client.send('AionRelay.requestConfirm', { webContentsId: 52, label: 'Send', sessionId, frameId: 'TOP' });
+      };
+
+      it("is the asking client's own chat on its own unshared agent tab", async () => {
+        await ownTab(false);
+        expect(yoloChatOfCall()).toBe('conv_B-2');
+      });
+
+      it('is none on its own agent tab once shared (R15)', async () => {
+        await ownTab(true);
+        expect(yoloChatOfCall()).toBeUndefined();
+      });
+
+      it('is none on a user tab shared with agents (R15)', async () => {
+        const client = await connect(await start(), 'claude', { 'X-Aion-Conversation': 'conv_B-2' });
+        const shared = new FakeContents(51, 'https://bank.test/');
+        shared.debugger.handler = (method) => (method === 'Page.getFrameTree' ? bankTree : {});
+        registry.track(shared);
+        registry.share(51, true);
+        await client.send('AionRelay.listTabs');
+        const sessionId = await attach(client, 51);
+        requestConfirm.mockResolvedValue(true);
+        await client.send('AionRelay.requestConfirm', { webContentsId: 51, label: 'Send', sessionId, frameId: 'TOP' });
+        expect(requestConfirm.mock.calls[0][0]).toMatchObject({ conversationId: 'conv_B-2' });
+        expect(yoloChatOfCall()).toBeUndefined();
       });
     });
 

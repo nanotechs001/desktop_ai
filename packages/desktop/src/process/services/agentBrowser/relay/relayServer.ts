@@ -63,8 +63,16 @@ export type RelayServerDeps = {
   /** An agent's tab was claimed for it (Target.createTarget, or its bot's new chat took it over), e.g. for the tab cap. */
   onAgentTab?(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
-  /** Asks the user to allow a risky action on a tab; resolves with the answer. `signal` aborts when the ask is moot. */
-  requestConfirm(request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal, webContentsId: number): Promise<boolean>;
+  /**
+   * Asks the user to allow a risky action on a tab; resolves with the answer. `signal` aborts when the ask is moot.
+   * `yoloChat`, when set, is the chat whose YOLO mode may answer instead: the asking client's own, on its own unshared agent tab.
+   */
+  requestConfirm(
+    request: Omit<ConfirmRequest, 'id'>,
+    signal: AbortSignal,
+    webContentsId: number,
+    yoloChat?: string
+  ): Promise<boolean>;
   /** Loopback ports agents must not navigate to besides the relay's own (e.g. the backend's). */
   blockedPorts?: () => readonly number[];
   limits?: Partial<RelayLimits>;
@@ -396,10 +404,24 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     return conversationId ? { conversationId } : {};
   };
 
+  /**
+   * The chat whose YOLO mode may skip the ask: the asking connection's own (never the tab owner's, ruling R13), and
+   * only on an agent tab not shared (R15). A user tab, a shared tab or a client with no chat header is always asked.
+   */
+  const yoloChatOf = (conn: Connection, webContentsId: number): string | undefined => {
+    const tab = registry.ownership(webContentsId);
+    return tab && tab.owner !== 'user' && tab.sharedWith === null ? conn.conversationId : undefined;
+  };
+
   /** The user's answer to `request`; false for anything but an explicit Allow, a rejection included (logged). */
-  const askUser = async (request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal, id: number): Promise<boolean> => {
+  const askUser = async (
+    conn: Connection,
+    request: Omit<ConfirmRequest, 'id'>,
+    signal: AbortSignal,
+    id: number
+  ): Promise<boolean> => {
     try {
-      return (await deps.requestConfirm(request, signal, id)) === true && !signal.aborted;
+      return (await deps.requestConfirm(request, signal, id, yoloChatOf(conn, id))) === true && !signal.aborted;
     } catch (error) {
       console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
       return false;
@@ -436,7 +458,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
           clientLabel: conn.client.label,
           ...askConversation(conn, id),
         };
-        return { allow: await askUser(request, signal, id) };
+        return { allow: await askUser(conn, request, signal, id) };
       } catch (error) {
         console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
         return { allow: false };
@@ -478,7 +500,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         kind: 'script' as const,
         ...askConversation(conn, id),
       };
-      if (!(await askUser(request, signal, id))) return { allow: false };
+      if (!(await askUser(conn, request, signal, id))) return { allow: false };
       // The answer may have outlived the page, the sharing or the session it was given for.
       const still =
         webOriginOf(contents.mainFrame.url) === origin &&

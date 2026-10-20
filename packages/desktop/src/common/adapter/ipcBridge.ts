@@ -48,6 +48,7 @@ import type {
   UpdateAssistantRequest,
 } from '../types/agent/assistantTypes';
 import type {
+  ConversationRuntimeMode,
   EnsureConversationRuntimeResponse,
   SetConfigOptionRequest,
   SetConfigOptionResponse,
@@ -327,6 +328,11 @@ export const conversation = {
   ensureRuntime: httpPost<EnsureConversationRuntimeResponse, { conversation_id: string }>(
     (p) => `/api/conversations/${p.conversation_id}/runtime/ensure`,
     () => undefined
+  ),
+  /** The live runtime's permission mode, read-only: never starts a runtime. 404 for an unknown chat. */
+  runtimeMode: httpGet<ConversationRuntimeMode, { conversation_id: string }>(
+    (p) => `/api/conversations/${p.conversation_id}/runtime/mode`,
+    { silentStatuses: [404] }
   ),
   /**
    * Restart the conversation's agent runtime: tears down the cached CLI agent

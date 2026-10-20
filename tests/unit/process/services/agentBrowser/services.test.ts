@@ -30,6 +30,7 @@ const h = vi.hoisted(() => {
         defaultAgentReady: emitter(),
       },
       browser: { openTabRequested: emitter(), closeTabRequested: emitter() },
+      conversation: { runtimeMode: { invoke: vi.fn() } },
     },
   };
 });
@@ -941,5 +942,22 @@ describe('agent browser services: closing', () => {
     expect(peer.sendText).toHaveBeenLastCalledWith(JSON.stringify({ type: 'closed', reason: 'not-allowed' }));
     expect(peer.close).toHaveBeenCalledTimes(1);
     expect(tab.debugger.isAttached()).toBe(false);
+  });
+});
+
+describe('chatIsYolo: the read-only runtime mode (R14)', () => {
+  it('reads the live mode without starting a runtime; an unknown chat (404) is asked, with no warning', async () => {
+    const { chatIsYolo } = await import('@process/services/agentBrowser/services');
+    const { BackendHttpError } = await import('@/common/adapter/httpBridge');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    h.ipcBridge.conversation.runtimeMode.invoke
+      .mockResolvedValueOnce({ mode: 'bypassPermissions', live: true, backend: 'claude' })
+      .mockRejectedValueOnce(new BackendHttpError({ method: 'GET', path: '/x', status: 404, body: '' }));
+
+    expect(await chatIsYolo('yolo-chat')).toBe(true);
+    expect(h.ipcBridge.conversation.runtimeMode.invoke).toHaveBeenCalledWith({ conversation_id: 'yolo-chat' });
+    expect(await chatIsYolo('gone-chat')).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

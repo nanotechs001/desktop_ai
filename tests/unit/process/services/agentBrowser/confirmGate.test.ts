@@ -14,6 +14,7 @@ import {
   webOriginOf,
   type ChatModeDeps,
 } from '@process/services/agentBrowser/confirmGate';
+import type { ConversationRuntimeMode } from '@/common/types/platform/acpTypes';
 
 let dir: string;
 let file: string;
@@ -309,8 +310,8 @@ describe('PendingConfirms in a YOLO chat', () => {
     const onChange = vi.fn();
     confirms.onChange(onChange);
 
-    expect(await confirms.request(inChat)).toBe(true);
-    expect(await confirms.request(script)).toBe(true);
+    expect(await confirms.request(inChat, undefined, undefined, 'conv-y')).toBe(true);
+    expect(await confirms.request(script, undefined, undefined, 'conv-y')).toBe(true);
     expect(isYolo).toHaveBeenCalledWith('conv-y');
     expect(onChange).not.toHaveBeenCalled();
     expect(confirms.list()).toEqual([]);
@@ -325,13 +326,22 @@ describe('PendingConfirms in a YOLO chat', () => {
     log.mockRestore();
   });
 
+  it("decides YOLO only from the given asking chat, never the ask's display chat (R13)", async () => {
+    const isYolo = vi.fn(async () => true);
+    const confirms = new PendingConfirms({ file, isYolo });
+    void confirms.request(inChat); // the tab owner's chat is YOLO, but no asking chat was given
+    await vi.waitFor(() => expect(confirms.list()).toHaveLength(1));
+    expect(isYolo).not.toHaveBeenCalled();
+    expect(confirms.list()[0].conversationId).toBe('conv-y'); // still shown in that chat
+  });
+
   it('still asks in Default mode, when the lookup fails, and for an ask with no chat', async () => {
     const confirms = new PendingConfirms({
       file,
       isYolo: async (id) => (id === 'boom' ? Promise.reject(new Error('down')) : false),
     });
-    void confirms.request(inChat);
-    void confirms.request({ ...inChat, conversationId: 'boom' });
+    void confirms.request(inChat, undefined, undefined, 'conv-y');
+    void confirms.request(inChat, undefined, undefined, 'boom');
     void confirms.request(ask);
     await vi.waitFor(() => expect(confirms.list()).toHaveLength(3));
   });
@@ -339,7 +349,12 @@ describe('PendingConfirms in a YOLO chat', () => {
   it('still asks "Leave site?" in a YOLO chat: it guards the user\'s own unsaved text', async () => {
     const isYolo = vi.fn(async () => true);
     const confirms = new PendingConfirms({ file, isYolo });
-    const leave = confirms.request({ ...inChat, kind: 'leave', frameOrigin: null, label: '' });
+    const leave = confirms.request(
+      { ...inChat, kind: 'leave', frameOrigin: null, label: '' },
+      undefined,
+      undefined,
+      'conv-y'
+    );
     expect(confirms.list().map((r) => r.kind)).toEqual(['leave']);
     expect(isYolo).not.toHaveBeenCalled();
     confirms.reply(confirms.list()[0].id, false, false);
@@ -355,126 +370,113 @@ describe('PendingConfirms in a YOLO chat', () => {
         return true;
       },
     });
-    expect(await confirms.request(inChat, undefined, controller.signal)).toBe(false);
+    expect(await confirms.request(inChat, undefined, controller.signal, 'conv-y')).toBe(false);
     expect(confirms.list()).toEqual([]);
   });
 });
 
 describe('isYoloMode', () => {
-  const claude = { id: '2d23ff1c', backend: 'claude', yolo_id: 'bypassPermissions' };
-  const codex = { id: '8e1acf31', backend: 'codex', yolo_id: 'agent-full-access' };
-  const opencode = { id: '53861a53', backend: 'opencode', yolo_id: 'build' };
-  const hermes = { id: '55f3ed1c', backend: 'hermes' };
-
   it.each([
-    ['bypassPermissions', 'acp', claude, true],
-    ['default', 'acp', claude, false],
-    ['acceptEdits', 'acp', claude, false],
-    ['plan', 'acp', claude, false],
-    ['agent-full-access', 'acp', codex, true],
-    ['full-access', 'acp', codex, true],
-    ['auto', 'acp', codex, false],
-    ['build', 'acp', opencode, true],
-    ['plan', 'acp', opencode, false],
-    ['yolo', 'acp', claude, true],
-    ['yoloNoSandbox', 'acp', codex, true],
-    ['yolo', 'acp', hermes, false],
-    ['default', 'acp', hermes, false],
-    ['yolo', 'aionrs', undefined, true],
-    ['auto_edit', 'aionrs', undefined, false],
-    ['default', 'aionrs', undefined, false],
-    ['bypassPermissions', 'acp', undefined, false],
-  ] as const)('%s on %s (%o) is YOLO: %s', (mode, type, agent, yolo) => {
-    expect(isYoloMode(mode, { type, agent })).toBe(yolo);
+    ['bypassPermissions', true], // Claude
+    ['agent-full-access', true], // Codex
+    ['full-access', true], // Codex, legacy
+    ['yolo', true], // aionrs, and AionUi's alias
+    ['yoloNoSandbox', true],
+    ['build', false], // OpenCode's and MiMo's everyday mode (their catalog yolo_id)
+    ['agent', false], // Cursor's everyday mode (its catalog yolo_id)
+    ['default', false],
+    ['acceptEdits', false],
+    ['plan', false],
+    ['auto', false],
+    ['auto_edit', false],
+  ] as const)('%s is YOLO: %s', (mode, yolo) => {
+    expect(isYoloMode(mode)).toBe(yolo);
   });
 
   it('is never YOLO without a mode', () => {
-    expect(isYoloMode(null, { type: 'aionrs' })).toBe(false);
-    expect(isYoloMode('', { type: 'acp', agent: claude })).toBe(false);
+    expect(isYoloMode(null)).toBe(false);
+    expect(isYoloMode('')).toBe(false);
   });
 });
 
 describe('createYoloLookup', () => {
-  const modeOption = (value: string | null) => ({
-    id: 'mode',
-    category: 'mode',
-    option_type: 'select' as const,
-    current_value: value,
-    options: [],
-  });
-  const deps = (mode: { value: string | null }): ChatModeDeps & Record<string, ReturnType<typeof vi.fn>> => ({
-    configOptions: vi.fn(async () => [{ id: 'model', category: 'model', options: [] }, modeOption(mode.value)]),
-    conversation: vi.fn(async () => ({ type: 'acp', extra: { agent_id: '2d23ff1c', backend: 'claude' } })),
-    agents: vi.fn(async () => [
-      { id: '8e1acf31', backend: 'codex', yolo_id: 'agent-full-access' },
-      { id: '2d23ff1c', backend: 'claude', yolo_id: 'bypassPermissions' },
-    ]),
+  const deps = (
+    reply: ConversationRuntimeMode | null = { mode: 'bypassPermissions', live: true }
+  ): ChatModeDeps & { runtimeMode: ReturnType<typeof vi.fn> } => ({ runtimeMode: vi.fn(async () => reply) });
+
+  it.each([
+    [{ mode: 'bypassPermissions', live: true, backend: 'claude' }, true],
+    [{ mode: 'agent-full-access', live: true, backend: 'codex' }, true],
+    [{ mode: 'yolo', live: true }, true],
+    [{ mode: 'build', live: true, backend: 'opencode' }, false],
+    [{ mode: 'build', live: true, backend: 'mimo' }, false],
+    [{ mode: 'agent', live: true, backend: 'cursor' }, false],
+    [{ mode: 'bypassPermissions', live: false }, false], // no live task
+    [{ mode: null, live: false }, false], // idle, or a team chat
+    [null, false], // unknown chat (404)
+  ] as const)('reads %o as YOLO: %s', async (reply, yolo) => {
+    const d = deps(reply);
+    expect(await createYoloLookup(d)('conv-1')).toBe(yolo);
+    expect(d.runtimeMode).toHaveBeenCalledWith('conv-1');
   });
 
-  it("reads the chat's live mode against its own agent's YOLO id", async () => {
-    const mode = { value: 'bypassPermissions' };
-    const d = deps(mode);
-    expect(await createYoloLookup(d)('conv-1')).toBe(true);
-    expect(d.configOptions).toHaveBeenCalledWith('conv-1');
-    expect(d.conversation).toHaveBeenCalledWith('conv-1');
-    mode.value = 'agent-full-access'; // codex's YOLO id, not this claude chat's
-    expect(await createYoloLookup(d)('conv-1')).toBe(false);
-  });
-
-  it("finds a chat's agent by its backend when the chat names no agent id and only one agent has that backend", async () => {
-    const d = deps({ value: 'bypassPermissions' });
-    d.conversation.mockResolvedValue({ type: 'acp', extra: { backend: 'claude' } });
-    expect(await createYoloLookup(d)('conv-1')).toBe(true);
-    d.agents.mockResolvedValue([
-      { id: 'a', backend: 'claude', yolo_id: 'bypassPermissions' },
-      { id: 'b', backend: 'claude', yolo_id: 'bypassPermissions' },
-    ]);
-    expect(await createYoloLookup(d)('conv-2')).toBe(false);
+  it('logs no warning for an idle or team chat', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const isYolo = createYoloLookup(deps({ mode: null, live: false }), { ttlMs: 0 });
+    await isYolo('team-1');
+    await isYolo('team-1');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('keeps an answer for 2 s, then looks again: switching back to Default asks again', async () => {
     let now = 1000;
-    const mode = { value: 'bypassPermissions' };
-    const d = deps(mode);
+    const d = deps();
     const isYolo = createYoloLookup(d, { now: () => now });
     expect(await isYolo('conv-1')).toBe(true);
-    mode.value = 'default';
+    d.runtimeMode.mockResolvedValue({ mode: 'default', live: true });
     now += YOLO_CACHE_MS - 1;
     expect(await isYolo('conv-1')).toBe(true);
-    expect(d.configOptions).toHaveBeenCalledTimes(1);
+    expect(d.runtimeMode).toHaveBeenCalledTimes(1);
     now += 1;
     expect(await isYolo('conv-1')).toBe(false);
-    expect(d.configOptions).toHaveBeenCalledTimes(2);
+    expect(d.runtimeMode).toHaveBeenCalledTimes(2);
     // Each chat has its own entry.
     expect(await isYolo('conv-2')).toBe(false);
-    expect(d.configOptions).toHaveBeenCalledTimes(3);
+    expect(d.runtimeMode).toHaveBeenCalledTimes(3);
   });
 
-  it('answers not YOLO when any lookup fails, a chat is gone, or it has no mode, and caches no failure', async () => {
-    const error = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const d = deps({ value: 'bypassPermissions' });
-    d.configOptions.mockRejectedValueOnce(new Error('runtime restarting'));
+  it('drops expired answers of other chats on a lookup (M8)', async () => {
+    let now = 0;
+    const d = deps();
+    const isYolo = createYoloLookup(d, { now: () => now });
+    await isYolo('old');
+    now += YOLO_CACHE_MS;
+    await isYolo('new');
+    d.runtimeMode.mockResolvedValue({ mode: 'default', live: true });
+    // 'old' was swept, not served from a stale entry.
+    expect(await isYolo('old')).toBe(false);
+    expect(d.runtimeMode).toHaveBeenCalledTimes(3);
+  });
+
+  it('answers not YOLO when the lookup fails, and caches no failure', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const d = deps();
+    d.runtimeMode.mockRejectedValueOnce(new Error('backend restarting'));
     const isYolo = createYoloLookup(d);
     expect(await isYolo('conv-1')).toBe(false);
     expect(await isYolo('conv-1')).toBe(true);
-
-    d.agents.mockRejectedValueOnce(new Error('down'));
-    expect(await createYoloLookup(d)('conv-1')).toBe(false);
-    d.conversation.mockResolvedValueOnce(null);
-    expect(await createYoloLookup(d)('conv-1')).toBe(false);
-    d.configOptions.mockResolvedValueOnce([{ id: 'model', category: 'model', options: [] }]);
-    expect(await createYoloLookup(d)('conv-1')).toBe(false);
-    error.mockRestore();
+    warn.mockRestore();
   });
 
   it('answers not YOLO when the backend does not answer in time', async () => {
     vi.useFakeTimers();
-    const error = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const d = deps({ value: 'bypassPermissions' });
-    d.configOptions.mockReturnValueOnce(new Promise(() => undefined));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const d = deps();
+    d.runtimeMode.mockReturnValueOnce(new Promise(() => undefined));
     const answer = createYoloLookup(d)('conv-1');
     await vi.advanceTimersByTimeAsync(MODE_LOOKUP_TIMEOUT_MS);
     expect(await answer).toBe(false);
-    error.mockRestore();
+    warn.mockRestore();
   });
 });
