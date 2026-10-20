@@ -152,8 +152,37 @@ describe('browser-view routes', () => {
       expect(routes.listTabs).not.toHaveBeenCalled();
     });
 
+    it('no Origin with Sec-Fetch-Site: same-origin passes on the tabs route, without CORS headers', async () => {
+      const r = await request(handle.port, 'GET', '/api/browser-view/tabs?conversation=conv-1', {
+        cookie: GOOD,
+        'sec-fetch-site': 'same-origin',
+      });
+      expect(r.status).toBe(200);
+      expect(JSON.parse(r.body)).toEqual({ tabs: TABS });
+      expect(Object.keys(r.headers).filter((h) => h.startsWith('access-control-'))).toEqual([]);
+    });
+
+    it.each([
+      ['Sec-Fetch-Site: cross-site and no Origin', { 'sec-fetch-site': 'cross-site' }],
+      ['Sec-Fetch-Site: same-site and no Origin', { 'sec-fetch-site': 'same-site' }],
+      ['Sec-Fetch-Site: none and no Origin', { 'sec-fetch-site': 'none' }],
+      [
+        'a foreign Origin with Sec-Fetch-Site: same-origin',
+        { origin: 'https://evil.example', 'sec-fetch-site': 'same-origin' },
+      ],
+    ])('%s gives 403 on the tabs route, without CORS headers', async (_name, extra) => {
+      const r = await request(handle.port, 'GET', '/api/browser-view/tabs?conversation=conv-1', {
+        cookie: GOOD,
+        ...extra,
+      });
+      expect(r.status).toBe(403);
+      expect(Object.keys(r.headers).filter((h) => h.startsWith('access-control-'))).toEqual([]);
+      expect(routes.listTabs).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['a missing Origin', {}],
+      ['a missing Origin with Sec-Fetch-Site: same-origin', { 'sec-fetch-site': 'same-origin' }],
       ['a foreign Origin', { origin: 'https://evil.example' }],
     ])('%s gives 403 on the stream upgrade', async (_name, extra) => {
       expect(await openStream(handle.port, 'wc-7', { cookie: GOOD, ...extra })).toBe(403);
@@ -176,6 +205,7 @@ describe('browser-view routes', () => {
       expect(r.status).toBe(200);
       expect(r.headers['content-type']).toBe('application/json');
       expect(r.headers['cache-control']).toBe('no-store');
+      expect(Object.keys(r.headers).filter((h) => h.startsWith('access-control-'))).toEqual([]);
       expect(JSON.parse(r.body)).toEqual({ tabs: TABS });
       expect(routes.listTabs).toHaveBeenCalledWith('conv-1');
       expect(backend.seen).toHaveLength(0);

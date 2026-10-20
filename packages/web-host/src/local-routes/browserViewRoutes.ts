@@ -1,7 +1,8 @@
 /**
  * The WebUI's live view of the desktop's agent browser tabs, answered by the listener itself after the auth gate:
- * `GET /api/browser-view/tabs?conversation=<id>` and the `/api/browser-view/stream?tab=<id>` WebSocket. Both also
- * need a same-origin `Origin`. Messages are carried as-is; the desktop's BrowserViewRoutes parses them.
+ * `GET /api/browser-view/tabs?conversation=<id>` and the `/api/browser-view/stream?tab=<id>` WebSocket. Both must
+ * be same-origin (isSameOriginFetch for the tabs route; the WebSocket needs a matching `Origin`). Messages are
+ * carried as-is; the desktop's BrowserViewRoutes parses them.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -41,6 +42,15 @@ export function isSameOrigin(headers: Headers): boolean {
   }
 }
 
+/**
+ * R4: the tabs route is a same-origin `fetch` GET, which browsers send without `Origin`. A present `Origin` must
+ * match (it wins over `Sec-Fetch-Site`); an absent one needs `Sec-Fetch-Site: same-origin`.
+ */
+export function isSameOriginFetch(headers: Headers): boolean {
+  if (headers.origin !== undefined) return isSameOrigin(headers);
+  return headers['sec-fetch-site'] === 'same-origin';
+}
+
 function reply(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   res.end(JSON.stringify(body));
@@ -48,7 +58,7 @@ function reply(res: ServerResponse, status: number, body: unknown): void {
 
 /** The tabs route, for a request the auth gate already passed. */
 export function serveTabs(req: IncomingMessage, res: ServerResponse, url: string, routes: BrowserViewRoutes): void {
-  if (!isSameOrigin(req.headers)) return reply(res, 403, { error: 'FORBIDDEN_ORIGIN' });
+  if (!isSameOriginFetch(req.headers)) return reply(res, 403, { error: 'FORBIDDEN_ORIGIN' });
   if (req.method !== 'GET') return reply(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   const ids = new URL(url, 'http://localhost').searchParams.getAll('conversation');
   if (ids.length !== 1 || !CONVERSATION_ID.test(ids[0])) return reply(res, 400, { error: 'BAD_CONVERSATION' });
