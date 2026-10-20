@@ -260,7 +260,8 @@
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",
       "deny": "Deny",
-      "always": "Always allow on this site"
+      "always": "Always allow on this site",
+      "timeoutHint": "Автоматически отклоняется, если нет ответа в течение 2 минут."
     },
     "crash": {
       "crashed": "This tab crashed.",

@@ -258,7 +258,8 @@
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",
       "deny": "Deny",
-      "always": "Always allow on this site"
+      "always": "Always allow on this site",
+      "timeoutHint": "2분 안에 응답하지 않으면 자동으로 거부됩니다."
     },
     "crash": {
       "crashed": "This tab crashed.",

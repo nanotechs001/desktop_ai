@@ -12,6 +12,7 @@ import { usePlanRecovery } from '@renderer/pages/conversation/PlanBar/usePlanRec
 import { CHAT_SURFACE_CONTAINER_CLASS } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
 import FlexFullContainer from '@renderer/components/layout/FlexFullContainer';
 import MessageList from '@renderer/pages/conversation/Messages/MessageList';
+import AgentConfirmCards from '@renderer/pages/conversation/components/AgentConfirmCards/AgentConfirmCards';
 import { ConversationArtifactProvider } from '@renderer/pages/conversation/Messages/artifacts';
 import {
   MessageListLoadingProvider,
@@ -83,6 +84,7 @@ const AionrsChat: React.FC<{
           <FlexFullContainer>
             <MessageList className='flex-1' emptySlot={emptySlot} />
           </FlexFullContainer>
+          <AgentConfirmCards conversationId={conversation_id} />
           <ConversationPlanBar conversation_id={conversation_id} />
           <AionrsSendBox
             conversation_id={conversation_id}
