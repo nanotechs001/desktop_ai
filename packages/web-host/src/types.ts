@@ -51,8 +51,23 @@ export type BrowserViewRoutes = {
 /** The desktop's loopback artifact server, used structurally; `port` is null while artifacts are unavailable. */
 export type ArtifactViewRoutes = { port(): number | null };
 
+/** A risky agent action waiting for the user, as the phone sees it. `label` is the page's text: show it as text only. */
+export type BrowserConfirm = { id: string; origin: string; frameOrigin: string | null; label: string };
+
+/** The desktop's pending agent confirmations, used structurally so web-host never imports desktop code. */
+export type BrowserConfirmRoutes = {
+  /** The chat's open asks. */
+  listConfirms(conversationId: string): BrowserConfirm[];
+  /** Answers one ask; false when the id is unknown or already answered (first answer wins). */
+  answerConfirm(id: string, allow: boolean, always: boolean): boolean;
+};
+
 /** Routes the listener answers itself, after the auth gate, instead of forwarding them to aioncore. */
-export type LocalRoutes = { browserView?: BrowserViewRoutes; artifactView?: ArtifactViewRoutes };
+export type LocalRoutes = {
+  browserView?: BrowserViewRoutes;
+  browserConfirms?: BrowserConfirmRoutes;
+  artifactView?: ArtifactViewRoutes;
+};
 
 /**
  * Options for starting WebHost

@@ -59,7 +59,7 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
   },
 }));
 
-const { agentTabProfile, getBrowserViewService, liveAgentProfile, startAgentBrowserServices } =
+const { agentTabProfile, getBrowserViewService, liveAgentProfile, startAgentBrowserServices, webuiConfirms } =
   await import('@process/services/agentBrowser/services');
 const { agentPartition, deleteAgentBrowserData, rememberBrowserSession, temporaryPartition } =
   await import('@process/services/browserSession/profiles/browserProfiles');
@@ -97,8 +97,8 @@ const start = async (): Promise<Services> => {
 };
 
 /** A new browser tab in `session` (the default Agent profile unless given), as browserSession dispatches it. */
-const newTab = (id: number, session: Electron.Session = defaultAgentSession): FakeContents => {
-  const tab = Object.assign(new FakeContents(id), { session });
+const newTab = (id: number, session: Electron.Session = defaultAgentSession, url?: string): FakeContents => {
+  const tab = Object.assign(new FakeContents(id, url), { session });
   h.created.forEach((listener) => listener(tab));
   return tab;
 };
@@ -497,6 +497,59 @@ describe('agent browser services: confirm gate', () => {
     expect(await call('replyConfirm', { id: open.id, allow: true, alwaysForSite: false })).toMatchObject({
       success: false,
     });
+  });
+
+  it("gives the WebUI a chat's own asks without the agent's label, answered once; never a shared tab's", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: 'https://shop.test/' });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalled());
+    const tab = newTab(31, agentSession, 'https://shop.test/');
+    tab.navigate('https://shop.test/');
+    expect((await created).result).toEqual({ targetId: 'wc-31' });
+    const shared = newTab(32, agentSession, 'https://bank.test/');
+    await call('share', { webContentsId: 32, on: true });
+    for (const [contents, origin] of [
+      [tab, 'https://shop.test'],
+      [shared, 'https://bank.test'],
+    ] as const) {
+      contents.debugger.handler = (method) =>
+        method === 'Page.getFrameTree'
+          ? { frameTree: { frame: { id: 'TOP', url: origin, securityOrigin: origin } } }
+          : {};
+    }
+    const ask = async (id: number) => {
+      const attached = await send('Target.attachToTarget', { targetId: `wc-${id}`, flatten: true });
+      return send('AionRelay.requestConfirm', {
+        webContentsId: id,
+        label: 'Pay',
+        sessionId: String(attached.result?.sessionId),
+        frameId: 'TOP',
+      });
+    };
+
+    const answer = ask(31);
+    const sharedAnswer = ask(32);
+    await vi.waitFor(async () => expect(((await call('getConfirmRequests')).data as unknown[]).length).toBe(2));
+    const [open] = webuiConfirms.listConfirms('conv-1');
+    expect(webuiConfirms.listConfirms('conv-1')).toEqual([
+      { id: open.id, origin: 'https://shop.test', frameOrigin: 'https://shop.test', label: 'Pay' },
+    ]);
+    expect(webuiConfirms.listConfirms('conv-2')).toEqual([]);
+
+    // The shared tab's ask belongs to no chat: the phone cannot answer it.
+    const sharedId = ((await call('getConfirmRequests')).data as Array<{ id: string; origin: string }>).find(
+      (r) => r.origin === 'https://bank.test'
+    )?.id;
+    expect(webuiConfirms.answerConfirm(String(sharedId), true, false)).toBe(false);
+
+    expect(webuiConfirms.answerConfirm(open.id, true, false)).toBe(true);
+    expect(webuiConfirms.answerConfirm(open.id, false, false)).toBe(false);
+    expect((await answer).result).toEqual({ allow: true });
+    expect(await call('replyConfirm', { id: String(sharedId), allow: false, alwaysForSite: false })).toEqual({
+      success: true,
+    });
+    expect((await sharedAnswer).result).toEqual({ allow: false });
   });
 
   it('validates the reply arguments', async () => {

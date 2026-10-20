@@ -12,8 +12,14 @@ import { networkInterfaces } from 'os';
 import { ipcBridge } from '@/common';
 import { getSystemDir } from './initStorage';
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { startWebHost, type ArtifactViewRoutes, type BrowserViewRoutes, type WebHostHandle } from '@aionui/web-host';
-import { getBrowserViewService } from '@process/services/agentBrowser/services';
+import {
+  startWebHost,
+  type ArtifactViewRoutes,
+  type BrowserConfirmRoutes,
+  type BrowserViewRoutes,
+  type WebHostHandle,
+} from '@aionui/web-host';
+import { getBrowserViewService, webuiConfirms } from '@process/services/agentBrowser/services';
 import { getDataPath } from './utils';
 import { cloudflaredPlatformKey, ensureCloudflared, extractTgz } from '@process/webuiTunnel/cloudflaredBinary';
 import { createTunnelManager } from '@process/webuiTunnel/tunnelManager';
@@ -299,6 +305,9 @@ const browserView: BrowserViewRoutes = {
     (await getBrowserViewService()?.openStream(tabId, peer)) ?? { error: 'not-allowed' },
 };
 
+/** A chat's risky-action asks for the phone; the desktop's chat card and browser pane answer the same ones. */
+const browserConfirms: BrowserConfirmRoutes = webuiConfirms;
+
 let artifactServerPort: number | null = null;
 
 /** Main sets this once the artifact server listens; the WebUI's /api/artifact-view/ route forwards there. */
@@ -354,7 +363,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     allowRemote,
     sessionsNotBefore,
     isTunnelActive: () => webuiTunnel.isActive(),
-    localRoutes: { browserView, artifactView },
+    localRoutes: { browserView, browserConfirms, artifactView },
     // Must align with the desktop IPC path's backend dataDir (src/index.ts), otherwise
     // users see divergent SQLite state between desktop app and bundled WebUI.
     dataDir: getDataPath(),

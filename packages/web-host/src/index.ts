@@ -4,6 +4,8 @@ export type {
   AppMetadata,
   ArtifactViewRoutes,
   BackendBinaryResolver,
+  BrowserConfirm,
+  BrowserConfirmRoutes,
   BrowserViewPeer,
   BrowserViewRoutes,
   BrowserViewStreamHandle,

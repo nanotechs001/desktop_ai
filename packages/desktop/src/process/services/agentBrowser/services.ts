@@ -6,7 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
-import type { BrowserTabProfile } from '@/common/types/browser';
+import type { BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
 import { setWindowOpenHooks } from '@process/services/browserSession/windowOpen';
@@ -58,9 +58,26 @@ const tabCapMessage = (max: number): string =>
   `The browser has too many tabs open (max ${max}). Close some tabs and try again.`;
 
 let browserView: BrowserViewService | null = null;
+let pendingConfirms: PendingConfirms | null = null;
 
 /** The WebUI's live view of agent tabs; null while agent browser control is off. */
 export const getBrowserViewService = (): BrowserViewService | null => browserView;
+
+/**
+ * The phone's view of the risky-action asks (web-host's BrowserConfirmRoutes): a chat's own asks only, without the
+ * agent's label. An ask no chat owns (a shared user tab) stays on the desktop's browser pane and cannot be answered here.
+ */
+export const webuiConfirms = {
+  listConfirms: (conversationId: string): Array<Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label'>> =>
+    (pendingConfirms?.list() ?? [])
+      .filter((r) => r.conversationId === conversationId)
+      .map(({ id, origin, frameOrigin, label }) => ({ id, origin, frameOrigin, label })),
+  answerConfirm: (id: string, allow: boolean, always: boolean): boolean => {
+    const confirms = pendingConfirms;
+    if (!confirms?.list().some((r) => r.id === id && r.conversationId !== undefined)) return false;
+    return confirms.reply(id, allow, always);
+  },
+};
 
 /** Pauses agent input on a tab the user types or clicks in (agent-owned or shared tabs only). */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
@@ -233,6 +250,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   let active: TargetRegistry | null = null;
   let activeWaiter: CreateTabWaiter<Electron.WebContents> | null = null;
   const confirms = new PendingConfirms();
+  pendingConfirms = confirms;
   registerProviders(
     () => active,
     confirms,

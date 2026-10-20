@@ -11,7 +11,8 @@
  * login. Every proxied request and upgrade is classified (auth-gate/), and those
  * that need a session are checked against aioncore `GET /api/auth/user` first.
  *
- * Local routes (browserViewRoutes.ts): when configured, /api/browser-view/* is answered here after the same gate.
+ * Local routes (browserViewRoutes.ts): when configured, /api/browser-view/* (tabs, stream, confirms) is answered
+ * here after the same gate.
  * /api/artifact-view/* (artifactViewRoutes.ts) is always answered here, never by aioncore.
  *
  * Design: Node native http + serve-handler. No Express. No business routes.
@@ -39,6 +40,8 @@ import {
 } from './auth-gate/index.js';
 import {
   createBrowserViewStreams,
+  isConfirmsPath,
+  serveConfirms,
   serveTabs,
   STREAM_PATH,
   STREAM_REQUEST_LINE,
@@ -414,6 +417,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     }
     if (browserView && normalizePath(url) === TABS_PATH) {
       serveTabs(req, res, url, browserView);
+      return;
+    }
+    const browserConfirms = opts.localRoutes?.browserConfirms;
+    if (browserConfirms && isConfirmsPath(normalizePath(url) ?? '')) {
+      serveConfirms(req, res, url, browserConfirms);
       return;
     }
     // Answered here even when unconfigured: the gate opens the lib paths, and aioncore runs without auth.

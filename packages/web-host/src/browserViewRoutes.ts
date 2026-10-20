@@ -2,16 +2,26 @@
  * The WebUI's live view of the desktop's agent browser tabs, answered by the listener itself after the auth gate:
  * `GET /api/browser-view/tabs?conversation=<id>` and the `/api/browser-view/stream?tab=<id>` WebSocket. Both must
  * be same-origin (isSameOriginFetch for the tabs route; the WebSocket needs a matching `Origin`). Messages are
- * carried as-is; the desktop's BrowserViewService parses them.
+ * carried as-is; the desktop's BrowserViewService parses them. Also the chat's risky-action asks:
+ * `GET /api/browser-view/confirms?conversation=<id>` (same rule as tabs) and `POST /api/browser-view/confirms/<id>`
+ * (a matching `Origin` required).
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { BrowserViewPeer, BrowserViewRoutes, BrowserViewStreamHandle } from './types.js';
+import { z } from 'zod';
+import { normalizePath } from './auth-gate/index.js';
+import type { BrowserConfirmRoutes, BrowserViewPeer, BrowserViewRoutes, BrowserViewStreamHandle } from './types.js';
 
 export const TABS_PATH = '/api/browser-view/tabs';
 export const STREAM_PATH = '/api/browser-view/stream';
+export const CONFIRMS_PATH = '/api/browser-view/confirms';
+/** One answer: the desktop's confirm ids are UUIDs. */
+const CONFIRM_ANSWER_PATH =
+  /^\/api\/browser-view\/confirms\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+const MAX_ANSWER_BYTES = 1024;
+const ANSWER_BODY = z.object({ allow: z.boolean(), always: z.boolean() }).strict();
 /** Anything a lenient parser could read as a request line for the stream route. */
 export const STREAM_ROUTE_LIKE = /^\S+\s+\/api\/browser-view\/stream(?:[?\s]|$)/i;
 /** The only stream upgrade request line: exactly one `tab`, a relay target id. */
@@ -57,13 +67,84 @@ function reply(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/** The one valid `conversation` query parameter of `url`, or null. */
+const conversationOf = (url: string): string | null => {
+  const ids = new URL(url, 'http://localhost').searchParams.getAll('conversation');
+  return ids.length === 1 && CONVERSATION_ID.test(ids[0]) ? ids[0] : null;
+};
+
 /** The tabs route, for a request the auth gate already passed. */
 export function serveTabs(req: IncomingMessage, res: ServerResponse, url: string, routes: BrowserViewRoutes): void {
   if (!isSameOriginFetch(req.headers)) return reply(res, 403, { error: 'FORBIDDEN_ORIGIN' });
   if (req.method !== 'GET') return reply(res, 405, { error: 'METHOD_NOT_ALLOWED' });
-  const ids = new URL(url, 'http://localhost').searchParams.getAll('conversation');
-  if (ids.length !== 1 || !CONVERSATION_ID.test(ids[0])) return reply(res, 400, { error: 'BAD_CONVERSATION' });
-  reply(res, 200, { tabs: routes.listTabs(ids[0]) });
+  const id = conversationOf(url);
+  if (id === null) return reply(res, 400, { error: 'BAD_CONVERSATION' });
+  reply(res, 200, { tabs: routes.listTabs(id) });
+}
+
+/** True for the confirm list and anything under it (answers, and paths that are neither: 404 here, never aioncore). */
+export const isConfirmsPath = (path: string): boolean => path === CONFIRMS_PATH || path.startsWith(`${CONFIRMS_PATH}/`);
+
+/** The body as text, or null once it passes `max` bytes (the rest is drained, not kept). */
+function readBody(req: IncomingMessage, max: number): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    if (Number(req.headers['content-length'] ?? 0) > max) {
+      req.resume();
+      return resolve(null);
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size <= max) chunks.push(chunk);
+    });
+    req.on('end', () => resolve(size <= max ? Buffer.concat(chunks).toString('utf8') : null));
+    req.on('error', reject);
+  });
+}
+
+const parseAnswer = (text: string): z.infer<typeof ANSWER_BODY> | null => {
+  try {
+    const parsed = ANSWER_BODY.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The confirm routes, for a request the auth gate already passed. Never sends CORS headers. */
+export function serveConfirms(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: string,
+  routes: BrowserConfirmRoutes
+): void {
+  const path = normalizePath(url) ?? '';
+  if (path === CONFIRMS_PATH) {
+    if (!isSameOriginFetch(req.headers)) return reply(res, 403, { error: 'FORBIDDEN_ORIGIN' });
+    if (req.method !== 'GET') return reply(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+    const id = conversationOf(url);
+    if (id === null) return reply(res, 400, { error: 'BAD_CONVERSATION' });
+    return reply(res, 200, { confirms: routes.listConfirms(id) });
+  }
+  const confirmId = CONFIRM_ANSWER_PATH.exec(path)?.[1];
+  if (!confirmId) return reply(res, 404, { error: 'NOT_FOUND' });
+  // A state-changing request: a matching Origin is required (a form or fetch from elsewhere carries its own).
+  if (!isSameOrigin(req.headers)) return reply(res, 403, { error: 'FORBIDDEN_ORIGIN' });
+  if (req.method !== 'POST') return reply(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+  readBody(req, MAX_ANSWER_BYTES)
+    .then((text) => {
+      if (text === null) return reply(res, 413, { error: 'BODY_TOO_LARGE' });
+      const answer = parseAnswer(text);
+      if (!answer) return reply(res, 400, { error: 'BAD_BODY' });
+      if (!routes.answerConfirm(confirmId, answer.allow, answer.always)) return reply(res, 404, { error: 'NOT_FOUND' });
+      res.writeHead(204, { 'cache-control': 'no-store' });
+      res.end();
+    })
+    .catch((error: unknown) => {
+      console.error('[web-host] confirm answer failed', error);
+      if (!res.headersSent) reply(res, 500, { error: 'INTERNAL' });
+    });
 }
 
 export type BrowserViewStreams = {
