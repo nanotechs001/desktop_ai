@@ -38,7 +38,11 @@ vi.mock('@process/webuiTunnel/tunnelManager', () => ({
   },
 }));
 
-vi.mock('@process/services/agentBrowser/services', () => ({ getBrowserViewService: () => browserViewService }));
+const webuiConfirms = vi.hoisted(() => ({ listConfirms: () => [], answerConfirm: () => false }));
+vi.mock('@process/services/agentBrowser/services', () => ({
+  getBrowserViewService: () => browserViewService,
+  webuiConfirms,
+}));
 
 const importModule = () => import('@process/utils/webuiConfig');
 const puts = () => httpRequest.mock.calls.filter(([method]) => method === 'PUT').map(([, , body]) => body);
@@ -91,6 +95,13 @@ describe('WebUI secure link wiring', () => {
     await expect(localRoutes.browserView.openStream('wc-1', peer)).resolves.toBe(handle);
     expect(browserViewService.openStream).toHaveBeenCalledWith('wc-1', peer);
     browserViewService = null;
+  });
+
+  it("passes the agent browser's chat confirms to the web host", async () => {
+    const { startDesktopWebUI } = await importModule();
+    await startDesktopWebUI({ port: 25809 });
+    const { localRoutes } = startWebHost.mock.calls[0][0] as { localRoutes: { browserConfirms: unknown } };
+    expect(localRoutes.browserConfirms).toBe(webuiConfirms);
   });
 
   it('passes the artifact server port to the web host, looked up at each call', async () => {

@@ -21,7 +21,10 @@ vi.mock('@process/utils/initStorage', () => ({
   getSystemDir: () => ({ logDir: '/l', cacheDir: '/c', workDir: '/w' }),
 }));
 vi.mock('@process/utils/utils', () => ({ getDataPath: () => '/data' }));
-vi.mock('@process/services/agentBrowser/services', () => ({ getBrowserViewService: () => null }));
+vi.mock('@process/services/agentBrowser/services', () => ({
+  getBrowserViewService: () => null,
+  webuiConfirms: { listConfirms: () => [], answerConfirm: () => false },
+}));
 
 const importModule = () => import('@process/utils/webuiConfig');
 
