@@ -6,6 +6,7 @@
 
 import { bridge } from '@/common/platform/bridge';
 import { WEBUI_DEFAULT_PORT } from '@/common/config/constants';
+import { reconnectWs } from './httpBridge';
 import { refreshSession } from './sessionRefresh';
 import type { ElectronBridgeAPI } from '@/common/types/platform/electron';
 
@@ -308,5 +309,7 @@ if (win.electronAPI) {
       reconnectTimer = null;
     }
     connect();
+    // The httpBridge realtime socket backs off separately; signing in must not wait it out.
+    reconnectWs();
   };
 }

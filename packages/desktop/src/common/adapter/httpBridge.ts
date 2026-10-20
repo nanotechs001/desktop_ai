@@ -496,6 +496,21 @@ function scheduleWsReconnect(): void {
 }
 
 /**
+ * Dial the realtime socket now instead of waiting out the backoff, e.g. right
+ * after sign-in gives it a session cookie. A socket nobody has used yet is left
+ * for its first subscriber to open.
+ */
+export function reconnectWs(): void {
+  if (wsListeners.size === 0 && !wsReconnectTimer) return;
+  wsReconnectAttempt = 0;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  ensureWs();
+}
+
+/**
  * Handle a realtime socket closed for auth policy violation (code 1008): attempt
  * one shared session refresh, then reconnect only if the session was renewed.
  * A failed refresh means the session is truly dead — we stop rather than loop.
