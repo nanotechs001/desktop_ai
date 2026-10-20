@@ -8,7 +8,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Left, Right, Refresh, Loading } from '@icon-park/react';
 import { ipcBridge } from '@/common';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { InternalNavTracker, shouldResetHistoryForUrlProp } from './webviewHistory';
+import WebviewUnavailable from './WebviewUnavailable';
 
 export interface WebviewHostProps {
   /** URL to display */
@@ -86,7 +88,7 @@ const MAX_ZOOM_FACTOR = 1.5;
  * - Partition support for cache isolation
  * - Optional navigation bar (hidden by default for embedded use)
  */
-const WebviewHost: React.FC<WebviewHostProps> = ({
+const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
   url,
   id: _id,
   showNavBar = false,
@@ -902,5 +904,13 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     </div>
   );
 };
+
+/** `<webview>` exists only in Electron; a plain browser (the WebUI) gets a notice in its place. */
+const WebviewHost: React.FC<WebviewHostProps> = (props) =>
+  isElectronDesktop() ? (
+    <ElectronWebviewHost {...props} />
+  ) : (
+    <WebviewUnavailable className={props.className} style={props.style} />
+  );
 
 export default WebviewHost;

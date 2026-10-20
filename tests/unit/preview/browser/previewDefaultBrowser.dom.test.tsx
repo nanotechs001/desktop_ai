@@ -548,4 +548,27 @@ describe('conversation route preview scope entry', () => {
       conversationId: 'c1',
     });
   });
+
+  it('does not ask for the browser default outside Electron (the WebUI)', async () => {
+    const w = window as Window & { electronAPI?: unknown };
+    const electronApiStub = w.electronAPI;
+    delete w.electronAPI;
+    try {
+      getConversationOrNull.mockResolvedValue(conv('p1'));
+      render(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <ChatConversationIndex />
+        </SWRConfig>
+      );
+
+      await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
+      expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
+        openBrowserIfEmpty: false,
+        carryFromScope: undefined,
+        conversationId: 'c1',
+      });
+    } finally {
+      w.electronAPI = electronApiStub;
+    }
+  });
 });

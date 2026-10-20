@@ -224,6 +224,22 @@ describe('PreviewContext browser tab requests from the main process', () => {
     ]);
   });
 
+  it('outside Electron, records the tab without opening the panel', () => {
+    const w = window as Window & { electronAPI?: unknown };
+    const electronApiStub = w.electronAPI;
+    delete w.electronAPI;
+    try {
+      renderProvider();
+
+      requestTab({ url: 'https://example.com/agent', background: false });
+
+      expect(browserTabs().map((tab) => tab.content)).toEqual(['https://example.com/agent']);
+      expect(ctx.isOpen).toBe(false);
+    } finally {
+      w.electronAPI = electronApiStub;
+    }
+  });
+
   it('stops listening when the provider unmounts', () => {
     const { unmount } = renderProvider();
     openTabRequested.unsubscribe.mockClear();

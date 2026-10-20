@@ -6,7 +6,7 @@
 
 import { iconColors } from '@/renderer/styles/colors';
 import { Close, Comments, Plus } from '@icon-park/react';
-import { Tag } from '@arco-design/web-react';
+import { Button, Tag } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -178,6 +178,11 @@ interface PreviewTabsProps {
   onToggleMaximize?: () => void;
 
   /**
+   * On a phone the open preview covers the chat, so the close control becomes a labeled "Chat" button.
+   */
+  isMobile?: boolean;
+
+  /**
    * 新建浏览器 tab 回调；仅在已有浏览器 tab 时提供，避免在纯文档场景出现无意义的加号
    * New browser tab callback. Only supplied when a browser tab already exists, so
    * the plus button never appears in a document-only panel.
@@ -213,6 +218,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   newTabMenu,
   isMaximized,
   chatToggle,
+  isMobile,
   onToggleMaximize,
 }) => {
   const { t } = useTranslation();
@@ -371,7 +377,17 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 )}
               </div>
             )}
-            {onClosePanel && (
+            {onClosePanel && isMobile && (
+              <Button
+                size='mini'
+                type='secondary'
+                icon={<Comments theme='outline' size='12' fill={iconColors.secondary} />}
+                onClick={onClosePanel}
+              >
+                {t('preview.chat')}
+              </Button>
+            )}
+            {onClosePanel && !isMobile && (
               <div
                 className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-bg-3 transition-colors'
                 onClick={onClosePanel}

@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/common', () => ({
@@ -37,6 +37,13 @@ vi.mock('@/common', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+// Outside a PreviewProvider by default, like the real hook; the WebUI notice tests hand in a preview.
+const optionalPreview = vi.hoisted(() => ({ value: null as { closePreview: () => void } | null }));
+vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useOptionalPreviewContext: () => optionalPreview.value,
 }));
 
 import WebviewHost from '@/renderer/components/media/WebviewHost';
@@ -316,5 +323,51 @@ describe('WebviewHost src follows explicit navigations only', () => {
     rerender(<WebviewHost url='https://example.com/b' interceptNavigation={false} />);
 
     expect(getWebview(container).getAttribute('src')).toBe('https://example.com/b');
+  });
+});
+
+// `<webview>` exists only in Electron. The WebUI (a plain phone browser) gets a notice and a way back to the chat.
+describe('WebviewHost outside Electron', () => {
+  let electronApiStub: unknown;
+  beforeEach(() => {
+    const w = window as Window & { electronAPI?: unknown };
+    electronApiStub = w.electronAPI;
+    delete w.electronAPI;
+  });
+  afterEach(() => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = electronApiStub;
+    optionalPreview.value = null;
+  });
+
+  it('shows the desktop-only notice instead of a webview', () => {
+    const { container } = render(<WebviewHost url='https://example.com' showNavBar />);
+
+    expect(container.querySelector('webview')).toBeNull();
+    expect(screen.getByText('preview.browser.desktopOnly')).toBeInTheDocument();
+  });
+
+  it('Back to chat closes the preview', () => {
+    const closePreview = vi.fn();
+    optionalPreview.value = { closePreview };
+    render(<WebviewHost url='https://example.com' />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.back' }));
+
+    expect(closePreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no Back to chat button outside a preview', () => {
+    render(<WebviewHost url='https://example.com' />);
+
+    expect(screen.queryByRole('button', { name: 'common.back' })).toBeNull();
+  });
+});
+
+describe('WebviewHost in Electron', () => {
+  it('renders the webview and no desktop-only notice', () => {
+    const { container } = render(<WebviewHost url='https://example.com' />);
+
+    expect(container.querySelector('webview')).not.toBeNull();
+    expect(screen.queryByText('preview.browser.desktopOnly')).toBeNull();
   });
 });

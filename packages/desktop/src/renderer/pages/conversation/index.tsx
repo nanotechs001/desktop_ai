@@ -14,6 +14,7 @@ import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conve
 import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { resolveAssistantConfigId } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 const ChatConversationIndex: React.FC = () => {
   const { id } = useParams();
@@ -44,7 +45,8 @@ const ChatConversationIndex: React.FC = () => {
     const last = lastEnteredRef.current;
     const carryFromScope = last?.conversationId === conversationId ? (last.scope ?? undefined) : undefined;
     lastEnteredRef.current = { conversationId, scope };
-    enterScopeRef.current(scope, { openBrowserIfEmpty: true, carryFromScope, conversationId });
+    // The WebUI cannot show a webview, so it gets no blank browser tab over the chat.
+    enterScopeRef.current(scope, { openBrowserIfEmpty: isElectronDesktop(), carryFromScope, conversationId });
   }, [conversationId, scope]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the

@@ -10,6 +10,7 @@ import type { BrowserTabProfile } from '@/common/types/browser';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import { chatFileRefKey, isChatFileRef } from '@/common/types/chatFile';
 import { emitter } from '@/renderer/utils/emitter';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from '../browser/constants';
@@ -96,6 +97,8 @@ export interface OpenPreviewOptions {
    * tab to avoid losing changes).
    */
   replace?: boolean;
+  /** Record and focus the tab but leave the panel's visibility alone. */
+  background?: boolean;
 }
 
 /**
@@ -981,6 +984,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
 
       setActiveTabId(targetTabId);
+      if (options?.background) return targetTabId;
       setIsOpen(true);
       userClosedRef.current = false;
       return targetTabId;
@@ -1017,7 +1021,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return false;
       }
       const metadata = fromAgent ? { agentOwned: true, ...profileMetadata(profile) } : profileMetadata(profile);
-      openPreview(url.trim() || BROWSER_BLANK_URL, 'browser', metadata);
+      // The WebUI cannot show a webview, so a tab opened from main must not cover the chat (on a phone, all of it).
+      openPreview(url.trim() || BROWSER_BLANK_URL, 'browser', metadata, { background: !isElectronDesktop() });
       return true;
     },
     [openPreview]
@@ -1042,7 +1047,11 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isDirty: false,
         originalContent: url,
       };
-      persistScopeState(scope, { isOpen: true, tabs: [...scopeTabs, tab], activeTabId: tab.id });
+      persistScopeState(scope, {
+        isOpen: isElectronDesktop() || stored.isOpen,
+        tabs: [...scopeTabs, tab],
+        activeTabId: tab.id,
+      });
       setBackground([...backgroundRef.current, { scope, tab, since: Date.now() }]);
       return true;
     },

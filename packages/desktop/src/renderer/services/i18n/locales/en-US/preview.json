@@ -153,7 +153,8 @@
     "tabLimitReached": "Browser tab limit reached ({{count}}). The oldest tab was reused.",
     "agentFirstUseTitle": "The agent is using the in-app browser",
     "agentFirstUseContent": "It can open pages, click and read content in this panel. Your sign-in state is kept between sessions.",
-    "agentFirstUseAction": "Open settings"
+    "agentFirstUseAction": "Open settings",
+    "desktopOnly": "The browser runs in the desktop app. Your agent can still browse — its results show in the chat."
   },
   "saveConflict": "Could not save: this file changed on disk since you opened it. Reload to see the other changes — your edits are still here, unsaved.",
   "persistQuotaExceeded": "Local storage is full, so open tabs can no longer be remembered for this project. Close some tabs or clear site data.",
@@ -304,5 +305,6 @@
     }
   },
   "showChat": "Show chat",
-  "hideChat": "Hide chat"
+  "hideChat": "Hide chat",
+  "chat": "Chat"
 }

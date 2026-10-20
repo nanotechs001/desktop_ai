@@ -153,7 +153,8 @@
     "tabLimitReached": "Tab-Limit erreicht ({{count}}). Der älteste Tab wurde wiederverwendet.",
     "agentFirstUseTitle": "Der Agent nutzt den integrierten Browser",
     "agentFirstUseContent": "Er kann in diesem Bereich Seiten öffnen, klicken und Inhalte lesen. Deine Anmeldung bleibt erhalten.",
-    "agentFirstUseAction": "Einstellungen öffnen"
+    "agentFirstUseAction": "Einstellungen öffnen",
+    "desktopOnly": "Der Browser läuft in der Desktop-App. Dein Agent kann trotzdem browsen – die Ergebnisse erscheinen im Chat."
   },
   "saveConflict": "Speichern fehlgeschlagen: Diese Datei wurde auf der Festplatte geändert, nachdem Sie sie geöffnet haben. Neu laden, um die anderen Änderungen zu sehen — Ihre Bearbeitungen sind noch da, ungespeichert.",
   "persistQuotaExceeded": "Der lokale Speicher ist voll, offene Tabs dieses Projekts können nicht mehr gemerkt werden. Schließen Sie einige Tabs oder löschen Sie die Websitedaten.",
@@ -304,5 +305,6 @@
     }
   },
   "showChat": "Chat anzeigen",
-  "hideChat": "Chat ausblenden"
+  "hideChat": "Chat ausblenden",
+  "chat": "Chat"
 }

@@ -1221,6 +1221,7 @@ const PreviewPanel: React.FC = () => {
           onCloseTab={handleCloseTab}
           onContextMenu={handleTabContextMenu}
           onClosePanel={handleClosePanel}
+          isMobile={layout?.isMobile}
           // VA Bot conversations get a chat toggle (chat collapsed under the browser) in
           // place of maximize.
           isMaximized={isVaBotMode ? isVaChatCollapsed : isMaximized}

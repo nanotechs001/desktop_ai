@@ -208,6 +208,25 @@ describe('agent browser tabs outlive the panel', () => {
     expect(h.mounts.get(id)).toBe(1);
   });
 
+  it("outside Electron, an agent tab for another chat does not reopen that chat's panel", async () => {
+    const w = window as Window & { electronAPI?: unknown };
+    const electronApiStub = w.electronAPI;
+    delete w.electronAPI;
+    try {
+      render(<App />);
+      enterScope('proj-b');
+
+      await requestTab('https://a.test/', 'chat-a');
+      await waitFor(() => expect(storedTabUrls('proj-a')).toEqual(['https://a.test/']));
+
+      enterScope('proj-a');
+      expect(ctx.tabs.map((tab) => tab.content)).toEqual(['https://a.test/']);
+      expect(ctx.isOpen).toBe(false);
+    } finally {
+      w.electronAPI = electronApiStub;
+    }
+  });
+
   it('marks an agent tab as agent-owned from creation, on screen or in the background, before any ownership event', async () => {
     render(<App />);
     enterScope('proj-a');

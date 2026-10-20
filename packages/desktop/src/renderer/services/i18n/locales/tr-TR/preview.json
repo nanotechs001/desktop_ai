@@ -153,7 +153,8 @@
     "tabLimitReached": "Sekme sınırına ulaşıldı ({{count}}). En eski sekme yeniden kullanıldı.",
     "agentFirstUseTitle": "Aracı uygulama içi tarayıcıyı kullanıyor",
     "agentFirstUseContent": "Bu panelde sayfa açabilir, tıklayabilir ve içerik okuyabilir. Oturum bilgileriniz korunur.",
-    "agentFirstUseAction": "Ayarları aç"
+    "agentFirstUseAction": "Ayarları aç",
+    "desktopOnly": "Tarayıcı masaüstü uygulamasında çalışır. Aracınız yine de gezinebilir; sonuçlar sohbette görünür."
   },
   "saveConflict": "Kaydedilemedi: bu dosya siz açtıktan sonra diskte değişti. Diğer değişiklikleri görmek için yeniden yükleyin — düzenlemeleriniz kaydedilmemiş olarak duruyor.",
   "persistQuotaExceeded": "Yerel depolama dolu, bu proje için açık sekmeler artık hatırlanamıyor. Bazı sekmeleri kapatın veya site verilerini temizleyin.",
@@ -304,5 +305,6 @@
     }
   },
   "showChat": "Sohbeti göster",
-  "hideChat": "Sohbeti gizle"
+  "hideChat": "Sohbeti gizle",
+  "chat": "Sohbet"
 }

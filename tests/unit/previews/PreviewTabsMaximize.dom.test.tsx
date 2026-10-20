@@ -53,3 +53,28 @@ describe('PreviewTabs maximize button', () => {
     expect(onToggleMaximize).toHaveBeenCalledTimes(1);
   });
 });
+
+// On a phone the preview covers the chat, so the way back must be a labeled button, not a bare 14px icon.
+describe('PreviewTabs way back to the chat', () => {
+  afterEach(() => cleanup());
+
+  it('on mobile shows a labeled Chat button that closes the preview', () => {
+    const props = baseProps();
+    render(<PreviewTabs {...props} isMobile />);
+
+    fireEvent.click(screen.getByRole('button', { name: /preview\.chat/ }));
+
+    expect(props.onClosePanel).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTitle('preview.collapsePanel')).toBeNull();
+  });
+
+  it('on desktop keeps the collapse icon and no Chat button', () => {
+    const props = baseProps();
+    render(<PreviewTabs {...props} />);
+
+    fireEvent.click(screen.getByTitle('preview.collapsePanel'));
+
+    expect(props.onClosePanel).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /preview\.chat/ })).toBeNull();
+  });
+});
