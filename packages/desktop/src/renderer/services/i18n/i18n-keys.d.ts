@@ -2283,6 +2283,7 @@ export type I18nKey =
   | 'settings.mcpNoDescription'
   | 'settings.mcpNoServersFound'
   | 'settings.mcpOAuthLoginFailed'
+  | 'settings.mcpOAuthLoginFailedWithReason'
   | 'settings.mcpOAuthLoginSuccess'
   | 'settings.mcpOneKeyImport'
   | 'settings.mcpPrevStep'

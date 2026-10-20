@@ -824,6 +824,7 @@
   "mcpAuthRequired": "需要身份驗證",
   "mcpOAuthLoginSuccess": "OAuth 登入成功",
   "mcpOAuthLoginFailed": "OAuth 登入失敗",
+  "mcpOAuthLoginFailedWithReason": "登入失敗：{{error}}",
   "mcpLogin": "登入",
   "mcpNeedsLogin": "需要登入",
   "noConfiguredModels": "暫無已配置的模型",

@@ -814,6 +814,7 @@
   "mcpAuthRequired": "Authentifizierung erforderlich",
   "mcpOAuthLoginSuccess": "OAuth-Anmeldung erfolgreich",
   "mcpOAuthLoginFailed": "OAuth-Anmeldung fehlgeschlagen",
+  "mcpOAuthLoginFailedWithReason": "Anmeldung fehlgeschlagen: {{error}}",
   "mcpLogin": "Anmelden",
   "mcpNeedsLogin": "getrennt · Enter zum Anmelden",
   "noConfiguredModels": "Keine konfigurierten Modelle",

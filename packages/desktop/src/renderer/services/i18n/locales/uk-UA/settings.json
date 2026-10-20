@@ -822,6 +822,7 @@
   "mcpAuthRequired": "Потрібна автентифікація",
   "mcpOAuthLoginSuccess": "OAuth-вхід успішний",
   "mcpOAuthLoginFailed": "Помилка OAuth-входу",
+  "mcpOAuthLoginFailedWithReason": "Не вдалося увійти: {{error}}",
   "mcpLogin": "Увійти",
   "mcpNeedsLogin": "Потрібен вхід",
   "noConfiguredModels": "Моделі не налаштовано",

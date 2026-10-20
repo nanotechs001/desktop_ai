@@ -824,6 +824,7 @@
   "mcpAuthRequired": "Autenticação obrigatória",
   "mcpOAuthLoginSuccess": "Login OAuth bem-sucedido",
   "mcpOAuthLoginFailed": "Falha no login OAuth",
+  "mcpOAuthLoginFailedWithReason": "Falha no login: {{error}}",
   "mcpLogin": "Login",
   "mcpNeedsLogin": "desconectado · Enter para logar",
   "noConfiguredModels": "Nenhum modelo configurado",

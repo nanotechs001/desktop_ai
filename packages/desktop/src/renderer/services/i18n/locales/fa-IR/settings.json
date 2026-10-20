@@ -824,6 +824,7 @@
   "mcpAuthRequired": "احراز هویت لازم است",
   "mcpOAuthLoginSuccess": "ورود OAuth موفق بود",
   "mcpOAuthLoginFailed": "ورود OAuth ناموفق بود",
+  "mcpOAuthLoginFailedWithReason": "ورود ناموفق بود: {{error}}",
   "mcpLogin": "ورود",
   "mcpNeedsLogin": "ورود لازم است",
   "noConfiguredModels": "مدل پیکربندی‌شده‌ای وجود ندارد",

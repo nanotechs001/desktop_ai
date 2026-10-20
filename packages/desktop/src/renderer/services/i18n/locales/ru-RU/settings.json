@@ -816,6 +816,7 @@
   "mcpAuthRequired": "Требуется аутентификация",
   "mcpOAuthLoginSuccess": "OAuth-вход успешен",
   "mcpOAuthLoginFailed": "Ошибка OAuth-входа",
+  "mcpOAuthLoginFailedWithReason": "Не удалось войти: {{error}}",
   "mcpLogin": "Войти",
   "mcpNeedsLogin": "Требуется вход",
   "noConfiguredModels": "Модели не настроены",

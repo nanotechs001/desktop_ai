@@ -103,7 +103,11 @@ const ModalMcpManagementSection: React.FC<{
         message.success(`${server.name}: ${t('settings.mcpOAuthLoginSuccess') || 'Login successful'}`);
         void handleTestMcpConnection(server);
       } else {
-        message.error(`${server.name}: ${result.error || t('settings.mcpOAuthLoginFailed') || 'Login failed'}`);
+        message.error(
+          `${server.name}: ${t('settings.mcpOAuthLoginFailedWithReason', {
+            error: result.error || t('settings.mcpOAuthLoginFailed'),
+          })}`
+        );
       }
     },
     [login, message, t, handleTestMcpConnection]

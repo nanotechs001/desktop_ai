@@ -824,6 +824,7 @@
   "mcpAuthRequired": "Authentication required",
   "mcpOAuthLoginSuccess": "OAuth login successful",
   "mcpOAuthLoginFailed": "OAuth login failed",
+  "mcpOAuthLoginFailedWithReason": "Sign-in failed: {{error}}",
   "mcpLogin": "Login",
   "mcpNeedsLogin": "Login required",
   "noConfiguredModels": "No configured models",

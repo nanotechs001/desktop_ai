@@ -812,6 +812,7 @@
   "mcpAuthRequired": "Kimlik doğrulama gerekli",
   "mcpOAuthLoginSuccess": "OAuth girişi başarılı",
   "mcpOAuthLoginFailed": "OAuth girişi başarısız",
+  "mcpOAuthLoginFailedWithReason": "Giriş başarısız: {{error}}",
   "mcpLogin": "Giriş Yap",
   "mcpNeedsLogin": "Giriş gerekli",
   "noConfiguredModels": "Yapılandırılmış model yok",

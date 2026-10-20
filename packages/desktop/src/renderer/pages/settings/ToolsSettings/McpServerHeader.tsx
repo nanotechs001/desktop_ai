@@ -187,6 +187,11 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
             {t('settings.mcpLogin') || 'Login'}
           </Button>
         )}
+        {needsLogin && oauthStatus?.error && (
+          <span className='text-12px text-danger max-w-320px truncate' title={oauthStatus.error}>
+            {t('settings.mcpOAuthLoginFailedWithReason', { error: oauthStatus.error })}
+          </span>
+        )}
         {!isReadOnly && !needsLogin && (
           <Button
             size='mini'

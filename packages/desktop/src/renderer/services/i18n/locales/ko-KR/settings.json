@@ -812,6 +812,7 @@
   "mcpAuthRequired": "인증 필요",
   "mcpOAuthLoginSuccess": "OAuth 로그인 성공",
   "mcpOAuthLoginFailed": "OAuth 로그인 실패",
+  "mcpOAuthLoginFailedWithReason": "로그인 실패: {{error}}",
   "mcpLogin": "로그인",
   "mcpNeedsLogin": "로그인 필요",
   "noConfiguredModels": "구성된 모델 없음",

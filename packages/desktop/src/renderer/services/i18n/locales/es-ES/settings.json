@@ -812,6 +812,7 @@
   "mcpAuthRequired": "Autenticación requerida",
   "mcpOAuthLoginSuccess": "Inicio de sesión OAuth exitoso",
   "mcpOAuthLoginFailed": "Error en el inicio de sesión OAuth",
+  "mcpOAuthLoginFailedWithReason": "Error al iniciar sesión: {{error}}",
   "mcpLogin": "Iniciar sesión",
   "mcpNeedsLogin": "Se requiere inicio de sesión",
   "noConfiguredModels": "No hay modelos configurados",

@@ -812,6 +812,7 @@
   "mcpAuthRequired": "認証が必要です",
   "mcpOAuthLoginSuccess": "OAuth ログイン成功",
   "mcpOAuthLoginFailed": "OAuth ログイン失敗",
+  "mcpOAuthLoginFailedWithReason": "サインインに失敗しました: {{error}}",
   "mcpLogin": "ログイン",
   "mcpNeedsLogin": "ログインが必要です",
   "noConfiguredModels": "設定されたモデルがありません",

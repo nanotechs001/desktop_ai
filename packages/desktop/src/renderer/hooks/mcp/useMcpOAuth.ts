@@ -85,37 +85,36 @@ export const useMcpOAuth = () => {
       }
 
       setLoggingIn((prev) => ({ ...prev, [server.id]: true }));
+      // Keep the failure reason on the server row so it outlives the toast.
+      const recordFailure = (error: string) => {
+        setOAuthStatus((prev) => ({
+          ...prev,
+          [server.id]: {
+            isAuthenticated: false,
+            needsLogin: true,
+            isChecking: false,
+            error,
+          },
+        }));
+        return { success: false, error };
+      };
 
       try {
         const result = await mcpService.loginMcpOAuth.invoke({ server_url: serverUrl });
 
-        if (result.success) {
-          // 登录成功，更新状态
-          setOAuthStatus((prev) => ({
-            ...prev,
-            [server.id]: {
-              isAuthenticated: true,
-              needsLogin: false,
-              isChecking: false,
-            },
-          }));
-          return { success: true };
-        } else {
-          return {
-            success: false,
-            error: result.error || 'Login failed',
-          };
+        if (!result.success) {
+          return recordFailure(result.error || 'Login failed');
         }
+        // Re-read the backend status so the row reflects the stored token.
+        await checkOAuthStatus(server);
+        return { success: true };
       } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        return recordFailure(error instanceof Error ? error.message : 'Unknown error');
       } finally {
         setLoggingIn((prev) => ({ ...prev, [server.id]: false }));
       }
     },
-    [getOAuthServerUrl]
+    [getOAuthServerUrl, checkOAuthStatus]
   );
 
   // 登出
