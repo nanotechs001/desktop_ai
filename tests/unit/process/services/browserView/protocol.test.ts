@@ -51,6 +51,12 @@ describe('parseClientMessage', () => {
     expect(parse({ type: 'hello', width: 0, dpr: 2 })).toBeNull();
   });
 
+  it('rejects unknown fields, non-finite numbers and JSON null', () => {
+    expect(parseClientMessage('{"type":"ack","x":1}')).toBeNull();
+    expect(parseClientMessage('{"type":"tap","nx":1e999,"ny":0}')).toBeNull();
+    expect(parseClientMessage('null')).toBeNull();
+  });
+
   it('clamps coordinates to 0..1', () => {
     expect(parse({ type: 'tap', nx: 1.5, ny: -3 })).toEqual({ type: 'tap', nx: 1, ny: 0 });
     expect(parse({ type: 'scroll', nx: 2, ny: -1, dy: 5 })).toMatchObject({ nx: 1, ny: 0 });
@@ -78,6 +84,22 @@ describe('frame encoding', () => {
     const decoded = decodeFrame(buf);
     expect(decoded.meta).toEqual(full);
     expect(Array.from(decoded.jpeg)).toEqual(Array.from(jpeg));
+  });
+
+  it('rejects a malformed frame header', () => {
+    const frame = (header: string) => {
+      const bytes = Buffer.from(header, 'utf8');
+      const out = Buffer.alloc(4 + bytes.length + 2);
+      out.writeUInt32BE(bytes.length);
+      bytes.copy(out, 4);
+      return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+    };
+    const { scrollOffsetY: _omit, ...missingField } = meta;
+    expect(() => decodeFrame(frame(JSON.stringify(meta)))).not.toThrow();
+    expect(() => decodeFrame(frame('not json!'))).toThrow();
+    expect(() => decodeFrame(frame(JSON.stringify({ ...meta, pageScaleFactor: 0 })))).toThrow();
+    expect(() => decodeFrame(frame(JSON.stringify(missingField)))).toThrow();
+    expect(() => decodeFrame(frame('null'))).toThrow();
   });
 
   it('rejects a truncated frame', () => {

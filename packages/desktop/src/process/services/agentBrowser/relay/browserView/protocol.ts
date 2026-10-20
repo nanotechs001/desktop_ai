@@ -39,22 +39,22 @@ const fraction = z
   .transform((n) => Math.min(1, Math.max(0, n)));
 
 const clientMessage = z.discriminatedUnion('type', [
-  z.object({
+  z.strictObject({
     type: z.literal('hello'),
     width: z.number().positive().max(MAX_VIEWPORT_PX),
     dpr: z.number().positive().max(MAX_DPR),
   }),
-  z.object({ type: z.literal('ack') }),
-  z.object({ type: z.literal('tap'), nx: fraction, ny: fraction }),
-  z.object({
+  z.strictObject({ type: z.literal('ack') }),
+  z.strictObject({ type: z.literal('tap'), nx: fraction, ny: fraction }),
+  z.strictObject({
     type: z.literal('scroll'),
     nx: fraction,
     ny: fraction,
     dy: z.number().finite().min(-MAX_SCROLL_DELTA_PX).max(MAX_SCROLL_DELTA_PX),
   }),
-  z.object({ type: z.literal('text'), value: z.string().max(MAX_TEXT_CHARS) }),
-  z.object({ type: z.literal('key'), key: z.enum(ALLOWED_KEYS) }),
-  z.object({ type: z.literal('resume') }),
+  z.strictObject({ type: z.literal('text'), value: z.string().max(MAX_TEXT_CHARS) }),
+  z.strictObject({ type: z.literal('key'), key: z.enum(ALLOWED_KEYS) }),
+  z.strictObject({ type: z.literal('resume') }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessage>;
@@ -69,15 +69,18 @@ export const parseClientMessage = (raw: string): ClientMessage | null => {
   }
 };
 
+const finite = z.number().finite();
+const frameMetaSchema = z.object({
+  offsetTop: finite,
+  pageScaleFactor: finite.positive(),
+  deviceWidth: finite,
+  deviceHeight: finite,
+  scrollOffsetX: finite,
+  scrollOffsetY: finite,
+});
+
 /** CDP `Page.screencastFrame` metadata. */
-export type FrameMeta = {
-  offsetTop: number;
-  pageScaleFactor: number;
-  deviceWidth: number;
-  deviceHeight: number;
-  scrollOffsetX: number;
-  scrollOffsetY: number;
-};
+export type FrameMeta = z.infer<typeof frameMetaSchema>;
 
 /**
  * Frame fraction -> CSS px for `Input.dispatchMouseEvent`. The frame excludes `offsetTop` and CDP `Input` is
@@ -99,11 +102,11 @@ export const encodeFrame = (meta: FrameMeta, jpeg: Buffer): Buffer => {
   return Buffer.concat([length, header, jpeg]);
 };
 
-/** Inverse of {@link encodeFrame}; only DataView and TextDecoder, so the phone bundle can import it. Throws on a truncated frame. */
+/** Inverse of {@link encodeFrame}; only DataView and TextDecoder, so the phone bundle can import it. Throws on a truncated frame or an invalid header. */
 export const decodeFrame = (buf: ArrayBuffer): { meta: FrameMeta; jpeg: Uint8Array } => {
   if (buf.byteLength < HEADER_LENGTH_BYTES) throw new Error('Frame is shorter than its length prefix');
   const headerEnd = HEADER_LENGTH_BYTES + new DataView(buf).getUint32(0);
   if (headerEnd > buf.byteLength) throw new Error('Frame header runs past the end of the frame');
   const header = new TextDecoder().decode(new Uint8Array(buf, HEADER_LENGTH_BYTES, headerEnd - HEADER_LENGTH_BYTES));
-  return { meta: JSON.parse(header) as FrameMeta, jpeg: new Uint8Array(buf, headerEnd) };
+  return { meta: frameMetaSchema.parse(JSON.parse(header)), jpeg: new Uint8Array(buf, headerEnd) };
 };
