@@ -56,7 +56,11 @@ const runAction = (entry: ActionEntry, contents: Electron.WebContents, params: C
     case 'openImageInNewTab':
       return openTab(arg, contents);
     case 'copyLink':
-      return clipboard.writeText(arg);
+      // Async since Electron 44, so the click handler's try/catch cannot see its failure.
+      clipboard.writeText(arg).catch((error: unknown) => {
+        console.error('[BrowserSession] context menu action "copyLink" failed:', error);
+      });
+      return;
     case 'copyImage':
       return contents.copyImageAt(params.x, params.y);
     case 'saveImageAs':

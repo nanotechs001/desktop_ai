@@ -341,8 +341,9 @@ const ensureAssistantDirs = async (): Promise<void> => {
 };
 
 const getBuiltinMcpBaseDir = (): string => {
-  const mainModuleDir =
-    typeof require !== 'undefined' && require.main?.filename ? path.dirname(require.main.filename) : __dirname;
+  // Under Electron's default_app (`electron .`, i.e. dev), Electron 44 sets require.main to a stub named 'electron'.
+  const mainFile = typeof require !== 'undefined' ? require.main?.filename : undefined;
+  const mainModuleDir = mainFile && path.isAbsolute(mainFile) ? path.dirname(mainFile) : __dirname;
   const baseDir = path.basename(mainModuleDir) === 'chunks' ? path.dirname(mainModuleDir) : mainModuleDir;
   // In packaged mode the main bundle lives inside app.asar, but external node
   // processes cannot read files from ASAR archives. Redirect to the unpacked copy.

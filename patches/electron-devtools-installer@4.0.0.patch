@@ -1,0 +1,14 @@
+diff --git a/dist/index.js b/dist/index.js
+index c428018df26dbeb7300644c938caf13d339c8f7b..5c95368d5c6630f1413ca62c57589bad0feaca56 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -6,7 +6,8 @@ const electron_1 = require("electron");
+ const downloadChromeExtension_1 = require("./downloadChromeExtension");
+ async function installExtension(extensionReference, options = {}) {
+     const { forceDownload, loadExtensionOptions, session: _session } = options;
+-    const targetSession = _session || electron_1.session.defaultSession;
++    // Electron 36+ moved the extension methods and events to session.extensions.
++    const targetSession = (_session || electron_1.session.defaultSession).extensions;
+     if (process.type !== 'browser') {
+         return Promise.reject(new Error('electron-devtools-installer can only be used from the main process'));
+     }
