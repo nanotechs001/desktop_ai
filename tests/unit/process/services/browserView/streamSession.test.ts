@@ -448,3 +448,72 @@ describe('browser view: lifecycle', () => {
     expect(tab.debugger.isAttached()).toBe(false);
   });
 });
+
+describe('browser view: owed acks across joins and restarts', () => {
+  it('a phone joining while acks are owed sends them once with its first ack, never twice', async () => {
+    const first = await casting();
+    frame(tab, { ...META, scrollOffsetY: 1 });
+    frame(tab, { ...META, scrollOffsetY: 2 });
+    const late = await casting();
+    expect(metaOf(late.peer.frames[0]).scrollOffsetY).toBe(2);
+
+    send(late.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+    send(first.handle, { type: 'ack' });
+    send(first.handle, { type: 'ack' });
+    send(late.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+  });
+
+  it('a width change while acks are owed still sends them exactly once', async () => {
+    const first = await casting('wc-7', 390, 3);
+    frame(tab);
+    frame(tab);
+    const wide = await casting('wc-7', 900, 2);
+    expect(sent('Page.startScreencast').map((x) => x.params.maxWidth)).toEqual([1170, 1280]);
+    expect(acks()).toBe(0);
+
+    send(first.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+    send(wide.handle, { type: 'ack' });
+    send(first.handle, { type: 'ack' });
+    expect(acks()).toBe(2);
+  });
+
+  it('after the last phone leaves, a new viewer gets a fresh cast', async () => {
+    const old = await casting();
+    frame(tab);
+    frame(tab);
+    old.handle.close();
+    expect(tab.debugger.isAttached()).toBe(false);
+    const acksBefore = acks();
+    const enables = sent('Page.enable').length;
+
+    const fresh = await casting('wc-7', 300, 2);
+    expect(tab.debugger.isAttached()).toBe(true);
+    expect(sent('Page.enable')).toHaveLength(enables + 1);
+    expect(sent('Page.startScreencast').at(-1)?.params.maxWidth).toBe(600);
+    frame(tab);
+    expect(fresh.peer.frames).toHaveLength(1);
+    send(fresh.handle, { type: 'ack' });
+    expect(acks()).toBe(acksBefore + 1);
+  });
+});
+
+describe('browser view: closing while attaching', () => {
+  it('closeAll during a pending attach refuses the stream, starts no screencast and detaches', async () => {
+    const setup = Promise.withResolvers<object>();
+    tab.debugger.handler = (method) => (method === 'Page.enable' ? setup.promise : {});
+    const peer = new FakePeer();
+    const opening = service.openStream('wc-7', peer);
+    await Promise.resolve();
+
+    service.closeAll('not-allowed');
+    setup.resolve({});
+
+    expect(await opening).toMatchObject({ error: expect.any(String) });
+    expect(sent('Page.startScreencast')).toHaveLength(0);
+    expect(tab.debugger.isAttached()).toBe(false);
+    expect(peer.texts).toEqual([]);
+  });
+});

@@ -60,6 +60,8 @@ export function createBrowserViewService({ registry, sessions }: BrowserViewDeps
       if (typeof contents === 'string') return { error: contents };
       const cast = castFor(contents);
       const stream = createStream({ registry, cast, webContentsId, peer, onClose: () => streams.delete(stream) });
+      // Tracked before the attach settles, so closeAll ends a stream that is still attaching (it refuses below).
+      streams.add(stream);
       const ready = await cast.ready;
       // The tab may have closed or been unshared while the debugger attached.
       const now = viewableContents(registry, webContentsId);
@@ -68,7 +70,6 @@ export function createBrowserViewService({ registry, sessions }: BrowserViewDeps
         stream.close();
         return { error: refusal };
       }
-      streams.add(stream);
       stream.start();
       return { onMessage: stream.onMessage, close: stream.close };
     },
