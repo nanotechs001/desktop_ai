@@ -1,8 +1,8 @@
-name: Release Windows (preview)
+name: Release Windows + macOS (preview)
 
-# Builds the Windows x64 NSIS installer (unsigned) from a version tag and publishes it as a
-# GitHub pre-release. Mac and Linux are not built here. build-and-release.yml ignores v* tags
-# so the two workflows never race on the same release.
+# Builds the Windows x64 NSIS installer and the macOS arm64 + x64 DMGs (all unsigned) from a
+# version tag, then publishes them together as one GitHub pre-release. Linux is not built here.
+# build-and-release.yml ignores v* tags so the two workflows never race on the same release.
 
 on:
   push:
@@ -198,22 +198,175 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  macos:
+    name: Build macOS ${{ matrix.arch }}
+    # core/ is compiled for the host only (scripts/prepareLocalCore.js), so each arch needs its own runner.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: macos-14
+            rust_target: aarch64-apple-darwin
+          - arch: x64
+            os: macos-15-intel
+            rust_target: x86_64-apple-darwin
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Check tag matches package.json version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v${VERSION}" != "${RELEASE_TAG}" ]; then
+            echo "::error::Tag ${RELEASE_TAG} does not match package.json version ${VERSION}"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: macos-${{ matrix.arch }}
+
+      - name: Cache Electron artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/.cache/electron
+            ${{ runner.temp }}/.cache/electron-builder
+          key: electron-cache-macos-${{ matrix.arch }}-${{ hashFiles('package.json', 'bun.lock') }}
+          restore-keys: |
+            electron-cache-macos-${{ matrix.arch }}-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: bun install --frozen-lockfile
+
+      - name: Run postinstall
+        run: bun run postinstall || true
+
+      - name: Rebuild native modules for Electron
+        run: bunx electron-builder install-app-deps
+        env:
+          npm_config_runtime: electron
+          npm_config_disturl: https://electronjs.org/headers
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/.cache/electron-builder
+
+      # No Apple certificate: scripts/afterSign.js applies an ad-hoc signature and skips notarization.
+      - name: Build with electron-builder
+        run: node scripts/build-with-builder.js ${{ matrix.arch }} --mac --${{ matrix.arch }}
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+          npm_config_runtime: electron
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_cache: ${{ runner.temp }}/.npm
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/.cache/electron-builder
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CI: true
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Locate DMG
+        run: |
+          ls -lh out/ || true
+          shopt -s nullglob
+          dmgs=(out/*-mac-${{ matrix.arch }}.dmg)
+          if [ ${#dmgs[@]} -ne 1 ]; then
+            echo "::error::Expected exactly one DMG (out/*-mac-${{ matrix.arch }}.dmg), found ${#dmgs[@]}"
+            exit 1
+          fi
+          echo "DMG: ${dmgs[0]}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-${{ env.RELEASE_TAG }}
+          path: |
+            out/*-mac-${{ matrix.arch }}.dmg
+            out/*-mac-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # One publish job so the Windows and macOS uploads never race to create the same release.
+  # It runs when at least one build succeeded and publishes whatever was built.
+  publish:
+    name: Publish pre-release
+    needs: [windows-x64, macos]
+    # !cancelled() also covers one macOS arch failing: whatever was uploaded still publishes.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-${{ env.RELEASE_TAG }}'
+          path: dist
+          merge-multiple: true
+
+      - name: List files
+        run: ls -lh dist
+
       - name: Publish pre-release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: Pixebot Browser ${{ env.RELEASE_TAG }} (Windows preview)
+          name: Pixebot Browser ${{ env.RELEASE_TAG }} (preview)
           prerelease: true
           draft: false
+          fail_on_unmatched_files: false
           files: |
-            out/*-win-x64.exe
-            out/*-win-x64.exe.blockmap
-            out/latest.yml
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+            dist/*.dmg
+            dist/*.zip
           body: |
-            Windows x64 preview build of Pixebot Browser ${{ env.RELEASE_TAG }}.
+            Preview build of Pixebot Browser ${{ env.RELEASE_TAG }}.
 
-            **Unsigned build.** The first time you run the installer, Windows may show "Windows protected your PC". Click **More info**, then **Run anyway**.
+            **Downloads**
+            - Windows (64-bit): `…-win-x64.exe`
+            - Mac with Apple Silicon (M1/M2/M3/M4): `…-mac-arm64.dmg`
+            - Mac with Intel: `…-mac-x64.dmg`
+
+            **These builds are unsigned.**
+            - **Windows:** if you see "Windows protected your PC", click **More info**, then **Run anyway**.
+            - **Mac:** open the DMG and drag the app to Applications. The first time you open it, macOS says it can't verify the developer. Go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. If macOS says the app "is damaged", run `xattr -cr "/Applications/Pixebot Browser.app"` in Terminal and open it again.
 
             **Known limitation:** agents running on the Claude Code engine don't start on Windows yet, because its launcher is macOS/Linux only. Agents on the other engines work.
 
-            Mac and Linux builds are not part of this release.
+            Linux builds are not part of this release.
