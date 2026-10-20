@@ -26,6 +26,9 @@ describe('classifyRequest', () => {
     ['POST', '/api/auth/qr-login'],
     ['GET', '/api/auth/status'],
     ['POST', '/api/auth/refresh'],
+    // Sandboxed artifact pages load their libraries without a cookie; the libraries are public bundles.
+    ['GET', '/api/artifact-view/lib/react.js'],
+    ['GET', '/api/artifact-view/lib/react.js?v=1'],
   ])('%s %s is open', (method, path) => {
     expect(classifyRequest(method, path)).toBe('open');
   });
@@ -55,6 +58,13 @@ describe('classifyRequest', () => {
     ['GET', '/../../api/agents'],
     ['GET', '/api/auth/refresh'],
     ['POST', '/api/auth/status'],
+    ['GET', '/api/artifact-view/a/AAAAAAAAAAAAAAAAAAAAAA'],
+    ['GET', '/api/artifact-view/a/AAAAAAAAAAAAAAAAAAAAAA/v/2'],
+    ['GET', '/api/artifact-view/lib/../a/AAAAAAAAAAAAAAAAAAAAAA'],
+    ['GET', '/api/artifact-view/lib/x/y.js'],
+    ['GET', '/api/artifact-view/lib/'],
+    ['POST', '/api/artifact-view/lib/react.js'],
+    ['HEAD', '/api/artifact-view/lib/react.js'],
   ])('%s %s needs auth', (method, path) => {
     expect(classifyRequest(method, path)).toBe('auth');
   });

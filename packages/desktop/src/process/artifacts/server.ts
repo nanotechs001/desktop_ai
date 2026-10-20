@@ -28,7 +28,8 @@ export type ArtifactServer = {
 export type ArtifactServerOptions = {
   store: ArtifactStore;
   token: string;
-  renderPage: (v: ArtifactVersion) => string;
+  /** `libBase` is the page's way to `/lib/`, relative to its path. */
+  renderPage: (v: ArtifactVersion, libBase: string) => string;
   /** Folder with the bundled libraries and their `manifest.json`; null serves none. */
   libsDir: string | null;
   /** 0 (the default) picks a free port. */
@@ -197,7 +198,9 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
 
   const servePage = async (res: ServerResponse, id: string, n: string | undefined): Promise<void> => {
     const result = await store.getById(id, n === undefined ? undefined : Number(n));
-    if (result.ok) return send(res, 200, HTML_TYPE, renderPage(result.value));
+    // Relative, so a page reached through the WebUI's /api/artifact-view/ prefix loads its libraries there too.
+    const libBase = n === undefined ? '../lib/' : '../../../lib/';
+    if (result.ok) return send(res, 200, HTML_TYPE, renderPage(result.value, libBase));
     if ('error' in result && result.error === 'not-found') return send(res, 404, TEXT_TYPE, 'Not found');
     send(res, 500, TEXT_TYPE, "Couldn't load the artifact");
   };

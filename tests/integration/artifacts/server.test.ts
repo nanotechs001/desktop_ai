@@ -238,6 +238,18 @@ describe('artifact server', () => {
     expect(reply.body).toContain('Logo &lt;b&gt;');
   });
 
+  it("a page's libraries resolve to /lib/ directly and to /api/artifact-view/lib/ through the WebUI route", async () => {
+    const { id } = await create({ title: 'Chart', kind: 'mermaid', content: 'graph TD; A-->B' });
+    for (const suffix of ['', '/v/1']) {
+      const reply = await page(`/a/${id}${suffix}`);
+      const [src] = [...reply.body.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+      expect(new URL(src, `http://127.0.0.1:1/a/${id}${suffix}`).pathname).toBe('/lib/mermaid.js');
+      expect(new URL(src, `https://phone.example/api/artifact-view/a/${id}${suffix}`).pathname).toBe(
+        '/api/artifact-view/lib/mermaid.js'
+      );
+    }
+  });
+
   it('oversized body → 413, server keeps serving', async () => {
     const auth = { host: `127.0.0.1:${server.port}`, authorization: `Bearer ${TOKEN}` };
     /** Streams `chunks` x 256 KB and resolves with the status; the server may cut the upload short. */

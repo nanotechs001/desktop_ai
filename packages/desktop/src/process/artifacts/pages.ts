@@ -8,7 +8,8 @@ import type { ArtifactVersion } from '@/common/types/agent/artifacts';
 
 /*
  * Artifact pages. Every page is served under the sandboxed artifact CSP and loads its libraries only from the
- * artifact server's /lib/ (built by scripts/build-mcp-servers.js). The artifact's content is never written into
+ * artifact server's /lib/ (built by scripts/build-mcp-servers.js), named relative to the page so the same page also
+ * works through the WebUI's /api/artifact-view/ route. The artifact's content is never written into
  * the markup or a script: it travels as a JSON string in a `<script type="application/json">` block.
  */
 
@@ -23,7 +24,8 @@ const page = (title: string, head: string, body: string): string =>
   `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
   `<title>${escapeHtml(title)}</title>${head}</head><body>${body}</body></html>`;
 
-const libs = (files: string[]): string => files.map((f) => `<script src="/lib/${f}"></script>`).join('');
+const libs = (files: string[], libBase: string): string =>
+  files.map((f) => `<script src="${libBase}${f}"></script>`).join('');
 
 /** Shared by the script pages: `source`, `root`, and `showError`, which replaces the page with a red message. */
 const PRELUDE = `
@@ -108,10 +110,21 @@ mermaid.render('mermaid-0', source).then(({ svg }) => { root.innerHTML = svg; },
  * A page that runs `boot` once the `globals` its libraries set are there. Without them (the libraries weren't
  * built or served) it says so instead of failing on an undefined name.
  */
-const scriptPage = (v: ArtifactVersion, files: string[], globals: string[], boot: string, style = ''): string => {
+const scriptPage = (
+  v: ArtifactVersion,
+  libBase: string,
+  files: string[],
+  globals: string[],
+  boot: string,
+  style = ''
+): string => {
   const missing = globals.map((g) => `typeof ${g} === 'undefined'`).join(' || ');
   const script = `${PRELUDE}if (${missing}) showError('${LIBS_MISSING}');\nelse {${boot}}`;
-  return page(v.title, style, `<div id="root"></div>${sourceBlock(v.content)}${libs(files)}<script>${script}</script>`);
+  return page(
+    v.title,
+    style,
+    `<div id="root"></div>${sourceBlock(v.content)}${libs(files, libBase)}<script>${script}</script>`
+  );
 };
 
 /**
@@ -122,8 +135,9 @@ const scriptPage = (v: ArtifactVersion, files: string[], globals: string[], boot
  * - markdown: react-markdown with GFM (tables, task lists, strikethrough); ```mermaid fences become diagrams.
  * - mermaid: one diagram.
  * Compile and runtime errors show up in the page as a red message.
+ * `libBase` is where the page finds `/lib/` (the server passes one relative to the page's path).
  */
-export function renderArtifactPage(v: ArtifactVersion): string {
+export function renderArtifactPage(v: ArtifactVersion, libBase = '/lib/'): string {
   switch (v.kind) {
     case 'html':
       return v.content;
@@ -137,6 +151,7 @@ export function renderArtifactPage(v: ArtifactVersion): string {
     case 'react':
       return scriptPage(
         v,
+        libBase,
         ['react.js', 'react-dom.js', 'sucrase.js', 'recharts.js', 'lucide.js', 'tailwind.js'],
         ['React', 'ReactDOM', 'Sucrase', 'Recharts', 'LucideReact'],
         REACT_BOOT
@@ -144,12 +159,13 @@ export function renderArtifactPage(v: ArtifactVersion): string {
     case 'markdown':
       return scriptPage(
         v,
+        libBase,
         ['react.js', 'react-dom.js', 'react-markdown.js', 'mermaid.js'],
         ['React', 'ReactDOM', 'ReactMarkdown', 'remarkGfm', 'mermaid'],
         MARKDOWN_BOOT,
         MARKDOWN_STYLE
       );
     case 'mermaid':
-      return scriptPage(v, ['mermaid.js'], ['mermaid'], MERMAID_BOOT);
+      return scriptPage(v, libBase, ['mermaid.js'], ['mermaid'], MERMAID_BOOT);
   }
 }

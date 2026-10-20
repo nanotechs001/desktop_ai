@@ -12,7 +12,7 @@ import { networkInterfaces } from 'os';
 import { ipcBridge } from '@/common';
 import { getSystemDir } from './initStorage';
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { startWebHost, type BrowserViewRoutes, type WebHostHandle } from '@aionui/web-host';
+import { startWebHost, type ArtifactViewRoutes, type BrowserViewRoutes, type WebHostHandle } from '@aionui/web-host';
 import { getBrowserViewService } from '@process/services/agentBrowser/services';
 import { getDataPath } from './utils';
 import { cloudflaredPlatformKey, ensureCloudflared, extractTgz } from '@process/webuiTunnel/cloudflaredBinary';
@@ -299,6 +299,16 @@ const browserView: BrowserViewRoutes = {
     (await getBrowserViewService()?.openStream(tabId, peer)) ?? { error: 'not-allowed' },
 };
 
+let artifactServerPort: number | null = null;
+
+/** Main sets this once the artifact server listens; the WebUI's /api/artifact-view/ route forwards there. */
+export function setArtifactServerPort(port: number | null): void {
+  artifactServerPort = port;
+}
+
+/** The artifact server for the WebUI's artifact view, looked up at each request. */
+const artifactView: ArtifactViewRoutes = { port: () => artifactServerPort };
+
 /**
  * Spawn a WebUI instance (static server + backend) and remember the handle so
  * callers can later stop it or query its status.
@@ -344,7 +354,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     allowRemote,
     sessionsNotBefore,
     isTunnelActive: () => webuiTunnel.isActive(),
-    localRoutes: { browserView },
+    localRoutes: { browserView, artifactView },
     // Must align with the desktop IPC path's backend dataDir (src/index.ts), otherwise
     // users see divergent SQLite state between desktop app and bundled WebUI.
     dataDir: getDataPath(),

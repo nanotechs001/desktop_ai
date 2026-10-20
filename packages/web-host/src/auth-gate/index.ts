@@ -21,6 +21,9 @@ const OPEN_ROUTES = new Set([
   'POST /api/auth/refresh',
 ]);
 
+/** `GET /api/artifact-view/lib/<file>` (lowercased); artifactViewRoutes.ts checks the exact file name. */
+const ARTIFACT_LIB = /^\/api\/artifact-view\/lib\/[^/]+$/;
+
 const stripQuery = (rawPath: string): string => rawPath.split(/[?#]/, 1)[0];
 
 /**
@@ -73,6 +76,9 @@ export function classifyRequest(method: string, rawPath: string): GateDecision {
   const path = normalized.toLowerCase(); // case only matters for comparison
   if (BLOCKED_PREFIXES.some((p) => isUnder(path, p))) return 'blocked';
   if (OPEN_ROUTES.has(`${method.toUpperCase()} ${path}`)) return 'open';
+  // Artifact pages are sandboxed (opaque origin), so their <script src> loads carry no cookie (Chrome sends none,
+  // not even SameSite=Lax/Strict). The libraries are the app's public bundles; the pages themselves stay gated.
+  if (method.toUpperCase() === 'GET' && ARTIFACT_LIB.test(path)) return 'open';
   if (isUnder(path, '/api') || isUnder(path, '/ws')) return 'auth';
   return 'open';
 }

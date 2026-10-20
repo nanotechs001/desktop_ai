@@ -48,8 +48,11 @@ export type BrowserViewRoutes = {
   ): Promise<BrowserViewStreamHandle | { error: 'tab-closed' | 'not-allowed' }>;
 };
 
+/** The desktop's loopback artifact server, used structurally; `port` is null while artifacts are unavailable. */
+export type ArtifactViewRoutes = { port(): number | null };
+
 /** Routes the listener answers itself, after the auth gate, instead of forwarding them to aioncore. */
-export type LocalRoutes = { browserView?: BrowserViewRoutes };
+export type LocalRoutes = { browserView?: BrowserViewRoutes; artifactView?: ArtifactViewRoutes };
 
 /**
  * Options for starting WebHost

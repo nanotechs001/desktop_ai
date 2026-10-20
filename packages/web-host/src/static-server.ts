@@ -12,6 +12,7 @@
  * that need a session are checked against aioncore `GET /api/auth/user` first.
  *
  * Local routes (browserViewRoutes.ts): when configured, /api/browser-view/* is answered here after the same gate.
+ * /api/artifact-view/* (artifactViewRoutes.ts) is always answered here, never by aioncore.
  *
  * Design: Node native http + serve-handler. No Express. No business routes.
  */
@@ -44,6 +45,7 @@ import {
   STREAM_ROUTE_LIKE,
   TABS_PATH,
 } from './browserViewRoutes.js';
+import { isArtifactViewPath, serveArtifactView } from './artifactViewRoutes.js';
 import type { LocalRoutes } from './types.js';
 
 export type StaticServerOptions = {
@@ -412,6 +414,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     }
     if (browserView && normalizePath(url) === TABS_PATH) {
       serveTabs(req, res, url, browserView);
+      return;
+    }
+    // Answered here even when unconfigured: the gate opens the lib paths, and aioncore runs without auth.
+    if (isArtifactViewPath(normalizePath(url) ?? '')) {
+      serveArtifactView(req, res, opts.localRoutes?.artifactView ?? null);
       return;
     }
     forwardToBackend(req, res, opts.backendPort, headers, secureCookies, (status) => {

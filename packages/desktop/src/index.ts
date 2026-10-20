@@ -62,6 +62,7 @@ import {
   resolveRemoteAccess,
   resolveWebUIPort,
   restoreDesktopWebUIFromPreferences,
+  setArtifactServerPort,
   webuiTunnel,
 } from './process/utils/webuiConfig';
 import {
@@ -830,6 +831,7 @@ const handleAppReady = async (): Promise<void> => {
     if (started) {
       process.env.AION_ARTIFACTS_URL = started.server.origin;
       process.env.AION_ARTIFACTS_TOKEN = started.token;
+      setArtifactServerPort(started.server.port);
       console.log(`[artifacts] server listening on ${started.server.origin} (token required)`);
       app.once('will-quit', () => void started.server.close());
       mark('artifactServer');

@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolMessage } from '@/common/chat/normalizeToolCall';
 import { normalizeToolMessages } from '@/common/chat/normalizeToolCall';
 
@@ -131,6 +131,43 @@ describe('ArtifactCard', () => {
     mocks.origin.mockResolvedValue(reply);
     render(<ArtifactCard title='Report' version={1} url={URL_OK} />);
     await originSettled();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+});
+
+describe('ArtifactCard in the WebUI', () => {
+  const electronAPI = window.electronAPI;
+  const WEBUI_HREF = `${window.location.origin}/api/artifact-view/a/AAAAAAAAAAAAAAAAAAAAAA/v/2`;
+
+  beforeEach(() => {
+    // @ts-expect-error -- a plain browser has no preload bridge
+    delete window.electronAPI;
+  });
+  afterEach(() => {
+    window.electronAPI = electronAPI;
+    vi.restoreAllMocks();
+  });
+
+  it("opens the page through web-host's artifact view in a new tab, without the IPC", async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<ArtifactCard title='T' version={2} url={URL_OK} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'messages.artifactCard.open' }));
+
+    expect(open).toHaveBeenCalledWith(WEBUI_HREF, '_blank', 'noopener');
+    expect(mocks.openBrowserTab).not.toHaveBeenCalled();
+    expect(mocks.origin).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'messages.artifactCard.copyLink' }));
+    await waitFor(() => expect(mocks.copyText).toHaveBeenCalledWith(WEBUI_HREF));
+  });
+
+  it('shows Open outside a preview panel too', async () => {
+    mocks.preview = false;
+    render(<ArtifactCard title='T' version={2} url={URL_OK} />);
+    expect(await screen.findByRole('button', { name: 'messages.artifactCard.open' })).toBeInTheDocument();
+  });
+
+  it('still shows no buttons for an unsafe url', () => {
+    render(<ArtifactCard title='T' version={2} url='http://127.0.0.1:4300@evil.example/a/AAAAAAAAAAAAAAAAAAAAAA' />);
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });

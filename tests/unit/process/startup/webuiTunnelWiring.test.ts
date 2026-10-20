@@ -93,6 +93,15 @@ describe('WebUI secure link wiring', () => {
     browserViewService = null;
   });
 
+  it('passes the artifact server port to the web host, looked up at each call', async () => {
+    const { setArtifactServerPort, startDesktopWebUI } = await importModule();
+    await startDesktopWebUI({ port: 25809 });
+    const { localRoutes } = startWebHost.mock.calls[0][0] as { localRoutes: { artifactView: { port(): unknown } } };
+    expect(localRoutes.artifactView.port()).toBeNull();
+    setArtifactServerPort(41234);
+    expect(localRoutes.artifactView.port()).toBe(41234);
+  });
+
   it('gives the manager the running WebUI port, or null when it is off', async () => {
     const { startDesktopWebUI, stopDesktopWebUI } = await importModule();
     expect(managerDeps?.getWebuiPort()).toBeNull();

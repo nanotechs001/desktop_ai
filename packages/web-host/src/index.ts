@@ -2,6 +2,7 @@ import type { WebHostOptions, WebHostHandle } from './types.js';
 
 export type {
   AppMetadata,
+  ArtifactViewRoutes,
   BackendBinaryResolver,
   BrowserViewPeer,
   BrowserViewRoutes,
