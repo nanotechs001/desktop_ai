@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } 
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { ConfirmRequest } from '@/common/types/browser';
+import type { AcpConfigOptionDto } from '@/common/types/platform/acpTypes';
 
 /** An unanswered confirm is denied after this long. */
 export const CONFIRM_TIMEOUT_MS = 120_000;
@@ -99,6 +100,89 @@ function saveAllowLists(file: string, lists: AllowLists): void {
   }
 }
 
+/** How long a chat's looked-up permission mode holds; a mode switch counts from the next ask after this. */
+export const YOLO_CACHE_MS = 2000;
+/** A mode lookup slower than this answers "not YOLO", so the user is asked. */
+export const MODE_LOOKUP_TIMEOUT_MS = 5000;
+
+/** Aliases AionUi persists for an agent's YOLO mode (aioncore's `normalize_requested_mode` maps them to `yolo_id`). */
+const YOLO_ALIASES = new Set(['yolo', 'yoloNoSandbox']);
+/** Codex's full-access ids, current and legacy (aioncore `mode_normalize.rs`). */
+const CODEX_FULL_ACCESS = new Set(['agent-full-access', 'full-access']);
+
+type CatalogAgent = { id: string; backend?: string; yolo_id?: string };
+
+/**
+ * True when `mode` is the chat's full-auto mode: `yolo` for the aionrs engine (its only auto-approve mode), else the
+ * mode the chat's catalog agent names as its `yolo_id` (claude `bypassPermissions`, codex `agent-full-access`, ...).
+ */
+export const isYoloMode = (
+  mode: string | null | undefined,
+  { type, agent }: { type?: string; agent?: Omit<CatalogAgent, 'id'> }
+): boolean => {
+  if (!mode) return false;
+  if (type === 'aionrs') return mode === 'yolo';
+  const yoloId = agent?.yolo_id?.trim();
+  if (!yoloId) return false;
+  return mode === yoloId || YOLO_ALIASES.has(mode) || (agent?.backend === 'codex' && CODEX_FULL_ACCESS.has(mode));
+};
+
+/** What main asks aioncore to learn a chat's current permission mode. */
+export type ChatModeDeps = {
+  /** The chat runtime's live config options; the mode one holds the mode in force (or just picked). */
+  configOptions(conversationId: string): Promise<readonly AcpConfigOptionDto[]>;
+  /** The chat: its engine type and, in `extra`, the catalog agent it runs. Null when it is gone. */
+  conversation(conversationId: string): Promise<{ type?: string; extra?: Record<string, unknown> | null } | null>;
+  /** The agent catalog, with each agent's YOLO mode id. */
+  agents(): Promise<readonly CatalogAgent[]>;
+};
+
+const agentOf = (agents: readonly CatalogAgent[], extra: Record<string, unknown>): CatalogAgent | undefined => {
+  const byId = typeof extra.agent_id === 'string' ? agents.find((a) => a.id === extra.agent_id) : undefined;
+  if (byId) return byId;
+  const sameBackend = agents.filter((a) => a.backend !== undefined && a.backend === extra.backend);
+  return sameBackend.length === 1 ? sameBackend[0] : undefined;
+};
+
+/**
+ * Whether a chat runs in YOLO mode right now, from aioncore, each answer kept `ttlMs` per chat. Fails safe: a failed
+ * or slow lookup is "not YOLO" (and not kept), so the user is asked.
+ */
+export function createYoloLookup(
+  deps: ChatModeDeps,
+  { now = Date.now, ttlMs = YOLO_CACHE_MS }: { now?: () => number; ttlMs?: number } = {}
+): (conversationId: string) => Promise<boolean> {
+  const known = new Map<string, { at: number; yolo: boolean }>();
+  const lookUp = async (conversationId: string): Promise<boolean> => {
+    const [options, conversation, agents] = await Promise.all([
+      deps.configOptions(conversationId),
+      deps.conversation(conversationId),
+      deps.agents(),
+    ]);
+    if (!conversation) return false;
+    const mode = (options.find((o) => o.category === 'mode') ?? options.find((o) => o.id === 'mode'))?.current_value;
+    return isYoloMode(mode, { type: conversation.type, agent: agentOf(agents, conversation.extra ?? {}) });
+  };
+  return async (conversationId) => {
+    const cached = known.get(conversationId);
+    if (cached && now() - cached.at < ttlMs) return cached.yolo;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('mode lookup timed out')), MODE_LOOKUP_TIMEOUT_MS);
+    });
+    try {
+      const yolo = await Promise.race([lookUp(conversationId), timeout]);
+      known.set(conversationId, { at: now(), yolo });
+      return yolo;
+    } catch (error) {
+      console.warn('[AgentBrowser] could not read the chat permission mode, asking:', error);
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
 type Open = { request: ConfirmRequest; resolve: (allow: boolean) => void; release: () => void };
 
 /** Risky agent actions waiting for the user. Unanswered, aborted and unknown requests are all denials. */
@@ -108,19 +192,40 @@ export class PendingConfirms {
   private readonly file: string;
   /** The allow lists as of the file's `mtime`; read again whenever the file changed. */
   private allowed: { mtime: number; lists: AllowLists } | undefined;
+  /** Whether the asking chat runs in YOLO mode; absent, every ask is asked. */
+  private readonly isYolo: ((conversationId: string) => Promise<boolean>) | undefined;
 
-  constructor({ file = defaultAllowFile() }: { file?: string } = {}) {
+  constructor({
+    file = defaultAllowFile(),
+    isYolo,
+  }: { file?: string; isYolo?: (conversationId: string) => Promise<boolean> } = {}) {
     this.file = file;
+    this.isYolo = isYolo;
   }
 
   /**
-   * Resolves with the user's answer at once when the origin is always allowed, else once they answer. Denies after
-   * `timeoutMs` and when `signal` aborts (the tab navigated or closed, the agent left).
+   * Resolves with the user's answer at once when the origin is always allowed or the asking chat is in YOLO mode, else
+   * once they answer. Denies after `timeoutMs` and when `signal` aborts (the tab navigated or closed, the agent left).
    */
   request(req: Omit<ConfirmRequest, 'id'>, timeoutMs = CONFIRM_TIMEOUT_MS, signal?: AbortSignal): Promise<boolean> {
     if (signal?.aborted) return Promise.resolve(false);
     const key = allowKey(req);
     if (key !== null && this.allowLists()[kindOf(req)].has(key)) return Promise.resolve(true);
+    const { conversationId } = req;
+    // "Leave site?" guards the user's own unsaved text, not an agent permission: YOLO never answers it.
+    if (req.kind === 'leave' || !conversationId || !this.isYolo) return this.ask(req, timeoutMs, signal);
+    return this.isYolo(conversationId)
+      .catch(() => false)
+      .then((yolo) => {
+        if (signal?.aborted) return false;
+        if (!yolo) return this.ask(req, timeoutMs, signal);
+        // Never the label or the code: they are page text and agent code.
+        console.info(`[AgentBrowser] ${req.origin} ${kindOf(req)} auto-allowed (yolo)`);
+        return true;
+      });
+  }
+
+  private ask(req: Omit<ConfirmRequest, 'id'>, timeoutMs: number, signal?: AbortSignal): Promise<boolean> {
     return new Promise((resolve) => {
       const id = randomUUID();
       const deny = (): void => void this.reply(id, false, false);
@@ -136,18 +241,25 @@ export class PendingConfirms {
   }
 
   /**
-   * Answers an open confirm; `alwaysForSite` on an Allow remembers its origin for that kind of ask only. False when
-   * the id is unknown.
+   * Answers an open confirm; `alwaysForSite` on an Allow remembers its origin for that kind of ask only, and allows the
+   * other open asks it covers too. False when the id is unknown.
    */
   reply(id: string, allow: boolean, alwaysForSite: boolean): boolean {
     const entry = this.open.get(id);
     if (!entry) return false;
-    entry.release();
-    this.open.delete(id);
     const key = allowKey(entry.request);
-    if (allow && alwaysForSite && key !== null) this.remember(kindOf(entry.request), key);
+    const kind = kindOf(entry.request);
+    const remembered = allow && alwaysForSite && key !== null;
+    if (remembered) this.remember(kind, key);
+    const settled = remembered
+      ? [...this.open.values()].filter((o) => kindOf(o.request) === kind && allowKey(o.request) === key)
+      : [entry];
+    settled.forEach((o) => {
+      o.release();
+      this.open.delete(o.request.id);
+    });
     this.notify();
-    entry.resolve(allow);
+    settled.forEach((o) => o.resolve(allow));
     return true;
   }
 

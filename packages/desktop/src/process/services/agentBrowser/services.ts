@@ -16,7 +16,7 @@ import {
   partitionOfProfile,
   profileOfSession,
 } from '@process/services/browserSession/profiles/browserProfiles';
-import { PendingConfirms, webOriginOf } from './confirmGate';
+import { PendingConfirms, createYoloLookup, webOriginOf } from './confirmGate';
 import { createBrowserViewService, type BrowserViewService } from './relay/browserView';
 import { createDebuggerSessions } from './relay/debuggerSessions';
 import { startRelayServer, type ProfileLookup } from './relay/relayServer';
@@ -38,7 +38,17 @@ export type AgentBrowserOptions = {
   resolveAgent?: (conversationId: string) => Promise<AgentResolution>;
   /** True for the built-in default Agent (a regular chat): its chats browse in a temporary per-chat session. */
   isDefaultAgent?: (agentId: string) => Promise<boolean>;
+  /** Whether a chat runs in YOLO mode now ({@link chatIsYolo}); its risky clicks and page scripts then go unasked. */
+  isYoloChat?: (conversationId: string) => Promise<boolean>;
 };
+
+/** A chat's current permission mode, from aioncore: its live runtime's mode and its agent's YOLO id in the catalog. */
+export const chatIsYolo = createYoloLookup({
+  configOptions: async (conversationId) =>
+    (await ipcBridge.conversation.ensureRuntime.invoke({ conversation_id: conversationId })).config_options,
+  conversation: (id) => ipcBridge.conversation.get.invoke({ id }),
+  agents: () => ipcBridge.acpConversation.getManagedAgents.invoke(),
+});
 
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
 
@@ -288,7 +298,7 @@ export const liveAgentProfile = (profile: BrowserTabProfile): BrowserTabProfile 
 export async function startAgentBrowserServices(options: AgentBrowserOptions): Promise<AgentBrowserServices | null> {
   let active: TargetRegistry | null = null;
   let activeWaiter: CreateTabWaiter<Electron.WebContents> | null = null;
-  const confirms = new PendingConfirms();
+  const confirms = new PendingConfirms({ isYolo: options.isYoloChat });
   pendingConfirms = confirms;
   registerProviders(
     () => active,

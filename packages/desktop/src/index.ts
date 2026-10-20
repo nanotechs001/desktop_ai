@@ -790,7 +790,7 @@ const handleAppReady = async (): Promise<void> => {
    */
   const { cdpStartupEnabled, setActiveCdpPort } = await import('./process/utils/configureChromium');
   try {
-    const { startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
+    const { chatIsYolo, startAgentBrowserServices } = await import('./process/services/agentBrowser/services');
     const { resolveChatAgent, isDefaultAgent } = await import('./process/artifacts');
     const { onAgentProfileDeleted } = await import('./process/services/browserSession/profiles/browserProfiles');
     // A deleted Agent's chats then resolve afresh (and its tabs fall back to the default Agent profile).
@@ -803,6 +803,8 @@ const handleAppReady = async (): Promise<void> => {
       resolveAgent: resolveChatAgent,
       // Regular chats (the default Agent) browse in a temporary per-chat session instead.
       isDefaultAgent,
+      // A chat in YOLO mode is not asked before risky clicks and page scripts.
+      isYoloChat: chatIsYolo,
     });
     if (agentBrowser) {
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;

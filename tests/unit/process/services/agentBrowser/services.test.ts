@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import type { TabOwnership } from '@/common/types/browser';
@@ -89,8 +92,8 @@ type Reply = { id: number; result?: Record<string, unknown>; error?: { message: 
 let services: Services | null = null;
 const sockets: WebSocket[] = [];
 
-const start = async (): Promise<Services> => {
-  const started = await startAgentBrowserServices({ enabled: true, blockedPorts: () => [], resolveAgent });
+const start = async (extra: Partial<Parameters<typeof startAgentBrowserServices>[0]> = {}): Promise<Services> => {
+  const started = await startAgentBrowserServices({ enabled: true, blockedPorts: () => [], resolveAgent, ...extra });
   if (!started) throw new Error('relay did not start');
   services = started;
   return started;
@@ -699,6 +702,131 @@ describe('agent browser services: confirm gate', () => {
     ]) {
       expect(await call('replyConfirm', args)).toMatchObject({ success: false, msg: 'Invalid arguments' });
     }
+  });
+});
+
+describe('agent browser services: YOLO chats and "Always allow"', () => {
+  const yolo = { on: true };
+  const isYoloChat = vi.fn(async (conversationId: string) => conversationId === 'conv-1' && yolo.on);
+  const asked = () => h.ipcBridge.agentBrowser.confirmRequested.emit.mock.calls.filter(([open]) => open.length > 0);
+  const allowFile = () => {
+    try {
+      return readFileSync(path.join(homedir(), '.aionui', 'browser-allow.json'), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+
+  /** Chat conv-1's agent tab `id` on `origin`, with a frame PAY of `frameOrigin`; asks to click Publish, or runs a script. */
+  const agentTabAt = async (id: number, origin: string, frameOrigin = origin) => {
+    const relay = await start({ isYoloChat });
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: `${origin}/` });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalled());
+    const tab = newTab(id, agentSession, `${origin}/`);
+    tab.navigate(`${origin}/`);
+    expect((await created).result).toEqual({ targetId: `wc-${id}` });
+    tab.debugger.handler = (method) =>
+      method === 'Page.getFrameTree'
+        ? {
+            frameTree: {
+              frame: { id: 'TOP', url: `${origin}/`, securityOrigin: origin },
+              childFrames: [{ frame: { id: 'PAY', url: `${frameOrigin}/`, securityOrigin: frameOrigin } }],
+            },
+          }
+        : {};
+    const sessionId = String(
+      (await send('Target.attachToTarget', { targetId: `wc-${id}`, flatten: true })).result?.sessionId
+    );
+    const click = async (frameId = 'TOP') =>
+      (await send('AionRelay.requestConfirm', { webContentsId: id, label: 'Publish', sessionId, frameId })).result;
+    const script = async () =>
+      (
+        await send('AionRelay.runScript', {
+          webContentsId: id,
+          sessionId,
+          code: 'x',
+          form: 'expression',
+          world: 'page',
+        })
+      ).result;
+    return { tab, click, script };
+  };
+
+  afterEach(() => {
+    yolo.on = true;
+  });
+
+  it("allows a YOLO chat's risky clicks and page scripts with no ask, and remembers nothing", async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { click, script } = await agentTabAt(90, 'https://yolo-a.test');
+    expect(await click()).toEqual({ allow: true });
+    expect(await click('PAY')).toEqual({ allow: true });
+    expect(await script()).toMatchObject({ allow: true });
+    expect(isYoloChat).toHaveBeenCalledWith('conv-1');
+    expect(asked()).toEqual([]);
+    expect(allowFile()).not.toContain('yolo-a.test');
+    info.mockRestore();
+  });
+
+  it('asks a Default-mode chat', async () => {
+    yolo.on = false;
+    const { click } = await agentTabAt(91, 'https://yolo-b.test');
+    const answer = click();
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
+    expect(webuiConfirms.answerConfirm(webuiConfirms.listConfirms('conv-1')[0].id, false, false)).toBe(true);
+    expect(await answer).toEqual({ allow: false });
+  });
+
+  it('still asks "Leave site?" in a YOLO chat once the user typed on the page', async () => {
+    const { tab } = await agentTabAt(92, 'https://yolo-c.test');
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+    const plan = hooks.current.unloadBlocked?.(92);
+    if (plan?.kind !== 'ask' || !plan.askChat) throw new Error('expected a chat ask');
+    const leave = plan.askChat(new AbortController().signal);
+    const [open] = webuiConfirms.listConfirms('conv-1');
+    expect(open).toMatchObject({ kind: 'leave', origin: 'https://yolo-c.test' });
+    expect(isYoloChat).not.toHaveBeenCalled();
+    expect(webuiConfirms.answerConfirm(open.id, false, false)).toBe(true);
+    expect(await leave).toBe(false);
+  });
+
+  it('"Always allow" from the pane, a chat card or the robot popup (IPC) stops the next click and script asks', async () => {
+    yolo.on = false;
+    const { click, script } = await agentTabAt(93, 'https://always-ipc.test');
+    for (const act of [click, script]) {
+      const first = act();
+      await vi.waitFor(async () => expect(((await call('getConfirmRequests')).data as unknown[]).length).toBe(1));
+      const [open] = (await call('getConfirmRequests')).data as Array<{ id: string }>;
+      expect(await call('replyConfirm', { id: open.id, allow: true, alwaysForSite: true })).toEqual({ success: true });
+      expect(await first).toMatchObject({ allow: true });
+      const before = asked().length;
+      expect(await act()).toMatchObject({ allow: true });
+      expect(asked()).toHaveLength(before);
+    }
+    expect(JSON.parse(allowFile())).toMatchObject({
+      origins: expect.arrayContaining(['https://always-ipc.test']),
+      scriptOrigins: expect.arrayContaining(['https://always-ipc.test']),
+    });
+  });
+
+  it('"Always allow" from the phone stops the next ask, a cross-origin frame as its page|frame pair', async () => {
+    yolo.on = false;
+    const { click } = await agentTabAt(94, 'https://always-web.test', 'https://always-pay.test');
+    const first = click('PAY');
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
+    const [open] = webuiConfirms.listConfirms('conv-1');
+    expect(open).toMatchObject({ origin: 'https://always-web.test', frameOrigin: 'https://always-pay.test' });
+    expect(webuiConfirms.answerConfirm(open.id, true, true)).toBe(true);
+    expect(await first).toEqual({ allow: true });
+
+    expect(await click('PAY')).toEqual({ allow: true });
+    expect(webuiConfirms.listConfirms('conv-1')).toEqual([]);
+    // The pair never covers the page's own controls.
+    const top = click('TOP');
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
+    expect(webuiConfirms.answerConfirm(webuiConfirms.listConfirms('conv-1')[0].id, false, false)).toBe(true);
+    expect(await top).toEqual({ allow: false });
   });
 });
 
