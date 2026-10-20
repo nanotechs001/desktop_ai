@@ -161,6 +161,10 @@
     "liveStopped": "라이브 보기가 중지되었습니다. 탭하여 다시 시도하세요.",
     "liveKeyboard": "키보드",
     "liveTabSelect": "브라우저 탭",
+    "liveTabCount": "탭 {{count}}개",
+    "liveZoomIn": "확대",
+    "liveZoomOut": "축소",
+    "liveZoomReset": "확대/축소 초기화",
     "watchBrowser": "브라우저 보기"
   },
   "saveConflict": "저장하지 못했습니다: 이 파일은 열어 둔 사이에 디스크에서 변경되었습니다. 다시 불러오면 다른 변경을 확인할 수 있으며, 편집 내용은 저장되지 않은 상태로 남아 있습니다.",

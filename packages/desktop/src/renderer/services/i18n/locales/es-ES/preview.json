@@ -161,6 +161,10 @@
     "liveStopped": "Vista en directo detenida. Toca para reintentar.",
     "liveKeyboard": "Teclado",
     "liveTabSelect": "Pestaña del navegador",
+    "liveTabCount": "{{count}} pestañas",
+    "liveZoomIn": "Acercar",
+    "liveZoomOut": "Alejar",
+    "liveZoomReset": "Restablecer zoom",
     "watchBrowser": "Ver navegador"
   },
   "saveConflict": "No se pudo guardar: este archivo cambió en el disco después de que lo abrieras. Vuelve a cargarlo para ver los otros cambios; tus ediciones siguen aquí, sin guardar.",

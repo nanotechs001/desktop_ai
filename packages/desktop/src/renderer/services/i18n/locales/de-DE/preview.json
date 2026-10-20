@@ -161,6 +161,10 @@
     "liveStopped": "Liveansicht gestoppt. Zum Wiederholen tippen.",
     "liveKeyboard": "Tastatur",
     "liveTabSelect": "Browser-Tab",
+    "liveTabCount": "{{count}} Tabs",
+    "liveZoomIn": "Vergrößern",
+    "liveZoomOut": "Verkleinern",
+    "liveZoomReset": "Zoom zurücksetzen",
     "watchBrowser": "Browser ansehen"
   },
   "saveConflict": "Speichern fehlgeschlagen: Diese Datei wurde auf der Festplatte geändert, nachdem Sie sie geöffnet haben. Neu laden, um die anderen Änderungen zu sehen — Ihre Bearbeitungen sind noch da, ungespeichert.",

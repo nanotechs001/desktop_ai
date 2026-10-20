@@ -161,6 +161,10 @@
     "liveStopped": "Live view stopped. Tap to retry.",
     "liveKeyboard": "Keyboard",
     "liveTabSelect": "Browser tab",
+    "liveTabCount": "{{count}} tabs",
+    "liveZoomIn": "Zoom in",
+    "liveZoomOut": "Zoom out",
+    "liveZoomReset": "Reset zoom",
     "watchBrowser": "Watch browser"
   },
   "saveConflict": "Could not save: this file changed on disk since you opened it. Reload to see the other changes — your edits are still here, unsaved.",

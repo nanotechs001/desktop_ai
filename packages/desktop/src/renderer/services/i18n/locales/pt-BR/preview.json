@@ -161,6 +161,10 @@
     "liveStopped": "Visualização ao vivo interrompida. Toque para tentar novamente.",
     "liveKeyboard": "Teclado",
     "liveTabSelect": "Aba do navegador",
+    "liveTabCount": "{{count}} abas",
+    "liveZoomIn": "Ampliar",
+    "liveZoomOut": "Reduzir",
+    "liveZoomReset": "Redefinir zoom",
     "watchBrowser": "Ver navegador"
   },
   "saveConflict": "Não foi possível salvar: este arquivo mudou no disco depois que você o abriu. Recarregue para ver as outras alterações — suas edições continuam aqui, não salvas.",

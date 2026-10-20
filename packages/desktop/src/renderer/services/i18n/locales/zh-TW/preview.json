@@ -161,6 +161,10 @@
     "liveStopped": "即時畫面已停止。輕觸以重試。",
     "liveKeyboard": "鍵盤",
     "liveTabSelect": "瀏覽器分頁",
+    "liveTabCount": "{{count}} 個分頁",
+    "liveZoomIn": "放大",
+    "liveZoomOut": "縮小",
+    "liveZoomReset": "重設縮放",
     "watchBrowser": "查看瀏覽器"
   },
   "saveConflict": "儲存失敗：該檔案在你開啟後已被變更。可重新載入查看其他變更——你的編輯仍在，尚未儲存。",

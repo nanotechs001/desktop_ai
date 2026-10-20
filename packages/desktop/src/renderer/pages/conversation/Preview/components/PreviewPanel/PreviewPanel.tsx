@@ -1236,7 +1236,8 @@ const PreviewPanel: React.FC = () => {
           // Show the "new browser tab" plus as soon as the panel holds any tab (file or
           // browser) instead of requiring the user to open a browser first. It stays
           // hidden only while the panel is empty, so the plus never appears alone.
-          onNewBrowserTab={previewTabs.length > 0 ? handleNewBrowserTab : undefined}
+          // Only the Electron desktop can show a new <webview> tab; the WebUI's browser tab is the live view.
+          onNewBrowserTab={isElectronDesktop() && previewTabs.length > 0 ? handleNewBrowserTab : undefined}
           newTabMenu={<ProfileSwitcher onOpen={(profile) => openBrowserTab(undefined, profile)} />}
         />
 

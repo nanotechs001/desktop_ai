@@ -161,6 +161,10 @@
     "liveStopped": "Canlı görünüm durdu. Yeniden denemek için dokunun.",
     "liveKeyboard": "Klavye",
     "liveTabSelect": "Tarayıcı sekmesi",
+    "liveTabCount": "{{count}} sekme",
+    "liveZoomIn": "Yakınlaştır",
+    "liveZoomOut": "Uzaklaştır",
+    "liveZoomReset": "Yakınlaştırmayı sıfırla",
     "watchBrowser": "Tarayıcıyı izle"
   },
   "saveConflict": "Kaydedilemedi: bu dosya siz açtıktan sonra diskte değişti. Diğer değişiklikleri görmek için yeniden yükleyin — düzenlemeleriniz kaydedilmemiş olarak duruyor.",

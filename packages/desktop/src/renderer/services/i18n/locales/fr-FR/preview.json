@@ -161,6 +161,10 @@
     "liveStopped": "Vue en direct arrêtée. Touchez pour réessayer.",
     "liveKeyboard": "Clavier",
     "liveTabSelect": "Onglet du navigateur",
+    "liveTabCount": "{{count}} onglets",
+    "liveZoomIn": "Zoom avant",
+    "liveZoomOut": "Zoom arrière",
+    "liveZoomReset": "Réinitialiser le zoom",
     "watchBrowser": "Voir le navigateur"
   },
   "saveConflict": "Échec de l'enregistrement : ce fichier a changé sur le disque depuis que vous l'avez ouvert. Rechargez pour voir les autres modifications — vos modifications sont toujours là, non enregistrées.",

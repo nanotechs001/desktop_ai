@@ -161,6 +161,10 @@
     "liveStopped": "实时画面已停止。轻点重试。",
     "liveKeyboard": "键盘",
     "liveTabSelect": "浏览器标签页",
+    "liveTabCount": "{{count}} 个标签页",
+    "liveZoomIn": "放大",
+    "liveZoomOut": "缩小",
+    "liveZoomReset": "重置缩放",
     "watchBrowser": "查看浏览器"
   },
   "saveConflict": "保存失败：该文件在你打开后已被改动。可重新加载查看其他改动——你的编辑仍在，尚未保存。",
