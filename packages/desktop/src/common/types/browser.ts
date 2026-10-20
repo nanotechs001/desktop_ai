@@ -103,7 +103,7 @@ export type CookieImportOutcome =
 export type TabOwnership = {
   webContentsId: number;
   /** 'user' for tabs the user opened; an agent client for tabs it opened through the relay. */
-  owner: 'user' | { clientId: string; label: string };
+  owner: 'user' | { clientId: string; label: string; conversationId?: string };
   /** 'all' once the user clicked "Share with agent": agent clients of the tab's profile may act on it (see mayAct). */
   sharedWith: 'all' | null;
   /** The user took over (typed or clicked) an agent or shared tab; agent input is refused until resume. */

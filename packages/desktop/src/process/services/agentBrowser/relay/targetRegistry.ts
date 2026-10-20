@@ -10,7 +10,13 @@ import type { BrowserTabProfile, TabOwnership } from '@/common/types/browser';
  * One relay WebSocket connection (an agent's MCP server). `profile` is its chat's Agent profile, set once main has
  * resolved it; until then the client reaches no shared Agent-profile tab.
  */
-export type RelayClient = { clientId: string; label: string; profile?: BrowserTabProfile };
+export type RelayClient = {
+  clientId: string;
+  label: string;
+  profile?: BrowserTabProfile;
+  /** The chat the client's MCP runs for; recorded on tabs it claims so the WebUI can list a chat's tabs. */
+  conversationId?: string;
+};
 
 /** The part of `webContents.debugger` the relay uses; Electron's Debugger satisfies it. */
 export type RelayDebugger = {
@@ -180,14 +186,20 @@ export function createTargetRegistry(): TargetRegistry {
       })),
     ownership: (webContentsId) => tabs.get(webContentsId)?.ownership ?? null,
     all,
-    claim: (webContentsId, { clientId, label }) => update(webContentsId, { owner: { clientId, label } }),
+    claim: (webContentsId, { clientId, label, conversationId }) =>
+      update(webContentsId, { owner: { clientId, label, ...(conversationId ? { conversationId } : {}) } }),
     share: (webContentsId, on) => update(webContentsId, { sharedWith: on ? 'all' : null }),
     setPaused: (webContentsId, paused) => update(webContentsId, { paused }),
     releaseClient(clientId) {
       for (const { ownership } of tabs.values()) {
         if (ownership.owner !== 'user' && ownership.owner.clientId === clientId) {
+          const { conversationId } = ownership.owner;
           update(ownership.webContentsId, {
-            owner: { clientId: `disconnected:${clientId}`, label: DISCONNECTED_LABEL },
+            owner: {
+              clientId: `disconnected:${clientId}`,
+              label: DISCONNECTED_LABEL,
+              ...(conversationId ? { conversationId } : {}),
+            },
           });
         }
       }

@@ -36,6 +36,19 @@ describe('targetRegistry', () => {
     ]);
   });
 
+  it('stores the claiming conversation on the owner, and keeps it after the client disconnects', () => {
+    const registry = createTargetRegistry();
+    registry.track(new FakeContents(8));
+    registry.claim(8, { ...agent, conversationId: 'conv-1' });
+    expect(registry.ownership(8)?.owner).toEqual({ ...agent, conversationId: 'conv-1' });
+    registry.releaseClient('c1');
+    expect(registry.ownership(8)?.owner).toEqual({
+      clientId: 'disconnected:c1',
+      label: 'agent (disconnected)',
+      conversationId: 'conv-1',
+    });
+  });
+
   it("records each tab's browser profile, and an owner is only the client's id and label", () => {
     const registry = createTargetRegistry();
     const profile = { kind: 'agent', agentId: 'bare:x' } as const;

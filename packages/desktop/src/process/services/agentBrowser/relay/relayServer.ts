@@ -226,7 +226,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       conn.pendingCreates -= 1;
     }
     registry.track(contents, profile);
-    registry.claim(contents.id, client);
+    registry.claim(contents.id, { ...client, conversationId: conn.conversationId });
     // The client may have gone while the tab opened; it must not stay claimable under its label.
     if (!connections.has(client.clientId)) registry.releaseClient(client.clientId);
     return { targetId: targetIdFor(contents.id) };
