@@ -10,9 +10,11 @@ import { useTranslation } from 'react-i18next';
 import type { ConfirmRequest } from '@/common/types/browser';
 
 export const CONFIRM_KEY = 'preview.browserChrome.confirm';
+/** The page's own "Leave site?" texts, shared with main's native box. */
+export const LEAVE_KEY = 'preview.browserChrome.leave';
 
 /** What every view needs to draw an ask; the phone gets exactly this. */
-export type ConfirmAsk = Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label'>;
+export type ConfirmAsk = Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label' | 'kind'>;
 
 /** Allow stays disabled this long after an ask appears, so a click or Enter aimed at the previous one cannot allow it. */
 const ARM_DELAY_MS = 500;
@@ -38,6 +40,23 @@ const ConfirmBody: React.FC<ConfirmBodyProps> = ({ request, onAnswer, focusDeny 
     const timer = setTimeout(() => setArmed(true), ARM_DELAY_MS);
     return () => clearTimeout(timer);
   }, [focusDeny]);
+
+  if (request.kind === 'leave') {
+    return (
+      <div className='flex flex-col gap-16px'>
+        <div>{t(`${LEAVE_KEY}.detail`)}</div>
+        {request.origin && <div className='break-all text-t-secondary'>{request.origin}</div>}
+        <div className='flex justify-end gap-8px'>
+          <Button ref={deny} onClick={() => onAnswer(false, false)}>
+            {t(`${LEAVE_KEY}.stay`)}
+          </Button>
+          <Button type='primary' disabled={!armed} onClick={() => onAnswer(true, false)}>
+            {t(`${LEAVE_KEY}.leave`)}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className='flex flex-col gap-16px'>

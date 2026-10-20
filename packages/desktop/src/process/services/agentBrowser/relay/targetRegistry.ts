@@ -84,9 +84,16 @@ export type TargetRegistry = {
   beginAgentInput(webContentsId: number, input: AgentInput): () => void;
   /** User keyDown or mouseDown on a tab: pauses agent input on agent-owned or shared tabs. */
   noteUserInput(webContentsId: number, input: UserInput): void;
+  /** Marks a tab used now: by an agent command (with that agent's chat, when known) or by user input. */
+  touch(webContentsId: number, conversationId?: string): void;
+  /** When the tab was last used (tracked counts as used), and the chat of the last agent that used it. */
+  lastUse(webContentsId: number): TabUse | null;
   onChange(cb: (all: TabOwnership[]) => void): () => void;
   onDestroyed(cb: (last: TabOwnership) => void): () => void;
 };
+
+/** Kept apart from ownership: a use changes nothing the pane draws, so it notifies nobody. */
+export type TabUse = { at: number; conversationId?: string };
 
 /** A user keyDown (Electron's key and code), or a mouseDown at CSS-px coordinates in the tab. */
 export type UserInput = { kind: 'key'; key: string; code: string } | { kind: 'mouse'; x: number; y: number };
@@ -144,6 +151,7 @@ export const webContentsIdFromTargetId = (targetId: string): number | null => {
 export function createTargetRegistry(): TargetRegistry {
   const tabs = new Map<number, { contents: RelayContents; ownership: TabOwnership }>();
   const agentInputs = new Map<number, AgentInput[]>();
+  const uses = new Map<number, TabUse>();
   const changeListeners = new Set<(all: TabOwnership[]) => void>();
   const destroyedListeners = new Set<(last: TabOwnership) => void>();
 
@@ -166,11 +174,13 @@ export function createTargetRegistry(): TargetRegistry {
         contents,
         ownership: { webContentsId, owner: 'user', sharedWith: null, paused: false, profile },
       });
+      uses.set(webContentsId, { at: Date.now() });
       contents.once('destroyed', () => {
         const tab = tabs.get(webContentsId);
         if (!tab) return;
         tabs.delete(webContentsId);
         agentInputs.delete(webContentsId);
+        uses.delete(webContentsId);
         callEach(destroyedListeners, tab.ownership);
         notify();
       });
@@ -242,6 +252,13 @@ export function createTargetRegistry(): TargetRegistry {
       }
       update(webContentsId, { paused: true });
     },
+    touch(webContentsId, conversationId) {
+      const previous = uses.get(webContentsId);
+      if (!previous) return;
+      const chat = conversationId ?? previous.conversationId;
+      uses.set(webContentsId, { at: Date.now(), ...(chat ? { conversationId: chat } : {}) });
+    },
+    lastUse: (webContentsId) => uses.get(webContentsId) ?? null,
     onChange(cb) {
       changeListeners.add(cb);
       return () => changeListeners.delete(cb);

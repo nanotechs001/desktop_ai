@@ -137,4 +137,9 @@ export type ConfirmRequest = {
   clientLabel: string;
   /** The asking agent's chat, else the chat that owns the tab; the ask also shows in that chat. Absent when neither is known. */
   conversationId?: string;
+  /**
+   * `leave`: not an agent action but a page's "Leave site?" (its beforeunload blocked a navigation); Allow means
+   * Leave. The desktop asks it in a native box, so only the chat shows it. Absent for a risky agent action.
+   */
+  kind?: 'leave';
 };

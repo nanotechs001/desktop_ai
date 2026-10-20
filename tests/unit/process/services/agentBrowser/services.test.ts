@@ -457,6 +457,79 @@ describe('agent browser services: tabs an agent page opens', () => {
   });
 });
 
+describe('agent browser services: leave site', () => {
+  /** Tab `id` opened by an agent of chat conv-1, and that agent's command sender. */
+  const agentTab = async (id: number) => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const created = send('Target.createTarget', { url: 'https://agent.test/' });
+    await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalled());
+    const tab = newTab(id, agentSession, 'https://agent.test/');
+    tab.navigate('https://agent.test/');
+    expect((await created).result).toEqual({ targetId: `wc-${id}` });
+    return { send, tab };
+  };
+
+  it("lets an agent's own tab leave unasked", async () => {
+    await agentTab(70);
+    expect(hooks.current.unloadBlocked?.(70)).toEqual({ kind: 'leave' });
+  });
+
+  it('asks on a paused agent tab, in its chat as well', async () => {
+    const { tab } = await agentTab(71);
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+    expect((await ownership(71))?.paused).toBe(true);
+
+    const plan = hooks.current.unloadBlocked?.(71);
+    expect(plan).toMatchObject({ kind: 'ask' });
+    expect(plan?.kind === 'ask' && typeof plan.askChat).toBe('function');
+  });
+
+  it('asks on a user tab only on the desktop: no chat drives it', async () => {
+    await start();
+    newTab(72, personalSession);
+    expect(hooks.current.unloadBlocked?.(72)).toEqual({ kind: 'ask' });
+    expect(hooks.current.unloadBlocked?.(999)).toEqual({ kind: 'ask' });
+  });
+
+  it("asks a shared tab's question in the chat of the agent that used it; the chat's Leave answers it", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-a' });
+    newTab(73, personalSession, 'https://bank.test/account');
+    await call('share', { webContentsId: 73, on: true });
+    expect(hooks.current.unloadBlocked?.(73)).toEqual({ kind: 'ask' }); // no agent used it yet
+    const attached = await send('Target.attachToTarget', { targetId: 'wc-73', flatten: true });
+    await send('Page.getFrameTree', {}, String(attached.result?.sessionId));
+
+    const plan = hooks.current.unloadBlocked?.(73);
+    if (plan?.kind !== 'ask' || !plan.askChat) throw new Error('expected a chat ask');
+    const leave = plan.askChat(new AbortController().signal);
+    const [open] = webuiConfirms.listConfirms('conv-a');
+    expect(open).toEqual({ id: open.id, kind: 'leave', origin: 'https://bank.test', frameOrigin: null, label: '' });
+    expect(webuiConfirms.answerConfirm(open.id, true, true)).toBe(true);
+    expect(await leave).toBe(true);
+  });
+
+  it('withdraws the chat ask once the desktop answered', async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-a' });
+    newTab(74, personalSession, 'https://bank.test/');
+    await call('share', { webContentsId: 74, on: true });
+    const attached = await send('Target.attachToTarget', { targetId: 'wc-74', flatten: true });
+    await send('Page.getFrameTree', {}, String(attached.result?.sessionId));
+    const plan = hooks.current.unloadBlocked?.(74);
+    if (plan?.kind !== 'ask' || !plan.askChat) throw new Error('expected a chat ask');
+    const settled = new AbortController();
+
+    const leave = plan.askChat(settled.signal);
+    expect(webuiConfirms.listConfirms('conv-a')).toHaveLength(1);
+    settled.abort();
+
+    expect(await leave).toBe(false);
+    expect(webuiConfirms.listConfirms('conv-a')).toEqual([]);
+  });
+});
+
 describe('agent browser services: confirm gate', () => {
   const confirmed = () => h.ipcBridge.agentBrowser.confirmRequested.emit.mock.calls;
 

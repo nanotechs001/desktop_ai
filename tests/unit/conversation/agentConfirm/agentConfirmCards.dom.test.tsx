@@ -118,6 +118,21 @@ describe('AgentConfirmCards in the desktop app', () => {
     expect(document.querySelector('img')).toBeNull();
   });
 
+  it('asks a page\'s "Leave site?" with Stay and Leave, without the always box or the timeout hint', async () => {
+    await mount([request('leave', 'conv-1', { kind: 'leave', frameOrigin: null, label: '' })]);
+    expect(screen.getByText('preview.browserChrome.leave.title')).toBeTruthy();
+    expect(screen.getByText('preview.browserChrome.leave.detail')).toBeTruthy();
+    expect(screen.getByText('https://leave.test')).toBeTruthy();
+    expect(screen.queryByText(`${KEY}.always`)).toBeNull();
+    expect(screen.queryByText(`${KEY}.timeoutHint`)).toBeNull();
+
+    await armAllow();
+    fireEvent.click(screen.getByText('preview.browserChrome.leave.leave'));
+    expect(mocks.replyConfirm).toHaveBeenLastCalledWith({ id: 'leave', allow: true, alwaysForSite: false });
+    fireEvent.click(screen.getByText('preview.browserChrome.leave.stay'));
+    expect(mocks.replyConfirm).toHaveBeenLastCalledWith({ id: 'leave', allow: false, alwaysForSite: false });
+  });
+
   it('unsubscribes on unmount', async () => {
     await mount();
     cleanup();

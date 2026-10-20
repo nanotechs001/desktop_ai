@@ -51,8 +51,11 @@ export type BrowserViewRoutes = {
 /** The desktop's loopback artifact server, used structurally; `port` is null while artifacts are unavailable. */
 export type ArtifactViewRoutes = { port(): number | null };
 
-/** A risky agent action waiting for the user, as the phone sees it. `label` is the page's text: show it as text only. */
-export type BrowserConfirm = { id: string; origin: string; frameOrigin: string | null; label: string };
+/**
+ * A risky agent action waiting for the user, as the phone sees it. `label` is the page's text: show it as text only.
+ * `kind: 'leave'` is a page's "Leave site?" instead (allow means Leave).
+ */
+export type BrowserConfirm = { id: string; origin: string; frameOrigin: string | null; label: string; kind?: 'leave' };
 
 /** The desktop's pending agent confirmations, used structurally so web-host never imports desktop code. */
 export type BrowserConfirmRoutes = {

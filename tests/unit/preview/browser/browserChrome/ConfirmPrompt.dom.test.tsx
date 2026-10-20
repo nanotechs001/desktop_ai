@@ -66,6 +66,14 @@ afterEach(() => {
 });
 
 describe('ConfirmPrompt', () => {
+  it('leaves a page\'s "Leave site?" to the native box: the pane shows the next risky ask instead', async () => {
+    await mount([request('leave', { kind: 'leave', frameOrigin: null, label: '' }), request('b')]);
+    expect(screen.queryByText('preview.browserChrome.leave.leave')).toBeNull();
+    expect(screen.getByText('Publish b')).toBeTruthy();
+    await push([request('leave', { kind: 'leave', frameOrigin: null, label: '' })]);
+    expect(screen.queryByText(`${KEY}.allow`)).toBeNull();
+  });
+
   it('shows the action label and the origin as text, and nothing while no ask is open', async () => {
     await mount();
     expect(screen.queryByText(`${KEY}.allow`)).toBeNull();

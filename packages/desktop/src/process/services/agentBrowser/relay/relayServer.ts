@@ -453,6 +453,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       blockedPorts: blockedPorts(),
     });
     if (decision.allow === false) throw new Error(decision.message);
+    registry.touch(webContentsId, conn.conversationId);
     if (method === 'Page.reload') return reload(session, params);
     const agentInput = agentInputOf(method, params);
     const endInput = agentInput ? registry.beginAgentInput(webContentsId, agentInput) : null;

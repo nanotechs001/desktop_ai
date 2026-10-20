@@ -90,6 +90,18 @@ describe('AgentConfirmCards in the WebUI', () => {
     expect(screen.queryByText('Pay now')).toBeNull();
   });
 
+  it('draws a "Leave site?" ask from web-host as one, and Leave posts allow true', async () => {
+    listed = [{ ...ASK, kind: 'leave', frameOrigin: null, label: '' }];
+    render(<AgentConfirmCards conversationId='conv-1' />);
+    await tick(0);
+    expect(screen.getByText('preview.browserChrome.leave.title')).toBeTruthy();
+    await tick(600);
+    fireEvent.click(screen.getByText('preview.browserChrome.leave.leave'));
+    await tick(0);
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ allow: true, always: false });
+  });
+
   it('Deny posts allow false without always', async () => {
     render(<AgentConfirmCards conversationId='conv-1' />);
     await tick(0);

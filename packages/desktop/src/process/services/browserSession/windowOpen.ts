@@ -80,7 +80,15 @@ export type WindowOpenHooks = {
   tabRequested?: (openerId: number, url: string, partition: string | null) => { conversationId?: string } | undefined;
   /** A page's popup window was created. */
   popupCreated?: (openerId: number, popup: Electron.WebContents) => void;
+  /** A page's beforeunload blocked a navigation or close: what to do instead of only asking on the desktop. */
+  unloadBlocked?: (webContentsId: number) => UnloadPlan;
 };
+
+/**
+ * `leave`: an agent's own tab goes on unasked (nobody may be watching it). `ask`: "Leave site?" on the desktop and,
+ * with `askChat`, in a chat too (resolves true for Leave; `signal` withdraws it once the other answered).
+ */
+export type UnloadPlan = { kind: 'leave' } | { kind: 'ask'; askChat?: (signal: AbortSignal) => Promise<boolean> };
 
 let hooks: WindowOpenHooks = {};
 
@@ -293,29 +301,100 @@ const preloadLeaveTranslate = (): void => {
   );
 };
 
+/** A Leave answered after the page stayed lets the tab's next unload attempt through unasked, for this long. */
+const LEAVE_AGAIN_MS = 60_000;
+/** Tabs whose next unload goes through unasked, until the time (ms) given. */
+const leaveAgainUntil = new Map<number, number>();
+/** Tabs with a desktop-and-chat ask open: a repeat attempt meanwhile stays without a second ask. */
+const asking = new Set<number>();
+
+const leaveOptions = (t: MenuTranslate) => ({
+  type: 'question' as const,
+  message: t(`${LEAVE_KEY}.title`),
+  detail: t(`${LEAVE_KEY}.detail`),
+  buttons: [t(`${LEAVE_KEY}.leave`), t(`${LEAVE_KEY}.stay`)],
+  defaultId: LEAVE_BUTTON,
+  cancelId: STAY_BUTTON,
+  noLink: true,
+});
+
+/** True once, within {@link LEAVE_AGAIN_MS} of a Leave answered after the page stayed. */
+const takeLeaveAgain = (webContentsId: number): boolean => {
+  const until = leaveAgainUntil.get(webContentsId);
+  leaveAgainUntil.delete(webContentsId);
+  return until !== undefined && Date.now() <= until;
+};
+
 /**
- * Asks "Leave site?" when a page's beforeunload handler blocks a navigation or close, on the window
- * that shows the page (the main window for a tab, the popup's own window). Leave lets the page go;
- * Stay, or no answer possible yet, keeps it.
+ * The blocked load's url when it is a browser-initiated one (the address bar, an agent's Page.navigate): Chromium
+ * shows its pending entry in `getURL()` before it commits. Null for a reload, back/forward or a link the page
+ * followed, whose target main cannot see.
+ */
+const pendingUrlOf = (contents: Electron.WebContents): string | null => {
+  const url = contents.getURL();
+  return url && url !== contents.mainFrame.url && isSafeUrl(url) ? url : null;
+};
+
+/**
+ * Asks on the desktop (a non-blocking box) and in the tab's chat at once; the first answer wins and withdraws the
+ * other. The page has already stayed, so Leave runs the blocked load again when main knows it; otherwise the tab's
+ * next attempt (the user's or the agent's retry) leaves unasked.
+ */
+const askDesktopAndChat = (
+  contents: Electron.WebContents,
+  owner: Electron.BrowserWindow,
+  t: MenuTranslate,
+  askChat: (signal: AbortSignal) => Promise<boolean>
+): void => {
+  const { id } = contents;
+  if (asking.has(id)) return;
+  asking.add(id);
+  const pendingUrl = pendingUrlOf(contents);
+  const settled = new AbortController();
+  const desktop = dialog
+    .showMessageBox(owner, { ...leaveOptions(t), signal: settled.signal })
+    .then(({ response }) => response === LEAVE_BUTTON);
+  const chat = askChat(settled.signal);
+  void Promise.race([desktop, chat])
+    .catch((error: unknown) => {
+      console.error('[BrowserSession] the leave-site ask failed; the page stays:', error);
+      return false;
+    })
+    .then((leave) => {
+      settled.abort();
+      asking.delete(id);
+      if (!leave || contents.isDestroyed()) return;
+      leaveAgainUntil.set(id, Date.now() + LEAVE_AGAIN_MS);
+      if (pendingUrl) {
+        contents.loadURL(pendingUrl).catch((error: unknown) => {
+          console.warn('[BrowserSession] could not run the left navigation again:', error);
+        });
+      }
+    });
+};
+
+/**
+ * Answers "Leave site?" when a page's beforeunload handler blocks a navigation or close. An agent's own tab leaves
+ * unasked. Otherwise it asks on the window that shows the page (the main window for a tab, the popup's own window):
+ * Leave lets the page go; Stay, or no answer possible yet, keeps it. When a chat drives the tab, the chat asks too
+ * (see {@link askDesktopAndChat}).
  */
 export function installBeforeUnloadDialog(
   contents: Electron.WebContents,
   getMainWindow: () => Electron.BrowserWindow | null
 ): void {
   preloadLeaveTranslate();
+  const { id } = contents;
+  contents.once('destroyed', () => leaveAgainUntil.delete(id));
   contents.on('will-prevent-unload', (event) => {
+    if (takeLeaveAgain(id)) return event.preventDefault();
+    const plan = runHook('unloadBlocked', () => hooks.unloadBlocked?.(id));
+    if (plan?.kind === 'leave') return event.preventDefault();
     const t = leaveTranslate;
     const owner = BrowserWindow.fromWebContents(contents.hostWebContents ?? contents) ?? getMainWindow();
     if (!t || !owner || owner.isDestroyed()) return;
-    const choice = dialog.showMessageBoxSync(owner, {
-      type: 'question',
-      message: t(`${LEAVE_KEY}.title`),
-      detail: t(`${LEAVE_KEY}.detail`),
-      buttons: [t(`${LEAVE_KEY}.leave`), t(`${LEAVE_KEY}.stay`)],
-      defaultId: LEAVE_BUTTON,
-      cancelId: STAY_BUTTON,
-      noLink: true,
-    });
+    if (plan?.askChat) return askDesktopAndChat(contents, owner, t, plan.askChat);
+    const choice = dialog.showMessageBoxSync(owner, leaveOptions(t));
     if (choice === LEAVE_BUTTON) event.preventDefault();
   });
 }

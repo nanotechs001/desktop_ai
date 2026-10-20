@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type FakeWindow = {
   options: Electron.BrowserWindowConstructorOptions;
@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   emit: vi.fn(),
   windows: [] as FakeWindow[],
   showMessageBoxSync: vi.fn(() => 0),
+  showMessageBox: vi.fn((_owner: unknown, _options: Electron.MessageBoxOptions) =>
+    Promise.resolve({ response: 1, checkboxChecked: false })
+  ),
   fromWebContents: vi.fn((_contents: unknown): unknown => null),
 }));
 
@@ -25,7 +28,7 @@ vi.mock('@process/services/browserSession/contextMenu/contextMenuInstall', () =>
 
 vi.mock('@/common', () => ({ ipcBridge: { browser: { openTabRequested: { emit: mocks.emit } } } }));
 vi.mock('electron', () => ({
-  dialog: { showMessageBoxSync: mocks.showMessageBoxSync },
+  dialog: { showMessageBoxSync: mocks.showMessageBoxSync, showMessageBox: mocks.showMessageBox },
   BrowserWindow: class {
     static fromWebContents = mocks.fromWebContents;
     options: Electron.BrowserWindowConstructorOptions;
@@ -536,8 +539,10 @@ describe('installBeforeUnloadDialog', () => {
   const installOn = async (contents: Record<string, unknown>) => {
     const handlers = new Map<string, (event: { preventDefault: () => void }) => void>();
     const target = {
+      id: 1,
       ...contents,
       on: (event: string, handler: (event: { preventDefault: () => void }) => void) => handlers.set(event, handler),
+      once: vi.fn(),
     };
     installBeforeUnloadDialog(
       target as unknown as Electron.WebContents,
@@ -556,7 +561,9 @@ describe('installBeforeUnloadDialog', () => {
 
   beforeEach(() => {
     mocks.showMessageBoxSync.mockReset();
+    mocks.showMessageBox.mockClear();
     mocks.fromWebContents.mockReset();
+    setWindowOpenHooks({});
   });
 
   it('asks "Leave site?" on the window that hosts the webview; Leave lets the page go', async () => {
@@ -597,6 +604,168 @@ describe('installBeforeUnloadDialog', () => {
     fire();
 
     expect(mocks.showMessageBoxSync.mock.calls[0][0]).toBe(mainWindow);
+  });
+});
+
+describe('installBeforeUnloadDialog with agent browser control', () => {
+  const owner = { isDestroyed: () => false };
+  let nextId = 100;
+
+  /** A tab whose beforeunload blocks a load; `pendingUrl` is the uncommitted address `getURL()` shows. */
+  const blockedTab = async (pendingUrl: string | null = null) => {
+    const handlers = new Map<string, (event: { preventDefault: () => void }) => void>();
+    const committed = 'https://editor.test/doc';
+    const tab = {
+      id: nextId++,
+      getURL: () => pendingUrl ?? committed,
+      mainFrame: { url: committed },
+      isDestroyed: () => false,
+      loadURL: vi.fn(() => Promise.resolve()),
+      on: (event: string, handler: (event: { preventDefault: () => void }) => void) => handlers.set(event, handler),
+      once: vi.fn(),
+    };
+    installBeforeUnloadDialog(tab as unknown as Electron.WebContents, () => null);
+    await vi.waitFor(() => expect(handlers.has('will-prevent-unload')).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const fire = () => {
+      const event = { preventDefault: vi.fn() };
+      handlers.get('will-prevent-unload')?.(event);
+      return event;
+    };
+    return { tab, fire };
+  };
+
+  /** A chat ask the test answers; `signal` is what the dialog passed it. */
+  const chatAsk = () => {
+    let answer: (leave: boolean) => void = () => {};
+    const seen: { signal: AbortSignal | null } = { signal: null };
+    const askChat = vi.fn(
+      (signal: AbortSignal) =>
+        new Promise<boolean>((resolve) => {
+          seen.signal = signal;
+          answer = resolve;
+        })
+    );
+    return { askChat, seen, answer: (leave: boolean) => answer(leave) };
+  };
+
+  /** The desktop box stays open until the test answers it or its signal closes it (as Stay). */
+  const desktopBox = () => {
+    let answer: (response: number) => void = () => {};
+    mocks.showMessageBox.mockImplementationOnce(
+      (_owner, options) =>
+        new Promise((resolve) => {
+          answer = (response) => resolve({ response, checkboxChecked: false });
+          options.signal?.addEventListener('abort', () => resolve({ response: 1, checkboxChecked: false }));
+        })
+    );
+    return { leave: () => answer(0) };
+  };
+
+  beforeEach(() => {
+    mocks.showMessageBoxSync.mockReset();
+    mocks.showMessageBox.mockClear();
+    mocks.fromWebContents.mockReset();
+    mocks.fromWebContents.mockReturnValue(owner);
+  });
+
+  afterEach(() => setWindowOpenHooks({}));
+
+  it("lets an agent's own tab leave without any dialog", async () => {
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'leave' }) });
+    const { fire } = await blockedTab();
+
+    expect(fire().preventDefault).toHaveBeenCalled();
+    expect(mocks.showMessageBoxSync).not.toHaveBeenCalled();
+    expect(mocks.showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('asks a tab no chat drives with the blocking desktop box, as before', async () => {
+    const unloadBlocked = vi.fn(() => ({ kind: 'ask' as const }));
+    setWindowOpenHooks({ unloadBlocked });
+    mocks.showMessageBoxSync.mockReturnValue(1);
+    const { tab, fire } = await blockedTab();
+
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+    expect(unloadBlocked).toHaveBeenCalledWith(tab.id);
+    expect(mocks.showMessageBoxSync).toHaveBeenCalledTimes(1);
+    expect(mocks.showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('keeps the page, asks on the desktop and in the chat; a chat Leave closes the box and runs the load again', async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
+    desktopBox();
+    const { tab, fire } = await blockedTab('https://elsewhere.test/next');
+
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+    expect(mocks.showMessageBoxSync).not.toHaveBeenCalled();
+    const [parent, options] = mocks.showMessageBox.mock.calls[0];
+    expect(parent).toBe(owner);
+    expect(options).toMatchObject({ message: 'preview.browserChrome.leave.title', cancelId: 1 });
+    // A second attempt while the ask is open does not ask again.
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+    expect(chat.askChat).toHaveBeenCalledTimes(1);
+
+    chat.answer(true);
+    await vi.waitFor(() => expect(tab.loadURL).toHaveBeenCalledWith('https://elsewhere.test/next'));
+    expect(options.signal?.aborted).toBe(true);
+    // The re-run load passes the page's beforeunload once; the next one asks again.
+    expect(fire().preventDefault).toHaveBeenCalled();
+    desktopBox();
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+    expect(chat.askChat).toHaveBeenCalledTimes(2);
+  });
+
+  it('a desktop Leave withdraws the chat ask; with no known target the next attempt leaves unasked', async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
+    const box = desktopBox();
+    const { tab, fire } = await blockedTab();
+    fire();
+
+    box.leave();
+    await vi.waitFor(() => expect(chat.seen.signal?.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(tab.loadURL).not.toHaveBeenCalled();
+    expect(fire().preventDefault).toHaveBeenCalled();
+  });
+
+  it('Stay in the chat keeps the page and grants nothing', async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
+    desktopBox();
+    const { tab, fire } = await blockedTab('https://elsewhere.test/next');
+    fire();
+
+    chat.answer(false);
+    await vi.waitFor(() => expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(tab.loadURL).not.toHaveBeenCalled();
+    desktopBox();
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('forgets an unused Leave after a minute', async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
+    desktopBox();
+    const { fire } = await blockedTab();
+    fire();
+    chat.answer(true);
+    await vi.waitFor(() => expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const later = Date.now() + 60_001;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    desktopBox();
+    try {
+      expect(fire().preventDefault).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 

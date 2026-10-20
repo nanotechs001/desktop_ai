@@ -8,7 +8,7 @@ import React from 'react';
 import { Card } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import ConfirmBody, { CONFIRM_KEY } from './ConfirmBody';
+import ConfirmBody, { CONFIRM_KEY, LEAVE_KEY } from './ConfirmBody';
 import { replyOverIpc, useIpcConfirms, usePolledConfirms } from './useAgentConfirms';
 
 /**
@@ -28,9 +28,16 @@ const AgentConfirmCards: React.FC<{ conversationId: string }> = ({ conversationI
   return (
     <div className='flex flex-col gap-8px py-8px'>
       {asks.map((ask) => (
-        <Card key={ask.id} size='small' title={t(`${CONFIRM_KEY}.title`)} role='group'>
+        <Card
+          key={ask.id}
+          size='small'
+          title={t(ask.kind === 'leave' ? `${LEAVE_KEY}.title` : `${CONFIRM_KEY}.title`)}
+          role='group'
+        >
           <ConfirmBody request={ask} onAnswer={(allow, always) => answer(ask.id, allow, always)} />
-          <div className='mt-8px text-12px text-t-secondary'>{t(`${CONFIRM_KEY}.timeoutHint`)}</div>
+          {ask.kind !== 'leave' && (
+            <div className='mt-8px text-12px text-t-secondary'>{t(`${CONFIRM_KEY}.timeoutHint`)}</div>
+          )}
         </Card>
       ))}
     </div>

@@ -9,14 +9,14 @@ import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
 import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
-import { setWindowOpenHooks } from '@process/services/browserSession/windowOpen';
+import { setWindowOpenHooks, type UnloadPlan } from '@process/services/browserSession/windowOpen';
 import {
   isDeletedAgentProfile,
   parseBrowserTabProfile,
   partitionOfProfile,
   profileOfSession,
 } from '@process/services/browserSession/profiles/browserProfiles';
-import { PendingConfirms } from './confirmGate';
+import { PendingConfirms, webOriginOf } from './confirmGate';
 import { createBrowserViewService, type BrowserViewService } from './relay/browserView';
 import { createDebuggerSessions } from './relay/debuggerSessions';
 import { startRelayServer, type ProfileLookup } from './relay/relayServer';
@@ -64,14 +64,22 @@ let pendingConfirms: PendingConfirms | null = null;
 export const getBrowserViewService = (): BrowserViewService | null => browserView;
 
 /**
- * The phone's view of the risky-action asks (web-host's BrowserConfirmRoutes): a chat's own asks only, without the
- * agent's label. An ask no chat owns (a shared user tab) stays on the desktop's browser pane and cannot be answered here.
+ * The phone's view of the risky-action and "Leave site?" asks (web-host's BrowserConfirmRoutes): a chat's own asks
+ * only, without the agent's label. An ask with no chat stays on the desktop and cannot be answered here.
  */
 export const webuiConfirms = {
-  listConfirms: (conversationId: string): Array<Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label'>> =>
+  listConfirms: (
+    conversationId: string
+  ): Array<Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label' | 'kind'>> =>
     (pendingConfirms?.list() ?? [])
       .filter((r) => r.conversationId === conversationId)
-      .map(({ id, origin, frameOrigin, label }) => ({ id, origin, frameOrigin, label })),
+      .map(({ id, origin, frameOrigin, label, kind }) => ({
+        id,
+        origin,
+        frameOrigin,
+        label,
+        ...(kind ? { kind } : {}),
+      })),
   answerConfirm: (id: string, allow: boolean, always: boolean): boolean => {
     const confirms = pendingConfirms;
     if (!confirms?.list().some((r) => r.id === id && r.conversationId !== undefined)) return false;
@@ -95,10 +103,39 @@ const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry
 };
 
 /**
+ * A page's "Leave site?": an agent's own tab (not shared, not taken over) leaves unasked, since the agent cannot
+ * answer and the user may not be watching. Any other tab asks on the desktop and, when a chat drives it (its owner's,
+ * else the last agent that used it), in that chat too.
+ */
+const unloadPlan = (registry: TargetRegistry, confirms: PendingConfirms, webContentsId: number): UnloadPlan => {
+  const tab = registry.ownership(webContentsId);
+  if (!tab) return { kind: 'ask' };
+  const { owner } = tab;
+  if (owner !== 'user' && tab.sharedWith === null && !tab.paused) return { kind: 'leave' };
+  const conversationId =
+    (owner === 'user' ? undefined : owner.conversationId) ?? registry.lastUse(webContentsId)?.conversationId;
+  if (!conversationId) return { kind: 'ask' };
+  const url = registry.contents(webContentsId)?.mainFrame.url ?? '';
+  const request: Omit<ConfirmRequest, 'id'> = {
+    kind: 'leave',
+    origin: webOriginOf(url) ?? '',
+    frameOrigin: null, // nothing to remember: every leave is asked
+    label: '',
+    clientLabel: owner === 'user' ? '' : owner.label,
+    conversationId,
+  };
+  return { kind: 'ask', askChat: (signal) => confirms.request(request, undefined, signal) };
+};
+
+/**
  * Popups and `_blank` tabs an agent's page opens belong to that agent (and its chat), so it can drive them and the
  * WebUI lists them. A `_blank` tab is matched like an agent's own new tab: its url and partition, within 15 s.
  */
-const followOpeners = (registry: TargetRegistry, waiter: CreateTabWaiter<Electron.WebContents>): void => {
+const followOpeners = (
+  registry: TargetRegistry,
+  waiter: CreateTabWaiter<Electron.WebContents>,
+  confirms: PendingConfirms
+): void => {
   const agentOwner = (openerId: number) => {
     const owner = registry.ownership(openerId)?.owner;
     return owner && owner !== 'user' ? owner : null;
@@ -119,6 +156,7 @@ const followOpeners = (registry: TargetRegistry, waiter: CreateTabWaiter<Electro
       );
       return owner.conversationId ? { conversationId: owner.conversationId } : {};
     },
+    unloadBlocked: (webContentsId) => unloadPlan(registry, confirms, webContentsId),
   });
 };
 
@@ -269,7 +307,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     watchUserInput(contents, registry);
     if (contents.getType() === 'webview') offerNewTab(waiter, contents, partitionOfProfile(profile));
   });
-  followOpeners(registry, waiter);
+  followOpeners(registry, waiter, confirms);
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
   confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));
 

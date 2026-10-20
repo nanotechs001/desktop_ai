@@ -19,7 +19,8 @@ import {
  */
 const ConfirmPrompt: React.FC = () => {
   const { t } = useTranslation();
-  const current = useIpcConfirms()[0];
+  // A page's "Leave site?" already has main's native box on the desktop; only the chat repeats it.
+  const current = useIpcConfirms().find((ask) => ask.kind !== 'leave');
   if (!current) return null;
 
   return (
