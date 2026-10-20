@@ -8,7 +8,7 @@ import { httpRequest } from '@/common/adapter/httpBridge';
 import { notesRoot, readNotes, upsertNotesBlock } from '@process/artifacts/notes';
 import { createSerialiser } from '@process/artifacts/store';
 import type { UpsertManagedBlockResult } from '@/common/types/agent/managedRuleBlock';
-import { upsertBrowserRule } from './browserRule';
+import { ruleBotName, upsertBrowserRule } from './browserRule';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { DEFAULT_AGENT_NAME } from '@/common/types/agent/defaultAgent';
 import type { Note } from '@/common/types/agent/artifacts';
@@ -35,8 +35,12 @@ const DEFAULT_LOCALE = '';
 
 const localeBody = (locale: string) => (locale ? { locale } : {});
 
-/** The name the user gave the bot; the default Agent's placeholder name is none, so it never says "I'm Agent". */
-const userSetName = ({ name }: Assistant): string | undefined => (name === DEFAULT_AGENT_NAME ? undefined : name);
+/**
+ * The name the user gave the bot; the default Agent's placeholder name is none, so it never says "I'm Agent". Compared
+ * as the rule would show it, so "Agent " or a hidden character around it counts as the placeholder too.
+ */
+const userSetName = ({ name }: Assistant): string | undefined =>
+  ruleBotName(name) === DEFAULT_AGENT_NAME ? undefined : name;
 
 /**
  * Backend-wired deps. Built-in assistants are skipped: the backend rejects writes to their ids.

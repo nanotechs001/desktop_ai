@@ -271,9 +271,15 @@ describe('backendAssistantRuleDeps', () => {
   });
 
   it("leaves the default Agent's placeholder name out, so it never introduces itself as Agent", async () => {
-    httpRequestMock.mockResolvedValue([{ id: 'aion-default-agent', source: 'user', name: 'Agent' }]);
+    httpRequestMock.mockResolvedValue([
+      { id: 'aion-default-agent', source: 'user', name: 'Agent' },
+      { id: 'bare:2', source: 'user', name: 'Agent ' },
+      { id: 'bare:3', source: 'user', name: ' Agent\u200b' },
+    ]);
     await expect(backendAssistantRuleDeps.listAssistants()).resolves.toEqual([
       { id: 'aion-default-agent', locales: [''], name: undefined },
+      { id: 'bare:2', locales: [''], name: undefined },
+      { id: 'bare:3', locales: [''], name: undefined },
     ]);
     await expect(backendAssistantRuleDeps.assistantName?.('aion-default-agent')).resolves.toBeUndefined();
   });
