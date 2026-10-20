@@ -2,7 +2,7 @@
  * The WebUI's live view of the desktop's agent browser tabs, answered by the listener itself after the auth gate:
  * `GET /api/browser-view/tabs?conversation=<id>` and the `/api/browser-view/stream?tab=<id>` WebSocket. Both must
  * be same-origin (isSameOriginFetch for the tabs route; the WebSocket needs a matching `Origin`). Messages are
- * carried as-is; the desktop's BrowserViewRoutes parses them.
+ * carried as-is; the desktop's BrowserViewService parses them.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -19,6 +19,7 @@ export const STREAM_REQUEST_LINE = /^GET (\/api\/browser-view\/stream)(\?tab=wc-
 
 const MAX_STREAMS_PER_TAB = 2;
 const MAX_STREAMS = 4;
+/** Session re-check and heartbeat interval: a phone that misses a ping is terminated on the next tick. */
 const REVALIDATE_MS = 30_000;
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 /** Messages the phone sends (its `hello` first) while the desktop is still attaching to the tab. */
@@ -105,6 +106,7 @@ export function createBrowserViewStreams(
       if (total >= MAX_STREAMS || (perTab.get(tabId) ?? 0) >= MAX_STREAMS_PER_TAB) return refuse(socket, 429);
       count(socket, tabId);
       // ws reads only the method, url and headers of the request it upgrades; the gate rebuilt those.
+      // This holds only while the server has no `verifyClient` or `path` option (those read req.socket / req.url).
       const req = { method: 'GET', url: target, headers } as IncomingMessage;
       wss.handleUpgrade(req, socket, head, (ws) => {
         socket.resume(); // the raw upgrade path paused it while the gate ran
@@ -127,7 +129,21 @@ function connect(ws: WebSocket, tabId: string, routes: BrowserViewRoutes, stillV
     close: (code, reason) => ws.close(code, reason),
   };
   const endSession = (): void => ws.close(POLICY_VIOLATION, 'session-ended');
+  const deliver = (target: BrowserViewStreamHandle, raw: string): void => {
+    try {
+      target.onMessage(raw);
+    } catch (error) {
+      console.error('[web-host] browser-view stream message failed', error);
+      ws.close(INTERNAL_ERROR, 'stream-failed');
+    }
+  };
+  // A phone that vanished without a FIN would otherwise hold its slot and the tab's cast forever.
+  let alive = true;
+  ws.on('pong', () => (alive = true));
   const timer = setInterval(() => {
+    if (!alive) return ws.terminate();
+    alive = false;
+    ws.ping();
     stillValid().then((ok) => {
       if (!ok) endSession();
     }, endSession);
@@ -137,7 +153,7 @@ function connect(ws: WebSocket, tabId: string, routes: BrowserViewRoutes, stillV
   ws.on('message', (data, isBinary) => {
     if (isBinary) return;
     const raw = data.toString();
-    if (handle) handle.onMessage(raw);
+    if (handle) deliver(handle, raw);
     else if (early.length < MAX_EARLY_MESSAGES) early.push(raw);
   });
   ws.on('close', () => {
@@ -151,7 +167,7 @@ function connect(ws: WebSocket, tabId: string, routes: BrowserViewRoutes, stillV
       if ('error' in result) return ws.close(CLOSE_CODES[result.error], result.error);
       if (closed) return result.close();
       handle = result;
-      early.forEach((raw) => result.onMessage(raw));
+      early.forEach((raw) => deliver(result, raw));
       early = [];
     },
     () => ws.close(INTERNAL_ERROR, 'stream-failed')

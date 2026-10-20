@@ -5,7 +5,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import http from 'node:http';
+import type { AddressInfo, Socket } from 'node:net';
 import WebSocket, { type RawData } from 'ws';
+import { createBrowserViewStreams } from '../src/local-routes/browserViewRoutes.js';
 import { startStaticServer, type StaticServerHandle } from '../src/static-server.js';
 import type { BrowserViewPeer, BrowserViewRoutes } from '../src/types.js';
 import {
@@ -47,7 +50,11 @@ function fakeRoutes(): FakeRoutes {
       if (held) await new Promise<void>((r) => held?.push(r));
       if (tabId === 'wc-99') return { error: 'not-allowed' as const };
       routes.peers.push(peer);
-      return { onMessage: (raw: string) => routes.messages.push(raw), close: () => (routes.closes += 1) };
+      const onMessage = (raw: string): void => {
+        if (raw === 'boom') throw new Error('bad message');
+        routes.messages.push(raw);
+      };
+      return { onMessage, close: () => (routes.closes += 1) };
     }),
   };
   return routes;
@@ -64,10 +71,15 @@ type Opened = {
   closed: () => { code: number; reason: string } | null;
 };
 
-/** Open a stream socket; resolves with the open socket, or the HTTP status that refused it. */
-function openStream(port: number, tab: string, headers: Record<string, string>): Promise<Opened | number> {
+/** Open a stream socket; resolves with the open socket, or the HTTP status that refused it. `autoPong: false` ignores pings. */
+function openStream(
+  port: number,
+  tab: string,
+  headers: Record<string, string>,
+  opts: { autoPong?: boolean } = {}
+): Promise<Opened | number> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/browser-view/stream?tab=${tab}`, { headers });
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/browser-view/stream?tab=${tab}`, { headers, ...opts });
     const received: RawData[] = [];
     let closed: { code: number; reason: string } | null = null;
     ws.on('message', (data) => received.push(data));
@@ -254,10 +266,24 @@ describe('browser-view routes', () => {
       expect(routes.messages).toEqual(['{"type":"hello","width":390,"dpr":3}']);
     });
 
-    it('forwards the close code of a refused stream', async () => {
-      const s = await stream('wc-99');
+    it('forwards the close code of a refused stream, and releases its slot', async () => {
+      // Two un-released slots would make the third a 429.
+      for (let i = 0; i < 3; i++) {
+        const s = await stream('wc-99');
+        await until(() => s.closed() !== null);
+        expect(s.closed()).toEqual({ code: 1008, reason: 'not-allowed' });
+      }
+    });
+
+    it('closes a stream whose onMessage throws with 1011, and logs it', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const s = await stream('wc-7');
+      await until(() => routes.peers.length === 1);
+      s.ws.send('boom');
       await until(() => s.closed() !== null);
-      expect(s.closed()).toEqual({ code: 1008, reason: 'not-allowed' });
+      expect(s.closed()?.code).toBe(1011);
+      expect(error).toHaveBeenCalled();
+      error.mockRestore();
     });
 
     it('forwards the close code the stream ends with, and closing the phone closes the stream', async () => {
@@ -279,6 +305,11 @@ describe('browser-view routes', () => {
       ['an extra query parameter', '/api/browser-view/stream?tab=wc-7&x=1'],
       ['no tab', '/api/browser-view/stream'],
       ['a non-canonical path', '/api/browser-view/../browser-view/stream?tab=wc-7'],
+      ['an upper-case path', '/API/browser-view/stream?tab=wc-7'],
+      ['a doubled slash', '//api/browser-view/stream?tab=wc-7'],
+      ['an encoded slash', '/api/browser-view%2fstream?tab=wc-7'],
+      ['encoded dot segments', '/api/browser-view/%2e%2e/browser-view/stream?tab=wc-7'],
+      ['two tabs', '/api/browser-view/stream?tab=wc-1&tab=wc-2'],
     ])('an upgrade with %s is 400', async (_name, target) => {
       const r = await rawExchange(handle.port, [upgrade(target, `Cookie: ${GOOD}\r\nOrigin: http://127.0.0.1\r\n`)]);
       expect(r.text).toMatch(/^HTTP\/1\.1 400/);
@@ -313,12 +344,18 @@ describe('browser-view routes', () => {
   });
 
   describe('revocation', () => {
-    it('setSessionsNotBefore closes a stream opened with an older session', async () => {
-      const s = await stream('wc-7', { cookie: `aionui-session=${jwtAt(1_000)}`, origin });
-      await until(() => routes.peers.length === 1);
+    it('setSessionsNotBefore closes a stream with an older session, keeps a newer one, and releases the slot', async () => {
+      const fresh = { cookie: `aionui-session=${jwtAt(3_000)}`, origin };
+      const old = await stream('wc-7', { cookie: `aionui-session=${jwtAt(1_000)}`, origin });
+      const kept = await stream('wc-7', fresh);
+      await until(() => routes.peers.length === 2);
+      expect(await openStream(handle.port, 'wc-7', fresh)).toBe(429);
       handle.setSessionsNotBefore(2_000_000);
-      await until(() => s.closed() !== null);
+      await until(() => old.closed() !== null);
       await until(() => routes.closes === 1);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(kept.closed()).toBeNull();
+      await stream('wc-7', fresh);
     });
   });
 
@@ -374,31 +411,94 @@ describe('browser-view stream re-validation', () => {
     await backend.close();
   });
 
-  const open = (): Promise<Opened> =>
-    opened(openStream(handle.port, 'wc-7', { cookie: GOOD, origin: `http://127.0.0.1:${handle.port}` }));
+  const headers = (): Record<string, string> => ({ cookie: GOOD, origin: `http://127.0.0.1:${handle.port}` });
+  const open = (opts: { autoPong?: boolean } = {}): Promise<Opened> =>
+    opened(openStream(handle.port, 'wc-7', headers(), opts));
+  const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 50));
 
-  it('re-checks the session every 30 s and keeps a stream whose session is still good', async () => {
+  it('re-checks the session every 30 s and keeps a stream whose session is still good and answers pings', async () => {
     const s = await open();
     await until(() => routes.peers.length === 1);
     const calls = backend.authCalls;
     vi.advanceTimersByTime(30_000);
     await until(() => backend.authCalls === calls + 1);
-    await new Promise((r) => setTimeout(r, 50));
+    await settle();
+    vi.advanceTimersByTime(30_000);
+    await until(() => backend.authCalls === calls + 2);
+    await settle();
     expect(s.closed()).toBeNull();
     s.ws.terminate();
   });
 
-  it('closes the stream with 1008 when the session fails re-validation', async () => {
-    const s = await open();
-    await until(() => routes.peers.length === 1);
+  it('closes the streams with 1008 when the session fails re-validation, releasing their slots', async () => {
+    const a = await open();
+    const b = await open();
+    await until(() => routes.peers.length === 2);
+    expect(await openStream(handle.port, 'wc-7', headers())).toBe(429);
     backend.authStatus(401);
     vi.advanceTimersByTime(29_999);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(s.closed()).toBeNull();
+    await settle();
+    expect(a.closed()).toBeNull();
     vi.advanceTimersByTime(1);
+    await until(() => a.closed() !== null && b.closed() !== null);
+    expect([a.closed()?.code, b.closed()?.code]).toEqual([1008, 1008]);
+    await until(() => routes.closes === 2);
+    backend.authStatus(null);
+    await open();
+  });
+
+  it('closes the stream with 1008 when aioncore cannot answer the re-check', async () => {
+    const s = await open();
+    await until(() => routes.peers.length === 1);
+    backend.authStatus(500);
+    vi.advanceTimersByTime(30_000);
     await until(() => s.closed() !== null);
     expect(s.closed()?.code).toBe(1008);
+  });
+
+  it('terminates a phone that stops answering pings within two ticks, and releases its slot', async () => {
+    const silent = await open({ autoPong: false });
+    const live = await open();
+    await until(() => routes.peers.length === 2);
+    vi.advanceTimersByTime(30_000);
+    await settle();
+    expect(silent.closed()).toBeNull();
+    vi.advanceTimersByTime(30_000);
+    await until(() => silent.closed() !== null);
     await until(() => routes.closes === 1);
+    await settle();
+    expect(live.closed()).toBeNull();
+    const again = await open();
+    expect(again.ws.readyState).toBe(WebSocket.OPEN);
+    live.ws.terminate();
+    again.ws.terminate();
+  });
+});
+
+describe('browser-view stream re-check that rejects', () => {
+  it('closes the stream with 1008', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const routes = fakeRoutes();
+    const streams = createBrowserViewStreams(routes, (socket) => socket.destroy());
+    const server = http.createServer();
+    server.on('upgrade', (req, socket, head) => {
+      const headers = req.headers as Record<string, string>;
+      const target = '/api/browser-view/stream?tab=wc-7';
+      streams.accept(socket as Socket, target, headers, head, () => Promise.reject(new Error('down')));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const s = await opened(openStream(port, 'wc-7', { origin: `http://127.0.0.1:${port}` }));
+      await until(() => routes.peers.length === 1);
+      vi.advanceTimersByTime(30_000);
+      await until(() => s.closed() !== null);
+      expect(s.closed()?.code).toBe(1008);
+    } finally {
+      vi.useRealTimers();
+      server.closeAllConnections();
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   });
 });
 

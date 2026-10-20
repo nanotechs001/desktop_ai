@@ -37,7 +37,7 @@ export async function startFakeBackend(): Promise<FakeBackend> {
       authCalls += 1;
       const cookie = req.headers.cookie ?? '';
       // Like the live aioncore: a revoked session is 401, a garbage cookie or token is 400.
-      const goodToken = /\.good\b/.test(cookie + (req.headers.authorization ?? '')); // see jwtFor()
+      const goodToken = /\.good\b/.test(cookie + (req.headers.authorization ?? '')); // tests sign their JWTs `<header>.<payload>.good` (jwtFor / jwtAt)
       const status = cookie.includes(GOOD) || goodToken ? (revoked ? 401 : 200) : 400;
       const answer = (): void => void res.writeHead(forced ?? status).end();
       if (held) held.push(answer);
