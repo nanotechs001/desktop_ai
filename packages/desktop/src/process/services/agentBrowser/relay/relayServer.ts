@@ -13,7 +13,15 @@ import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
 import { createDebuggerSessions, type DebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
-import { MAX_SCRIPT_CHARS, isScriptForm, scriptEvaluateParams, scriptPreview, withScriptTimeout } from './pageScript';
+import {
+  MAX_SCRIPT_CHARS,
+  isScriptForm,
+  isScriptWorld,
+  openScriptWorld,
+  scriptAsk,
+  withScriptTimeout,
+  writeScriptParams,
+} from './pageScript';
 import { POLICY_ERROR_CODE, decideRelayCommand, mayAct } from './relayPolicy';
 import {
   DEFAULT_RELAY_LIMITS,
@@ -421,32 +429,35 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   /**
-   * run_script in the page's own JS world (the DevTools console's) of a tab the client may act on, once the user
-   * allowed it for its origin. The approval is spent on this one `Runtime.evaluate`, which the relay builds itself
-   * (awaited, by value, timed, never the command-line API) and sends on the tab's own session: main-world `Runtime`
-   * stays closed to the session (relayPolicy). Fails closed like requestConfirm: `{ allow: false }` unless the user
-   * allowed it and the tab still shows that origin; else `{ allow: true, reply }` with the CDP reply.
+   * run_script in write mode on a tab the client may act on, once the user allowed scripts on its origin: in a fresh
+   * isolated world of the top frame, or in the page's own JS world (the DevTools console's). Either can change
+   * anything on the site, so both ask. The approval is spent on this one `Runtime.evaluate`, which the relay builds
+   * itself (awaited, by value, timed, origin-checked in the page, never the command-line API) and sends on the tab's
+   * own session: main-world `Runtime` stays closed to the session (relayPolicy). Fails closed like requestConfirm:
+   * `{ allow: false }` unless the user allowed it and the tab, its sharing and the session are still as asked; else
+   * `{ allow: true, reply }` with the CDP reply.
    */
-  const runPageScript = async (conn: Connection, params: Params): Promise<Params> => {
-    const { webContentsId, sessionId, code, form } = params;
+  const runScript = async (conn: Connection, params: Params): Promise<Params> => {
+    const { webContentsId, sessionId, code, form, world } = params;
     const valid =
       Number.isInteger(webContentsId) &&
       typeof sessionId === 'string' &&
       typeof code === 'string' &&
       code.length > 0 &&
       code.length <= MAX_SCRIPT_CHARS &&
-      isScriptForm(form);
-    if (!valid) throw new Error('Invalid AionRelay.runPageScript params');
+      isScriptForm(form) &&
+      isScriptWorld(world);
+    if (!valid) throw new Error('Invalid AionRelay.runScript params');
     const id = webContentsId as number;
     const { contents, session } = askedTab(conn, id, sessionId);
-    if (session.cdpSessionId) throw new Error('A page script runs on the tab session, not a frame session');
+    if (session.cdpSessionId) throw new Error('A script runs on the tab session, not a frame session');
     return whileAsking(conn, id, contents, async (signal) => {
       const origin = webOriginOf(contents.mainFrame.url);
       if (!origin) return { allow: false };
       const request = {
         origin,
         frameOrigin: origin,
-        label: scriptPreview(code),
+        ...scriptAsk(code),
         clientLabel: conn.client.label,
         kind: 'script' as const,
         ...askConversation(conn, id),
@@ -458,12 +469,12 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         mayAct(registry.ownership(id), conn.client) &&
         sessions.session(sessionId) !== null;
       if (!still) return { allow: false };
-      console.info(`[AgentBrowserRelay] run_script on ${origin} (world: page)`);
+      console.info(`[AgentBrowserRelay] run_script on ${origin} (world: ${world})`);
       registry.touch(id, conn.conversationId);
-      const reply = await withScriptTimeout(
-        sessions.send(sessionId, 'Runtime.evaluate', scriptEvaluateParams(code, form))
-      );
-      return { allow: true, reply: reply ?? {} };
+      const send = (method: string, cdpParams: Params) => sessions.send(sessionId, method, cdpParams);
+      const inWorld = world === 'isolated' ? { contextId: (await openScriptWorld(send)).contextId } : {};
+      const evaluate = { ...writeScriptParams(code, form, origin), ...inWorld };
+      return { allow: true, reply: (await withScriptTimeout(send('Runtime.evaluate', evaluate))) ?? {} };
     });
   };
 
@@ -516,8 +527,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         return reportAction(conn, params);
       case 'AionRelay.requestConfirm':
         return requestConfirm(conn, params);
-      case 'AionRelay.runPageScript':
-        return runPageScript(conn, params);
+      case 'AionRelay.runScript':
+        return runScript(conn, params);
       default:
         throw new Error(`${method} is not allowed for agents`);
     }

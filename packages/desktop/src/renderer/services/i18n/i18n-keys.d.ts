@@ -1292,6 +1292,7 @@ export type I18nKey =
   | 'preview.browserChrome.confirm.frame'
   | 'preview.browserChrome.confirm.frameOpaque'
   | 'preview.browserChrome.confirm.message'
+  | 'preview.browserChrome.confirm.scriptLength'
   | 'preview.browserChrome.confirm.scriptMessage'
   | 'preview.browserChrome.confirm.timeoutHint'
   | 'preview.browserChrome.confirm.title'

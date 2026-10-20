@@ -251,7 +251,8 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
-      "scriptMessage": "智能体想在 {{origin}} 的页面控制台中运行脚本。脚本可以读取和修改此网站。代码开头：",
+      "scriptMessage": "智能体想运行一个会更改 {{origin}} 的脚本。脚本可以像 DevTools 控制台一样，在此网站上执行你能执行的任何操作。代码：",
+      "scriptLength": "共 {{total}} 个字符",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

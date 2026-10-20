@@ -115,10 +115,12 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT).not.toMatch(/`(observe|act|drag)`/);
   });
 
-  it('keeps run_script for what act and observe cannot do, and says page scripts ask first, within the cap', () => {
+  it('keeps run_script for what act and observe cannot do, and says scripts that change the page ask first', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      'Prefer act/observe. Use run_script only when the task needs it (reading data, page state, or site APIs); page-world scripts ask the user first.'
+      'Prefer act/observe. Use run_script only when the task needs it (reading data, page state, or site APIs); scripts that change the page ask the user first.'
     );
+    // No script level is presented as a sandbox.
+    expect(BROWSER_RULE_TEXT).not.toMatch(/sandbox|page-world/i);
     expect(browserRuleText('W'.repeat(BOT_NAME_MAX_CHARS)).length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });
 

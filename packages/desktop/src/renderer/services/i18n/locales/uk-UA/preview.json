@@ -253,7 +253,8 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
-      "scriptMessage": "Агент хоче виконати скрипт у консолі сторінки на {{origin}}. Він може читати й змінювати цей сайт. Початок коду:",
+      "scriptMessage": "Агент хоче виконати скрипт, який змінює {{origin}}. Скрипт може робити на цьому сайті все, що можете ви, як консоль DevTools. Код:",
+      "scriptLength": "Усього символів: {{total}}",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

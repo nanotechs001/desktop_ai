@@ -41,7 +41,7 @@ export const useIpcConfirms = (enabled = true): ConfirmRequest[] => {
 
 const parseAsk = (value: unknown): ConfirmAsk | null => {
   if (typeof value !== 'object' || value === null) return null;
-  const { id, origin, frameOrigin, label, kind } = value as Record<string, unknown>;
+  const { id, origin, frameOrigin, label, kind, codeLength } = value as Record<string, unknown>;
   const frameOk = frameOrigin === null || typeof frameOrigin === 'string';
   if (typeof id !== 'string' || typeof origin !== 'string' || typeof label !== 'string' || !frameOk) return null;
   return {
@@ -50,6 +50,7 @@ const parseAsk = (value: unknown): ConfirmAsk | null => {
     frameOrigin: frameOrigin as string | null,
     label,
     ...(kind === 'leave' || kind === 'script' ? { kind } : {}),
+    ...(Number.isSafeInteger(codeLength) && (codeLength as number) >= 0 ? { codeLength: codeLength as number } : {}),
   };
 };
 

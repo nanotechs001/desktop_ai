@@ -251,7 +251,8 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
-      "scriptMessage": "エージェントが {{origin}} のページコンソールでスクリプトを実行しようとしています。このサイトを読み取り、変更できます。コードの先頭:",
+      "scriptMessage": "エージェントが {{origin}} を変更するスクリプトを実行しようとしています。スクリプトは DevTools コンソールと同様に、このサイトであなたができることを何でも実行できます。コード:",
+      "scriptLength": "合計 {{total}} 文字",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

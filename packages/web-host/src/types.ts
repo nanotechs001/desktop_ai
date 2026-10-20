@@ -53,8 +53,8 @@ export type ArtifactViewRoutes = { port(): number | null };
 
 /**
  * A risky agent action waiting for the user, as the phone sees it. `label` is the page's text: show it as text only.
- * `kind: 'leave'` is a page's "Leave site?" instead (allow means Leave); `kind: 'script'` asks to run a page script
- * (`label` is a preview of its code).
+ * `kind: 'leave'` is a page's "Leave site?" instead (allow means Leave); `kind: 'script'` asks to run a script that may
+ * change the page (`label` is `</> ` and its code, `codeLength` the code's full length).
  */
 export type BrowserConfirm = {
   id: string;
@@ -62,6 +62,7 @@ export type BrowserConfirm = {
   frameOrigin: string | null;
   label: string;
   kind?: 'leave' | 'script';
+  codeLength?: number;
 };
 
 /** The desktop's pending agent confirmations, used structurally so web-host never imports desktop code. */

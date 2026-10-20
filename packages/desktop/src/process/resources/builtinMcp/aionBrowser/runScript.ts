@@ -4,21 +4,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { webOriginOf } from '@process/services/agentBrowser/confirmGate';
 import {
-  scriptEvaluateParams,
+  MAX_RESULT_CHARS,
+  PAGE_CHANGED,
+  openScriptWorld,
+  readScriptParams,
   withScriptTimeout,
   type ScriptForm,
 } from '@process/services/agentBrowser/relay/pageScript';
 import { sanitizePageText } from '@/common/utils/utils';
 import type { ActionContext } from './actions';
 
-/** Characters of a script's JSON result the agent gets; the rest is cut with a note. */
-export const MAX_RESULT_CHARS = 20_000;
 /** Characters of an exception message the agent gets. */
 const MAX_ERROR_CHARS = 500;
-/** Its own world, apart from the one observe and act run in, so a script cannot disturb them. */
-const WORLD_NAME = 'aion-browser-script';
+/** V8's refusal of a change during a read-only (throwOnSideEffect) run. */
+const SIDE_EFFECT = /^EvalError: Possible side-effect/;
+const CHANGES_THE_PAGE = "This script changes the page; rerun with mode 'write' (asks the user).";
+const PAGE_CHANGED_TEXT = 'The page changed before the script ran, so it did not run. Observe the page again first.';
 
 /** A script's outcome as the agent sees it: the result text, or an error message. */
 export type ScriptOutcome = { ok: true; text: string } | { ok: false; error: string };
@@ -39,15 +41,20 @@ const exceptionText = (details: Fields, code: string | undefined): string => {
   const exception = asFields(details.exception);
   const described = typeof exception?.description === 'string' ? exception.description.split('\n')[0] : undefined;
   const value = exception && 'value' in exception ? String(exception.value) : undefined;
+  if (described !== undefined && SIDE_EFFECT.test(described)) return CHANGES_THE_PAGE;
+  if (value === PAGE_CHANGED) return PAGE_CHANGED_TEXT;
   const text = typeof details.text === 'string' ? details.text : 'unknown error';
   const message = sanitizePageText(described ?? value ?? text, MAX_ERROR_CHARS);
   const line = lineOf(details, code);
   return line === null ? `The script threw: ${message}` : `The script threw at line ${line}: ${message}`;
 };
 
+const truncatedNote = (length: number): string =>
+  `[Truncated: the result has ${length} characters; only the first ${MAX_RESULT_CHARS} are shown.]`;
+
 /**
  * A `Runtime.evaluate` reply as the agent sees it: the returned value as JSON, cut to {@link MAX_RESULT_CHARS} with a
- * note, or the exception's message and line in `code`. A malformed reply is an error.
+ * note (in the page already when it was too long, as `{ __truncated, length }`), or the exception's message and line in `code`. A malformed reply is an error.
  */
 export const formatScriptReply = (reply: unknown, code?: string): ScriptOutcome => {
   const fields = asFields(reply);
@@ -57,35 +64,28 @@ export const formatScriptReply = (reply: unknown, code?: string): ScriptOutcome 
   const result = asFields(fields.result);
   if (!result) return { ok: false, error: 'The browser returned no script result.' };
   if (typeof result.unserializableValue === 'string') return { ok: true, text: result.unserializableValue };
+  const marker = asFields(result.value);
+  if (typeof marker?.__truncated === 'string' && typeof marker.length === 'number') {
+    return { ok: true, text: `${marker.__truncated.slice(0, MAX_RESULT_CHARS)}\n${truncatedNote(marker.length)}` };
+  }
   const json = result.type === 'undefined' || !('value' in result) ? undefined : JSON.stringify(result.value);
   if (json === undefined) return { ok: true, text: 'undefined' };
   if (json.length <= MAX_RESULT_CHARS) return { ok: true, text: json };
-  const note = `[Truncated: the result has ${json.length} characters; only the first ${MAX_RESULT_CHARS} are shown.]`;
-  return { ok: true, text: `${json.slice(0, MAX_RESULT_CHARS)}\n${note}` };
+  return { ok: true, text: `${json.slice(0, MAX_RESULT_CHARS)}\n${truncatedNote(json.length)}` };
 };
 
-type FrameTree = { frameTree?: { frame?: { id?: unknown; securityOrigin?: unknown } } };
-
 /**
- * Runs `code` in a fresh isolated world of the tab's top frame: it sees and changes the page's DOM, but not the
- * page's own JS globals. The relay only lets it into worlds this client created, so no approval is needed.
+ * Runs `code` read-only in a fresh isolated world of the tab's top frame, the run that needs no approval:
+ * `throwOnSideEffect` makes V8 refuse anything that would change the page, and an isolated world is no boundary of
+ * its own (it shares the DOM, cookies and storage), so this is what keeps the run harmless.
  */
-export async function runIsolatedScript(ctx: ActionContext, code: string, form: ScriptForm): Promise<ScriptOutcome> {
+export async function runReadScript(ctx: ActionContext, code: string, form: ScriptForm): Promise<ScriptOutcome> {
   const { conn, sessionId } = ctx;
-  const { frameTree } = await conn.send<FrameTree>('Page.getFrameTree', {}, sessionId);
-  const frameId = frameTree?.frame?.id;
-  if (typeof frameId !== 'string') return { ok: false, error: 'The page is not readable right now; try again.' };
-  // shortcut: a new world per run (they live until the document goes), cache one per document if runs pile up.
-  const { executionContextId } = await conn.send<{ executionContextId?: unknown }>(
-    'Page.createIsolatedWorld',
-    { frameId, worldName: WORLD_NAME },
-    sessionId
-  );
-  if (typeof executionContextId !== 'number') return { ok: false, error: 'Could not prepare the page for a script.' };
-  const origin =
-    typeof frameTree?.frame?.securityOrigin === 'string' ? webOriginOf(frameTree.frame.securityOrigin) : null;
+  const { contextId, origin } = await openScriptWorld((method, params) => conn.send(method, params, sessionId));
   // stdout is the MCP protocol channel; only the origin and the world are logged, never the code or the result.
-  process.stderr.write(`[builtin-mcp-browser] run_script on ${origin ?? 'a non-web page'} (world: isolated)\n`);
-  const params = { ...scriptEvaluateParams(code, form), contextId: executionContextId };
+  process.stderr.write(
+    `[builtin-mcp-browser] run_script on ${origin ?? 'a non-web page'} (world: isolated, mode: read)\n`
+  );
+  const params = { ...readScriptParams(code, form), contextId };
   return formatScriptReply(await withScriptTimeout(conn.send('Runtime.evaluate', params, sessionId)), code);
 }

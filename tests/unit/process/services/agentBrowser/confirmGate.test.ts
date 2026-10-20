@@ -206,6 +206,14 @@ describe('PendingConfirms', () => {
       writeFileSync(path.join(dir, 'bad.json'), content);
       expect(loadAllowedOrigins(path.join(dir, 'bad.json')).size, content).toBe(0);
     }
+    for (const content of [
+      '{"scriptOrigins": "x"}',
+      '{"scriptOrigins": [1]}',
+      '{"origins": [], "scriptOrigins": [null]}',
+    ]) {
+      writeFileSync(path.join(dir, 'bad.json'), content);
+      expect(loadAllowedOrigins(path.join(dir, 'bad.json'), 'script').size, content).toBe(0);
+    }
     expect(loadAllowedOrigins(path.join(dir, 'missing.json')).size).toBe(0);
   });
 

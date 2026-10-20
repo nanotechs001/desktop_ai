@@ -251,7 +251,8 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
-      "scriptMessage": "The agent wants to run a script in the page console on {{origin}}. It can read and change this site. The code starts with:",
+      "scriptMessage": "The agent wants to run a script that changes {{origin}}. A script can do anything you can do on this site, like the DevTools console. The code:",
+      "scriptLength": "{{total}} characters in total",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

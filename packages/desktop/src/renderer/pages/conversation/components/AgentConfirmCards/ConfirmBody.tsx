@@ -14,7 +14,10 @@ export const CONFIRM_KEY = 'preview.browserChrome.confirm';
 export const LEAVE_KEY = 'preview.browserChrome.leave';
 
 /** What every view needs to draw an ask; the phone gets exactly this. */
-export type ConfirmAsk = Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label' | 'kind'>;
+export type ConfirmAsk = Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label' | 'kind' | 'codeLength'>;
+
+/** Main prefixes a script ask's label with this, so a WebUI from before script asks still shows it as code. */
+const SCRIPT_LABEL_PREFIX = '</> ';
 
 /** Allow stays disabled this long after an ask appears, so a click or Enter aimed at the previous one cannot allow it. */
 const ARM_DELAY_MS = 500;
@@ -69,8 +72,21 @@ const ConfirmBody: React.FC<ConfirmBodyProps> = ({ request, onAnswer, focusDeny 
       {request.frameOrigin !== null && request.frameOrigin !== request.origin && (
         <div>{t(`${CONFIRM_KEY}.frame`, { origin: request.frameOrigin })}</div>
       )}
-      {/* The label is the page's own text (or the agent's code): shown as plain text, never as markup. */}
-      <div className='break-all font-bold'>{request.label}</div>
+      {/* The label is the page's own text, or the agent's code: shown as plain text, never as markup. */}
+      {request.kind === 'script' ? (
+        <>
+          <pre className='m-0 max-h-240px overflow-auto whitespace-pre-wrap break-all rd-4px bg-fill-2 p-8px font-mono text-12px'>
+            {request.label.startsWith(SCRIPT_LABEL_PREFIX)
+              ? request.label.slice(SCRIPT_LABEL_PREFIX.length)
+              : request.label}
+          </pre>
+          {request.codeLength !== undefined && (
+            <div className='text-t-secondary'>{t(`${CONFIRM_KEY}.scriptLength`, { total: request.codeLength })}</div>
+          )}
+        </>
+      ) : (
+        <div className='break-all font-bold'>{request.label}</div>
+      )}
       {/* A sandboxed frame has no origin to remember. */}
       {request.frameOrigin !== null && (
         <Checkbox checked={always} onChange={setAlways}>

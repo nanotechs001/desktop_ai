@@ -44,7 +44,7 @@ export class FakeContents extends EventEmitter {
 
   constructor(
     readonly id: number,
-    private readonly url = 'https://example.com/',
+    private url = 'https://example.com/',
     private readonly title = 'Example',
     private readonly type = 'webview'
   ) {
@@ -58,6 +58,11 @@ export class FakeContents extends EventEmitter {
   /** Emits the tab's first main-frame navigation the way Electron does. */
   navigate(url: string, isMainFrame = true): void {
     this.emit('did-start-navigation', { url, isMainFrame });
+  }
+
+  /** Commits a new main-frame document without any event, as a race between the ask and its answer would look. */
+  commitSilently(url: string): void {
+    this.url = url;
   }
 
   getURL(): string {

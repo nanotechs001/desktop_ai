@@ -71,15 +71,16 @@ export const getBrowserViewService = (): BrowserViewService | null => browserVie
 export const webuiConfirms = {
   listConfirms: (
     conversationId: string
-  ): Array<Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label' | 'kind'>> =>
+  ): Array<Pick<ConfirmRequest, 'id' | 'origin' | 'frameOrigin' | 'label' | 'kind' | 'codeLength'>> =>
     (pendingConfirms?.list() ?? [])
       .filter((r) => r.conversationId === conversationId)
-      .map(({ id, origin, frameOrigin, label, kind }) => ({
+      .map(({ id, origin, frameOrigin, label, kind, codeLength }) => ({
         id,
         origin,
         frameOrigin,
         label,
         ...(kind ? { kind } : {}),
+        ...(codeLength !== undefined ? { codeLength } : {}),
       })),
   answerConfirm: (id: string, allow: boolean, always: boolean): boolean => {
     const confirms = pendingConfirms;

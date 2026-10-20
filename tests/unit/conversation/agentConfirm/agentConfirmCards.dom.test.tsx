@@ -36,7 +36,10 @@ vi.mock('@/common', () => ({
 vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, opts?: { origin?: string }) => (opts?.origin ? `${key} @ ${opts.origin}` : key),
+    t: (key: string, opts?: { origin?: string; total?: number }) => {
+      if (opts?.total !== undefined) return `${key} ${opts.total}`;
+      return opts?.origin ? `${key} @ ${opts.origin}` : key;
+    },
   }),
 }));
 
@@ -131,6 +134,21 @@ describe('AgentConfirmCards in the desktop app', () => {
     expect(mocks.replyConfirm).toHaveBeenLastCalledWith({ id: 'leave', allow: true, alwaysForSite: false });
     fireEvent.click(screen.getByText('preview.browserChrome.leave.stay'));
     expect(mocks.replyConfirm).toHaveBeenLastCalledWith({ id: 'leave', allow: false, alwaysForSite: false });
+  });
+
+  it('shows a script ask: its own message, the whole code as preformatted text only, and its full length', async () => {
+    const code = 'const a = "<b>x</b>";\nreturn a;';
+    await mount([request('s', 'conv-1', { kind: 'script', label: `</> ${code}`, codeLength: 5000 })]);
+    expect(screen.getByText(`${KEY}.scriptMessage @ https://s.test`)).toBeTruthy();
+    expect(screen.queryByText(`${KEY}.message @ https://s.test`)).toBeNull();
+    const pre = document.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.className).toMatch(/whitespace-pre-wrap/);
+    expect(pre?.className).toMatch(/overflow-auto/);
+    expect(pre?.className).toMatch(/font-mono/);
+    expect(document.querySelector('b')).toBeNull();
+    expect(screen.getByText(`${KEY}.scriptLength 5000`)).toBeTruthy();
+    expect(screen.getByText(`${KEY}.always`)).toBeTruthy();
   });
 
   it('unsubscribes on unmount', async () => {

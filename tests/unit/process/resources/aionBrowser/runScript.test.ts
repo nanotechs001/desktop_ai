@@ -3,14 +3,16 @@
  * Copyright 2026 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * The run_script tool: isolated-world scripts without approval, page-world scripts through the relay's ask.
+ * The run_script tool: read-only scripts without approval (isolated world, throwOnSideEffect), scripts that write only
+ * through the relay's ask, in the isolated or the page world.
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RelayClient } from '@process/resources/builtinMcp/aionBrowser/relayClient';
-import { MAX_RESULT_CHARS, formatScriptReply } from '@process/resources/builtinMcp/aionBrowser/runScript';
+import { formatScriptReply } from '@process/resources/builtinMcp/aionBrowser/runScript';
+import { MAX_RESULT_CHARS, PAGE_CHANGED } from '@process/services/agentBrowser/relay/pageScript';
 import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
 import { FakeRelay } from './fakeRelay';
 
@@ -48,18 +50,63 @@ const runScript = async (args: Record<string, unknown>): Promise<ToolReply> =>
   (await client.callTool({ name: 'run_script', arguments: args })) as ToolReply;
 const textOf = (reply: ToolReply): string => reply.content.map((part) => part.text ?? '').join('');
 
-describe('run_script, isolated world', () => {
-  it('returns the value as JSON from its own isolated world, without asking the user', async () => {
+const SIDE_EFFECT = {
+  result: { type: 'object', subtype: 'error' },
+  exceptionDetails: {
+    text: 'Uncaught',
+    lineNumber: 1,
+    exception: {
+      type: 'object',
+      description: 'EvalError: Possible side-effect in debug-evaluate\n    at <anonymous>:2:16',
+    },
+  },
+};
+
+describe('run_script description', () => {
+  it('never presents the isolated world as a boundary, and warns that a busy loop freezes the tab', async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find((tool) => tool.name === 'run_script')?.description ?? '';
+    expect(description).not.toMatch(/sandbox/i);
+    expect(description).toContain('mode read (default): read-only, no approval.');
+    expect(description).toContain('Either can change anything on the site.');
+    expect(description).toContain('a busy loop freezes its tab');
+  });
+});
+
+describe('run_script, read mode (the default)', () => {
+  it('returns the value as JSON from its own isolated world, read-only, without asking the user', async () => {
     const reply = await runScript({ code: '({ title: document.title })' });
     expect(reply.isError).toBeFalsy();
     expect(JSON.parse(textOf(reply))).toEqual({ title: 'Shop' });
 
     expect(relay.callsTo('Page.createIsolatedWorld')).toEqual([{ frameId: 'TOP', worldName: 'aion-browser-script' }]);
     const [evaluate] = relay.callsTo('Runtime.evaluate');
-    expect(evaluate).toMatchObject({ contextId: 41, awaitPromise: true, returnByValue: true, timeout: 10_000 });
+    expect(evaluate).toMatchObject({
+      contextId: 41,
+      throwOnSideEffect: true,
+      awaitPromise: true,
+      returnByValue: true,
+      timeout: 10_000,
+    });
     expect(evaluate).not.toHaveProperty('includeCommandLineAPI');
     expect(relay.callsTo('AionRelay.requestConfirm')).toEqual([]);
-    expect(relay.callsTo('AionRelay.runPageScript')).toEqual([]);
+    expect(relay.callsTo('AionRelay.runScript')).toEqual([]);
+  });
+
+  it('refuses a script that changes the page (e.g. appends a <script>) and points to mode write', async () => {
+    relay.on('Runtime.evaluate', () => SIDE_EFFECT);
+    const reply = await runScript({ code: "document.body.append(document.createElement('script'))" });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toBe("This script changes the page; rerun with mode 'write' (asks the user).");
+    expect(relay.callsTo('Runtime.evaluate')[0]).toMatchObject({ throwOnSideEffect: true });
+  });
+
+  it('refuses world page without mode write, before touching the page', async () => {
+    const reply = await runScript({ code: 'window.app', world: 'page' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toMatch(/mode 'write'/);
+    expect(relay.callsTo('Runtime.evaluate')).toEqual([]);
+    expect(relay.callsTo('AionRelay.runScript')).toEqual([]);
   });
 
   it('reports a thrown exception with its message and line', async () => {
@@ -82,55 +129,91 @@ describe('run_script, isolated world', () => {
       result: { type: 'object', subtype: 'error' },
       exceptionDetails: {
         text: 'Uncaught',
-        lineNumber: 9,
-        exception: { type: 'object', description: 'Error: run_script timed out after 10000 ms' },
+        lineNumber: 0,
+        exception: { type: 'object', description: 'Error: Execution was terminated' },
       },
     }));
-    const reply = await runScript({ code: 'new Promise(() => {})' });
+    const reply = await runScript({ code: 'while (true) {}' });
     expect(reply.isError).toBe(true);
-    expect(textOf(reply)).toBe('The script threw: Error: run_script timed out after 10000 ms');
+    expect(textOf(reply)).toBe('The script threw: Error: Execution was terminated');
+  });
+
+  it('logs only the origin and the world to stderr, never the code or the result', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await runScript({ code: 'secretCode()' });
+    const logged = stderr.mock.calls.map(([line]) => String(line)).join('');
+    stderr.mockRestore();
+    expect(logged).toBe('[builtin-mcp-browser] run_script on https://shop.test (world: isolated, mode: read)\n');
   });
 });
 
-describe('run_script, page world', () => {
-  it('runs through the relay ask on the tab session and returns the value', async () => {
-    relay.on('AionRelay.runPageScript', () => ({ allow: true, reply: { result: { type: 'number', value: 3 } } }));
-    const reply = await runScript({ code: 'window.app.count', world: 'page' });
+describe('run_script, write mode', () => {
+  it.each(['isolated', 'page'] as const)('world %s goes through the relay ask and returns the value', async (world) => {
+    relay.on('AionRelay.runScript', () => ({ allow: true, reply: { result: { type: 'number', value: 3 } } }));
+    const reply = await runScript({ code: 'window.app.count', mode: 'write', world });
     expect(reply.isError).toBeFalsy();
     expect(textOf(reply)).toBe('3');
-    expect(relay.callsTo('AionRelay.runPageScript')).toEqual([
-      { webContentsId: 7, sessionId: 's1', code: 'window.app.count', form: 'expression' },
+    expect(relay.callsTo('AionRelay.runScript')).toEqual([
+      { webContentsId: 7, sessionId: 's1', code: 'window.app.count', form: 'expression', world },
     ]);
-    // The page world is never reached through a raw evaluate.
+    // A write never runs through a raw evaluate of the MCP's own.
     expect(relay.callsTo('Runtime.evaluate')).toEqual([]);
+    expect(relay.callsTo('Page.createIsolatedWorld')).toEqual([]);
+  });
+
+  it('defaults to the isolated world', async () => {
+    relay.on('AionRelay.runScript', () => ({ allow: true, reply: { result: { type: 'undefined' } } }));
+    await runScript({ code: 'document.title = "x"', mode: 'write' });
+    expect(relay.callsTo('AionRelay.runScript')[0]).toMatchObject({ world: 'isolated' });
   });
 
   it('a denied or unanswered ask is a clear tool error', async () => {
-    relay.on('AionRelay.runPageScript', () => ({ allow: false }));
-    const reply = await runScript({ code: 'window.app', world: 'page' });
+    relay.on('AionRelay.runScript', () => ({ allow: false }));
+    const reply = await runScript({ code: 'window.app', mode: 'write', world: 'page' });
     expect(reply.isError).toBe(true);
-    expect(textOf(reply)).toMatch(/^The user did not allow this page script/);
+    expect(textOf(reply)).toMatch(/^The user did not allow this script/);
+  });
+
+  it('a page that changed before the run is a clear tool error', async () => {
+    relay.on('AionRelay.runScript', () => ({
+      allow: true,
+      reply: {
+        exceptionDetails: { text: 'Uncaught', lineNumber: 0, exception: { type: 'string', value: PAGE_CHANGED } },
+      },
+    }));
+    const reply = await runScript({ code: 'window.app', mode: 'write' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toBe(
+      'The page changed before the script ran, so it did not run. Observe the page again first.'
+    );
   });
 
   it('a refused tab is a tool error', async () => {
-    relay.on('AionRelay.runPageScript', () => {
+    relay.on('AionRelay.runScript', () => {
       throw new Error('This tab is not shared with agents');
     });
-    const reply = await runScript({ code: 'window.app', world: 'page' });
+    const reply = await runScript({ code: 'window.app', mode: 'write', world: 'page' });
     expect(reply.isError).toBe(true);
     expect(textOf(reply)).toBe('This tab is not shared with agents');
   });
 });
 
 describe('formatScriptReply', () => {
-  it('cuts results over 20 000 characters and says so', () => {
+  it('reads the in-page truncation marker and says how long the result was', () => {
+    const cut = `"${'x'.repeat(MAX_RESULT_CHARS - 1)}`;
+    const out = formatScriptReply({ result: { type: 'object', value: { __truncated: cut, length: 30_002 } } });
+    expect(out).toEqual({
+      ok: true,
+      text: `${cut}\n[Truncated: the result has 30002 characters; only the first 20000 are shown.]`,
+    });
+  });
+
+  it('still cuts a result over 20 000 characters that came back whole', () => {
     const out = formatScriptReply({ result: { type: 'string', value: 'x'.repeat(30_000) } });
-    expect(out.ok).toBe(true);
-    if (!out.ok) return;
+    if (!out.ok) throw new Error('expected a result');
     const [json, note] = out.text.split('\n');
     expect(json).toHaveLength(MAX_RESULT_CHARS);
     expect(note).toBe('[Truncated: the result has 30002 characters; only the first 20000 are shown.]');
-    expect(MAX_RESULT_CHARS).toBe(20_000);
   });
 
   it('shows undefined and unserializable values, and a thrown non-error value', () => {

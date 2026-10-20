@@ -102,6 +102,15 @@ describe('AgentConfirmCards in the WebUI', () => {
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ allow: true, always: false });
   });
 
+  it('passes a script ask through from web-host: its kind, the code and its length', async () => {
+    listed = [{ ...ASK, kind: 'script', label: '</> document.title', codeLength: 14 }];
+    render(<AgentConfirmCards conversationId='conv-1' />);
+    await tick(0);
+    expect(screen.getByText(`${KEY}.scriptMessage`)).toBeTruthy();
+    expect(document.querySelector('pre')?.textContent).toBe('document.title');
+    expect(screen.getByText(`${KEY}.scriptLength`)).toBeTruthy();
+  });
+
   it('Deny posts allow false without always', async () => {
     render(<AgentConfirmCards conversationId='conv-1' />);
     await tick(0);
