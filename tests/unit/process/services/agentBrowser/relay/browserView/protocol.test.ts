@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_KEYS,
   ALLOWED_VIEWER_METHODS,
-  decodeFrame,
   encodeFrame,
   mapTap,
   parseClientMessage,
@@ -76,35 +75,13 @@ describe('mapTap', () => {
 });
 
 describe('frame encoding', () => {
-  it('round-trips meta and jpeg bytes', () => {
+  it('lays out a 4-byte big-endian header length, the JSON meta, then the jpeg bytes', () => {
     const jpeg = Buffer.from([0xff, 0xd8, 1, 2, 3, 0xff, 0xd9]);
     const full: FrameMeta = { ...meta, offsetTop: 56, pageScaleFactor: 1.5, scrollOffsetY: 300.5 };
     const encoded = encodeFrame(full, jpeg);
-    const buf = encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer;
-    const decoded = decodeFrame(buf);
-    expect(decoded.meta).toEqual(full);
-    expect(Array.from(decoded.jpeg)).toEqual(Array.from(jpeg));
-  });
-
-  it('rejects a malformed frame header', () => {
-    const frame = (header: string) => {
-      const bytes = Buffer.from(header, 'utf8');
-      const out = Buffer.alloc(4 + bytes.length + 2);
-      out.writeUInt32BE(bytes.length);
-      bytes.copy(out, 4);
-      return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
-    };
-    const { scrollOffsetY: _omit, ...missingField } = meta;
-    expect(() => decodeFrame(frame(JSON.stringify(meta)))).not.toThrow();
-    expect(() => decodeFrame(frame('not json!'))).toThrow();
-    expect(() => decodeFrame(frame(JSON.stringify({ ...meta, pageScaleFactor: 0 })))).toThrow();
-    expect(() => decodeFrame(frame(JSON.stringify(missingField)))).toThrow();
-    expect(() => decodeFrame(frame('null'))).toThrow();
-  });
-
-  it('rejects a truncated frame', () => {
-    expect(() => decodeFrame(new Uint8Array([0, 0, 0, 99, 1]).buffer)).toThrow();
-    expect(() => decodeFrame(new ArrayBuffer(2))).toThrow();
+    const headerEnd = 4 + encoded.readUInt32BE(0);
+    expect(JSON.parse(encoded.subarray(4, headerEnd).toString('utf8'))).toEqual(full);
+    expect(Array.from(encoded.subarray(headerEnd))).toEqual(Array.from(jpeg));
   });
 });
 

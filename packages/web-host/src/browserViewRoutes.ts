@@ -15,7 +15,7 @@ export const STREAM_PATH = '/api/browser-view/stream';
 /** Anything a lenient parser could read as a request line for the stream route. */
 export const STREAM_ROUTE_LIKE = /^\S+\s+\/api\/browser-view\/stream(?:[?\s]|$)/i;
 /** The only stream upgrade request line: exactly one `tab`, a relay target id. */
-export const STREAM_REQUEST_LINE = /^GET (\/api\/browser-view\/stream)(\?tab=wc-\d{1,9}) HTTP\/1\.1$/;
+export const STREAM_REQUEST_LINE = /^GET (\/api\/browser-view\/stream)(\?tab=wc-(?:0|[1-9]\d{0,8})) HTTP\/1\.1$/;
 
 const MAX_STREAMS_PER_TAB = 2;
 const MAX_STREAMS = 4;

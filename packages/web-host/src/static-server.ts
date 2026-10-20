@@ -366,10 +366,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const withStream = browserViewStreams !== null;
 
   /** The gate's checks again, for a stream that outlives them: not-before, aioncore, not-before. */
-  const sessionStillValid = async (creds: Credentials): Promise<boolean> =>
-    !isSessionRevoked(creds, sessionsNotBefore) &&
-    (await validate(creds)) === 'valid' &&
-    !isSessionRevoked(creds, sessionsNotBefore);
+  const sessionStillValid = async (creds: Credentials): Promise<boolean> => {
+    if (isSessionRevoked(creds, sessionsNotBefore)) return false;
+    validate.invalidate(creds); // a cached 'valid' would let a revoked session live another tick
+    return (await validate(creds)) === 'valid' && !isSessionRevoked(creds, sessionsNotBefore);
+  };
 
   const proxyThroughGate = async (req: IncomingMessage, res: ServerResponse, url: string): Promise<void> => {
     const method = req.method ?? '';

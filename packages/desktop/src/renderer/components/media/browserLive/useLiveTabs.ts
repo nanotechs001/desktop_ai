@@ -11,7 +11,7 @@ export type LiveTab = { id: string; title: string; url: string; paused: boolean 
 
 const CONVERSATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** The stream route's own rule for a tab id. */
-const TAB_ID = /^wc-\d{1,9}$/;
+const TAB_ID = /^wc-(?:0|[1-9]\d{0,8})$/;
 const POLL_MS = 5000;
 
 export const isWatchableConversation = (id: string | null): id is string => id !== null && CONVERSATION_ID.test(id);
@@ -42,18 +42,30 @@ export const useLiveTabs = (conversationId: string | null, generation = 0): Live
   const [tabs, setTabs] = useState<LiveTab[] | null>(null);
 
   useEffect(() => {
-    if (!isWatchableConversation(conversationId)) return;
+    if (!isWatchableConversation(conversationId)) {
+      setTabs(null); // not the previous conversation's tabs
+      return;
+    }
     let live = true;
+    let stopped = false;
     setTabs(null);
     const load = (): void => {
-      if (document.visibilityState === 'hidden') return;
+      if (stopped || document.visibilityState === 'hidden') return;
       fetch(`/api/browser-view/tabs?conversation=${encodeURIComponent(conversationId)}`, { credentials: 'include' })
-        .then((response) => {
+        .then(async (response) => {
+          // Signed out, or a headless `--webui` host with no such route: nothing to watch. Only a missing route is final.
+          if (response.status === 401 || response.status === 404) {
+            if (response.status === 404) {
+              stopped = true;
+              clearInterval(timer);
+            }
+            return [];
+          }
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.json() as Promise<unknown>;
+          return parseTabs(await response.json());
         })
-        .then((body) => {
-          if (live) setTabs(parseTabs(body));
+        .then((next) => {
+          if (live) setTabs(next);
         })
         .catch((error: unknown) => {
           console.warn('[BrowserLiveView] could not list the browser tabs:', error);

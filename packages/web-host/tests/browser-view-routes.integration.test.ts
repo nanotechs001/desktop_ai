@@ -310,6 +310,7 @@ describe('browser-view routes', () => {
       ['an encoded slash', '/api/browser-view%2fstream?tab=wc-7'],
       ['encoded dot segments', '/api/browser-view/%2e%2e/browser-view/stream?tab=wc-7'],
       ['two tabs', '/api/browser-view/stream?tab=wc-1&tab=wc-2'],
+      ['a tab id with a leading zero', '/api/browser-view/stream?tab=wc-01'],
     ])('an upgrade with %s is 400', async (_name, target) => {
       const r = await rawExchange(handle.port, [upgrade(target, `Cookie: ${GOOD}\r\nOrigin: http://127.0.0.1\r\n`)]);
       expect(r.text).toMatch(/^HTTP\/1\.1 400/);
@@ -472,6 +473,38 @@ describe('browser-view stream re-validation', () => {
     expect(again.ws.readyState).toBe(WebSocket.OPEN);
     live.ws.terminate();
     again.ws.terminate();
+  });
+});
+
+describe('browser-view stream re-check against a real clock', () => {
+  it('asks aioncore on every tick, not the 30 s session cache', async () => {
+    // Date stays real: the session cache entry is still fresh when the next tick fires.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const backend = await startFakeBackend();
+    const routes = fakeRoutes();
+    const handle = await startStaticServer({
+      staticDir: STATIC_DIR,
+      backendPort: backend.port,
+      port: 0,
+      localRoutes: { browserView: routes },
+    });
+    try {
+      const s = await opened(
+        openStream(handle.port, 'wc-7', { cookie: GOOD, origin: `http://127.0.0.1:${handle.port}` })
+      );
+      await until(() => routes.peers.length === 1);
+      const calls = backend.authCalls;
+      vi.advanceTimersByTime(30_000);
+      await until(() => backend.authCalls === calls + 1);
+      await new Promise((r) => setTimeout(r, 50));
+      vi.advanceTimersByTime(30_000);
+      await until(() => backend.authCalls === calls + 2);
+      s.ws.terminate();
+    } finally {
+      vi.useRealTimers();
+      await handle.stop();
+      await backend.close();
+    }
   });
 });
 

@@ -32,7 +32,11 @@ const LABEL = 'preview.browser.watchBrowser';
 const TAB = { id: 'wc-1', title: 'One', url: 'https://one.example/', paused: false };
 
 let tabs: Array<typeof TAB> = [TAB];
-const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, json: async () => ({ tabs }) }));
+const answer = () => ({ ok: true, status: 200, json: async () => ({ tabs }) });
+const fetchMock = vi.fn(
+  async (_url: string, _init?: RequestInit): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }> =>
+    answer()
+);
 let electronApiStub: unknown;
 
 /** Lets the pending fetch resolve and React render it. */
@@ -44,7 +48,8 @@ const settle = () =>
 beforeEach(() => {
   vi.useFakeTimers();
   tabs = [TAB];
-  fetchMock.mockClear();
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(async () => answer());
   vi.stubGlobal('fetch', fetchMock);
   const w = window as Window & { electronAPI?: unknown };
   electronApiStub = w.electronAPI;
@@ -151,5 +156,70 @@ describe('WatchBrowserButton', () => {
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
+  });
+
+  it('hides the button when the session ends (401), and keeps polling', async () => {
+    render(<WatchBrowserButton conversationId='conv-1' />);
+    await settle();
+    expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
+
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(screen.queryByRole('button', { name: LABEL })).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('hides the button and stops polling when the route is missing (404, headless --webui)', async () => {
+    render(<WatchBrowserButton conversationId='conv-1' />);
+    await settle();
+    expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
+
+    fetchMock.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(screen.queryByRole('button', { name: LABEL })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the last list when a refresh fails some other way', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<WatchBrowserButton conversationId='conv-1' />);
+    await settle();
+
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
+  });
+
+  it('clears the tabs when the conversation changes to an invalid id', async () => {
+    const { rerender } = render(<WatchBrowserButton conversationId='conv-1' />);
+    await settle();
+    expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
+
+    rerender(<WatchBrowserButton conversationId='not valid!' />);
+    await settle();
+    expect(screen.queryByRole('button', { name: LABEL })).toBeNull();
+  });
+
+  it('ignores a tab id with a leading zero', async () => {
+    tabs = [{ ...TAB, id: 'wc-01' }];
+    render(<WatchBrowserButton conversationId='conv-1' />);
+    await settle();
+
+    expect(screen.queryByRole('button', { name: LABEL })).toBeNull();
   });
 });

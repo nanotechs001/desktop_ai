@@ -101,12 +101,3 @@ export const encodeFrame = (meta: FrameMeta, jpeg: Buffer): Buffer => {
   length.writeUInt32BE(header.length);
   return Buffer.concat([length, header, jpeg]);
 };
-
-/** Inverse of {@link encodeFrame}; only DataView and TextDecoder, so the phone bundle can import it. Throws on a truncated frame or an invalid header. */
-export const decodeFrame = (buf: ArrayBuffer): { meta: FrameMeta; jpeg: Uint8Array } => {
-  if (buf.byteLength < HEADER_LENGTH_BYTES) throw new Error('Frame is shorter than its length prefix');
-  const headerEnd = HEADER_LENGTH_BYTES + new DataView(buf).getUint32(0);
-  if (headerEnd > buf.byteLength) throw new Error('Frame header runs past the end of the frame');
-  const header = new TextDecoder().decode(new Uint8Array(buf, HEADER_LENGTH_BYTES, headerEnd - HEADER_LENGTH_BYTES));
-  return { meta: frameMetaSchema.parse(JSON.parse(header)), jpeg: new Uint8Array(buf, headerEnd) };
-};

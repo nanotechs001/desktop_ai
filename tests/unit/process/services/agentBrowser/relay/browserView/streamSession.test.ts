@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBrowserViewService, type StreamPeer } from '@process/services/agentBrowser/relay/browserView';
-import { ALLOWED_VIEWER_METHODS, decodeFrame } from '@process/services/agentBrowser/relay/browserView/protocol';
+import { ALLOWED_VIEWER_METHODS } from '@process/services/agentBrowser/relay/browserView/protocol';
 import { createDebuggerSessions, type DebuggerSessions } from '@process/services/agentBrowser/relay/debuggerSessions';
 import { createTargetRegistry, type TargetRegistry } from '@process/services/agentBrowser/relay/targetRegistry';
 import { FakeContents } from '../fakes';
@@ -48,7 +48,8 @@ const commands = (): Array<{ method: string; params: Record<string, unknown> }> 
   }));
 const sent = (method: string) => commands().filter((c) => c.method === method);
 const acks = (): number => sent('Page.screencastFrameAck').length;
-const metaOf = (b: Buffer) => decodeFrame(new Uint8Array(b).buffer).meta;
+/** The JSON meta of a wire frame (see encodeFrame): 4-byte big-endian header length, then the header. */
+const metaOf = (b: Buffer): Record<string, number> => JSON.parse(b.subarray(4, 4 + b.readUInt32BE(0)).toString('utf8'));
 
 const frame = (contents: FakeContents, meta: Record<string, unknown> = META, sessionId = 1): void =>
   contents.debugger.message('Page.screencastFrame', {
@@ -132,7 +133,7 @@ describe('browser view: frames', () => {
     frame(tab);
     frame(tab, { ...META, scrollOffsetY: 50 });
     expect(peer.frames).toHaveLength(1);
-    expect(decodeFrame(new Uint8Array(peer.frames[0]).buffer).meta).toEqual({
+    expect(metaOf(peer.frames[0])).toEqual({
       offsetTop: 0,
       pageScaleFactor: 2,
       deviceWidth: 400,
@@ -145,7 +146,7 @@ describe('browser view: frames', () => {
     send(handle, { type: 'ack' });
     expect(sent('Page.screencastFrameAck').map((c) => c.params)).toEqual([{ sessionId: 1 }, { sessionId: 1 }]);
     expect(peer.frames).toHaveLength(2);
-    expect(decodeFrame(new Uint8Array(peer.frames[1]).buffer).meta.scrollOffsetY).toBe(50);
+    expect(metaOf(peer.frames[1]).scrollOffsetY).toBe(50);
   });
 
   it('a new stream on the same tab starts unpaced', async () => {

@@ -112,6 +112,7 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
     cast.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...click });
     cast.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...click });
   };
+  // Deliberately no noteUserInput: a phone scroll does not pause the agent, as on the desktop (only mouseDown and keyDown pause).
   const scroll = (nx: number, ny: number, dy: number): void => {
     if (!shown) return;
     const { x, y } = mapTap(nx, ny, shown);
