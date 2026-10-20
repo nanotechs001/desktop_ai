@@ -1286,3 +1286,141 @@ describe('relay server: shared debugger sessions', () => {
     expect(view.emit).toHaveBeenCalledWith(expect.objectContaining({ method: 'Page.screencastFrame' }));
   });
 });
+
+describe('relay server: runPageScript', () => {
+  const EVALUATED = { result: { type: 'string', value: 'from the page' } };
+
+  /** An agent-owned tab on shop.test with an attached session, and `run(…)` for the MCP's page-script request. */
+  const scriptTab = async (id = 60) => {
+    const client = await connect(await start());
+    const contents = new FakeContents(id, 'https://shop.test/cart');
+    contents.debugger.handler = (method) => (method === 'Runtime.evaluate' ? EVALUATED : {});
+    registry.track(contents);
+    registry.claim(id, relay?.clients()[0] as RelayClient);
+    const sessionId = await attach(client, id);
+    const run = (patch: Record<string, unknown> = {}) =>
+      client.send('AionRelay.runPageScript', {
+        webContentsId: id,
+        sessionId,
+        code: 'window.app.state',
+        form: 'expression',
+        ...patch,
+      });
+    const evaluates = () =>
+      contents.debugger.sendCommand.mock.calls.filter(([method]) => method === 'Runtime.evaluate');
+    return { client, contents, sessionId, run, evaluates };
+  };
+
+  it('asks with the origin from its own state and the code preview, and evaluates only after Allow', async () => {
+    const { run, evaluates } = await scriptTab();
+    let answer: (allow: boolean) => void = () => {};
+    requestConfirm.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    const reply = run({ origin: 'https://evil.test' });
+    await vi.waitFor(() => expect(requestConfirm).toHaveBeenCalledTimes(1));
+    expect(requestConfirm.mock.calls[0][0]).toEqual({
+      origin: 'https://shop.test',
+      frameOrigin: 'https://shop.test',
+      label: 'window.app.state',
+      clientLabel: 'claude',
+      kind: 'script',
+    });
+    expect(evaluates()).toHaveLength(0);
+    answer(true);
+    expect((await reply).result).toEqual({ allow: true, reply: EVALUATED });
+    expect(evaluates()).toHaveLength(1);
+    const [, params, cdpSession] = evaluates()[0];
+    expect(params).toMatchObject({ awaitPromise: true, returnByValue: true, timeout: 10_000 });
+    expect(params).not.toHaveProperty('contextId');
+    expect(params).not.toHaveProperty('includeCommandLineAPI');
+    expect(cdpSession).toBeUndefined(); // the tab's own (top) session: the page's main world
+  });
+
+  it.each([
+    ['Deny', () => requestConfirm.mockResolvedValueOnce(false)],
+    ['an error (e.g. a timed-out ask)', () => requestConfirm.mockRejectedValueOnce(new Error('timed out'))],
+  ])('%s gives allow: false and sends no evaluate', async (_name, arrange) => {
+    const { run, evaluates } = await scriptTab();
+    arrange();
+    expect((await run()).result).toEqual({ allow: false });
+    expect(evaluates()).toHaveLength(0);
+  });
+
+  it('denies and sends nothing when the tab navigates during the ask', async () => {
+    const { run, contents, evaluates } = await scriptTab();
+    requestConfirm.mockImplementation(
+      (_ask, signal) => new Promise((resolve) => signal.addEventListener('abort', () => resolve(true)))
+    );
+    const reply = run();
+    await vi.waitFor(() => expect(requestConfirm).toHaveBeenCalled());
+    contents.navigate('https://evil.test/');
+    expect((await reply).result).toEqual({ allow: false });
+    expect(evaluates()).toHaveLength(0);
+  });
+
+  it('spends the approval on one evaluate: a raw main-world evaluate is still denied, the next script asks again', async () => {
+    const { client, sessionId, run, evaluates } = await scriptTab();
+    requestConfirm.mockResolvedValue(true);
+    expect((await run()).result).toMatchObject({ allow: true });
+    const raw = await client.send(
+      'Runtime.evaluate',
+      { expression: 'document.cookie', returnByValue: true },
+      sessionId
+    );
+    expect(raw.error?.message).toMatch(/isolated-world context/);
+    expect((await run()).result).toMatchObject({ allow: true });
+    expect(requestConfirm).toHaveBeenCalledTimes(2);
+    expect(evaluates()).toHaveLength(2);
+  });
+
+  it('is bound to its tab and session: another tab, a foreign session or an OOPIF session is refused', async () => {
+    const { client, run, contents, evaluates } = await scriptTab();
+    requestConfirm.mockResolvedValue(true);
+    const other = new FakeContents(61, 'https://other.test/');
+    registry.track(other);
+    registry.claim(61, relay?.clients()[0] as RelayClient);
+    const otherSession = await attach(client, 61);
+    expect((await run({ sessionId: otherSession })).error?.message).toMatch(/Unknown sessionId/);
+    expect((await run({ webContentsId: 61 })).error?.message).toMatch(/Unknown sessionId/);
+    expect((await run({ sessionId: 'nope' })).error?.message).toMatch(/Unknown sessionId/);
+    // A cross-origin frame's child session reaches only that frame, never the tab's main world.
+    contents.debugger.message('Target.attachedToTarget', {
+      sessionId: 'OOPIF-1',
+      targetInfo: { targetId: 'F1', type: 'iframe', url: 'https://ads.test/' },
+      waitingForDebugger: false,
+    });
+    const child = await client.waitForEvent('Target.attachedToTarget');
+    const childSession = String(child.params?.sessionId);
+    expect((await run({ sessionId: childSession })).error?.message).toMatch(/tab session/);
+    expect(requestConfirm).not.toHaveBeenCalled();
+    expect(evaluates()).toHaveLength(0);
+    expect(other.debugger.sendCommand.mock.calls.some(([method]) => method === 'Runtime.evaluate')).toBe(false);
+  });
+
+  it('refuses a user tab that is not shared, and malformed params, without asking', async () => {
+    const { client, run } = await scriptTab();
+    registry.track(new FakeContents(62, 'https://bank.test/'));
+    const refused = await client.send('AionRelay.runPageScript', {
+      webContentsId: 62,
+      sessionId: 'x',
+      code: 'document.cookie',
+      form: 'expression',
+    });
+    expect(refused.error?.message).toMatch(/not shared/);
+    for (const patch of [{ code: '' }, { code: 5 }, { form: 'module' }, { code: 'x'.repeat(50_001) }]) {
+      expect((await run(patch)).error?.message, JSON.stringify(patch).slice(0, 40)).toMatch(/Invalid/);
+    }
+    expect(requestConfirm).not.toHaveBeenCalled();
+  });
+
+  it('logs only the origin and the world, never the code or the result', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { run } = await scriptTab();
+    requestConfirm.mockResolvedValueOnce(true);
+    await run({ code: 'secretCode()' });
+    const logged = JSON.stringify(info.mock.calls);
+    expect(logged).toContain('https://shop.test');
+    expect(logged).toContain('page');
+    expect(logged).not.toContain('secretCode');
+    expect(logged).not.toContain('from the page');
+  });
+});

@@ -209,6 +209,39 @@ describe('PendingConfirms', () => {
     expect(loadAllowedOrigins(path.join(dir, 'missing.json')).size).toBe(0);
   });
 
+  it('remembers page scripts apart from risky clicks: allowing one never allows the other', async () => {
+    const script = { ...ask, label: 'window.app', kind: 'script' as const };
+    const confirms = new PendingConfirms({ file });
+    const first = confirms.request(script);
+    confirms.reply(confirms.list()[0].id, true, true);
+    expect(await first).toBe(true);
+    expect(await confirms.request(script)).toBe(true);
+    // A risky click on the same site still asks.
+    void confirms.request(ask);
+    expect(confirms.list().map((r) => r.label)).toEqual(['Place order']);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ origins: [], scriptOrigins: ['https://shop.test'] });
+    expect([...loadAllowedOrigins(file, 'script')]).toEqual(['https://shop.test']);
+    expect(loadAllowedOrigins(file).size).toBe(0);
+
+    // And the reverse: a click allowance on another site never lets a page script through there.
+    const clicks = new PendingConfirms({ file: path.join(dir, 'clicks.json') });
+    const click = clicks.request(ask);
+    clicks.reply(clicks.list()[0].id, true, true);
+    await click;
+    expect(await clicks.request({ ...ask, label: 'Delete' })).toBe(true);
+    void clicks.request(script);
+    expect(clicks.list().map((r) => r.kind)).toEqual(['script']);
+  });
+
+  it('reads an allow file from before kinds as click allowances only', async () => {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ origins: ['https://shop.test'] }));
+    const confirms = new PendingConfirms({ file });
+    expect(await confirms.request(ask)).toBe(true);
+    void confirms.request({ ...ask, kind: 'script' });
+    expect(confirms.list()).toHaveLength(1);
+  });
+
   it('keeps the allowance for this run when the file cannot be written', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     writeFileSync(path.join(dir, 'blocker'), 'a file where a directory should be');

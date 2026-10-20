@@ -7,6 +7,7 @@
 // Runs inside the standalone aion-browser MCP process: no electron imports, and nothing that pulls them in.
 import WebSocket from 'ws';
 import { CdpConnection, createWebSocketTransport } from '@process/services/agentBrowser/cdpConnection';
+import type { ScriptForm } from '@process/services/agentBrowser/relay/pageScript';
 import { parseConversationId } from '@process/services/agentBrowser/relay/relayTransport';
 import type { ReportedAction } from './actions';
 import { watchFrames } from './frames';
@@ -209,6 +210,23 @@ export class RelayClient {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Runs `code` in the page's own JS world of `targetId` (AionRelay.runPageScript) on its tab session `sessionId`. The
+   * relay asks the user first, per origin, and waits for their answer up to its timeout. Resolves with the CDP
+   * evaluate reply, or null when the user did not allow it; throws when the relay refuses the tab or the script.
+   */
+  async runPageScript(targetId: string, sessionId: string, code: string, form: ScriptForm): Promise<unknown> {
+    const match = TARGET_ID.exec(targetId);
+    if (!match) throw new Error(`No tab ${targetId} that you may use; call tabs list to see them.`);
+    const reply = await this.connection.send<{ allow?: unknown; reply?: unknown }>('AionRelay.runPageScript', {
+      webContentsId: Number(match[1]),
+      sessionId,
+      code,
+      form,
+    });
+    return reply.allow === true ? (reply.reply ?? {}) : null;
   }
 
   /** True once after the connection was re-established, so callers can tell the agent its old tabs are gone. */

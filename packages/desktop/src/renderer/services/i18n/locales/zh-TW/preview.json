@@ -251,6 +251,7 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
+      "scriptMessage": "代理程式想在 {{origin}} 的頁面主控台中執行指令碼。指令碼可以讀取和修改此網站。程式碼開頭：",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

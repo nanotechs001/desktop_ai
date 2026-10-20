@@ -251,6 +251,7 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
+      "scriptMessage": "Ajan, {{origin}} üzerinde sayfa konsolunda bir betik çalıştırmak istiyor. Betik bu siteyi okuyabilir ve değiştirebilir. Kodun başı:",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

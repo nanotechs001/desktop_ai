@@ -60,12 +60,16 @@ const ConfirmBody: React.FC<ConfirmBodyProps> = ({ request, onAnswer, focusDeny 
 
   return (
     <div className='flex flex-col gap-16px'>
-      <div>{t(`${CONFIRM_KEY}.message`, { origin: request.origin })}</div>
+      <div>
+        {t(request.kind === 'script' ? `${CONFIRM_KEY}.scriptMessage` : `${CONFIRM_KEY}.message`, {
+          origin: request.origin,
+        })}
+      </div>
       {request.frameOrigin === null && <div>{t(`${CONFIRM_KEY}.frameOpaque`)}</div>}
       {request.frameOrigin !== null && request.frameOrigin !== request.origin && (
         <div>{t(`${CONFIRM_KEY}.frame`, { origin: request.frameOrigin })}</div>
       )}
-      {/* The label is the page's own text: shown as plain text, never as markup. */}
+      {/* The label is the page's own text (or the agent's code): shown as plain text, never as markup. */}
       <div className='break-all font-bold'>{request.label}</div>
       {/* A sandboxed frame has no origin to remember. */}
       {request.frameOrigin !== null && (

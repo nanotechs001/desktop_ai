@@ -44,7 +44,13 @@ const parseAsk = (value: unknown): ConfirmAsk | null => {
   const { id, origin, frameOrigin, label, kind } = value as Record<string, unknown>;
   const frameOk = frameOrigin === null || typeof frameOrigin === 'string';
   if (typeof id !== 'string' || typeof origin !== 'string' || typeof label !== 'string' || !frameOk) return null;
-  return { id, origin, frameOrigin: frameOrigin as string | null, label, ...(kind === 'leave' ? { kind } : {}) };
+  return {
+    id,
+    origin,
+    frameOrigin: frameOrigin as string | null,
+    label,
+    ...(kind === 'leave' || kind === 'script' ? { kind } : {}),
+  };
 };
 
 const parseAsks = (body: unknown): ConfirmAsk[] => {

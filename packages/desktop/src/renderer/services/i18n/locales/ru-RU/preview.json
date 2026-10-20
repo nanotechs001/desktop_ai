@@ -253,6 +253,7 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
+      "scriptMessage": "Агент хочет выполнить скрипт в консоли страницы на {{origin}}. Он может читать и изменять этот сайт. Начало кода:",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

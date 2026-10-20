@@ -68,6 +68,7 @@ describe('aion-browser server', () => {
       'screenshot',
       'click_point',
       'viewport',
+      'run_script',
     ]);
     for (const tool of tools) expect(tool.description?.startsWith(PANE_SENTENCE)).toBe(true);
   });
@@ -93,7 +94,7 @@ describe('aion-browser server', () => {
       expect(reply.isError).toBe(true);
       expect(textOf(reply)).toBe(NOT_AVAILABLE);
     }
-    expect((await client.listTools()).tools).toHaveLength(7); // still serving
+    expect((await client.listTools()).tools).toHaveLength(8); // still serving
   });
 
   it('says too many agent sessions are connected when the relay refuses with 503', async () => {

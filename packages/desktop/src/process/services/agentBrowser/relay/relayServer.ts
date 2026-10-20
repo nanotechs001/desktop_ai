@@ -13,6 +13,7 @@ import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
 import { createDebuggerSessions, type DebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
+import { MAX_SCRIPT_CHARS, isScriptForm, scriptEvaluateParams, scriptPreview, withScriptTimeout } from './pageScript';
 import { POLICY_ERROR_CODE, decideRelayCommand, mayAct } from './relayPolicy';
 import {
   DEFAULT_RELAY_LIMITS,
@@ -324,6 +325,63 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     }
   };
 
+  /** The tab an ask names, checked like an action on it: the client may act on it and `sessionId` is its own on it. */
+  const askedTab = (conn: Connection, webContentsId: number, sessionId: string) => {
+    if (!mayAct(registry.ownership(webContentsId), conn.client)) throw new Error('This tab is not shared with agents');
+    const session = ownSession(conn, sessionId);
+    if (session.webContentsId !== webContentsId) throw new Error(`Unknown sessionId: ${sessionId}`);
+    const contents = registry.contents(webContentsId);
+    if (!contents) throw new Error(`No such target: ${targetIdFor(webContentsId)}`);
+    return { contents, session };
+  };
+
+  /**
+   * Runs `ask` with a signal that aborts when the ask is moot (the tab's main frame navigates to another document or
+   * the tab closes, or the client leaves), counting it against the client's few open asks. A destroyed tab or a
+   * client already at that limit is denied without asking.
+   */
+  const whileAsking = async (
+    conn: Connection,
+    webContentsId: number,
+    contents: RelayContents,
+    ask: (signal: AbortSignal) => Promise<Params>
+  ): Promise<Params> => {
+    if (contents.isDestroyed() || conn.confirmsInFlight >= MAX_CONFIRMS_IN_FLIGHT) return { allow: false };
+    const moot = new AbortController();
+    const onNavigate = (details: { isMainFrame: boolean; isSameDocument?: boolean }): void => {
+      if (details.isMainFrame && !details.isSameDocument) moot.abort();
+    };
+    contents.on('did-start-navigation', onNavigate);
+    const offDestroyed = registry.onDestroyed((last) => {
+      if (last.webContentsId === webContentsId) moot.abort();
+    });
+    conn.confirmsInFlight += 1;
+    try {
+      return await ask(AbortSignal.any([moot.signal, conn.closed.signal]));
+    } finally {
+      conn.confirmsInFlight -= 1;
+      offDestroyed();
+      contents.removeListener('did-start-navigation', onNavigate);
+    }
+  };
+
+  /** The asking agent's chat first (ruling R9): an ask on a user tab shared with it still reaches that chat. */
+  const askConversation = (conn: Connection, webContentsId: number): { conversationId?: string } => {
+    const owner = registry.ownership(webContentsId)?.owner;
+    const conversationId = conn.conversationId ?? (owner && owner !== 'user' ? owner.conversationId : undefined);
+    return conversationId ? { conversationId } : {};
+  };
+
+  /** The user's answer to `request`; false for anything but an explicit Allow, a rejection included (logged). */
+  const askUser = async (request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal, id: number): Promise<boolean> => {
+    try {
+      return (await deps.requestConfirm(request, signal, id)) === true && !signal.aborted;
+    } catch (error) {
+      console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
+      return false;
+    }
+  };
+
   /**
    * Asks the user before the agent clicks or presses a key on a risky control. Both origins come from main's own
    * state, never from the agent: the tab's committed main-frame url, and the frame (`sessionId` + `frameId`) looked
@@ -341,46 +399,72 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       throw new Error('Invalid AionRelay.requestConfirm params');
     }
     const id = webContentsId as number;
-    if (!mayAct(registry.ownership(id), conn.client)) throw new Error('This tab is not shared with agents');
-    const session = ownSession(conn, sessionId);
-    if (session.webContentsId !== id) throw new Error(`Unknown sessionId: ${sessionId}`);
-    const contents = registry.contents(id);
-    if (!contents) throw new Error(`No such target: ${targetIdFor(id)}`);
-    if (contents.isDestroyed() || conn.confirmsInFlight >= MAX_CONFIRMS_IN_FLIGHT) return { allow: false };
-
-    const moot = new AbortController();
-    const onNavigate = (details: { isMainFrame: boolean; isSameDocument?: boolean }): void => {
-      if (details.isMainFrame && !details.isSameDocument) moot.abort();
-    };
-    contents.on('did-start-navigation', onNavigate);
-    const offDestroyed = registry.onDestroyed((last) => {
-      if (last.webContentsId === id) moot.abort();
+    const { contents } = askedTab(conn, id, sessionId);
+    return whileAsking(conn, id, contents, async (signal) => {
+      try {
+        const origin = webOriginOf(contents.mainFrame.url);
+        const frameOrigin = origin ? await frameOriginOf(sessionId, frameId) : null;
+        if (!origin || !frameOrigin) return { allow: false };
+        const request = {
+          origin,
+          frameOrigin: frameOrigin === 'opaque' ? null : frameOrigin,
+          label: sanitizePageText(label, MAX_CONFIRM_LABEL_LENGTH),
+          clientLabel: conn.client.label,
+          ...askConversation(conn, id),
+        };
+        return { allow: await askUser(request, signal, id) };
+      } catch (error) {
+        console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
+        return { allow: false };
+      }
     });
-    conn.confirmsInFlight += 1;
-    try {
+  };
+
+  /**
+   * run_script in the page's own JS world (the DevTools console's) of a tab the client may act on, once the user
+   * allowed it for its origin. The approval is spent on this one `Runtime.evaluate`, which the relay builds itself
+   * (awaited, by value, timed, never the command-line API) and sends on the tab's own session: main-world `Runtime`
+   * stays closed to the session (relayPolicy). Fails closed like requestConfirm: `{ allow: false }` unless the user
+   * allowed it and the tab still shows that origin; else `{ allow: true, reply }` with the CDP reply.
+   */
+  const runPageScript = async (conn: Connection, params: Params): Promise<Params> => {
+    const { webContentsId, sessionId, code, form } = params;
+    const valid =
+      Number.isInteger(webContentsId) &&
+      typeof sessionId === 'string' &&
+      typeof code === 'string' &&
+      code.length > 0 &&
+      code.length <= MAX_SCRIPT_CHARS &&
+      isScriptForm(form);
+    if (!valid) throw new Error('Invalid AionRelay.runPageScript params');
+    const id = webContentsId as number;
+    const { contents, session } = askedTab(conn, id, sessionId);
+    if (session.cdpSessionId) throw new Error('A page script runs on the tab session, not a frame session');
+    return whileAsking(conn, id, contents, async (signal) => {
       const origin = webOriginOf(contents.mainFrame.url);
-      const frameOrigin = origin ? await frameOriginOf(sessionId, frameId) : null;
-      if (!origin || !frameOrigin) return { allow: false };
-      // The asking agent's chat first (ruling R9): an ask on a user tab shared with it still reaches that chat.
-      const owner = registry.ownership(id)?.owner;
-      const conversationId = conn.conversationId ?? (owner && owner !== 'user' ? owner.conversationId : undefined);
+      if (!origin) return { allow: false };
       const request = {
         origin,
-        frameOrigin: frameOrigin === 'opaque' ? null : frameOrigin,
-        label: sanitizePageText(label, MAX_CONFIRM_LABEL_LENGTH),
+        frameOrigin: origin,
+        label: scriptPreview(code),
         clientLabel: conn.client.label,
-        ...(conversationId ? { conversationId } : {}),
+        kind: 'script' as const,
+        ...askConversation(conn, id),
       };
-      const allow = await deps.requestConfirm(request, AbortSignal.any([moot.signal, conn.closed.signal]), id);
-      return { allow: allow === true && !moot.signal.aborted };
-    } catch (error) {
-      console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
-      return { allow: false };
-    } finally {
-      conn.confirmsInFlight -= 1;
-      offDestroyed();
-      contents.removeListener('did-start-navigation', onNavigate);
-    }
+      if (!(await askUser(request, signal, id))) return { allow: false };
+      // The answer may have outlived the page, the sharing or the session it was given for.
+      const still =
+        webOriginOf(contents.mainFrame.url) === origin &&
+        mayAct(registry.ownership(id), conn.client) &&
+        sessions.session(sessionId) !== null;
+      if (!still) return { allow: false };
+      console.info(`[AgentBrowserRelay] run_script on ${origin} (world: page)`);
+      registry.touch(id, conn.conversationId);
+      const reply = await withScriptTimeout(
+        sessions.send(sessionId, 'Runtime.evaluate', scriptEvaluateParams(code, form))
+      );
+      return { allow: true, reply: reply ?? {} };
+    });
   };
 
   /** Tabs this client may act on with who owns each: `Target.getTargets` cannot tell agent from shared. */
@@ -432,6 +516,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         return reportAction(conn, params);
       case 'AionRelay.requestConfirm':
         return requestConfirm(conn, params);
+      case 'AionRelay.runPageScript':
+        return runPageScript(conn, params);
       default:
         throw new Error(`${method} is not allowed for agents`);
     }

@@ -251,6 +251,7 @@
     "confirm": {
       "title": "Allow this agent action?",
       "message": "The agent wants to use this control on {{origin}}:",
+      "scriptMessage": "에이전트가 {{origin}}의 페이지 콘솔에서 스크립트를 실행하려고 합니다. 이 사이트를 읽고 변경할 수 있습니다. 코드 시작 부분:",
       "frame": "The control is inside a frame from {{origin}}",
       "frameOpaque": "The control is inside a sandboxed frame, so this choice cannot be remembered",
       "allow": "Allow",

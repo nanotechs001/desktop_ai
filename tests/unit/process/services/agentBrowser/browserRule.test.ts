@@ -115,6 +115,13 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT).not.toMatch(/`(observe|act|drag)`/);
   });
 
+  it('keeps run_script for what act and observe cannot do, and says page scripts ask first, within the cap', () => {
+    expect(BROWSER_RULE_TEXT).toContain(
+      'Prefer act/observe. Use run_script only when the task needs it (reading data, page state, or site APIs); page-world scripts ask the user first.'
+    );
+    expect(browserRuleText('W'.repeat(BOT_NAME_MAX_CHARS)).length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+  });
+
   it('tells the model to report missing browser tools instead of opening another browser', () => {
     expect(BROWSER_RULE_TEXT).toContain('tell the user instead of opening any other browser');
   });

@@ -130,14 +130,16 @@ export type ConfirmRequest = {
    * opaque-origin frame (sandboxed): it has no identity to remember, so it is asked about every time.
    */
   frameOrigin: string | null;
-  /** The control's label as the page names it, sanitized and bounded. Untrusted text: show it as text only. */
+  /** The control's label as the page names it (or a script preview), sanitized and bounded. Untrusted text: show it as text only. */
   label: string;
   clientLabel: string;
   /** The asking agent's chat, else the chat that owns the tab; the ask also shows in that chat. Absent when neither is known. */
   conversationId?: string;
   /**
    * `leave`: not an agent action but a page's "Leave site?" (its beforeunload blocked a navigation); Allow means
-   * Leave. The desktop asks it in a native box, so only the chat shows it. Absent for a risky agent action.
+   * Leave. The desktop asks it in a native box, so only the chat shows it. `script`: the agent wants to run a script in
+   * the page's own JS world (run_script); `label` is then a preview of its code, and "Always allow" is remembered
+   * apart from risky clicks. Absent for a risky agent action.
    */
-  kind?: 'leave';
+  kind?: 'leave' | 'script';
 };
