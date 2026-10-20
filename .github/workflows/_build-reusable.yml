@@ -246,6 +246,13 @@ jobs:
           Write-Host "Rebuilding native modules for Electron $electronVer ($arch)"
           Write-Host "=========================================="
 
+          # better-sqlite3 13+ ships an N-API prebuild that loads in any Electron; nothing to rebuild.
+          $napiPrebuild = "node_modules/better-sqlite3/prebuilds/win32-$arch.node"
+          if (Test-Path $napiPrebuild) {
+            Write-Host "✅ better-sqlite3 N-API prebuild found: $napiPrebuild"
+            exit 0
+          }
+
           # Strategy: Try prebuild-install first (faster, more reliable)
           # Fallback to electron-rebuild only if prebuild-install fails
           $success = $false

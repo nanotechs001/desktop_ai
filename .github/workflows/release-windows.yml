@@ -122,6 +122,13 @@ jobs:
           $electronVer = (node -p "require('./package.json').devDependencies.electron.replace(/[\^~]/g, '')").Trim()
           Write-Host "Rebuilding native modules for Electron $electronVer ($arch)"
 
+          # better-sqlite3 13+ ships an N-API prebuild that loads in any Electron; nothing to rebuild.
+          $napiPrebuild = "node_modules/better-sqlite3/prebuilds/win32-$arch.node"
+          if (Test-Path $napiPrebuild) {
+            Write-Host "better-sqlite3 N-API prebuild found: $napiPrebuild"
+            exit 0
+          }
+
           # prebuild-install first (prebuilt binaries), electron-rebuild as fallback.
           try {
             bun x --yes prebuild-install --runtime=electron --target=$electronVer --platform=win32 --arch=$arch --force 2>&1
