@@ -27,6 +27,30 @@ export type BackendSystemDirs = {
   logDir: string;
 };
 
+/** One tab the WebUI may watch (mirrors the desktop's browser-view ViewTab). */
+export type BrowserViewTab = { id: string; title: string; url: string; paused: boolean };
+
+/** How the desktop pushes one stream to the phone; `close` codes are forwarded as WebSocket close codes. */
+export type BrowserViewPeer = {
+  sendBinary(b: Buffer): void;
+  sendText(s: string): void;
+  close(code: number, reason: string): void;
+};
+
+export type BrowserViewStreamHandle = { onMessage(raw: string): void; close(): void };
+
+/** The desktop's live browser-view service, used structurally so web-host never imports desktop code. */
+export type BrowserViewRoutes = {
+  listTabs(conversationId: string): BrowserViewTab[];
+  openStream(
+    tabId: string,
+    peer: BrowserViewPeer
+  ): Promise<BrowserViewStreamHandle | { error: 'tab-closed' | 'not-allowed' }>;
+};
+
+/** Routes the listener answers itself, after the auth gate, instead of forwarding them to aioncore. */
+export type LocalRoutes = { browserView?: BrowserViewRoutes };
+
 /**
  * Options for starting WebHost
  */
@@ -42,6 +66,8 @@ export type WebHostOptions = {
   isTunnelActive?: () => boolean;
   /** Epoch ms: sessions issued before it are refused (see StaticServerOptions.sessionsNotBefore). */
   sessionsNotBefore?: number | null;
+  /** Routes answered here instead of by aioncore; without them those paths are forwarded as before. */
+  localRoutes?: LocalRoutes;
   backend: { kind: 'ownBackend'; resolveBackend: BackendBinaryResolver } | { kind: 'useExistingBackend'; port: number };
 };
 

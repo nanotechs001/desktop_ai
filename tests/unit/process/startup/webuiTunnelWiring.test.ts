@@ -19,6 +19,7 @@ const tunnel = {
   onWebuiRestarted: vi.fn(),
 };
 let managerDeps: { getWebuiPort: () => number | null } | undefined;
+let browserViewService: { listTabs: ReturnType<typeof vi.fn>; openStream: ReturnType<typeof vi.fn> } | null = null;
 
 vi.mock('electron', () => ({
   app: { getVersion: () => '0.0.0', isPackaged: false, getAppPath: () => '/app', getPath: () => '/tmp' },
@@ -36,6 +37,8 @@ vi.mock('@process/webuiTunnel/tunnelManager', () => ({
     return tunnel;
   },
 }));
+
+vi.mock('@process/services/agentBrowser/services', () => ({ getBrowserViewService: () => browserViewService }));
 
 const importModule = () => import('@process/utils/webuiConfig');
 const puts = () => httpRequest.mock.calls.filter(([method]) => method === 'PUT').map(([, , body]) => body);
@@ -66,6 +69,28 @@ describe('WebUI secure link wiring', () => {
     expect(isTunnelActive()).toBe(false);
     tunnelState = 'running';
     expect(isTunnelActive()).toBe(true);
+  });
+
+  it('passes the browser view to the web host, following agent browser control at each call', async () => {
+    browserViewService = null;
+    const { startDesktopWebUI } = await importModule();
+    await startDesktopWebUI({ port: 25809 });
+    type Routes = {
+      listTabs: (conversationId: string) => unknown[];
+      openStream: (tabId: string, peer: unknown) => Promise<unknown>;
+    };
+    const { localRoutes } = startWebHost.mock.calls[0][0] as { localRoutes: { browserView: Routes } };
+    const peer = { sendBinary: vi.fn(), sendText: vi.fn(), close: vi.fn() };
+    expect(localRoutes.browserView.listTabs('c1')).toEqual([]);
+    await expect(localRoutes.browserView.openStream('wc-1', peer)).resolves.toEqual({ error: 'not-allowed' });
+
+    const handle = { onMessage: vi.fn(), close: vi.fn() };
+    browserViewService = { listTabs: vi.fn(() => [{ id: 'wc-1' }]), openStream: vi.fn(async () => handle) };
+    expect(localRoutes.browserView.listTabs('c1')).toEqual([{ id: 'wc-1' }]);
+    expect(browserViewService.listTabs).toHaveBeenCalledWith('c1');
+    await expect(localRoutes.browserView.openStream('wc-1', peer)).resolves.toBe(handle);
+    expect(browserViewService.openStream).toHaveBeenCalledWith('wc-1', peer);
+    browserViewService = null;
   });
 
   it('gives the manager the running WebUI port, or null when it is off', async () => {

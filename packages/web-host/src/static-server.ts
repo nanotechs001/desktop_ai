@@ -11,6 +11,8 @@
  * login. Every proxied request and upgrade is classified (auth-gate/), and those
  * that need a session are checked against aioncore `GET /api/auth/user` first.
  *
+ * Local routes (local-routes/): when configured, /api/browser-view/* is answered here after the same gate.
+ *
  * Design: Node native http + serve-handler. No Express. No business routes.
  */
 
@@ -34,6 +36,15 @@ import {
   sessionIssuedAtMs,
   type SessionValidator,
 } from './auth-gate/index.js';
+import {
+  createBrowserViewStreams,
+  serveTabs,
+  STREAM_PATH,
+  STREAM_REQUEST_LINE,
+  STREAM_ROUTE_LIKE,
+  TABS_PATH,
+} from './local-routes/browserViewRoutes.js';
+import type { LocalRoutes } from './types.js';
 
 export type StaticServerOptions = {
   staticDir: string;
@@ -44,6 +55,8 @@ export type StaticServerOptions = {
   isTunnelActive?: () => boolean;
   /** Epoch ms: sessions and refresh tokens issued before it are refused (see isSessionRevoked). */
   sessionsNotBefore?: number | null;
+  /** Routes answered here, after the auth gate, instead of by aioncore. */
+  localRoutes?: LocalRoutes;
   /** Raw-listener timeouts; defaults suit production, tests shorten them. */
   timeouts?: { headerMs?: number; refuseLingerMs?: number };
 };
@@ -261,6 +274,8 @@ function relayAfterUpgrade(client: Socket, upstream: Socket, held: Buffer): void
 const REFUSAL_REASONS: Record<number, string> = {
   400: 'Bad Request',
   401: 'Unauthorized',
+  403: 'Forbidden',
+  429: 'Too Many Requests',
   431: 'Request Header Fields Too Large',
   503: 'Service Unavailable',
 };
@@ -279,9 +294,14 @@ const UPGRADE_ROUTE_LIKE = /^\S+\s+\/(?:ws|api\/stt\/stream)(?:[?\s]|$)/i;
 // The only upgrade request line forwarded; any other upgrade-like line is refused.
 const UPGRADE_REQUEST_LINE = /^GET (\/ws|\/api\/stt\/stream)(\?[\x21-\x7e]*)? HTTP\/1\.1$/;
 
+/** The upgrade allowlist; the browser-view stream joins it only while that route is configured. */
+const matchUpgradeLine = (line: string, withStream: boolean): RegExpExecArray | null =>
+  UPGRADE_REQUEST_LINE.exec(line) ?? (withStream ? STREAM_REQUEST_LINE.exec(line) : null);
+
 /**
  * Decide routing from the first line of an incoming connection:
- *  - `'upgrade'` → exactly `GET /ws[?q] HTTP/1.1\r\n` or `GET /api/stt/stream[?q] HTTP/1.1\r\n`; the
+ *  - `'upgrade'` → exactly `GET /ws[?q] HTTP/1.1\r\n` or `GET /api/stt/stream[?q] HTTP/1.1\r\n` (or, with
+ *    `withStream`, `GET /api/browser-view/stream?tab=wc-<n> HTTP/1.1\r\n`); the
  *    auth gate then waits for the full header block and splices to the backend
  *  - `'refuse'`  → looks like an upgrade route but is not that exact form (bare LF, tab, HTTP/1.0, ...)
  *  - `'http'`    → anything else, handed to the internal HTTP server (which parses and rebuilds it)
@@ -290,12 +310,12 @@ const UPGRADE_REQUEST_LINE = /^GET (\/ws|\/api\/stt\/stream)(\?[\x21-\x7e]*)? HT
  * `Upgrade: websocket` is not required: a request the backend does not upgrade
  * gets its response and the connection is closed.
  */
-function peekWsRoute(buf: Buffer): 'upgrade' | 'refuse' | 'http' | null {
+function peekWsRoute(buf: Buffer, withStream: boolean): 'upgrade' | 'refuse' | 'http' | null {
   const newlineIdx = buf.indexOf(0x0a); // \n
   if (newlineIdx < 0) return null;
   const line = buf.subarray(0, newlineIdx).toString('latin1');
-  if (!UPGRADE_ROUTE_LIKE.test(line)) return 'http';
-  return line.endsWith('\r') && UPGRADE_REQUEST_LINE.test(line.slice(0, -1)) ? 'upgrade' : 'refuse';
+  if (!UPGRADE_ROUTE_LIKE.test(line) && !(withStream && STREAM_ROUTE_LIKE.test(line))) return 'http';
+  return line.endsWith('\r') && matchUpgradeLine(line.slice(0, -1), withStream) ? 'upgrade' : 'refuse';
 }
 
 /**
@@ -325,7 +345,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const validate = createSessionValidator(fetchAuthUser(opts.backendPort));
   let sessionsNotBefore = opts.sessionsNotBefore ?? null;
   // Open upgraded sockets with the iat (ms) of their credential, so a later not-before can close them.
-  const openSockets = new Set<{ iat: number; client: Socket; upstream: Socket }>();
+  // A browser-view stream has no upstream: its socket is a WebSocket served here.
+  const openSockets = new Set<{ iat: number; client: Socket; upstream?: Socket }>();
+  const track = (entry: { iat: number; client: Socket; upstream?: Socket }): void => {
+    openSockets.add(entry);
+    entry.client.once('close', () => openSockets.delete(entry));
+  };
   // Internal-server connections are local splices; map each one's local port back to the real client.
   const peers = new Map<number, string>();
   // A connection we did not splice (a local process on the internal port) has no real peer: never loopback.
@@ -334,6 +359,17 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const clients = new Set<Socket>();
   const headerMs = opts.timeouts?.headerMs ?? HEADER_TIMEOUT_MS;
   const lingerMs = opts.timeouts?.refuseLingerMs ?? REFUSE_LINGER_MS;
+  const browserView = opts.localRoutes?.browserView;
+  const browserViewStreams = browserView
+    ? createBrowserViewStreams(browserView, (client, status) => refuseRaw(client, status, lingerMs))
+    : null;
+  const withStream = browserViewStreams !== null;
+
+  /** The gate's checks again, for a stream that outlives them: not-before, aioncore, not-before. */
+  const sessionStillValid = async (creds: Credentials): Promise<boolean> =>
+    !isSessionRevoked(creds, sessionsNotBefore) &&
+    (await validate(creds)) === 'valid' &&
+    !isSessionRevoked(creds, sessionsNotBefore);
 
   const proxyThroughGate = async (req: IncomingMessage, res: ServerResponse, url: string): Promise<void> => {
     const method = req.method ?? '';
@@ -373,6 +409,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       replyError(res, 401, 'UNAUTHORIZED');
       return;
     }
+    if (browserView && normalizePath(url) === TABS_PATH) {
+      serveTabs(req, res, url, browserView);
+      return;
+    }
     forwardToBackend(req, res, opts.backendPort, headers, secureCookies, (status) => {
       if (method === 'POST' && normalizePath(url) === '/logout' && status >= 200 && status < 300) {
         validate.invalidate(creds);
@@ -385,6 +425,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
    * keep-alive connection on the internal server: exact request line and canonical path, readable
    * credential bytes, not-before, aioncore validation and a re-check, then a splice to aioncore that
    * holds client bytes until its 101. `held` is what the client sent after the header block.
+   * A configured browser-view stream passes the same checks, then is served here instead of spliced.
    */
   const gateUpgrade = async (
     client: Socket,
@@ -395,7 +436,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     settle: () => void
   ): Promise<void> => {
     client.on('error', () => client.destroy());
-    const match = UPGRADE_REQUEST_LINE.exec(requestLine);
+    const match = matchUpgradeLine(requestLine, withStream);
     const target = match ? match[1] + (match[2] ?? '') : '';
     if (!match || !isCanonicalPath(target) || hasUnreadableCredentialBytes(incoming)) {
       settle();
@@ -413,13 +454,17 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       refuseRaw(client, verdict === 'invalid' ? 401 : 503, lingerMs);
       return;
     }
+    const iat = sessionIssuedAtMs(creds);
+    if (browserViewStreams && match[1] === STREAM_PATH) {
+      track({ iat, client });
+      browserViewStreams.accept(client, target, headers, held, () => sessionStillValid(creds));
+      return;
+    }
     // Rebuilt from parsed parts: nothing the gate did not check reaches the backend.
     const fields = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
     const rewritten = Buffer.from(`GET ${target} HTTP/1.1\r\n${fields.join('')}\r\n`, 'latin1');
     const upstream = spliceToTcpEndpoint(client, opts.backendPort, rewritten, held);
-    const entry = { iat: sessionIssuedAtMs(creds), client, upstream };
-    openSockets.add(entry);
-    client.once('close', () => openSockets.delete(entry));
+    track({ iat, client, upstream });
   };
 
   // The HTTP server listens only on loopback — user traffic hits the outer
@@ -529,7 +574,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     const onData = (chunk: Buffer): void => {
       peeked = Buffer.concat([peeked, chunk]);
       if (wsRoute !== 'upgrade') {
-        wsRoute = peekWsRoute(peeked);
+        wsRoute = peekWsRoute(peeked, withStream);
         if (wsRoute === null && peeked.length < PEEK_LIMIT_BYTES) return;
         if (wsRoute === 'refuse') {
           cleanup();
@@ -603,7 +648,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       for (const { iat, client, upstream } of openSockets) {
         if (iat < ms) {
           client.destroy();
-          upstream.destroy();
+          upstream?.destroy();
         }
       }
     },
@@ -612,7 +657,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
         // Spliced and idle keep-alive sockets never end on their own; close() would wait for them.
         for (const { client, upstream } of openSockets) {
           client.destroy();
-          upstream.destroy();
+          upstream?.destroy();
         }
         for (const client of clients) client.destroy();
         tcp_server.close(() => {

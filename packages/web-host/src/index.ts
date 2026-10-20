@@ -1,6 +1,16 @@
 import type { WebHostOptions, WebHostHandle } from './types.js';
 
-export type { AppMetadata, BackendBinaryResolver, WebHostOptions, WebHostHandle } from './types.js';
+export type {
+  AppMetadata,
+  BackendBinaryResolver,
+  BrowserViewPeer,
+  BrowserViewRoutes,
+  BrowserViewStreamHandle,
+  BrowserViewTab,
+  LocalRoutes,
+  WebHostOptions,
+  WebHostHandle,
+} from './types.js';
 export { startStaticServer, stopStaticServer } from './static-server.js';
 export type { StaticServerOptions, StaticServerHandle } from './static-server.js';
 
@@ -58,6 +68,7 @@ export async function startWebHost(opts: WebHostOptions): Promise<WebHostHandle>
       allowRemote: opts.allowRemote ?? false,
       isTunnelActive: opts.isTunnelActive,
       sessionsNotBefore: opts.sessionsNotBefore,
+      localRoutes: opts.localRoutes,
     });
   } catch (err) {
     // If static-server fails, clean up backend

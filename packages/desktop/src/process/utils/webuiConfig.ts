@@ -12,7 +12,8 @@ import { networkInterfaces } from 'os';
 import { ipcBridge } from '@/common';
 import { getSystemDir } from './initStorage';
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { startWebHost, type WebHostHandle } from '@aionui/web-host';
+import { startWebHost, type BrowserViewRoutes, type WebHostHandle } from '@aionui/web-host';
+import { getBrowserViewService } from '@process/services/agentBrowser/services';
 import { getDataPath } from './utils';
 import { cloudflaredPlatformKey, ensureCloudflared, extractTgz } from '@process/webuiTunnel/cloudflaredBinary';
 import { createTunnelManager } from '@process/webuiTunnel/tunnelManager';
@@ -291,6 +292,13 @@ export async function revokeOtherWebUISessions(now: number = Date.now()): Promis
   );
 }
 
+/** The live browser view, looked up at each call: it is null while agent browser control is off. */
+const browserView: BrowserViewRoutes = {
+  listTabs: (conversationId) => getBrowserViewService()?.listTabs(conversationId) ?? [],
+  openStream: async (tabId, peer) =>
+    (await getBrowserViewService()?.openStream(tabId, peer)) ?? { error: 'not-allowed' },
+};
+
 /**
  * Spawn a WebUI instance (static server + backend) and remember the handle so
  * callers can later stop it or query its status.
@@ -336,6 +344,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     allowRemote,
     sessionsNotBefore,
     isTunnelActive: () => webuiTunnel.isActive(),
+    localRoutes: { browserView },
     // Must align with the desktop IPC path's backend dataDir (src/index.ts), otherwise
     // users see divergent SQLite state between desktop app and bundled WebUI.
     dataDir: getDataPath(),
