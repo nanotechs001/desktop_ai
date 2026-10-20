@@ -1,7 +1,7 @@
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import { newBotColor, rememberBotColor } from '@/renderer/hooks/agent/useBotColor';
-import { persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
+import { enginePinOrigin, persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
 import type { IMcpServer } from '@/common/config/storage';
 import type { Assistant, CreateAssistantRequest, UpdateAssistantRequest } from '@/common/types/agent/assistantTypes';
 import type { Message } from '@arco-design/web-react';
@@ -71,11 +71,16 @@ const deriveBuiltinAutoSkills = (skills: SkillInfo[]): BuiltinAutoSkill[] =>
     description: skill.description,
   }));
 
-/** Keep `agent.enginePins` in step with the editor's choice, writing only when it changed. */
+/**
+ * Keep `agent.enginePins` in step with the editor's choice, writing only when it changed. Saving an explicit engine
+ * also confirms a usage-limit pin on that same engine as the user's own, so a default change no longer releases it.
+ */
 const syncEnginePin = async (assistantId: string, usesDefault: boolean, engineId: string): Promise<void> => {
   const current = configService.get('agent.enginePins')?.[assistantId];
   if (usesDefault && current) return persistEnginePin(assistantId, null);
-  if (!usesDefault && engineId && current !== engineId) return persistEnginePin(assistantId, engineId);
+  if (!usesDefault && engineId && (current !== engineId || enginePinOrigin(assistantId) === 'limit')) {
+    return persistEnginePin(assistantId, engineId);
+  }
 };
 
 /**

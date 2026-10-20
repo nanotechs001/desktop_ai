@@ -97,6 +97,7 @@ import { ipcBridge } from '@/common';
 import type { AssistantListItem } from '@/renderer/pages/settings/AssistantSettings/types';
 import { mutate as swrMutate } from 'swr';
 import { BOT_COLOR_PALETTE } from '@/common/types/agent/botColors';
+import { releaseLimitPins } from '@/renderer/hooks/agent/useDefaultEngine';
 
 describe('useAssistantEditor', () => {
   const mockAssistantDetail = {
@@ -1259,6 +1260,27 @@ describe('useAssistantEditor', () => {
         expect.objectContaining({ id: 'a1', agent_id: 'agent-default' })
       );
       expect(enginePinWrites()).toEqual([]);
+    });
+
+    it('confirms a usage-limit pin on a same-engine save, so a later default change keeps it', async () => {
+      engineConfig.store.set('agent.enginePins', { a1: 'agent-claude', other: 'agent-gemini' });
+      engineConfig.store.set('agent.enginePinOrigins', { a1: 'limit', other: 'limit' });
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
+      const { result } = renderHook(() =>
+        useAssistantEditor({ ...defaultParams, activeAssistant: userAssistant, defaultEngineId: 'agent-default' })
+      );
+
+      await act(async () => {
+        await result.current.handleEdit(userAssistant);
+      });
+      expect(result.current.editAgent).toBe('agent-claude');
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(engineConfig.store.get('agent.enginePinOrigins')).toEqual({ other: 'limit' });
+      await releaseLimitPins();
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({ a1: 'agent-claude' });
     });
 
     it('opens a generated (bare CLI) assistant on its own engine, not following the default', async () => {
