@@ -51,6 +51,12 @@ describe('readScriptParams (no approval)', () => {
     expect(SCRIPT_TIMEOUT_MS).toBe(10_000);
   });
 
+  it('wraps without await or async: V8 side-effect mode refuses both (measured in Electron 37)', () => {
+    const { expression } = readScriptParams('document.title', 'expression');
+    expect(expression).not.toMatch(/\bawait\b/);
+    expect(expression).not.toMatch(/\basync\b/);
+  });
+
   it('runs an expression (a trailing semicolon or comment is fine) and a function body', async () => {
     expect(await evaluate(readScriptParams('1 + 1;', 'expression').expression)).toBe(2);
     expect(await evaluate(readScriptParams('Promise.resolve(3) // three', 'expression').expression)).toBe(3);

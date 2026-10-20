@@ -42,18 +42,19 @@ export const isScriptWorld = (value: unknown): value is ScriptWorld =>
 const CAP_RESULT = `try { const __s = JSON.stringify(__v); return __s !== undefined && __s.length > ${MAX_RESULT_CHARS} ? { __truncated: __s.slice(0, ${MAX_RESULT_CHARS}), length: __s.length } : __v; } catch { return __v; }`;
 
 /**
- * The agent's code as one awaited expression with its result capped; `race` lets it settle within
- * {@link SCRIPT_TIMEOUT_MS} with an in-page timer (a side effect, so read-only runs go without). Everything before the
- * code sits on the first line, so line n of the code is 0-based line n of the expression (what CDP reports).
+ * The agent's code as one expression with its result capped. A write run is awaited and `race`d against an in-page
+ * {@link SCRIPT_TIMEOUT_MS} timer. A read-only run is synchronous: V8's side-effect check refuses any `await` (and the
+ * timer), so with them every read would fail (measured in Electron 37). Everything before the code sits on the first
+ * line, so line n of the code is 0-based line n of the expression (what CDP reports).
  */
-const wrapScript = (code: string, form: ScriptForm, race: boolean): string => {
+const wrapScript = (code: string, form: ScriptForm, mode: 'read' | 'write'): string => {
   const [open, close] = form === 'body' ? ['{', '}'] : ['(', ')'];
   // A trailing semicolon would end the expression early; trailing comments are safe on their own line.
   const source = form === 'body' ? code : code.replace(/[\s;]+$/, '');
+  if (mode === 'read') return `(() => { const __v = (() => ${open}\n${source}\n${close})(); ${CAP_RESULT} })()`;
   const run = `(async () => ${open}\n${source}\n${close})()`;
   const timeout = `new Promise((_, reject) => setTimeout(() => reject(new Error('run_script timed out after ${SCRIPT_TIMEOUT_MS} ms')), ${SCRIPT_TIMEOUT_MS}))`;
-  const settled = race ? `Promise.race([${run}, ${timeout}])` : run;
-  return `(async () => { const __v = await ${settled}; ${CAP_RESULT} })()`;
+  return `(async () => { const __v = await Promise.race([${run}, ${timeout}]); ${CAP_RESULT} })()`;
 };
 
 const EVALUATE = { awaitPromise: true, returnByValue: true, timeout: SCRIPT_TIMEOUT_MS } as const;
@@ -63,7 +64,7 @@ const EVALUATE = { awaitPromise: true, returnByValue: true, timeout: SCRIPT_TIME
  * at anything that would change the page (DOM writes, fetch, storage, timers). The caller adds its isolated world.
  */
 export const readScriptParams = (code: string, form: ScriptForm) => ({
-  expression: wrapScript(code, form, false),
+  expression: wrapScript(code, form, 'read'),
   ...EVALUATE,
   throwOnSideEffect: true,
 });
@@ -73,7 +74,7 @@ export const readScriptParams = (code: string, form: ScriptForm) => ({
  * the tab shows another origin by the time it starts (a navigation between the answer and the run).
  */
 export const writeScriptParams = (code: string, form: ScriptForm, expectOrigin: string) => ({
-  expression: `if (location.origin !== ${JSON.stringify(expectOrigin)}) throw ${JSON.stringify(PAGE_CHANGED)}; ${wrapScript(code, form, true)}`,
+  expression: `if (location.origin !== ${JSON.stringify(expectOrigin)}) throw ${JSON.stringify(PAGE_CHANGED)}; ${wrapScript(code, form, 'write')}`,
   ...EVALUATE,
 });
 
