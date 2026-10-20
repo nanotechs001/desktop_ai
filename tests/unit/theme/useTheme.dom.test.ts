@@ -34,6 +34,8 @@ vi.mock('@/renderer/utils/theme/systemThemeWatcher', () => ({
 }));
 
 import useTheme from '@/renderer/hooks/system/useTheme';
+import { emitAuthenticated } from '@/renderer/hooks/context/authEvents';
+import { applyTheme } from '@/renderer/utils/theme/applyTheme';
 
 const darkTheme: Theme = {
   id: 'dark',
@@ -74,5 +76,18 @@ describe('useTheme selection', () => {
     await expect(act(async () => result.current[1]('dark'))).rejects.toThrow('save failed');
 
     expect(result.current[0]?.appearance).toBe('light');
+  });
+
+  it('applies the saved theme again once a signed-out WebUI page signs in', async () => {
+    configGetMock.mockImplementation((key: string) => {
+      if (key === 'theme.activeId') return 'dark';
+      if (key === 'theme.userThemes') return [];
+      return undefined;
+    });
+    vi.mocked(applyTheme).mockClear();
+
+    emitAuthenticated();
+
+    await waitFor(() => expect(applyTheme).toHaveBeenCalledWith(expect.objectContaining({ id: 'dark' })));
   });
 });

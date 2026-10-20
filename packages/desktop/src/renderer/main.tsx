@@ -66,6 +66,7 @@ import { registerPwa } from './services/registerPwa';
 import { ipcBridge } from '@/common';
 import { repairAllCronJobTimeZonesOnce } from '@renderer/pages/cron/repairCronJobTimeZone';
 import { bootstrapRendererConfig } from '@renderer/services/bootstrapRenderer';
+import { onAuthenticated } from './hooks/context/authEvents';
 
 // Components and utilities
 import BackendStartingView from './components/layout/BackendStartingView';
@@ -94,6 +95,8 @@ import { getWidgetConversationId } from './pages/agentWidget/chatLocation';
 // share the backend session but skip main-window-only startup work and dialogs.
 const isAgentWidgetWindow = getWidgetConversationId() !== null;
 if (isAgentWidgetWindow) document.documentElement.classList.add('agent-widget-window');
+// WebUI: the bootstrap cron repair in Main failed with 401 while signed out; retry once signed in.
+if (!isAgentWidgetWindow) onAuthenticated(() => void repairAllCronJobTimeZonesOnce());
 
 // Arco ships several locales that predate its newer components: sections such
 // as Form, ColorPicker and the Calendar month/year formats are missing there.

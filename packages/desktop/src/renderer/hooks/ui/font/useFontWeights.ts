@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { configService } from '@/common/config/configService';
+import { onAuthenticated } from '@renderer/hooks/context/authEvents';
 import {
   FONT_WEIGHT_KEYS,
   defaultFontWeights,
@@ -29,11 +30,15 @@ function readFontWeights(): FontWeights {
 }
 
 // Apply persisted weights ASAP at module load to minimize first-paint flash (FOUC).
+// Again once a signed-out WebUI page signs in: its first read failed with 401.
 if (typeof window !== 'undefined') {
-  void configService
-    .whenReady()
-    .then(() => applyFontWeights(readFontWeights()))
-    .catch((error) => console.error('Failed to apply persisted font weights:', error));
+  const applyPersisted = (): void =>
+    void configService
+      .whenReady()
+      .then(() => applyFontWeights(readFontWeights()))
+      .catch((error) => console.error('Failed to apply persisted font weights:', error));
+  applyPersisted();
+  onAuthenticated(applyPersisted);
 }
 
 export type UseFontWeights = {

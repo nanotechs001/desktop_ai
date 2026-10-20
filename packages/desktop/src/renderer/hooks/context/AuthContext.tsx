@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { PREVIEW_SCOPE_KEY_PREFIX } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { refreshSession } from '@/common/adapter/sessionRefresh';
+import { emitAuthenticated } from './authEvents';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -133,6 +134,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [ready, setReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Last settled status; 'checking' is a transient step of every refresh.
+  const settledStatusRef = useRef<AuthStatus>('checking');
+
+  useEffect(() => {
+    if (status === 'checking') return;
+    const previous = settledStatusRef.current;
+    settledStatusRef.current = status;
+    // Signed-out startup reads failed with 401; let them run again (WebUI only —
+    // the desktop app is never 'unauthenticated').
+    if (previous === 'unauthenticated' && status === 'authenticated') emitAuthenticated();
+  }, [status]);
 
   const refresh = useCallback(async () => {
     if (isDesktopRuntime) {

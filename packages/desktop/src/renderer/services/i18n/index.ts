@@ -13,6 +13,7 @@ import {
   type SupportedLanguage,
 } from '@/common/config/i18n';
 import { applyDocumentDirection } from './direction';
+import { onAuthenticated } from '@renderer/hooks/context/authEvents';
 
 // Static imports for all locales to ensure packaged app can always switch language.
 import enUS from './locales/en-US/index';
@@ -176,8 +177,9 @@ i18n.on('languageChanged', (lang: string) => {
 });
 applyDocumentDirection(initialLanguage);
 
-// Initialize on module load
+// Initialize on module load, and again once a signed-out WebUI page signs in.
 void initLanguage();
+onAuthenticated(() => void initLanguage());
 
 // Listen for language changes broadcast by the main process (from other renderers).
 // This enables real-time sync between desktop and WebUI — when one changes language,

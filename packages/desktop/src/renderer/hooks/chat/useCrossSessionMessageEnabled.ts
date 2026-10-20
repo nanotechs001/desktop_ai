@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { onAuthenticated } from '@renderer/hooks/context/authEvents';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 /**
@@ -69,6 +70,13 @@ const load = (): Promise<void> => {
   })();
   return loadPromise;
 };
+
+// A signed-out WebUI read failed and kept the default; read again once signed in.
+onAuthenticated(() => {
+  if (!loadPromise) return;
+  loadPromise = null;
+  void load();
+});
 
 /** Drop the cached fetch so the next mount re-reads. Exported for tests. */
 export const resetCrossSessionMessageEnabledCache = (): void => {

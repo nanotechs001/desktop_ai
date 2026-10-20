@@ -11,6 +11,7 @@ import { applyTheme, seedElectronTheme, setActiveTheme } from '@/renderer/utils/
 import { getSystemPrefersDark } from '@/renderer/utils/theme/systemAppearance';
 import { startSystemThemeWatcher } from '@/renderer/utils/theme/systemThemeWatcher';
 import { BUILTIN_THEMES } from '@renderer/theme/builtinThemes';
+import { onAuthenticated } from '@renderer/hooks/context/authEvents';
 import { LIGHT_THEME_ID } from '@/common/theme/constants';
 import type { Theme } from '@/common/theme/types';
 import { useCallback, useEffect, useState } from 'react';
@@ -49,7 +50,13 @@ async function initActiveTheme(): Promise<Theme> {
 }
 
 let initialPromise: Promise<Theme> | null = null;
-if (typeof window !== 'undefined') initialPromise = initActiveTheme();
+if (typeof window !== 'undefined') {
+  initialPromise = initActiveTheme();
+  // A signed-out WebUI page fell back to Light; apply the saved theme once signed in.
+  onAuthenticated(() => {
+    initialPromise = initActiveTheme();
+  });
+}
 
 /**
  * Returns [resolvedActiveTheme, selectThemeById, rawActiveId]. `rawActiveId` may be the

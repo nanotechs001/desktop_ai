@@ -5,6 +5,7 @@
  */
 
 import { configService } from '@/common/config/configService';
+import { onAuthenticated } from '@renderer/hooks/context/authEvents';
 
 type BootstrapLogger = (message?: unknown, ...optionalParams: unknown[]) => void;
 
@@ -17,3 +18,6 @@ export async function bootstrapRendererConfig(logError: BootstrapLogger = consol
     logError('Failed to initialize config:', err);
   });
 }
+
+// WebUI: the signed-out boot read failed with 401; read the settings again once signed in.
+onAuthenticated(() => void bootstrapRendererConfig());

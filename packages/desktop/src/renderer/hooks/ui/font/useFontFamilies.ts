@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { configService } from '@/common/config/configService';
+import { onAuthenticated } from '@renderer/hooks/context/authEvents';
 import {
   FONT_FAMILY_KEYS,
   defaultFontFamilies,
@@ -29,11 +30,15 @@ function readFontFamilies(): FontFamilies {
 }
 
 // Apply persisted families ASAP at module load to minimize first-paint flash (FOUC).
+// Again once a signed-out WebUI page signs in: its first read failed with 401.
 if (typeof window !== 'undefined') {
-  void configService
-    .whenReady()
-    .then(() => applyFontFamilies(readFontFamilies()))
-    .catch((error) => console.error('Failed to apply persisted font families:', error));
+  const applyPersisted = (): void =>
+    void configService
+      .whenReady()
+      .then(() => applyFontFamilies(readFontFamilies()))
+      .catch((error) => console.error('Failed to apply persisted font families:', error));
+  applyPersisted();
+  onAuthenticated(applyPersisted);
 }
 
 export type UseFontFamilies = {
