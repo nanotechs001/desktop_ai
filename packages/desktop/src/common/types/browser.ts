@@ -135,4 +135,6 @@ export type ConfirmRequest = {
   /** The control's label as the page names it, sanitized and bounded. Untrusted text: show it as text only. */
   label: string;
   clientLabel: string;
+  /** The chat whose agent owns the tab, from main's tab registry; the ask also shows in that chat. Absent for tabs no chat owns. */
+  conversationId?: string;
 };

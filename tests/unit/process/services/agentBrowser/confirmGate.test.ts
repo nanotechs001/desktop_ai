@@ -88,6 +88,22 @@ describe('PendingConfirms', () => {
     expect(loadAllowedOrigins(file).size).toBe(0);
   });
 
+  it("keeps the request's chat, and ignores a second answer from another view", async () => {
+    const confirms = new PendingConfirms({ file });
+    const onChange = vi.fn();
+    confirms.onChange(onChange);
+    const answer = confirms.request({ ...ask, conversationId: 'conv-1' });
+    const [open] = confirms.list();
+    expect(open.conversationId).toBe('conv-1');
+
+    // The chat card answers first; the browser pane's (or the phone's) later Deny changes nothing.
+    expect(confirms.reply(open.id, true, false)).toBe(true);
+    expect(confirms.reply(open.id, false, false)).toBe(false);
+    expect(await answer).toBe(true);
+    // Every view got the full list twice: once with the ask, once without it.
+    expect(onChange.mock.calls).toEqual([[[open]], [[]]]);
+  });
+
   it('Always allow on this site skips later prompts for that origin only, and is written atomically', async () => {
     const confirms = new PendingConfirms({ file });
     const first = confirms.request(ask);

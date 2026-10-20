@@ -776,12 +776,12 @@ describe('relay server: AionRelay methods', () => {
     };
 
     /** An agent-owned tab, an attached session, and `ask(…)` for the request the MCP would send. */
-    const confirmTab = async (url = 'https://shop.test/cart?x=1#y', id = 40) => {
+    const confirmTab = async (url = 'https://shop.test/cart?x=1#y', id = 40, conversationId?: string) => {
       const client = await connect(await start());
       const contents = new FakeContents(id, url);
       contents.debugger.handler = (method) => (method === 'Page.getFrameTree' ? TREE : {});
       registry.track(contents);
-      registry.claim(id, relay?.clients()[0] as RelayClient);
+      registry.claim(id, { ...(relay?.clients()[0] as RelayClient), ...(conversationId ? { conversationId } : {}) });
       const sessionId = await attach(client, id);
       const ask = (patch: Record<string, unknown> = {}) =>
         client.send('AionRelay.requestConfirm', {
@@ -808,6 +808,33 @@ describe('relay server: AionRelay methods', () => {
       });
       requestConfirm.mockResolvedValueOnce(false);
       expect((await ask()).result).toEqual({ allow: false });
+    });
+
+    it('names the chat that owns the tab, so the ask also shows there; none for a tab no chat owns', async () => {
+      const { ask, client } = await confirmTab(undefined, 40, 'conv_A-1');
+      requestConfirm.mockResolvedValue(true);
+      await ask();
+      expect(requestConfirm.mock.calls[0][0]).toMatchObject({
+        origin: 'https://shop.test',
+        conversationId: 'conv_A-1',
+      });
+
+      // A user tab shared with agents belongs to no chat: the ask stays on the browser pane only.
+      const shared = new FakeContents(50, 'https://bank.test/');
+      shared.debugger.handler = (method) =>
+        method === 'Page.getFrameTree'
+          ? { frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } } }
+          : {};
+      registry.track(shared);
+      registry.share(50, true);
+      const bankSession = await attach(client, 50);
+      await client.send('AionRelay.requestConfirm', {
+        webContentsId: 50,
+        label: 'Send',
+        sessionId: bankSession,
+        frameId: 'TOP',
+      });
+      expect(requestConfirm.mock.calls[1][0]).not.toHaveProperty('conversationId');
     });
 
     it('takes the origin of a control in a cross-origin frame from the frame tree', async () => {

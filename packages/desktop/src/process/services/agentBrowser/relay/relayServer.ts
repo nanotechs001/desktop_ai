@@ -358,11 +358,14 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       const origin = webOriginOf(contents.mainFrame.url);
       const frameOrigin = origin ? await frameOriginOf(sessionId, frameId) : null;
       if (!origin || !frameOrigin) return { allow: false };
+      const owner = registry.ownership(id)?.owner;
+      const conversationId = owner && owner !== 'user' ? owner.conversationId : undefined;
       const request = {
         origin,
         frameOrigin: frameOrigin === 'opaque' ? null : frameOrigin,
         label: sanitizePageText(label, MAX_CONFIRM_LABEL_LENGTH),
         clientLabel: conn.client.label,
+        ...(conversationId ? { conversationId } : {}),
       };
       const allow = await deps.requestConfirm(request, AbortSignal.any([moot.signal, conn.closed.signal]));
       return { allow: allow === true && !moot.signal.aborted };
