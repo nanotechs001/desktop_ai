@@ -261,6 +261,20 @@ describe('browser view: phone input', () => {
     ]);
   });
 
+  it("counts the phone's text and keys as the user typing on the tab, a tap or scroll not", async () => {
+    const { handle } = await streaming();
+    send(handle, { type: 'tap', nx: 0.5, ny: 0.25 });
+    send(handle, { type: 'scroll', nx: 0.5, ny: 0.5, dy: 120 });
+    expect(registry.typedSinceLoad(7)).toBe(false);
+
+    send(handle, { type: 'text', value: 'hi' });
+    expect(registry.typedSinceLoad(7)).toBe(true);
+
+    registry.clearTyped(7);
+    send(handle, { type: 'key', key: 'Backspace' });
+    expect(registry.typedSinceLoad(7)).toBe(true);
+  });
+
   it('sends a non-text key as rawKeyDown, as the agent does', async () => {
     const { handle } = await streaming();
     send(handle, { type: 'key', key: 'Backspace' });

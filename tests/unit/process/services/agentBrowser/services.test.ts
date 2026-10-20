@@ -473,11 +473,56 @@ describe('agent browser services: leave site', () => {
     expect(hooks.current.unloadBlocked?.(70)).toEqual({ kind: 'leave' });
   });
 
-  it("still lets an agent's own tab leave unasked after the user typed and clicked in it", async () => {
+  it("still lets an agent's own tab leave unasked after the user only clicked in it", async () => {
     const { tab } = await agentTab(71);
-    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
     tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 1, y: 1 });
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'Meta', code: 'MetaLeft' });
     expect(hooks.current.unloadBlocked?.(71)).toEqual({ kind: 'leave' });
+  });
+
+  it("asks, in the agent's chat too, once the user typed in an agent's own tab; a new page forgets it", async () => {
+    const { tab } = await agentTab(75);
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+
+    const plan = hooks.current.unloadBlocked?.(75);
+    if (plan?.kind !== 'ask' || !plan.askChat) throw new Error('expected a chat ask');
+    const leave = plan.askChat(new AbortController().signal);
+    const [open] = webuiConfirms.listConfirms('conv-1');
+    expect(open).toMatchObject({ kind: 'leave', origin: 'https://agent.test' });
+    expect(webuiConfirms.answerConfirm(open.id, false, false)).toBe(true);
+    expect(await leave).toBe(false);
+
+    tab.emit('did-navigate-in-page', {}, 'https://agent.test/#step-2', true);
+    expect(hooks.current.unloadBlocked?.(75)).toMatchObject({ kind: 'ask' }); // same document: the text is still there
+    tab.emit('did-navigate', {}, 'https://agent.test/next');
+    expect(hooks.current.unloadBlocked?.(75)).toEqual({ kind: 'leave' });
+  });
+
+  it("still leaves unasked after the agent's own typing, which Electron also reports as a keyDown", async () => {
+    const { send, tab } = await agentTab(76);
+    tab.debugger.handler = (method, params) => {
+      // Electron fires before-input-event for a CDP key while the command is in flight.
+      const { type, key, code } = params as { type: string; key?: string; code?: string };
+      if (method === 'Input.dispatchKeyEvent' && type !== 'keyUp') {
+        tab.emit('before-input-event', {}, { type: 'keyDown', key, code });
+      }
+      return {};
+    };
+    const attached = await send('Target.attachToTarget', { targetId: 'wc-76', flatten: true });
+    const sessionId = String(attached.result?.sessionId);
+
+    const typed = await send(
+      'Input.dispatchKeyEvent',
+      { type: 'keyDown', key: 'a', code: 'KeyA', text: 'a' },
+      sessionId
+    );
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA' }, sessionId);
+
+    expect(typed.error).toBeUndefined();
+    expect(hooks.current.unloadBlocked?.(76)).toEqual({ kind: 'leave' });
+    // The same key from the user, once the agent's command settled, is the user's.
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+    expect(hooks.current.unloadBlocked?.(76)).toMatchObject({ kind: 'ask' });
   });
 
   it('asks on a user tab only on the desktop: no chat drives it', async () => {
@@ -503,6 +548,22 @@ describe('agent browser services: leave site', () => {
     expect(open).toEqual({ id: open.id, kind: 'leave', origin: 'https://bank.test', frameOrigin: null, label: '' });
     expect(webuiConfirms.answerConfirm(open.id, true, true)).toBe(true);
     expect(await leave).toBe(true);
+  });
+
+  it('lists and answers nothing on the phone once agent control stopped', async () => {
+    const { tab } = await agentTab(77);
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+    const plan = hooks.current.unloadBlocked?.(77);
+    if (plan?.kind !== 'ask' || !plan.askChat) throw new Error('expected a chat ask');
+    void plan.askChat(new AbortController().signal);
+    const [open] = webuiConfirms.listConfirms('conv-1');
+    expect(open).toBeDefined();
+
+    await services?.close();
+    services = null;
+
+    expect(webuiConfirms.listConfirms('conv-1')).toEqual([]);
+    expect(webuiConfirms.answerConfirm(open.id, true, false)).toBe(false);
   });
 
   it('withdraws the chat ask once the desktop answered', async () => {

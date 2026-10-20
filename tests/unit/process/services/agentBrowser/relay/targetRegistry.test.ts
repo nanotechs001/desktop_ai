@@ -126,3 +126,46 @@ describe('targetRegistry', () => {
     ]);
   });
 });
+
+describe('targetRegistry: typed since load', () => {
+  const A = { key: 'a', code: 'KeyA' };
+
+  it('marks a user key, not an in-flight agent key; forgets on a new page and when the tab goes', () => {
+    const registry = createTargetRegistry();
+    const tab = new FakeContents(4);
+    registry.track(tab);
+
+    const end = registry.beginAgentKey(4, A);
+    expect(registry.isAgentKey(4, A)).toBe(true);
+    registry.noteUserKey(4, A);
+    expect(registry.typedSinceLoad(4)).toBe(false);
+    registry.noteUserKey(4, { key: 'b', code: 'KeyB' });
+    expect(registry.typedSinceLoad(4)).toBe(true);
+
+    registry.clearTyped(4);
+    end();
+    registry.noteUserKey(4, A);
+    expect(registry.typedSinceLoad(4)).toBe(true);
+
+    tab.destroy();
+    expect(registry.typedSinceLoad(4)).toBe(false);
+  });
+
+  it('counts a key with no report to match (the phone) as the user, and forgets an unsettled agent key', () => {
+    vi.useFakeTimers();
+    try {
+      const registry = createTargetRegistry();
+      registry.track(new FakeContents(5));
+      registry.beginAgentKey(5, A);
+      vi.advanceTimersByTime(5001);
+      expect(registry.isAgentKey(5, A)).toBe(false);
+
+      registry.noteUserKey(5);
+      expect(registry.typedSinceLoad(5)).toBe(true);
+      registry.noteUserKey(99);
+      expect(registry.typedSinceLoad(99)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

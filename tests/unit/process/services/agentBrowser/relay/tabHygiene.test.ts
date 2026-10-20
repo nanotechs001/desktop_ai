@@ -19,6 +19,8 @@ const MINUTE = 60_000;
 let registry: TargetRegistry;
 let hygiene: TabHygiene;
 let shown: number | null;
+let streamed: Set<number>;
+let confirming: Set<number>;
 const closeTab = vi.fn();
 
 /** A tab an agent of `chat` opened at the current (fake) time. */
@@ -34,7 +36,15 @@ beforeEach(() => {
   vi.useFakeTimers();
   registry = createTargetRegistry();
   shown = null;
-  hygiene = startTabHygiene({ registry, closeTab, shownTab: () => shown });
+  streamed = new Set();
+  confirming = new Set();
+  hygiene = startTabHygiene({
+    registry,
+    closeTab,
+    shownTab: () => shown,
+    isStreamed: (id) => streamed.has(id),
+    isConfirming: (id) => confirming.has(id),
+  });
 });
 
 afterEach(() => {
@@ -137,5 +147,32 @@ describe('idle sweep', () => {
     vi.advanceTimersByTime(AGENT_TAB_IDLE_MS + MINUTE);
 
     expect(closeTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('tabs the user may still need', () => {
+  it('never closes a tab the user typed in, one a phone watches, or one with an open risky ask', () => {
+    agentTab(1);
+    agentTab(2);
+    agentTab(3);
+    registry.noteUserKey(1);
+    streamed.add(2);
+    confirming.add(3);
+
+    agentTab(4); // the cap spares 1, 2 and 3
+    expect(closeTab).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(AGENT_TAB_IDLE_MS);
+
+    expect(closeTab.mock.calls).toEqual([[4]]);
+  });
+
+  it('asks again after 10 s when the pane never closed the tab', () => {
+    agentTab(1);
+    vi.advanceTimersByTime(AGENT_TAB_IDLE_MS);
+    expect(closeTab.mock.calls).toEqual([[1]]);
+
+    vi.advanceTimersByTime(MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[1], [1]]);
   });
 });

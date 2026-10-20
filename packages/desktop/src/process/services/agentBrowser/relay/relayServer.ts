@@ -29,6 +29,7 @@ import {
 import {
   targetIdFor,
   webContentsIdFromTargetId,
+  type KeyInput,
   type RelayClient,
   type RelayContents,
   type TargetRegistry,
@@ -52,8 +53,8 @@ export type RelayServerDeps = {
   /** An agent's new tab was claimed for it (Target.createTarget), e.g. for the per-chat tab cap. */
   onAgentTab?(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
-  /** Asks the user to allow a risky action; resolves with the answer. `signal` aborts when the ask is moot. */
-  requestConfirm(request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal): Promise<boolean>;
+  /** Asks the user to allow a risky action on a tab; resolves with the answer. `signal` aborts when the ask is moot. */
+  requestConfirm(request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal, webContentsId: number): Promise<boolean>;
   /** Loopback ports agents must not navigate to besides the relay's own (e.g. the backend's). */
   blockedPorts?: () => readonly number[];
   limits?: Partial<RelayLimits>;
@@ -113,6 +114,17 @@ const parseRect = (value: unknown): AgentActionEvent['rect'] | undefined => {
   if (!numbers.every(isFiniteNumber) || numbers.length !== 4) return undefined;
   const [x, y, width, height] = (numbers as number[]).map((n) => Math.max(0, n));
   return { x, y, width, height };
+};
+
+/** Inserted text has no key of its own; Chromium reports such input as key "Unidentified". */
+const INSERTED_TEXT: KeyInput = { key: 'Unidentified', code: '' };
+
+/** An agent key Electron also reports as a keyDown: a keyDown/rawKeyDown's key and code, or inserted text. */
+const agentKeyOf = (method: string, params: Params): KeyInput | null => {
+  if (method === 'Input.insertText') return INSERTED_TEXT;
+  const keyDown = method === 'Input.dispatchKeyEvent' && (params.type === 'keyDown' || params.type === 'rawKeyDown');
+  if (!keyDown || typeof params.key !== 'string') return null;
+  return { key: params.key, code: typeof params.code === 'string' ? params.code : '' };
 };
 
 /**
@@ -359,7 +371,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         clientLabel: conn.client.label,
         ...(conversationId ? { conversationId } : {}),
       };
-      const allow = await deps.requestConfirm(request, AbortSignal.any([moot.signal, conn.closed.signal]));
+      const allow = await deps.requestConfirm(request, AbortSignal.any([moot.signal, conn.closed.signal]), id);
       return { allow: allow === true && !moot.signal.aborted };
     } catch (error) {
       console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
@@ -446,12 +458,18 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     if (decision.allow === false) throw new Error(decision.message);
     registry.touch(webContentsId, conn.conversationId);
     if (method === 'Page.reload') return reload(session, params);
-    const result = await sessions.send(sessionId, method, params);
-    const contextId = asParams(result)?.executionContextId;
-    if (method === 'Page.createIsolatedWorld' && typeof contextId === 'number') {
-      sessions.addOwnContext(sessionId, contextId);
+    const agentKey = agentKeyOf(method, params);
+    const endKey = agentKey ? registry.beginAgentKey(webContentsId, agentKey) : null;
+    try {
+      const result = await sessions.send(sessionId, method, params);
+      const contextId = asParams(result)?.executionContextId;
+      if (method === 'Page.createIsolatedWorld' && typeof contextId === 'number') {
+        sessions.addOwnContext(sessionId, contextId);
+      }
+      return result ?? {};
+    } finally {
+      endKey?.();
     }
-    return result ?? {};
   };
 
   const onMessage = async (conn: Connection, raw: string): Promise<void> => {

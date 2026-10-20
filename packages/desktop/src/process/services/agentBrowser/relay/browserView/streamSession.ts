@@ -114,6 +114,8 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
     cast.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: dy });
   };
   const key = (name: AllowedKey): void => {
+    // The phone's keys are the user's own typing, whatever Electron reports for their CDP events.
+    registry.noteUserKey(webContentsId);
     const base = { key: name, code: name, windowsVirtualKeyCode: KEY_CODES[name] };
     // As the agent's pressKey: only a key that types text is a keyDown; the rest are rawKeyDown.
     const down = name === 'Enter' ? { type: 'keyDown', text: '\r' } : { type: 'rawKeyDown' };
@@ -132,6 +134,7 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
       case 'scroll':
         return scroll(message.nx, message.ny, message.dy);
       case 'text':
+        registry.noteUserKey(webContentsId);
         return cast.send('Input.insertText', { text: message.value });
       case 'key':
         return key(message.key);

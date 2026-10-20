@@ -613,7 +613,8 @@ describe('installBeforeUnloadDialog with agent browser control', () => {
 
   /** A tab whose beforeunload blocks a load; `pendingUrl` is the uncommitted address `getURL()` shows. */
   const blockedTab = async (pendingUrl: string | null = null) => {
-    const handlers = new Map<string, (event: { preventDefault: () => void }) => void>();
+    const handlers = new Map<string, (event: { preventDefault: () => void }, input?: unknown) => void>();
+    const destroyed = new Set<() => void>();
     const committed = 'https://editor.test/doc';
     const tab = {
       id: nextId++,
@@ -622,7 +623,15 @@ describe('installBeforeUnloadDialog with agent browser control', () => {
       isDestroyed: () => false,
       loadURL: vi.fn(() => Promise.resolve()),
       on: (event: string, handler: (event: { preventDefault: () => void }) => void) => handlers.set(event, handler),
-      once: vi.fn(),
+      once: (event: string, handler: () => void) => {
+        if (event === 'destroyed') destroyed.add(handler);
+      },
+      removeListener: (event: string, handler: () => void) => {
+        if (event === 'destroyed') destroyed.delete(handler);
+      },
+      destroy: () => destroyed.forEach((handler) => handler()),
+      keyDown: (key: string) =>
+        handlers.get('before-input-event')?.({ preventDefault: () => {} }, { type: 'keyDown', key, code: `Key${key}` }),
     };
     installBeforeUnloadDialog(tab as unknown as Electron.WebContents, () => null);
     await vi.waitFor(() => expect(handlers.has('will-prevent-unload')).toBe(true));
@@ -748,7 +757,60 @@ describe('installBeforeUnloadDialog with agent browser control', () => {
     expect(fire().preventDefault).not.toHaveBeenCalled();
   });
 
-  it('forgets an unused Leave after a minute', async () => {
+  it('closes the box and the chat card when the tab goes away', async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
+    desktopBox();
+    const { tab, fire } = await blockedTab();
+    fire();
+
+    tab.destroy();
+
+    expect(chat.seen.signal?.aborted).toBe(true);
+    expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(true);
+  });
+
+  it("forgets a granted Leave at the user's next key, not at the agent's", async () => {
+    const chat = chatAsk();
+    const agentKeys = new Set(['A']);
+    setWindowOpenHooks({
+      unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }),
+      isAgentKey: (_id, { key }) => agentKeys.has(key),
+    });
+    desktopBox();
+    const { tab, fire } = await blockedTab();
+    fire();
+    chat.answer(true);
+    await vi.waitFor(() => expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    tab.keyDown('A'); // the agent's own key: the Leave still holds
+    tab.keyDown('B'); // the user typed: the next attempt asks again
+    desktopBox();
+
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+    expect(chat.askChat).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a granted Leave through the agent's key", async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({
+      unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }),
+      isAgentKey: () => true,
+    });
+    desktopBox();
+    const { tab, fire } = await blockedTab();
+    fire();
+    chat.answer(true);
+    await vi.waitFor(() => expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    tab.keyDown('A');
+
+    expect(fire().preventDefault).toHaveBeenCalled();
+  });
+
+  it('forgets an unused Leave after 15 s', async () => {
     const chat = chatAsk();
     setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
     desktopBox();
@@ -758,7 +820,7 @@ describe('installBeforeUnloadDialog with agent browser control', () => {
     await vi.waitFor(() => expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const later = Date.now() + 60_001;
+    const later = Date.now() + 15_001;
     vi.spyOn(Date, 'now').mockReturnValue(later);
     desktopBox();
     try {

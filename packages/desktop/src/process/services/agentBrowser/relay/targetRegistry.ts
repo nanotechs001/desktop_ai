@@ -79,6 +79,19 @@ export type TargetRegistry = {
   touch(webContentsId: number, conversationId?: string): void;
   /** When the tab was last used (tracked counts as used), and the chat of the last agent that used it. */
   lastUse(webContentsId: number): TabUse | null;
+  /**
+   * Records an agent key (`Input.dispatchKeyEvent` keyDown/rawKeyDown, or `Input.insertText`) while its command is
+   * in flight, because Electron reports it as a keyDown too. Call the returned function when the command settles.
+   */
+  beginAgentKey(webContentsId: number, key: KeyInput): () => void;
+  /** True while an agent key matching Electron's report `key` is in flight on the tab. */
+  isAgentKey(webContentsId: number, key: KeyInput): boolean;
+  /** A keyDown on the tab: the user typed, unless it is an in-flight agent key. Without `key` (the phone), always the user. */
+  noteUserKey(webContentsId: number, key?: KeyInput): void;
+  /** The tab committed a new document: what the user typed is gone. */
+  clearTyped(webContentsId: number): void;
+  /** The user typed on the tab's current document: an agent must not leave or close it unasked. */
+  typedSinceLoad(webContentsId: number): boolean;
   onChange(cb: (all: TabOwnership[]) => void): () => void;
   onDestroyed(cb: (last: TabOwnership) => void): () => void;
 };
@@ -86,7 +99,12 @@ export type TargetRegistry = {
 /** Kept apart from ownership: a use changes nothing the pane draws, so it notifies nobody. */
 export type TabUse = { at: number; conversationId?: string };
 
+/** A key as Electron reports it and CDP sends it. */
+export type KeyInput = { key: string; code: string };
+
 const TARGET_PREFIX = 'wc-';
+/** An in-flight agent key is forgotten after this even if its command never settles. */
+const AGENT_KEY_TTL_MS = 5000;
 
 const logListenerError = (error: unknown): void => {
   console.error('[AgentBrowserRelay] registry listener failed:', error);
@@ -118,6 +136,10 @@ export const webContentsIdFromTargetId = (targetId: string): number | null => {
 export function createTargetRegistry(): TargetRegistry {
   const tabs = new Map<number, { contents: RelayContents; ownership: TabOwnership }>();
   const uses = new Map<number, TabUse>();
+  const agentKeys = new Map<number, KeyInput[]>();
+  const typed = new Set<number>();
+  const isAgentKey = (webContentsId: number, { key, code }: KeyInput): boolean =>
+    (agentKeys.get(webContentsId) ?? []).some((agent) => agent.key === key && agent.code === code);
   const changeListeners = new Set<(all: TabOwnership[]) => void>();
   const destroyedListeners = new Set<(last: TabOwnership) => void>();
 
@@ -146,6 +168,8 @@ export function createTargetRegistry(): TargetRegistry {
         if (!tab) return;
         tabs.delete(webContentsId);
         uses.delete(webContentsId);
+        agentKeys.delete(webContentsId);
+        typed.delete(webContentsId);
         callEach(destroyedListeners, tab.ownership);
         notify();
       });
@@ -192,6 +216,30 @@ export function createTargetRegistry(): TargetRegistry {
       uses.set(webContentsId, { at: Date.now(), ...(chat ? { conversationId: chat } : {}) });
     },
     lastUse: (webContentsId) => uses.get(webContentsId) ?? null,
+    beginAgentKey(webContentsId, key) {
+      const own: KeyInput = { ...key };
+      agentKeys.set(webContentsId, [...(agentKeys.get(webContentsId) ?? []), own]);
+      const end = (): void => {
+        clearTimeout(timer);
+        const left = (agentKeys.get(webContentsId) ?? []).filter((entry) => entry !== own);
+        if (left.length > 0) agentKeys.set(webContentsId, left);
+        else agentKeys.delete(webContentsId);
+      };
+      const timer = setTimeout(end, AGENT_KEY_TTL_MS);
+      timer.unref?.();
+      return end;
+    },
+    isAgentKey,
+    noteUserKey(webContentsId, key) {
+      // Not consumed: a matching report while the agent's key is in flight is the agent's (the user pressing the very
+      // same key in those few ms is missed, which only lets one leave go unasked).
+      if (!tabs.has(webContentsId) || (key && isAgentKey(webContentsId, key))) return;
+      typed.add(webContentsId);
+    },
+    clearTyped: (webContentsId) => {
+      typed.delete(webContentsId);
+    },
+    typedSinceLoad: (webContentsId) => typed.has(webContentsId),
     onChange(cb) {
       changeListeners.add(cb);
       return () => changeListeners.delete(cb);

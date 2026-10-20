@@ -11,6 +11,8 @@ export const MAX_AGENT_TABS_PER_CHAT = 3;
 /** An agent tab nobody (agent or user) used for this long is closed. */
 export const AGENT_TAB_IDLE_MS = 15 * 60_000;
 const SWEEP_INTERVAL_MS = 60_000;
+/** A close the pane never carried out is forgotten after this, so a later cap or sweep may ask again. */
+const CLOSE_PENDING_MS = 10_000;
 
 export type TabHygieneDeps = {
   registry: TargetRegistry;
@@ -18,6 +20,10 @@ export type TabHygieneDeps = {
   closeTab(webContentsId: number): void;
   /** The tab the pane last reported on screen, if any; it is never closed. */
   shownTab(): number | null;
+  /** True while a phone watches the tab; it is never closed. */
+  isStreamed?(webContentsId: number): boolean;
+  /** True while a risky-action ask is open on the tab; it is never closed. */
+  isConfirming?(webContentsId: number): boolean;
 };
 
 export type TabHygiene = {
@@ -32,10 +38,16 @@ export type TabHygiene = {
 
 /**
  * Keeps agents from piling up tabs: a per-chat cap and an idle sweep every minute. Only a closable tab is ever
- * closed: agent-owned, not shared, not on screen. "Used" is the registry's last use (an agent
- * command or user input on the tab).
+ * closed: agent-owned, not shared, not on screen, not typed in since its page loaded, not watched by a phone, no
+ * risky ask open. "Used" is the registry's last use (an agent command or user input on the tab).
  */
-export function startTabHygiene({ registry, closeTab, shownTab }: TabHygieneDeps): TabHygiene {
+export function startTabHygiene({
+  registry,
+  closeTab,
+  shownTab,
+  isStreamed,
+  isConfirming,
+}: TabHygieneDeps): TabHygiene {
   const agentTabs = new Set<number>();
   /** Asked to close and not gone yet: neither counted nor asked again. */
   const closing = new Set<number>();
@@ -43,6 +55,9 @@ export function startTabHygiene({ registry, closeTab, shownTab }: TabHygieneDeps
   const closable = (webContentsId: number): boolean => {
     const tab = registry.ownership(webContentsId);
     if (!tab || tab.owner === 'user' || tab.sharedWith !== null) return false;
+    if (registry.typedSinceLoad(webContentsId) || isStreamed?.(webContentsId) || isConfirming?.(webContentsId)) {
+      return false;
+    }
     return !closing.has(webContentsId) && webContentsId !== shownTab();
   };
   const chatOf = (webContentsId: number): string | undefined => {
@@ -52,6 +67,7 @@ export function startTabHygiene({ registry, closeTab, shownTab }: TabHygieneDeps
   const lastUsedAt = (webContentsId: number): number => registry.lastUse(webContentsId)?.at ?? 0;
   const closeNow = (webContentsId: number): void => {
     closing.add(webContentsId);
+    setTimeout(() => closing.delete(webContentsId), CLOSE_PENDING_MS).unref?.();
     closeTab(webContentsId);
   };
 

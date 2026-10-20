@@ -82,6 +82,8 @@ export type WindowOpenHooks = {
   popupCreated?: (openerId: number, popup: Electron.WebContents) => void;
   /** A page's beforeunload blocked a navigation or close: what to do instead of only asking on the desktop. */
   unloadBlocked?: (webContentsId: number) => UnloadPlan;
+  /** True when a keyDown Electron reports on the tab is an agent's own in-flight CDP key, not the user's. */
+  isAgentKey?: (webContentsId: number, key: { key: string; code: string }) => boolean;
 };
 
 /**
@@ -301,8 +303,11 @@ const preloadLeaveTranslate = (): void => {
   );
 };
 
-/** A Leave answered after the page stayed lets the tab's next unload attempt through unasked, for this long. */
-const LEAVE_AGAIN_MS = 60_000;
+/**
+ * A Leave answered after the page stayed lets the tab's next unload attempt through unasked, for this long or until
+ * the user's next key on the tab (new typing may be worth keeping).
+ */
+const LEAVE_AGAIN_MS = 15_000;
 /** Tabs whose next unload goes through unasked, until the time (ms) given. */
 const leaveAgainUntil = new Map<number, number>();
 /** Tabs with a desktop-and-chat ask open: a repeat attempt meanwhile stays without a second ask. */
@@ -351,6 +356,9 @@ const askDesktopAndChat = (
   asking.add(id);
   const pendingUrl = pendingUrlOf(contents);
   const settled = new AbortController();
+  // The tab went away: close the box and withdraw the chat card.
+  const onDestroyed = (): void => settled.abort();
+  contents.once('destroyed', onDestroyed);
   const desktop = dialog
     .showMessageBox(owner, { ...leaveOptions(t), signal: settled.signal })
     .then(({ response }) => response === LEAVE_BUTTON);
@@ -362,6 +370,7 @@ const askDesktopAndChat = (
     })
     .then((leave) => {
       settled.abort();
+      contents.removeListener('destroyed', onDestroyed);
       asking.delete(id);
       if (!leave || contents.isDestroyed()) return;
       leaveAgainUntil.set(id, Date.now() + LEAVE_AGAIN_MS);
@@ -386,6 +395,11 @@ export function installBeforeUnloadDialog(
   preloadLeaveTranslate();
   const { id } = contents;
   contents.once('destroyed', () => leaveAgainUntil.delete(id));
+  contents.on('before-input-event', (_event, input) => {
+    if (input.type !== 'keyDown' || !leaveAgainUntil.has(id)) return;
+    const key = { key: input.key, code: input.code };
+    if (!runHook('isAgentKey', () => hooks.isAgentKey?.(id, key))) leaveAgainUntil.delete(id);
+  });
   contents.on('will-prevent-unload', (event) => {
     if (takeLeaveAgain(id)) return event.preventDefault();
     const plan = runHook('unloadBlocked', () => hooks.unloadBlocked?.(id));

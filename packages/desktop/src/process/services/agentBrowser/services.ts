@@ -88,28 +88,35 @@ export const webuiConfirms = {
   },
 };
 
-/** A key or click marks the tab used, for the idle sweep. The agent keeps working: it sees the change on its next observe. */
+/**
+ * A key or click marks the tab used, for the idle sweep; a user key (not the agent's own CDP key) also marks the page
+ * typed in, until a new document commits. Only a cross-document load clears it: a same-document navigation (a
+ * history-API or fragment change) keeps the DOM, so whatever the user typed is still there to lose. The agent keeps
+ * working: it sees the change on its next observe.
+ */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
   contents.on('before-input-event', (_event, input) => {
     if (input.type === 'keyDown' && !MODIFIER_KEYS.has(input.key)) {
       registry.touch(contents.id);
+      registry.noteUserKey(contents.id, { key: input.key, code: input.code });
     }
   });
   contents.on('before-mouse-event', (_event, mouse) => {
     if (mouse.type === 'mouseDown') registry.touch(contents.id);
   });
+  contents.on('did-navigate', () => registry.clearTyped(contents.id));
 };
 
 /**
- * A page's "Leave site?": an agent's own tab (not shared) leaves unasked, since the agent cannot
- * answer and the user may not be watching. Any other tab asks on the desktop and, when a chat drives it (its owner's,
- * else the last agent that used it), in that chat too.
+ * A page's "Leave site?": an agent's own tab (not shared, not typed in by the user since its page loaded) leaves
+ * unasked, since the agent cannot answer and the user may not be watching. Any other tab asks on the desktop and, when
+ * a chat drives it (its owner's, else the last agent that used it), in that chat too.
  */
 const unloadPlan = (registry: TargetRegistry, confirms: PendingConfirms, webContentsId: number): UnloadPlan => {
   const tab = registry.ownership(webContentsId);
   if (!tab) return { kind: 'ask' };
   const { owner } = tab;
-  if (owner !== 'user' && tab.sharedWith === null) return { kind: 'leave' };
+  if (owner !== 'user' && tab.sharedWith === null && !registry.typedSinceLoad(webContentsId)) return { kind: 'leave' };
   const conversationId =
     (owner === 'user' ? undefined : owner.conversationId) ?? registry.lastUse(webContentsId)?.conversationId;
   if (!conversationId) return { kind: 'ask' };
@@ -159,6 +166,7 @@ const followOpeners = (
       return owner.conversationId ? { conversationId: owner.conversationId } : {};
     },
     unloadBlocked: (webContentsId) => unloadPlan(registry, confirms, webContentsId),
+    isAgentKey: (webContentsId, key) => registry.isAgentKey(webContentsId, key),
   });
 };
 
@@ -299,10 +307,28 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     watchUserInput(contents, registry);
     if (contents.getType() === 'webview') offerNewTab(waiter, contents, partitionOfProfile(profile));
   });
+  /** Open risky-action asks per tab: tab cleanup spares those tabs. */
+  const confirming = new Map<number, number>();
+  const requestConfirm = async (
+    request: Omit<ConfirmRequest, 'id'>,
+    signal: AbortSignal,
+    webContentsId: number
+  ): Promise<boolean> => {
+    confirming.set(webContentsId, (confirming.get(webContentsId) ?? 0) + 1);
+    try {
+      return await confirms.request(request, undefined, signal);
+    } finally {
+      const left = (confirming.get(webContentsId) ?? 1) - 1;
+      if (left > 0) confirming.set(webContentsId, left);
+      else confirming.delete(webContentsId);
+    }
+  };
   const hygiene = startTabHygiene({
     registry,
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     shownTab: shownBrowserTab,
+    isStreamed: (webContentsId) => browserView?.isStreamed(webContentsId) ?? false,
+    isConfirming: (webContentsId) => confirming.has(webContentsId),
   });
   followOpeners(registry, waiter, confirms, hygiene);
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
@@ -327,7 +353,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentTab: (webContentsId) => hygiene.adopt(webContentsId),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
-    requestConfirm: (request, signal) => confirms.request(request, undefined, signal),
+    requestConfirm,
     blockedPorts: options.blockedPorts,
   });
   active = registry;
@@ -340,6 +366,8 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
       // The relay's sessions no longer own the tabs' debuggers alone: phone streams must end with agent control.
       browserView?.closeAll('not-allowed');
       browserView = null;
+      // The phone lists and answers nothing once agent control is off (the desktop keeps its own asks).
+      pendingConfirms = null;
       setWindowOpenHooks({});
       hygiene.close();
       return relay.close();

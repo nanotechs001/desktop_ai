@@ -25,6 +25,8 @@ export type BrowserViewService = {
   openStream(tabId: string, peer: StreamPeer): Promise<StreamHandle | { error: StreamRefusal }>;
   /** Ends every open stream, e.g. when agent browser control turns off. */
   closeAll(reason: StreamRefusal): void;
+  /** True while a phone watches (or is starting to watch) the tab. */
+  isStreamed(webContentsId: number): boolean;
 };
 
 export type BrowserViewDeps = { registry: TargetRegistry; sessions: DebuggerSessions };
@@ -76,5 +78,6 @@ export function createBrowserViewService({ registry, sessions }: BrowserViewDeps
     closeAll(reason) {
       Array.from(streams).forEach((stream) => stream.end(reason));
     },
+    isStreamed: (webContentsId) => casts.has(webContentsId),
   };
 }
