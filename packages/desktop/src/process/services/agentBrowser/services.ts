@@ -8,7 +8,7 @@ import { ipcBridge } from '@/common';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
-import { onBrowserContentsCreated } from '@process/services/browserSession/browserSession';
+import { onBrowserContentsCreated, shownBrowserTab } from '@process/services/browserSession/browserSession';
 import { setWindowOpenHooks, type UnloadPlan } from '@process/services/browserSession/windowOpen';
 import {
   isDeletedAgentProfile,
@@ -20,6 +20,7 @@ import { PendingConfirms, webOriginOf } from './confirmGate';
 import { createBrowserViewService, type BrowserViewService } from './relay/browserView';
 import { createDebuggerSessions } from './relay/debuggerSessions';
 import { startRelayServer, type ProfileLookup } from './relay/relayServer';
+import { startTabHygiene, type TabHygiene } from './relay/tabHygiene';
 import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
 import { parseConversationId } from './relay/relayTransport';
 import { handleEnsureAgentRule } from './assistantRules';
@@ -87,15 +88,20 @@ export const webuiConfirms = {
   },
 };
 
-/** Pauses agent input on a tab the user types or clicks in (agent-owned or shared tabs only). */
+/**
+ * A key or click marks the tab used (for the idle sweep) and pauses agent input on a tab the user types or clicks in
+ * (agent-owned or shared tabs only).
+ */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
   contents.on('before-input-event', (_event, input) => {
     if (input.type === 'keyDown' && !MODIFIER_KEYS.has(input.key)) {
+      registry.touch(contents.id);
       registry.noteUserInput(contents.id, { kind: 'key', key: input.key, code: input.code });
     }
   });
   contents.on('before-mouse-event', (_event, mouse) => {
     if (mouse.type !== 'mouseDown') return;
+    registry.touch(contents.id);
     // Electron reports zoomed (DIP) coordinates; CDP input uses CSS px (measured on 37.10.3).
     const zoom = contents.getZoomFactor() || 1;
     registry.noteUserInput(contents.id, { kind: 'mouse', x: mouse.x / zoom, y: mouse.y / zoom });
@@ -134,7 +140,8 @@ const unloadPlan = (registry: TargetRegistry, confirms: PendingConfirms, webCont
 const followOpeners = (
   registry: TargetRegistry,
   waiter: CreateTabWaiter<Electron.WebContents>,
-  confirms: PendingConfirms
+  confirms: PendingConfirms,
+  hygiene: TabHygiene
 ): void => {
   const agentOwner = (openerId: number) => {
     const owner = registry.ownership(openerId)?.owner;
@@ -151,7 +158,10 @@ const followOpeners = (
       const owner = agentOwner(openerId);
       if (!owner || partition === null) return undefined;
       waiter.wait(url, TAB_CREATE_TIMEOUT_MS, owner.conversationId, partition).then(
-        (tab) => registry.inherit(openerId, tab.id),
+        (tab) => {
+          registry.inherit(openerId, tab.id);
+          hygiene.adopt(tab.id);
+        },
         () => {} // not opened in time (or refused at the tab cap): the tab, if any, stays the user's
       );
       return owner.conversationId ? { conversationId: owner.conversationId } : {};
@@ -307,7 +317,12 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     watchUserInput(contents, registry);
     if (contents.getType() === 'webview') offerNewTab(waiter, contents, partitionOfProfile(profile));
   });
-  followOpeners(registry, waiter, confirms);
+  const hygiene = startTabHygiene({
+    registry,
+    closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
+    shownTab: shownBrowserTab,
+  });
+  followOpeners(registry, waiter, confirms, hygiene);
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
   confirms.onChange((open) => ipcBridge.agentBrowser.confirmRequested.emit(open));
 
@@ -328,6 +343,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
       waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(liveAgentProfile(profile))),
     resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
+    onAgentTab: (webContentsId) => hygiene.adopt(webContentsId),
     onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
     requestConfirm: (request, signal) => confirms.request(request, undefined, signal),
     blockedPorts: options.blockedPorts,
@@ -343,6 +359,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
       browserView?.closeAll('not-allowed');
       browserView = null;
       setWindowOpenHooks({});
+      hygiene.close();
       return relay.close();
     },
   };

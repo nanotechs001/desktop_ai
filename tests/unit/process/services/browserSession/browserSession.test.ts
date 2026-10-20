@@ -477,6 +477,11 @@ describe('Chrome extensions wiring', () => {
     mod.selectBrowserTab(1);
 
     expect(mocks.extensions.selectTab.mock.calls).toEqual([[browserTab]]);
+    // The tab on screen is remembered for agent tab cleanup; a dead or unknown id does not replace it.
+    expect(mod.shownBrowserTab()).toBe(1);
+    mod.selectBrowserTab(3);
+    mod.selectBrowserTab(4);
+    expect(mod.shownBrowserTab()).toBe(1);
   });
 });
 

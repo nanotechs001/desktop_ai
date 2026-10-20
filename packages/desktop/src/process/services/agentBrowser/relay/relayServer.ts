@@ -50,6 +50,8 @@ export type RelayServerDeps = {
   resolveProfile(conversationId: string | undefined): Promise<ProfileLookup>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
+  /** An agent's new tab was claimed for it (Target.createTarget), e.g. for the per-chat tab cap. */
+  onAgentTab?(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
   /** Asks the user to allow a risky action; resolves with the answer. `signal` aborts when the ask is moot. */
   requestConfirm(request: Omit<ConfirmRequest, 'id'>, signal: AbortSignal): Promise<boolean>;
@@ -233,6 +235,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     registry.claim(contents.id, { ...client, conversationId: conn.conversationId });
     // The client may have gone while the tab opened; it must not stay claimable under its label.
     if (!connections.has(client.clientId)) registry.releaseClient(client.clientId);
+    deps.onAgentTab?.(contents.id);
     return { targetId: targetIdFor(contents.id) };
   };
 

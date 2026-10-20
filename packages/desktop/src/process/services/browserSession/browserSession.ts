@@ -211,12 +211,20 @@ function wipeTemporarySessionWhenClosed(contents: Electron.WebContents): void {
   });
 }
 
+/** The browser tab the pane last reported on screen. */
+let shownTabId: number | null = null;
+
+/** The browser tab the pane last reported on screen (see {@link selectBrowserTab}); null before any report. */
+export const shownBrowserTab = (): number | null => shownTabId;
+
 /**
- * Tells extensions which browser tab the user is looking at (`chrome.tabs.onActivated`). Ids that
- * are gone or not on a browser session are ignored, so a misreported id cannot reach extensions.
+ * Tells extensions which browser tab the user is looking at (`chrome.tabs.onActivated`), and remembers it so agent
+ * tab cleanup never closes it. Ids that are gone or not on a browser session are ignored, so a misreported id cannot
+ * reach extensions.
  */
 export function selectBrowserTab(webContentsId: number): void {
   const contents = webContents.fromId(webContentsId);
   if (!contents || contents.isDestroyed()) return;
+  shownTabId = webContentsId;
   extensionsOf(contents)?.selectTab(contents);
 }

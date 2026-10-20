@@ -249,3 +249,52 @@ describe('tabs list, close and switch', () => {
     await expect(callTabs(client, { action: 'burn' })).resolves.toMatchObject({ isError: true });
   });
 });
+
+describe('tabs navigate', () => {
+  beforeEach(() => {
+    relay.on('Target.attachToTarget', () => ({ sessionId: 's1' }));
+    relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
+    relay.on('Page.navigate', () => ({ frameId: 'TOP', loaderId: 'L1' }));
+  });
+
+  it('loads the page in the current tab with Page.navigate on its session and returns once it commits', async () => {
+    const client = await connectClient(relay.env);
+    await callTabs(client, { action: 'open' });
+
+    const reply = await callTabs(client, { action: 'navigate', url: 'https://example.com/next' });
+
+    expect(reply.isError).toBeFalsy();
+    expect(jsonOf(reply)).toEqual({ tab: 'wc-7', url: 'https://example.com/next' });
+    const navigate = relay.requests.find((r) => r.method === 'Page.navigate');
+    expect(navigate).toMatchObject({ params: { url: 'https://example.com/next' }, sessionId: 's1' });
+    expect(relay.callsTo('Target.createTarget')).toHaveLength(1); // reused, no new tab
+  });
+
+  it('navigates a named tab', async () => {
+    const client = await connectClient(relay.env);
+    await callTabs(client, { action: 'navigate', url: 'http://docs.example.com/', tab: 'wc-9' });
+    expect(relay.callsTo('Target.attachToTarget')).toEqual([{ targetId: 'wc-9', flatten: true }]);
+    expect(relay.callsTo('Page.navigate')).toEqual([{ url: 'http://docs.example.com/' }]);
+  });
+
+  it('rejects a non-http(s) url, about:blank and a missing url without calling the relay', async () => {
+    const client = await connectClient(relay.env);
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,x', 'about:blank', undefined]) {
+      const reply = await callTabs(client, { action: 'navigate', url, tab: 'wc-7' });
+      expect(reply.isError, String(url)).toBe(true);
+      expect(textOf(reply)).toBe('tabs navigate needs an http(s) url.');
+    }
+    expect(relay.requests).toEqual([]);
+  });
+
+  it('reports a failed load and a missing current tab as errors', async () => {
+    const client = await connectClient(relay.env);
+    expect(textOf(await callTabs(client, { action: 'navigate', url: 'https://example.com/' }))).toContain(
+      'No current tab'
+    );
+    relay.on('Page.navigate', () => ({ frameId: 'TOP', errorText: 'net::ERR_NAME_NOT_RESOLVED' }));
+    const reply = await callTabs(client, { action: 'navigate', url: 'https://nope.example/', tab: 'wc-7' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toBe('Could not load the page: net::ERR_NAME_NOT_RESOLVED');
+  });
+});

@@ -57,6 +57,7 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
     h.created.push(listener);
     return () => {};
   },
+  shownBrowserTab: () => null,
 }));
 
 const { agentTabProfile, getBrowserViewService, liveAgentProfile, startAgentBrowserServices, webuiConfirms } =
@@ -527,6 +528,21 @@ describe('agent browser services: leave site', () => {
 
     expect(await leave).toBe(false);
     expect(webuiConfirms.listConfirms('conv-a')).toEqual([]);
+  });
+});
+
+describe('agent browser services: tab hygiene', () => {
+  it("closes a chat's least recently used agent tab when its agent opens a 4th, through the pane's close", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    for (const id of [80, 81, 82, 83]) {
+      const created = send('Target.createTarget', { url: `https://site${id}.test/` });
+      await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(id - 79));
+      newTab(id, agentSession).navigate(`https://site${id}.test/`);
+      expect((await created).result).toEqual({ targetId: `wc-${id}` });
+    }
+
+    expect(h.ipcBridge.browser.closeTabRequested.emit.mock.calls).toEqual([[{ webContentsId: 80 }]]);
   });
 });
 
