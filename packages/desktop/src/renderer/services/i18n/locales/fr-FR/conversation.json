@@ -137,7 +137,8 @@
       "check_provider_base_url": "Vérifiez l'URL de base du fournisseur de modèles, le chemin d'accès à l'API, le proxy et la compatibilité de l'API.",
       "change_model": "Choisissez un modèle disponible pour le compte courant et prenant en charge cette demande.",
       "reduce_context": "Réduisez le contenu du message, les fichiers référencés ou la taille du contexte, puis réessayez.",
-      "send_feedback": "Réessayez ou redémarrez l'application."
+      "send_feedback": "Réessayez ou redémarrez l'application.",
+      "switch_engine": "Passez à un autre moteur ou modèle et continuez dans une nouvelle discussion."
     },
     "ownership": {
       "aionui": "Application",
@@ -330,6 +331,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "L'agent sélectionné n'est plus disponible",
         "body": "Actualisez le catalogue des agents, puis choisissez un autre agent pour ce coéquipier."
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "Limite d’utilisation du forfait atteinte",
+        "body": "Ce moteur ou ce forfait a épuisé son quota pour le moment. Passez à un autre moteur ou modèle pour continuer, ou attendez la réinitialisation de la limite."
+      }
+    },
+    "switch": {
+      "title": "Changer et continuer :",
+      "noAlternatives": "Aucun autre moteur ni modèle n’est encore configuré.",
+      "openEngineSettings": "Ajouter un moteur dans les Paramètres",
+      "openModelSettings": "Ajouter un fournisseur de modèles dans les Paramètres",
+      "tooltipBot": "Fait passer {{name}} sur ce choix (ce bot uniquement ; votre moteur par défaut ne change pas) et continue dans une nouvelle discussion avec la conversation récente.",
+      "tooltipChatOnly": "Continue dans une nouvelle discussion avec ce choix et la conversation récente. Rien d’autre ne change.",
+      "failed": "Impossible de changer et de continuer. Rien n’a été modifié.",
+      "handoff": {
+        "header": "Suite d’une discussion précédente (l’IA précédente a atteint sa limite d’utilisation). Contexte :",
+        "quoteStart": "--- Conversation précédente citée (pour le contexte uniquement) ---",
+        "quoteEnd": "--- Fin de la citation ---",
+        "user": "Utilisateur",
+        "assistant": "IA",
+        "lastRequest": "La dernière demande, citée en entier :",
+        "closing": "Poursuis la dernière demande là où elle s’est arrêtée."
       }
     }
   },

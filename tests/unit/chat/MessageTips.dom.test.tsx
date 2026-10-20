@@ -8,7 +8,9 @@
 
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { SWRConfig } from 'swr';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -58,6 +60,32 @@ vi.mock('@renderer/components/Markdown', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+// The switch section's data sources and action, so a test controls exactly what it offers.
+const switchMocks = vi.hoisted(() => ({
+  conversation: null as unknown,
+  engines: [] as unknown[],
+  providers: [] as unknown[],
+  switchAndContinue: vi.fn(),
+}));
+vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
+  getConversationOrNull: async () => switchMocks.conversation,
+}));
+vi.mock('@/renderer/utils/model/agentTypes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/utils/model/agentTypes')>()),
+  fetchManagedAgentsOrThrow: async () => switchMocks.engines,
+}));
+vi.mock('@/renderer/hooks/agent/useModelProviderList', () => ({
+  useModelProviderList: () => ({
+    providers: switchMocks.providers,
+    getAvailableModels: (provider: { models?: string[] }) => provider.models ?? [],
+    formatModelLabel: (_provider: unknown, model?: string) => model ?? '',
+  }),
+}));
+vi.mock('@/renderer/pages/conversation/components/limitSwitch/switchAndContinue', () => ({
+  pinnableAssistantId: () => 'bot-1',
+  switchAndContinue: switchMocks.switchAndContinue,
+}));
+
 import MessageTips from '@/renderer/pages/conversation/Messages/components/MessageTips';
 import type { AgentStreamErrorInfo, IMessageTips } from '@/common/chat/chatLib';
 
@@ -83,6 +111,7 @@ const requiredAgentErrorCodes = [
   'USER_LLM_PROVIDER_INVALID_TOOL_SCHEMA',
   'USER_LLM_PROVIDER_CONTEXT_TOO_LARGE',
   'USER_LLM_PROVIDER_EMPTY_RESPONSE',
+  'USER_LLM_PROVIDER_USAGE_LIMITED',
 ] as const;
 
 const requiredAgentTipCodes = [
@@ -300,6 +329,104 @@ describe('MessageTips', () => {
     const detailsToggle = screen.getByRole('button', { name: /common.technical_details/ });
     expect(detailsToggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(/Provider returned 401/)).toBeInTheDocument();
+  });
+});
+
+const engine = (id: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  name: `Engine ${id}`,
+  agent_type: 'acp',
+  enabled: true,
+  status: 'online',
+  installed: true,
+  ...extra,
+});
+
+describe('MessageTips switch and continue', () => {
+  const usageLimited = (kind: 'switch_engine' | 'retry') =>
+    ({
+      ...buildTips('error', 'limit', {
+        message: 'The plan usage limit was reached',
+        code: 'USER_LLM_PROVIDER_USAGE_LIMITED',
+        ownership: 'user_llm_provider',
+        retryable: false,
+        resolution: { kind },
+      }),
+      conversation_id: 'c1',
+    }) as IMessageTips;
+  const renderTips = (message: IMessageTips) =>
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <MemoryRouter initialEntries={['/conversation/c1']}>
+          <Routes>
+            <Route path='/conversation/c1' element={<MessageTips message={message} />} />
+            <Route path='/conversation/:id' element={<div>opened new chat</div>} />
+          </Routes>
+        </MemoryRouter>
+      </SWRConfig>
+    );
+
+  afterEach(() => {
+    cleanup();
+    switchMocks.switchAndContinue.mockReset();
+  });
+
+  it('offers only other connected engines and configured provider models', async () => {
+    switchMocks.conversation = { id: 'c1', type: 'acp', extra: { agent_id: 'claude' }, assistant: { id: 'bot-1' } };
+    switchMocks.engines = [
+      engine('claude'),
+      engine('codex'),
+      engine('missing', { status: 'missing', installed: false }),
+      engine('disabled', { enabled: false }),
+      engine('aionrs', { agent_type: 'aionrs' }),
+    ];
+    switchMocks.providers = [{ id: 'openrouter', name: 'OpenRouter', platform: 'custom', models: ['m1'] }];
+
+    renderTips(usageLimited('switch_engine'));
+
+    expect(await screen.findByText('Switch and continue:')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Engine codex' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /OpenRouter/ })).toBeInTheDocument();
+    for (const hidden of ['Engine claude', 'Engine missing', 'Engine disabled', 'Engine aionrs']) {
+      expect(screen.queryByRole('button', { name: hidden })).not.toBeInTheDocument();
+    }
+  });
+
+  it('switches and opens the new chat on click', async () => {
+    switchMocks.conversation = { id: 'c1', type: 'acp', extra: { agent_id: 'claude' }, assistant: { id: 'bot-1' } };
+    switchMocks.engines = [engine('claude'), engine('codex')];
+    switchMocks.providers = [];
+    switchMocks.switchAndContinue.mockResolvedValue('c2');
+
+    renderTips(usageLimited('switch_engine'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Engine codex' }));
+
+    expect(await screen.findByText('opened new chat')).toBeInTheDocument();
+    expect(switchMocks.switchAndContinue).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'c1', target: { kind: 'engine', engine: switchMocks.engines[1] } })
+    );
+  });
+
+  it('points to Settings when there is nothing to switch to', async () => {
+    switchMocks.conversation = { id: 'c1', type: 'acp', extra: { agent_id: 'claude' } };
+    switchMocks.engines = [engine('claude')];
+    switchMocks.providers = [];
+
+    renderTips(usageLimited('switch_engine'));
+
+    expect(await screen.findByText('Add an engine in Settings')).toBeInTheDocument();
+    expect(screen.queryByText('Switch and continue:')).not.toBeInTheDocument();
+  });
+
+  it('shows no switch section for other resolutions', async () => {
+    switchMocks.conversation = { id: 'c1', type: 'acp', extra: { agent_id: 'claude' } };
+    switchMocks.engines = [engine('claude'), engine('codex')];
+
+    renderTips(usageLimited('retry'));
+
+    expect(await screen.findByText('Plan usage limit reached')).toBeInTheDocument();
+    expect(screen.queryByText('Switch and continue:')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Engine codex' })).not.toBeInTheDocument();
   });
 });
 

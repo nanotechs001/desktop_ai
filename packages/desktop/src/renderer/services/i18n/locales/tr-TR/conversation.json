@@ -125,7 +125,8 @@
       "check_provider_base_url": "Model sağlayıcının Base URL, API yolu, proxy ve API uyumluluğunu kontrol edin.",
       "change_model": "Geçerli hesapta kullanılabilen ve bu isteği destekleyen bir model seçin.",
       "reduce_context": "Mesaj içeriğini, başvurulan dosyaları veya bağlam boyutunu azaltıp yeniden deneyin.",
-      "send_feedback": "Yeniden deneyin veya uygulamayı yeniden başlatın."
+      "send_feedback": "Yeniden deneyin veya uygulamayı yeniden başlatın.",
+      "switch_engine": "Başka bir motora veya modele geçin ve yeni bir sohbette devam edin."
     },
     "ownership": {
       "aionui": "Uygulama",
@@ -318,6 +319,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected Agent is no longer available",
         "body": "Refresh the Agent catalog, then choose another Agent for this teammate."
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "Plan kullanım sınırına ulaşıldı",
+        "body": "Bu motor veya plan şimdilik kullanım hakkını doldurdu. Devam etmek için başka bir motora ya da modele geçin veya sınırın sıfırlanmasını bekleyin."
+      }
+    },
+    "switch": {
+      "title": "Geç ve devam et:",
+      "noAlternatives": "Henüz başka bir motor veya model ayarlanmadı.",
+      "openEngineSettings": "Ayarlar’dan motor ekle",
+      "openModelSettings": "Ayarlar’dan model sağlayıcı ekle",
+      "tooltipBot": "{{name}} bu seçeneğe taşınır (yalnızca bu bot; varsayılan motorunuz değişmez) ve son konuşmayla yeni bir sohbette devam edilir.",
+      "tooltipChatOnly": "Son konuşmayla bu seçenekte yeni bir sohbette devam edilir. Başka hiçbir şey değişmez.",
+      "failed": "Geçiş yapılıp devam edilemedi. Hiçbir şey değiştirilmedi.",
+      "handoff": {
+        "header": "Önceki bir sohbete devam ediliyor (önceki yapay zekâ kullanım sınırına ulaştı). Bağlam:",
+        "quoteStart": "--- Alıntılanan önceki konuşma (yalnızca bağlam için) ---",
+        "quoteEnd": "--- Alıntı sonu ---",
+        "user": "Kullanıcı",
+        "assistant": "Yapay zekâ",
+        "lastRequest": "Son istek, tam alıntı:",
+        "closing": "Son isteğe kaldığı yerden devam et."
       }
     }
   },

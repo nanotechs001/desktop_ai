@@ -51,6 +51,22 @@ const SOURCE = {
 
 type Call = { method: string; path: string; body: unknown };
 
+/** The MCP catalog's built-in records as they are now; a chat's stored copy may be older. */
+const builtin = (id: string, name: string) => ({
+  id,
+  name,
+  builtin: true,
+  enabled: true,
+  transport: { type: 'stdio', command: 'node', args: [`${name}-fresh.js`] },
+});
+const CATALOG = [
+  builtin('aionui-browser', 'aionui-browser'),
+  builtin('aionui-artifacts', 'aionui-artifacts'),
+  builtin('aionui-notes', 'aionui-notes'),
+];
+/** What a new chat gets: every built-in session MCP, fresh from the catalog. */
+const FRESH_SESSION_MCPS = CATALOG.map(({ id, name, transport }) => ({ id, name, transport }));
+
 const json = (status: number, payload: unknown) =>
   new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -64,6 +80,10 @@ const stubBackend = (cloneStatus = 200) => {
       const method = init?.method ?? 'GET';
       calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       if (method === 'GET' && path === '/api/conversations/c1') return json(200, { success: true, data: SOURCE });
+      if (method === 'GET' && path === '/api/settings/client') {
+        return json(200, { success: true, data: { 'mcp.config': CATALOG } });
+      }
+      if (method === 'GET' && path === '/api/mcp/servers') return json(200, { success: true, data: [] });
       if (method === 'POST' && path === '/api/conversations/clone') {
         return cloneStatus === 200
           ? json(200, { success: true, data: { ...SOURCE, id: 'c2', name: '' } })
@@ -134,7 +154,9 @@ describe.each([
     expect(sent.name).toBe('');
     const extra = sent.extra as Record<string, unknown>;
     expect(extra.session_mode).toBe('default');
-    expect(extra.session_mcp_servers).toEqual([{ id: 'aionui-browser' }]);
+    // The stored session MCP list may be stale: the new chat takes the built-ins fresh from the catalog instead.
+    expect(extra).not.toHaveProperty('session_mcp_servers');
+    expect(extra.selected_session_mcp_servers).toEqual(FRESH_SESSION_MCPS);
     // Nothing that belongs to the old chat: its backend session, schedule, pin or temporary folder.
     for (const key of ['acp_session_id', 'acp_session_updated_at', 'cron_job_id', 'pinned', 'workspace']) {
       expect(extra).not.toHaveProperty(key);
@@ -168,7 +190,6 @@ describe('ConversationNewChatButton bindings', () => {
       current_model_id: 'gpt-5',
       sandboxMode: 'workspace-write',
       codexModel: 'gpt-5-codex',
-      session_mcp_servers: [{ id: 'aionui-browser' }],
       skills: ['notes'],
     };
     const bound = {
@@ -179,6 +200,9 @@ describe('ConversationNewChatButton bindings', () => {
       status: 'running',
       extra: {
         ...KEPT,
+        session_mcp_servers: [
+          { id: 'aionui-browser', name: 'aionui-browser', transport: { type: 'stdio', command: 'stale' } },
+        ],
         is_temporary_workspace: false,
         cronJobId: 'job-1',
         cron_job_id: 'job-1',
@@ -203,7 +227,7 @@ describe('ConversationNewChatButton bindings', () => {
       expect(sent).not.toHaveProperty(key);
     }
     expect(sent).toMatchObject({ type: 'acp', name: '', assistant: { id: 'bot-1' } });
-    expect(sent.extra).toEqual(KEPT);
+    expect(sent.extra).toEqual({ ...KEPT, selected_session_mcp_servers: FRESH_SESSION_MCPS });
   });
 });
 

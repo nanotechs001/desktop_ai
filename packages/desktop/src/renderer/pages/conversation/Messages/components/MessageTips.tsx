@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import MarkdownView from '@renderer/components/Markdown';
 import CollapsibleContent from '@renderer/components/chat/CollapsibleContent';
 import { iconColors } from '@/renderer/styles/colors';
+import LimitSwitchActions from '../../components/limitSwitch/LimitSwitchActions';
 
 // One entry per `IMessageTips['type']`. `info` was missing, and the render
 // falls back to `warning`, so every informational tip was drawn with the alarm
@@ -134,6 +135,9 @@ const MessageTips: React.FC<{ message: IMessageTips }> = ({ message }) => {
               <div className='text-t-secondary whitespace-break-spaces [word-break:break-word]'>{body}</div>
               {resolutionHint && (
                 <div className='text-t-secondary whitespace-break-spaces [word-break:break-word]'>{resolutionHint}</div>
+              )}
+              {structuredError.resolution?.kind === 'switch_engine' && message.conversation_id && (
+                <LimitSwitchActions conversationId={message.conversation_id} />
               )}
               {detailParts.length > 0 && (
                 <Collapse bordered={false} className='bg-transparent' defaultActiveKey={['technical-details']}>

@@ -137,7 +137,8 @@
       "check_provider_base_url": "モデルプロバイダーの Base URL、API パス、プロキシ、API 互換性を確認してください。",
       "change_model": "現在のアカウントで利用でき、このリクエストをサポートするモデルを選択してください。",
       "reduce_context": "メッセージ内容、参照ファイル、またはコンテキストサイズを減らしてから再試行してください。",
-      "send_feedback": "もう一度お試しいただくか、アプリを再起動してください。"
+      "send_feedback": "もう一度お試しいただくか、アプリを再起動してください。",
+      "switch_engine": "別のエンジンまたはモデルに切り替え、新しいチャットで続けます。"
     },
     "ownership": {
       "aionui": "アプリ",
@@ -330,6 +331,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected Agent is no longer available",
         "body": "Refresh the Agent catalog, then choose another Agent for this teammate."
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "プランの利用上限に達しました",
+        "body": "このエンジンまたはプランの利用枠を使い切りました。別のエンジンかモデルに切り替えて続けるか、上限がリセットされるまでお待ちください。"
+      }
+    },
+    "switch": {
+      "title": "切り替えて続ける：",
+      "noAlternatives": "他のエンジンやモデルはまだ設定されていません。",
+      "openEngineSettings": "設定でエンジンを追加",
+      "openModelSettings": "設定でモデルプロバイダーを追加",
+      "tooltipBot": "{{name}} をこの選択に切り替え（このボットのみ。デフォルトのエンジンは変わりません）、直近の会話を引き継いで新しいチャットで続けます。",
+      "tooltipChatOnly": "直近の会話を引き継ぎ、この選択で新しいチャットを続けます。ほかは何も変わりません。",
+      "failed": "切り替えて続けることができませんでした。何も変更されていません。",
+      "handoff": {
+        "header": "以前のチャットの続きです（前の AI が利用上限に達しました）。コンテキスト：",
+        "quoteStart": "--- 以前の会話の引用（参考用） ---",
+        "quoteEnd": "--- 引用ここまで ---",
+        "user": "ユーザー",
+        "assistant": "AI",
+        "lastRequest": "最後のリクエスト（全文引用）：",
+        "closing": "最後のリクエストを中断したところから続けてください。"
       }
     }
   },

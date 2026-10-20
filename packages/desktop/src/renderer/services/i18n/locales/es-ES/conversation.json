@@ -137,7 +137,8 @@
       "check_provider_base_url": "Verifica la URL base del proveedor, la ruta de la API, el proxy y la compatibilidad de la API.",
       "change_model": "Elige un modelo disponible para la cuenta actual y que admita esta solicitud.",
       "reduce_context": "Reduce el contenido del mensaje, los archivos referenciados o el tamaño del contexto, luego reintenta.",
-      "send_feedback": "Inténtalo de nuevo o reinicia la aplicación."
+      "send_feedback": "Inténtalo de nuevo o reinicia la aplicación.",
+      "switch_engine": "Cambia a otro motor o modelo y continúa en un chat nuevo."
     },
     "ownership": {
       "aionui": "Aplicación",
@@ -330,6 +331,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected Agent is no longer available",
         "body": "Refresh the Agent catalog, then choose another Agent for this teammate."
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "Se alcanzó el límite de uso del plan",
+        "body": "Este motor o plan ha agotado su cuota por ahora. Cambia a otro motor o modelo para seguir, o espera a que el límite se restablezca."
+      }
+    },
+    "switch": {
+      "title": "Cambiar y continuar:",
+      "noAlternatives": "Aún no hay otro motor ni modelo configurado.",
+      "openEngineSettings": "Añadir un motor en Ajustes",
+      "openModelSettings": "Añadir un proveedor de modelos en Ajustes",
+      "tooltipBot": "Pasa {{name}} a esta opción (solo este bot; tu motor predeterminado no cambia) y continúa en un chat nuevo con la conversación reciente.",
+      "tooltipChatOnly": "Continúa en un chat nuevo con esta opción y la conversación reciente. No cambia nada más.",
+      "failed": "No se pudo cambiar y continuar. No se cambió nada.",
+      "handoff": {
+        "header": "Continuación de un chat anterior (la IA anterior alcanzó su límite de uso). Contexto:",
+        "quoteStart": "--- Conversación anterior citada (solo como contexto) ---",
+        "quoteEnd": "--- Fin de la cita ---",
+        "user": "Usuario",
+        "assistant": "IA",
+        "lastRequest": "La última petición, citada completa:",
+        "closing": "Continúa la última petición desde donde se detuvo."
       }
     }
   },

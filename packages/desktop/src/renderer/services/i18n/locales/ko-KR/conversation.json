@@ -137,7 +137,8 @@
       "check_provider_base_url": "모델 제공자의 Base URL, API 경로, 프록시 및 API 호환성을 확인하세요.",
       "change_model": "현재 계정에서 사용할 수 있고 이 요청을 지원하는 모델을 선택하세요.",
       "reduce_context": "메시지 내용, 참조 파일 또는 컨텍스트 크기를 줄인 뒤 재시도하세요.",
-      "send_feedback": "다시 시도하거나 앱을 다시 시작하세요."
+      "send_feedback": "다시 시도하거나 앱을 다시 시작하세요.",
+      "switch_engine": "다른 엔진이나 모델로 전환하고 새 채팅에서 계속합니다."
     },
     "ownership": {
       "aionui": "앱",
@@ -330,6 +331,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected Agent is no longer available",
         "body": "Refresh the Agent catalog, then choose another Agent for this teammate."
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "요금제 사용 한도에 도달했습니다",
+        "body": "이 엔진 또는 요금제의 사용량을 현재 모두 사용했습니다. 다른 엔진이나 모델로 전환해 계속하거나 한도가 초기화될 때까지 기다리세요."
+      }
+    },
+    "switch": {
+      "title": "전환하고 계속하기:",
+      "noAlternatives": "아직 설정된 다른 엔진이나 모델이 없습니다.",
+      "openEngineSettings": "설정에서 엔진 추가",
+      "openModelSettings": "설정에서 모델 제공자 추가",
+      "tooltipBot": "{{name}}을(를) 이 선택으로 전환하고(이 봇만, 기본 엔진은 유지) 최근 대화를 가지고 새 채팅에서 계속합니다.",
+      "tooltipChatOnly": "최근 대화를 가지고 이 선택으로 새 채팅에서 계속합니다. 다른 것은 바뀌지 않습니다.",
+      "failed": "전환하고 계속할 수 없습니다. 아무것도 변경되지 않았습니다.",
+      "handoff": {
+        "header": "이전 채팅을 이어갑니다(이전 AI가 사용 한도에 도달했습니다). 컨텍스트:",
+        "quoteStart": "--- 이전 대화 인용(참고용) ---",
+        "quoteEnd": "--- 인용 끝 ---",
+        "user": "사용자",
+        "assistant": "AI",
+        "lastRequest": "마지막 요청(전체 인용):",
+        "closing": "마지막 요청을 중단된 지점부터 계속하세요."
       }
     }
   },

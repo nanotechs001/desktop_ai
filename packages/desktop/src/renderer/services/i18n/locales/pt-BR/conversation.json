@@ -138,7 +138,8 @@
       "check_provider_base_url": "Verifique a URL Base do provedor de modelos, o caminho da API, o proxy e a compatibilidade da API.",
       "change_model": "Escolha um modelo disponível para a conta atual e que suporte esta solicitação.",
       "reduce_context": "Reduza o conteúdo da mensagem, os arquivos referenciados ou o tamanho do contexto e tente novamente.",
-      "send_feedback": "Tente novamente ou reinicie o aplicativo."
+      "send_feedback": "Tente novamente ou reinicie o aplicativo.",
+      "switch_engine": "Mude para outro mecanismo ou modelo e continue em um novo chat."
     },
     "ownership": {
       "aionui": "Aplicativo",
@@ -336,6 +337,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "The selected agente is no longer available",
         "body": "Refresh the agente catalog, then choose another agente for this teammate."
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "Limite de uso do plano atingido",
+        "body": "Este mecanismo ou plano esgotou a cota por enquanto. Mude para outro mecanismo ou modelo para continuar, ou aguarde o limite ser redefinido."
+      }
+    },
+    "switch": {
+      "title": "Mudar e continuar:",
+      "noAlternatives": "Nenhum outro mecanismo ou modelo foi configurado ainda.",
+      "openEngineSettings": "Adicionar um mecanismo nas Configurações",
+      "openModelSettings": "Adicionar um provedor de modelos nas Configurações",
+      "tooltipBot": "Move {{name}} para esta opção (só este bot; seu mecanismo padrão continua o mesmo) e continua em um novo chat com a conversa recente.",
+      "tooltipChatOnly": "Continua em um novo chat com esta opção e a conversa recente. Nada mais muda.",
+      "failed": "Não foi possível mudar e continuar. Nada foi alterado.",
+      "handoff": {
+        "header": "Continuando um chat anterior (a IA anterior atingiu o limite de uso). Contexto:",
+        "quoteStart": "--- Conversa anterior citada (apenas como contexto) ---",
+        "quoteEnd": "--- Fim da citação ---",
+        "user": "Usuário",
+        "assistant": "IA",
+        "lastRequest": "O último pedido, citado na íntegra:",
+        "closing": "Continue o último pedido de onde parou."
       }
     }
   },

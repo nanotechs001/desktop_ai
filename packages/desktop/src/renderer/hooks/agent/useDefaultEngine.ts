@@ -8,7 +8,7 @@ import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
-import { DEFAULT_AGENT_SETTING_KEY, isEligibleEngine, pickDefaultEngineId } from '@/common/types/agent/defaultAgent';
+import { DEFAULT_AGENT_SETTING_KEY, isConnectedEngine, pickDefaultEngineId } from '@/common/types/agent/defaultAgent';
 import {
   ENGINE_CATALOG_SWR_KEY,
   fetchManagedAgentsOrThrow,
@@ -72,7 +72,7 @@ export async function persistEnginePin(assistantId: string, engineId: string | n
  * changes engine drops its fixed values, exactly as the Agent editor does
  * (resetModelAndPermissionDefaults). Skills and MCPs are engine-independent and untouched.
  */
-const ENGINE_CHANGE_DEFAULTS_RESET = {
+export const ENGINE_CHANGE_DEFAULTS_RESET = {
   model: { mode: 'auto' },
   permission: { mode: 'auto' },
   thought_level: { mode: 'auto' },
@@ -181,10 +181,7 @@ function useEngineState() {
   const agent = useMemo(() => resolveDefaultEngine(agents, storedId), [agents, storedId]);
   const engineIds = useMemo(() => new Set(agents.map((item) => item.id)), [agents]);
   // The resolved default can be a fallback that is not installed; "connected" asks for a usable one.
-  const hasConnectedEngine = useMemo(
-    () => agents.some((item) => isEligibleEngine(item) && item.status !== 'missing'),
-    [agents]
-  );
+  const hasConnectedEngine = useMemo(() => agents.some(isConnectedEngine), [agents]);
   const retry = useCallback(() => mutate(), [mutate]);
   // Only a failure with nothing to show counts: a failed background refresh keeps the last good list.
   return {

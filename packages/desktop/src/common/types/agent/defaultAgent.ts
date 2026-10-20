@@ -26,6 +26,10 @@ export type EngineEntry = { id: string; enabled?: boolean; status?: string; agen
 export const isEligibleEngine = (engine: EngineEntry): boolean =>
   engine.enabled !== false && !DEPRECATED_ENGINE_TYPES.has(engine.agent_type ?? '');
 
+/** An eligible engine that is installed (not reported missing), so a chat can run on it now. */
+export const isConnectedEngine = (engine: EngineEntry): boolean =>
+  isEligibleEngine(engine) && engine.status !== 'missing';
+
 /**
  * The engine Agents run on by default: the stored choice while it is enabled, else the first
  * installed enabled engine, else the first enabled one.

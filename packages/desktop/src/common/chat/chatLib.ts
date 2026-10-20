@@ -149,7 +149,8 @@ export type AgentErrorResolutionKind =
   | 'check_provider_base_url'
   | 'change_model'
   | 'reduce_context'
-  | 'send_feedback';
+  | 'send_feedback'
+  | 'switch_engine';
 
 export type AgentErrorResolutionTarget = 'provider_settings' | 'agent_settings' | 'new_conversation' | 'feedback';
 
@@ -536,6 +537,7 @@ const AGENT_ERROR_RESOLUTION_KINDS = new Set<AgentErrorResolutionKind>([
   'change_model',
   'reduce_context',
   'send_feedback',
+  'switch_engine',
 ]);
 
 const AGENT_ERROR_RESOLUTION_TARGETS = new Set<AgentErrorResolutionTarget>([

@@ -137,7 +137,8 @@
       "check_provider_base_url": "Check the model provider Base URL, API path, proxy, and API compatibility.",
       "change_model": "Choose a model that is available for the current account and supports this request.",
       "reduce_context": "Reduce the message content, referenced files, or context size, then retry.",
-      "send_feedback": "請重試，或重新啟動應用程式。"
+      "send_feedback": "請重試，或重新啟動應用程式。",
+      "switch_engine": "切換到其他引擎或模型，並在新對話中繼續。"
     },
     "ownership": {
       "aionui": "應用",
@@ -330,6 +331,28 @@
       "TEAM_ASSISTANT_NOT_FOUND": {
         "title": "所選 Agent 已不可用",
         "body": "請重新整理 Agent 目錄，然後為這位隊友重新選擇一個 Agent。"
+      },
+      "USER_LLM_PROVIDER_USAGE_LIMITED": {
+        "title": "已達到方案用量上限",
+        "body": "此引擎或方案的額度暫時已用完。可切換到其他引擎或模型繼續，或等待額度重設。"
+      }
+    },
+    "switch": {
+      "title": "切換並繼續：",
+      "noAlternatives": "尚未設定其他引擎或模型。",
+      "openEngineSettings": "在設定中新增引擎",
+      "openModelSettings": "在設定中新增模型服務商",
+      "tooltipBot": "將 {{name}} 切換到此選項（僅此助理，預設引擎不變），並帶著最近的對話在新對話中繼續。",
+      "tooltipChatOnly": "帶著最近的對話，在使用此選項的新對話中繼續。其他設定不變。",
+      "failed": "無法切換並繼續，未做任何變更。",
+      "handoff": {
+        "header": "繼續先前的對話（先前的 AI 已達到用量上限）。上下文：",
+        "quoteStart": "--- 引用的先前對話（僅供參考） ---",
+        "quoteEnd": "--- 引用結束 ---",
+        "user": "使用者",
+        "assistant": "AI",
+        "lastRequest": "最後一個請求（完整引用）：",
+        "closing": "請從中斷處繼續完成最後一個請求。"
       }
     }
   },
