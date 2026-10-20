@@ -154,7 +154,12 @@
     "agentFirstUseTitle": "L'agent utilise le navigateur intégré",
     "agentFirstUseContent": "Il peut ouvrir des pages, cliquer et lire du contenu dans ce panneau. Votre connexion est conservée.",
     "agentFirstUseAction": "Ouvrir les paramètres",
-    "desktopOnly": "Le navigateur s'exécute dans l'application de bureau. Votre agent peut toujours naviguer — ses résultats s'affichent dans la conversation."
+    "desktopOnly": "Le navigateur s'exécute dans l'application de bureau. Votre agent peut toujours naviguer — ses résultats s'affichent dans la conversation.",
+    "liveConnecting": "Connexion…",
+    "livePaused": "Vous avez la main. Reprendre l'agent.",
+    "liveNoFrames": "Impossible de voir le navigateur de bureau. Laissez la fenêtre Pixebot ouverte sur votre ordinateur.",
+    "liveStopped": "Vue en direct arrêtée. Touchez pour réessayer.",
+    "liveKeyboard": "Clavier"
   },
   "saveConflict": "Échec de l'enregistrement : ce fichier a changé sur le disque depuis que vous l'avez ouvert. Rechargez pour voir les autres modifications — vos modifications sont toujours là, non enregistrées.",
   "persistQuotaExceeded": "Le stockage local est plein : les onglets ouverts de ce projet ne peuvent plus être mémorisés. Fermez des onglets ou effacez les données du site.",

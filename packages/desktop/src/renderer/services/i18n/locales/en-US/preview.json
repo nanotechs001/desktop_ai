@@ -154,7 +154,12 @@
     "agentFirstUseTitle": "The agent is using the in-app browser",
     "agentFirstUseContent": "It can open pages, click and read content in this panel. Your sign-in state is kept between sessions.",
     "agentFirstUseAction": "Open settings",
-    "desktopOnly": "The browser runs in the desktop app. Your agent can still browse — its results show in the chat."
+    "desktopOnly": "The browser runs in the desktop app. Your agent can still browse — its results show in the chat.",
+    "liveConnecting": "Connecting…",
+    "livePaused": "You're in control. Resume agent.",
+    "liveNoFrames": "Can't see the desktop browser. Keep the Pixebot window open on your computer.",
+    "liveStopped": "Live view stopped. Tap to retry.",
+    "liveKeyboard": "Keyboard"
   },
   "saveConflict": "Could not save: this file changed on disk since you opened it. Reload to see the other changes — your edits are still here, unsaved.",
   "persistQuotaExceeded": "Local storage is full, so open tabs can no longer be remembered for this project. Close some tabs or clear site data.",

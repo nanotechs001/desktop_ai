@@ -154,7 +154,12 @@
     "agentFirstUseTitle": "Aracı uygulama içi tarayıcıyı kullanıyor",
     "agentFirstUseContent": "Bu panelde sayfa açabilir, tıklayabilir ve içerik okuyabilir. Oturum bilgileriniz korunur.",
     "agentFirstUseAction": "Ayarları aç",
-    "desktopOnly": "Tarayıcı masaüstü uygulamasında çalışır. Aracınız yine de gezinebilir; sonuçlar sohbette görünür."
+    "desktopOnly": "Tarayıcı masaüstü uygulamasında çalışır. Aracınız yine de gezinebilir; sonuçlar sohbette görünür.",
+    "liveConnecting": "Bağlanıyor…",
+    "livePaused": "Kontrol sizde. Aracı sürdür.",
+    "liveNoFrames": "Masaüstü tarayıcısı görülemiyor. Bilgisayarınızda Pixebot penceresini açık tutun.",
+    "liveStopped": "Canlı görünüm durdu. Yeniden denemek için dokunun.",
+    "liveKeyboard": "Klavye"
   },
   "saveConflict": "Kaydedilemedi: bu dosya siz açtıktan sonra diskte değişti. Diğer değişiklikleri görmek için yeniden yükleyin — düzenlemeleriniz kaydedilmemiş olarak duruyor.",
   "persistQuotaExceeded": "Yerel depolama dolu, bu proje için açık sekmeler artık hatırlanamıyor. Bazı sekmeleri kapatın veya site verilerini temizleyin.",

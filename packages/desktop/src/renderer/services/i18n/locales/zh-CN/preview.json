@@ -154,7 +154,12 @@
     "agentFirstUseTitle": "Agent 正在使用应用内浏览器",
     "agentFirstUseContent": "它可以在这个面板里打开网页、点击和读取内容。你的登录状态会被保留。",
     "agentFirstUseAction": "前往设置",
-    "desktopOnly": "浏览器在桌面应用中运行。Agent 仍然可以浏览网页，结果会显示在对话中。"
+    "desktopOnly": "浏览器在桌面应用中运行。Agent 仍然可以浏览网页，结果会显示在对话中。",
+    "liveConnecting": "正在连接…",
+    "livePaused": "你正在控制。恢复 Agent",
+    "liveNoFrames": "看不到桌面浏览器。请在电脑上保持 Pixebot 窗口打开。",
+    "liveStopped": "实时画面已停止。轻点重试。",
+    "liveKeyboard": "键盘"
   },
   "saveConflict": "保存失败：该文件在你打开后已被改动。可重新加载查看其他改动——你的编辑仍在，尚未保存。",
   "persistQuotaExceeded": "本地存储已满，无法再记住该项目打开的标签页。请关闭一些标签页或清理站点数据。",

@@ -154,7 +154,12 @@
     "agentFirstUseTitle": "Der Agent nutzt den integrierten Browser",
     "agentFirstUseContent": "Er kann in diesem Bereich Seiten öffnen, klicken und Inhalte lesen. Deine Anmeldung bleibt erhalten.",
     "agentFirstUseAction": "Einstellungen öffnen",
-    "desktopOnly": "Der Browser läuft in der Desktop-App. Dein Agent kann trotzdem browsen – die Ergebnisse erscheinen im Chat."
+    "desktopOnly": "Der Browser läuft in der Desktop-App. Dein Agent kann trotzdem browsen – die Ergebnisse erscheinen im Chat.",
+    "liveConnecting": "Verbindung wird hergestellt…",
+    "livePaused": "Du hast die Kontrolle. Agent fortsetzen.",
+    "liveNoFrames": "Der Desktop-Browser ist nicht sichtbar. Lass das Pixebot-Fenster auf deinem Computer geöffnet.",
+    "liveStopped": "Liveansicht gestoppt. Zum Wiederholen tippen.",
+    "liveKeyboard": "Tastatur"
   },
   "saveConflict": "Speichern fehlgeschlagen: Diese Datei wurde auf der Festplatte geändert, nachdem Sie sie geöffnet haben. Neu laden, um die anderen Änderungen zu sehen — Ihre Bearbeitungen sind noch da, ungespeichert.",
   "persistQuotaExceeded": "Der lokale Speicher ist voll, offene Tabs dieses Projekts können nicht mehr gemerkt werden. Schließen Sie einige Tabs oder löschen Sie die Websitedaten.",

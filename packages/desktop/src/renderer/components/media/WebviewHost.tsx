@@ -11,6 +11,7 @@ import { ipcBridge } from '@/common';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { InternalNavTracker, shouldResetHistoryForUrlProp } from './webviewHistory';
 import WebviewUnavailable from './WebviewUnavailable';
+import BrowserLiveView from './browserLive/BrowserLiveView';
 
 export interface WebviewHostProps {
   /** URL to display */
@@ -73,6 +74,8 @@ export interface WebviewHostProps {
   onWebviewAttached?: (webview: Electron.WebviewTag) => void;
   /** Receives the address bar's input element, so the owner can focus it (needs `showNavBar`) */
   addressInputRef?: React.Ref<HTMLInputElement>;
+  /** The browser preview tab on screen: outside Electron it shows the conversation's desktop tab live instead. */
+  liveView?: boolean;
 }
 
 const MIN_ZOOM_FACTOR = 0.75;
@@ -905,12 +908,15 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
   );
 };
 
-/** `<webview>` exists only in Electron; a plain browser (the WebUI) gets a notice in its place. */
-const WebviewHost: React.FC<WebviewHostProps> = (props) =>
-  isElectronDesktop() ? (
-    <ElectronWebviewHost {...props} />
-  ) : (
-    <WebviewUnavailable className={props.className} style={props.style} />
-  );
+/**
+ * `<webview>` exists only in Electron. A plain browser (the WebUI) gets the agent's desktop tab live in the browser
+ * preview, and a notice anywhere else or when there is nothing to watch.
+ */
+const WebviewHost: React.FC<WebviewHostProps> = (props) => {
+  if (isElectronDesktop()) return <ElectronWebviewHost {...props} />;
+  const unavailable = <WebviewUnavailable className={props.className} style={props.style} />;
+  if (!props.liveView) return unavailable;
+  return <BrowserLiveView fallback={unavailable} className={props.className} style={props.style} />;
+};
 
 export default WebviewHost;

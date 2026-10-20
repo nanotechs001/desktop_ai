@@ -326,6 +326,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         <WebviewHost
           webviewTabIndex={active ? undefined : -1}
           chromeInert={!active}
+          liveView={active}
           url={url || BROWSER_BLANK_URL}
           partition={partition}
           showNavBar
