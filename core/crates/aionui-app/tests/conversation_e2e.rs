@@ -1366,3 +1366,110 @@ async fn session_mcp_snapshot_takes_builtin_entries_only_from_builtin_rows() {
     );
     assert_eq!(extra["mcp_servers"], json!(["aionui-browser", "my-server"]));
 }
+
+async fn create_with_extra(
+    app: &mut axum::Router,
+    path: &str,
+    extra: serde_json::Value,
+    token: &str,
+    csrf: &str,
+) -> serde_json::Value {
+    let conversation = json!({ "type": "acp", "name": "Raw snapshot", "extra": extra });
+    let body = if path.ends_with("/clone") {
+        json!({ "conversation": conversation })
+    } else {
+        conversation
+    };
+    let resp = app
+        .clone()
+        .oneshot(json_with_token("POST", path, body, token, csrf))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    body_json(resp).await["data"]["extra"].clone()
+}
+
+/// A raw `extra.session_mcp_servers` on a non-team create (and on clone) goes through the same
+/// built-in gate as `selected_session_mcp_servers`: no foreign transport, no client env.
+#[tokio::test]
+async fn raw_session_mcp_snapshot_on_non_team_create_and_clone_is_gated() {
+    let (mut app, services) = build_app().await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+    let raw = json!([
+        client_stdio(
+            "client-browser",
+            "aionui-browser",
+            json!({ "AION_BROWSER_RELAY_TOKEN": "stolen" })
+        ),
+        client_stdio("client-user", "my-server", json!({ "KEY": "v" })),
+    ]);
+
+    for path in ["/api/conversations", "/api/conversations/clone"] {
+        // No built-in row yet: the built-in-named entry is dropped.
+        let extra = create_with_extra(
+            &mut app,
+            path,
+            json!({ "selected_mcp_server_ids": [], "session_mcp_servers": raw }),
+            &token,
+            &csrf,
+        )
+        .await;
+        assert_eq!(
+            extra["session_mcp_servers"],
+            json!([client_stdio("client-user", "my-server", json!({ "KEY": "v" }))]),
+            "{path}"
+        );
+        assert_eq!(extra["mcp_servers"], json!(["my-server"]), "{path}");
+    }
+
+    // With the user's built-in row, the entry takes that row's transport.
+    let browser_row = seed_mcp_row(&services, "aionui-browser", true, "/app/builtin-mcp-browser.js").await;
+    for path in ["/api/conversations", "/api/conversations/clone"] {
+        let extra = create_with_extra(
+            &mut app,
+            path,
+            json!({ "selected_mcp_server_ids": [], "session_mcp_servers": raw }),
+            &token,
+            &csrf,
+        )
+        .await;
+        assert_eq!(
+            extra["session_mcp_servers"],
+            json!([
+                {
+                    "id": browser_row,
+                    "name": "aionui-browser",
+                    "transport": { "type": "stdio", "command": "node", "args": ["/app/builtin-mcp-browser.js"], "env": {} }
+                },
+                client_stdio("client-user", "my-server", json!({ "KEY": "v" })),
+            ]),
+            "{path}"
+        );
+        assert!(!extra.to_string().contains("stolen"), "{path}: {extra}");
+    }
+}
+
+/// When both keys are sent, the selected snapshot is used and the raw key is not stored as sent.
+#[tokio::test]
+async fn selected_session_mcp_snapshot_wins_over_raw_key() {
+    let (mut app, services) = build_app().await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+
+    let extra = create_with_extra(
+        &mut app,
+        "/api/conversations",
+        json!({
+            "selected_mcp_server_ids": [],
+            "selected_session_mcp_servers": [client_stdio("client-user", "my-server", json!({}))],
+            "session_mcp_servers": [client_stdio("client-browser", "aionui-browser", json!({}))],
+        }),
+        &token,
+        &csrf,
+    )
+    .await;
+    assert_eq!(
+        extra["session_mcp_servers"],
+        json!([client_stdio("client-user", "my-server", json!({}))])
+    );
+    assert_eq!(extra["mcp_servers"], json!(["my-server"]));
+}

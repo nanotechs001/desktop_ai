@@ -1909,7 +1909,7 @@ pub async fn build_session_instance(
         .filter(|server| server.name != TEAM_MCP_SERVER_NAME)
     {
         neutral.push(if backend_label == "codex" {
-            codex_snapshot_server(server, runtime_env).await
+            codex_snapshot_server(server, runtime_env, mcp_server_repo.map(|repo| repo.as_ref()), &user_id).await
         } else {
             // claude is left as is: it already reaches the built-ins' env, and its MCP
             // config rides argv (visible in the process list), so no tokens go there.
@@ -2279,8 +2279,10 @@ fn build_session_cli_config_dump_value(backend: &str, cfg: &aionui_session::Sess
 async fn codex_snapshot_server(
     server: &aionui_api_types::SessionMcpServer,
     runtime_env: &[(String, String)],
+    repo: Option<&dyn IMcpServerRepository>,
+    user_id: &str,
 ) -> aionui_api_types::SessionMcpServer {
-    let server = crate::factory::builtin_mcp_env::with_builtin_mcp_env(server, runtime_env);
+    let server = crate::factory::builtin_mcp_env::with_builtin_mcp_env(server, runtime_env, repo, user_id).await;
     crate::factory::builtin_mcp_env::resolve_builtin_command(server).await
 }
 
@@ -5167,8 +5169,13 @@ mod build_mapping_tests {
             },
         };
         let env_of = |name: &str| {
-            let injected =
-                crate::factory::builtin_mcp_env::with_builtin_mcp_env_from(&server(name), &runtime_env, process_env);
+            let row = server("aionui-browser").transport;
+            let injected = crate::factory::builtin_mcp_env::with_builtin_mcp_env_from(
+                &server(name),
+                &runtime_env,
+                Some(&row),
+                process_env,
+            );
             match session_server_to_spec(&injected).transport {
                 McpTransport::Stdio { env, .. } => env,
                 other => panic!("stdio expected, got {other:?}"),

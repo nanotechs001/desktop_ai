@@ -1343,21 +1343,19 @@ impl ConversationService {
             }
             None => None,
         };
-        let selected_session_mcp_servers = match extra.as_object_mut() {
-            Some(obj) => match obj.remove("selected_session_mcp_servers").or_else(|| {
-                (is_team_conversation)
-                    .then(|| obj.remove("session_mcp_servers"))
-                    .flatten()
-            }) {
-                Some(value) => Some(serde_json::from_value::<Vec<SessionMcpServer>>(value).map_err(|e| {
-                    ConversationError::BadRequest {
-                        reason: format!("Invalid session MCP snapshot: {e}"),
-                    }
-                })?),
-                None => None,
-            },
-            None => None,
-        };
+        // A raw `session_mcp_servers` (team provisioning sends it; any client can) is never
+        // stored as sent: it goes through the same built-in gate as the selected snapshot.
+        let session_mcp_value = extra.as_object_mut().and_then(|obj| {
+            let raw = obj.remove("session_mcp_servers");
+            obj.remove("selected_session_mcp_servers").or(raw)
+        });
+        let selected_session_mcp_servers = session_mcp_value
+            .map(|value| {
+                serde_json::from_value::<Vec<SessionMcpServer>>(value).map_err(|e| ConversationError::BadRequest {
+                    reason: format!("Invalid session MCP snapshot: {e}"),
+                })
+            })
+            .transpose()?;
         let selected_mcp_statuses = if is_team_conversation {
             match extra.as_object_mut().and_then(|obj| obj.remove("mcp_statuses")) {
                 Some(value) => serde_json::from_value::<Vec<ConversationMcpStatus>>(value).map_err(|e| {
