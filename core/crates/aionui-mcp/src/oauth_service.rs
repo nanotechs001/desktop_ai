@@ -11,12 +11,13 @@ use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, HttpRequest, HttpResponse, PkceCodeChallenge,
     PkceCodeVerifier, RedirectUrl, RefreshToken, RequestTokenError, Scope, TokenResponse, TokenUrl,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, oneshot};
+use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
 use crate::error::McpError;
+use crate::oauth_callback::{CallbackCode, bind_callback_listener, serve_one_callback, short_reason};
 use crate::oauth_discovery::{MAX_RESPONSE_BYTES, OAuthDiscovery, discover, oauth_http_client, read_capped};
 use crate::oauth_registration::register_client;
 
@@ -24,8 +25,13 @@ use crate::oauth_registration::register_client;
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Default timeout for the OAuth callback server waiting for the redirect.
-const CALLBACK_TIMEOUT: Duration = Duration::from_secs(120);
+/// How long the callback server waits for the browser redirect. Users may
+/// have to sign in to the provider first, so this is generous.
+const CALLBACK_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// How long the browser's callback request waits for the token exchange
+/// before it gets a "still finishing" page.
+const OUTCOME_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Client ID used when the authorization server offers no registration
 /// endpoint (public client, no secret).
@@ -42,8 +48,10 @@ const EXPIRY_MARGIN_MS: i64 = 5 * 60 * 1000;
 ///
 /// Stores endpoint URLs rather than the typed `BasicClient` to avoid
 /// complex generic type parameters from the `oauth2` crate.
+///
+/// Keyed by `(user_id, oauth_state)`, so a redirect is only accepted with a
+/// state this service issued.
 struct PendingLogin {
-    csrf_token: CsrfToken,
     pkce_verifier: PkceCodeVerifier,
     auth_url: String,
     token_url: String,
@@ -51,6 +59,9 @@ struct PendingLogin {
     client: ClientCredentials,
     resource: String,
 }
+
+/// A running callback server and the oauth_state it was started for.
+type CallbackWait = (String, JoinHandle<()>);
 
 /// OAuth client identity used against one authorization server.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +100,10 @@ pub struct McpOAuthService {
     client_repo: Arc<dyn IOAuthClientRepository>,
     /// Mutex protecting pending login state by (user_id, oauth_state).
     pending: Arc<Mutex<HashMap<(String, String), PendingLogin>>>,
+    /// The running callback server per user, tagged with its oauth_state.
+    waits: Arc<Mutex<HashMap<String, CallbackWait>>>,
+    callback_timeout: Duration,
+    outcome_timeout: Duration,
 }
 
 impl McpOAuthService {
@@ -97,6 +112,18 @@ impl McpOAuthService {
             token_repo,
             client_repo,
             pending: Arc::new(Mutex::new(HashMap::new())),
+            waits: Arc::new(Mutex::new(HashMap::new())),
+            callback_timeout: CALLBACK_TIMEOUT,
+            outcome_timeout: OUTCOME_TIMEOUT,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_timeouts(self, callback_timeout: Duration, outcome_timeout: Duration) -> Self {
+        Self {
+            callback_timeout,
+            outcome_timeout,
+            ..self
         }
     }
 
@@ -119,7 +146,7 @@ impl McpOAuthService {
     /// 5. Wait for the redirect with the authorization code
     /// 6. Exchange code for tokens and persist them
     pub async fn login(&self, user_id: &str, server_url: &str) -> Result<OAuthLoginResponse, McpError> {
-        let (authorize_url, listener) = match self.prepare_login_flow(user_id, server_url).await {
+        let (authorize_url, listener, state) = match self.prepare_login_flow(user_id, server_url).await {
             Ok(prepared) => prepared,
             Err(e) => {
                 warn!(server_url, error = %e, "OAuth login could not start");
@@ -133,37 +160,7 @@ impl McpOAuthService {
             warn!("Failed to open browser: {e}");
         }
 
-        // Wait for callback.
-        let (code, state) = match self.wait_for_callback(user_id, listener).await {
-            Ok(callback) => callback,
-            Err(e) => {
-                warn!(server_url, error = %e, "OAuth callback failed");
-                self.clear_pending_for_user(user_id).await;
-                return Ok(OAuthLoginResponse {
-                    success: false,
-                    error: Some(e.to_string()),
-                });
-            }
-        };
-
-        // Exchange code for tokens.
-        match self.exchange_code(user_id, server_url, code, state).await {
-            Ok(()) => {
-                info!(server_url, "OAuth login completed");
-                Ok(OAuthLoginResponse {
-                    success: true,
-                    error: None,
-                })
-            }
-            Err(e) => {
-                warn!(server_url, error = %e, "OAuth token exchange failed");
-                self.clear_pending_for_user(user_id).await;
-                Ok(OAuthLoginResponse {
-                    success: false,
-                    error: Some(e.to_string()),
-                })
-            }
-        }
+        Ok(self.complete_login(user_id, server_url, &state, listener).await)
     }
 
     /// Logout from the given MCP server URL (delete stored token).
@@ -227,9 +224,13 @@ impl McpOAuthService {
     // -----------------------------------------------------------------------
 
     /// Discover endpoints, register or reuse a client, generate PKCE, bind the
-    /// callback server, store pending state, and return the authorization URL
-    /// + listener.
-    async fn prepare_login_flow(&self, user_id: &str, server_url: &str) -> Result<(String, TcpListener), McpError> {
+    /// callback server, store pending state, and return the authorization URL,
+    /// listener and oauth_state. Cancels the user's older pending sign-in first.
+    async fn prepare_login_flow(
+        &self,
+        user_id: &str,
+        server_url: &str,
+    ) -> Result<(String, TcpListener, String), McpError> {
         let http = oauth_http_client()?;
         let discovery = discover(&http, server_url).await?;
         let stored = self.client_repo.get_by_url(user_id, server_url).await?;
@@ -239,6 +240,10 @@ impl McpOAuthService {
         let token_url = TokenUrl::new(discovery.metadata.token_endpoint.clone())
             .map_err(|e| McpError::OAuth(format!("Invalid token URL: {e}")))?;
 
+        // Close an older callback server first so its port can be reused.
+        if self.stop_wait(user_id, None, true).await {
+            info!(server_url, "Cancelled an older pending OAuth sign-in");
+        }
         let listener = bind_callback_listener(stored.as_ref().and_then(registered_callback_port)).await?;
         let callback_port = listener
             .local_addr()
@@ -267,13 +272,12 @@ impl McpOAuthService {
             .add_extra_param("resource", discovery.resource.clone())
             .url();
 
+        let state = csrf_token.secret().clone();
         {
             let mut pending = self.pending.lock().await;
-            let state = csrf_token.secret().clone();
             pending.insert(
-                (user_id.to_string(), state),
+                (user_id.to_string(), state.clone()),
                 PendingLogin {
-                    csrf_token,
                     pkce_verifier,
                     auth_url: discovery.metadata.authorization_endpoint,
                     token_url: discovery.metadata.token_endpoint,
@@ -284,7 +288,7 @@ impl McpOAuthService {
             );
         }
 
-        Ok((authorize_url.to_string(), listener))
+        Ok((authorize_url.to_string(), listener, state))
     }
 
     /// Pick the client identity for this login. With a registration endpoint,
@@ -352,67 +356,103 @@ impl McpOAuthService {
         Ok(true)
     }
 
-    /// Wait for the OAuth callback redirect on the given listener.
-    async fn wait_for_callback(&self, user_id: &str, listener: TcpListener) -> Result<(String, String), McpError> {
-        let (code_tx, code_rx) = tokio::sync::oneshot::channel::<Result<(String, String), McpError>>();
-        let pending = self.pending.clone();
-        let user_id = user_id.to_string();
+    /// Wait for the browser redirect on `listener`, exchange the code, and
+    /// answer the browser only once the token is stored (or the exchange
+    /// failed). A timeout or cancellation closes the listener.
+    async fn complete_login(
+        &self,
+        user_id: &str,
+        server_url: &str,
+        state: &str,
+        listener: TcpListener,
+    ) -> OAuthLoginResponse {
+        let (code_tx, code_rx) = oneshot::channel();
+        let task = tokio::spawn(serve_one_callback(
+            listener,
+            server_host(server_url),
+            self.outcome_timeout,
+            code_tx,
+        ));
+        let replaced = self
+            .waits
+            .lock()
+            .await
+            .insert(user_id.to_string(), (state.to_string(), task));
+        if let Some((_, older)) = replaced {
+            older.abort();
+        }
 
-        tokio::spawn(async move {
-            let result = Self::handle_callback_connection(&user_id, listener, pending).await;
-            let _ = code_tx.send(result);
-        });
+        let callback = match tokio::time::timeout(self.callback_timeout, code_rx).await {
+            Ok(Ok(Ok(callback))) => callback,
+            other => {
+                let error = match other {
+                    Ok(Ok(Err(e))) => e,
+                    Ok(Err(_)) => McpError::OAuth("Sign-in was cancelled because a newer sign-in started".to_string()),
+                    _ => McpError::OAuth(format!(
+                        "OAuth callback timed out — no redirect received within {}",
+                        describe_duration(self.callback_timeout)
+                    )),
+                };
+                warn!(server_url, error = %error, "OAuth callback failed");
+                self.stop_wait(user_id, Some(state), true).await;
+                self.remove_pending(user_id, state).await;
+                return login_failure(&error);
+            }
+        };
 
-        match tokio::time::timeout(CALLBACK_TIMEOUT, code_rx).await {
-            Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(McpError::OAuth("Callback channel closed unexpectedly".to_string())),
-            Err(_) => Err(McpError::OAuth(
-                "OAuth callback timed out — no redirect received within 120s".to_string(),
-            )),
+        let CallbackCode {
+            code,
+            state: callback_state,
+            outcome,
+        } = callback;
+        let result = self
+            .exchange_code(user_id, server_url, code.clone(), callback_state)
+            .await;
+        let browser_outcome = match &result {
+            Ok(()) => Ok(()),
+            Err(e) => Err(short_reason(e).replace(&code, "[redacted]")),
+        };
+        let _ = outcome.send(browser_outcome);
+        // Let the callback server write its page before returning.
+        self.stop_wait(user_id, Some(state), false).await;
+
+        match result {
+            Ok(()) => {
+                info!(server_url, "OAuth login completed");
+                OAuthLoginResponse {
+                    success: true,
+                    error: None,
+                }
+            }
+            Err(e) => {
+                warn!(server_url, error = %e, "OAuth token exchange failed");
+                self.remove_pending(user_id, state).await;
+                login_failure(&e)
+            }
         }
     }
 
-    /// Handle a single HTTP connection on the callback server.
-    async fn handle_callback_connection(
-        user_id: &str,
-        listener: TcpListener,
-        pending: Arc<Mutex<HashMap<(String, String), PendingLogin>>>,
-    ) -> Result<(String, String), McpError> {
-        let (mut stream, _) = listener
-            .accept()
-            .await
-            .map_err(|e| McpError::OAuth(format!("Failed to accept connection: {e}")))?;
-
-        let mut buf = vec![0u8; 4096];
-        let n = stream
-            .read(&mut buf)
-            .await
-            .map_err(|e| McpError::OAuth(format!("Failed to read request: {e}")))?;
-
-        let request = String::from_utf8_lossy(&buf[..n]);
-        let (code, state) = parse_callback_query(&request)?;
-
-        // Validate CSRF state.
-        let guard = pending.lock().await;
-        let pending_login = guard
-            .get(&(user_id.to_string(), state.clone()))
-            .ok_or_else(|| McpError::OAuth("No pending login state".to_string()))?;
-
-        if state != *pending_login.csrf_token.secret() {
-            return Err(McpError::OAuth("CSRF state mismatch".to_string()));
+    /// Take the user's callback server out of the registry (only when it was
+    /// started for `state`, if given), abort it when `abort` is set, and wait
+    /// until it is gone. Returns whether one was found.
+    async fn stop_wait(&self, user_id: &str, state: Option<&str>, abort: bool) -> bool {
+        let task = {
+            let mut waits = self.waits.lock().await;
+            let matches = waits
+                .get(user_id)
+                .is_some_and(|(wait_state, _)| state.is_none_or(|s| s == wait_state));
+            if !matches {
+                return false;
+            }
+            waits.remove(user_id).map(|(_, task)| task)
+        };
+        if let Some(task) = task {
+            if abort {
+                task.abort();
+            }
+            let _ = task.await;
         }
-
-        // Send a success response to the browser.
-        let response = "HTTP/1.1 200 OK\r\n\
-            Content-Type: text/html; charset=utf-8\r\n\
-            Connection: close\r\n\r\n\
-            <html><body><h1>Authorization successful!</h1>\
-            <p>You can close this window and return to AionUi.</p>\
-            </body></html>";
-
-        let _ = stream.write_all(response.as_bytes()).await;
-
-        Ok((code, state))
+        true
     }
 
     /// Exchange the authorization code for tokens and persist them.
@@ -542,10 +582,34 @@ impl McpOAuthService {
         Ok(())
     }
 
-    /// Clear the pending login state.
-    async fn clear_pending_for_user(&self, user_id: &str) {
+    /// Clear one pending login state. Keyed by oauth_state so a cancelled
+    /// older sign-in never clears the newer one.
+    async fn remove_pending(&self, user_id: &str, state: &str) {
         let mut guard = self.pending.lock().await;
-        guard.retain(|(pending_user_id, _), _| pending_user_id != user_id);
+        guard.remove(&(user_id.to_string(), state.to_string()));
+    }
+}
+
+fn login_failure(error: &McpError) -> OAuthLoginResponse {
+    OAuthLoginResponse {
+        success: false,
+        error: Some(error.to_string()),
+    }
+}
+
+/// Host shown on the callback page.
+fn server_host(server_url: &str) -> String {
+    reqwest::Url::parse(server_url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_string))
+        .unwrap_or_else(|| "the MCP server".to_string())
+}
+
+fn describe_duration(duration: Duration) -> String {
+    match duration.as_secs() {
+        secs if secs >= 60 => format!("{} minutes", secs / 60),
+        secs if secs >= 1 => format!("{secs}s"),
+        _ => format!("{}ms", duration.as_millis()),
     }
 }
 
@@ -556,20 +620,6 @@ impl McpOAuthService {
 /// Port of the loopback redirect URI a stored client was registered with.
 fn registered_callback_port(row: &OAuthClientRow) -> Option<u16> {
     reqwest::Url::parse(&row.redirect_uri).ok()?.port()
-}
-
-/// Bind the loopback callback server, preferring the port the stored client
-/// was registered with so its exact redirect URI still matches.
-async fn bind_callback_listener(preferred_port: Option<u16>) -> Result<TcpListener, McpError> {
-    if let Some(port) = preferred_port {
-        match TcpListener::bind(("127.0.0.1", port)).await {
-            Ok(listener) => return Ok(listener),
-            Err(e) => debug!(port, error = %e, "Registered callback port unavailable; using a new one"),
-        }
-    }
-    TcpListener::bind("127.0.0.1:0")
-        .await
-        .map_err(|e| McpError::OAuth(format!("Failed to bind callback server: {e}")))
 }
 
 /// `oauth2` HTTP client that applies the OAuth timeouts, redirect policy and
@@ -607,80 +657,6 @@ fn describe_token_error(err: &RequestTokenError<McpError, BasicErrorResponse>) -
 }
 
 // ---------------------------------------------------------------------------
-// Query parameter parsing
-// ---------------------------------------------------------------------------
-
-/// Parse `code` and `state` from the first line of an HTTP request.
-///
-/// Expects: `GET /callback?code=xxx&state=yyy HTTP/1.1`
-fn parse_callback_query(request: &str) -> Result<(String, String), McpError> {
-    let first_line = request
-        .lines()
-        .next()
-        .ok_or_else(|| McpError::OAuth("Empty HTTP request".to_string()))?;
-
-    let path = first_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or_else(|| McpError::OAuth("Malformed HTTP request line".to_string()))?;
-
-    let query_str = path
-        .split_once('?')
-        .map(|(_, q)| q)
-        .ok_or_else(|| McpError::OAuth("No query parameters in callback".to_string()))?;
-
-    let mut code = None;
-    let mut state = None;
-
-    for pair in query_str.split('&') {
-        if let Some((key, value)) = pair.split_once('=') {
-            match key {
-                "code" => code = Some(url_decode(value)),
-                "state" => state = Some(url_decode(value)),
-                _ => {}
-            }
-        }
-    }
-
-    let code = code.ok_or_else(|| McpError::OAuth("Missing 'code' in callback".to_string()))?;
-    let state = state.ok_or_else(|| McpError::OAuth("Missing 'state' in callback".to_string()))?;
-
-    Ok((code, state))
-}
-
-/// Minimal percent-decoding for query parameter values.
-fn url_decode(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.bytes();
-
-    while let Some(b) = chars.next() {
-        if b == b'%' {
-            let hi = chars.next();
-            let lo = chars.next();
-            if let (Some(h), Some(l)) = (hi, lo) {
-                let hex = [h, l];
-                if let Ok(s) = std::str::from_utf8(&hex)
-                    && let Ok(byte) = u8::from_str_radix(s, 16)
-                {
-                    result.push(byte as char);
-                    continue;
-                }
-                // Malformed percent-encoding: keep as-is.
-                result.push('%');
-                result.push(h as char);
-                result.push(l as char);
-            }
-        } else if b == b'+' {
-            result.push(' ');
-        } else {
-            result.push(b as char);
-        }
-    }
-
-    result
-}
-
-// ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
 
@@ -694,86 +670,6 @@ mod tests {
 
     const TEST_USER_ID: &str = "user-1";
 
-    // -- parse_callback_query ------------------------------------------------
-
-    #[test]
-    fn parse_valid_callback_query() {
-        let request = "GET /callback?code=abc123&state=xyz789 HTTP/1.1\r\nHost: localhost\r\n";
-        let (code, state) = parse_callback_query(request).unwrap();
-        assert_eq!(code, "abc123");
-        assert_eq!(state, "xyz789");
-    }
-
-    #[test]
-    fn parse_callback_query_reversed_params() {
-        let request = "GET /callback?state=s1&code=c1 HTTP/1.1\r\n";
-        let (code, state) = parse_callback_query(request).unwrap();
-        assert_eq!(code, "c1");
-        assert_eq!(state, "s1");
-    }
-
-    #[test]
-    fn parse_callback_query_with_extra_params() {
-        let request = "GET /callback?code=c&foo=bar&state=s HTTP/1.1\r\n";
-        let (code, state) = parse_callback_query(request).unwrap();
-        assert_eq!(code, "c");
-        assert_eq!(state, "s");
-    }
-
-    #[test]
-    fn parse_callback_query_missing_code() {
-        let request = "GET /callback?state=s HTTP/1.1\r\n";
-        let err = parse_callback_query(request).unwrap_err();
-        assert!(err.to_string().contains("Missing 'code'"));
-    }
-
-    #[test]
-    fn parse_callback_query_missing_state() {
-        let request = "GET /callback?code=c HTTP/1.1\r\n";
-        let err = parse_callback_query(request).unwrap_err();
-        assert!(err.to_string().contains("Missing 'state'"));
-    }
-
-    #[test]
-    fn parse_callback_query_no_query_string() {
-        let request = "GET /callback HTTP/1.1\r\n";
-        let err = parse_callback_query(request).unwrap_err();
-        assert!(err.to_string().contains("No query parameters"));
-    }
-
-    #[test]
-    fn parse_callback_query_empty_request() {
-        let err = parse_callback_query("").unwrap_err();
-        assert!(err.to_string().contains("Empty HTTP request"));
-    }
-
-    // -- url_decode ----------------------------------------------------------
-
-    #[test]
-    fn url_decode_no_encoding() {
-        assert_eq!(url_decode("hello"), "hello");
-    }
-
-    #[test]
-    fn url_decode_percent_encoded() {
-        assert_eq!(url_decode("hello%20world"), "hello world");
-    }
-
-    #[test]
-    fn url_decode_plus_sign() {
-        assert_eq!(url_decode("hello+world"), "hello world");
-    }
-
-    #[test]
-    fn url_decode_special_characters() {
-        assert_eq!(url_decode("%3D%26%3F"), "=&?");
-    }
-
-    #[test]
-    fn url_decode_mixed() {
-        assert_eq!(url_decode("a%20b+c%3Dd"), "a b c=d");
-    }
-
     // -- McpOAuthService construction ----------------------------------------
 
     #[test]
@@ -784,12 +680,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clear_pending_for_user_keeps_other_user_same_oauth_state() {
+    async fn remove_pending_keeps_other_user_same_oauth_state() {
         let svc = McpOAuthService::new(Arc::new(MockTokenRepo), Arc::new(NoClientRepo));
         insert_pending_login(&svc, "user-a", "shared-state").await;
         insert_pending_login(&svc, "user-b", "shared-state").await;
 
-        svc.clear_pending_for_user("user-a").await;
+        svc.remove_pending("user-a", "shared-state").await;
 
         let pending = svc.pending.lock().await;
         assert!(!pending.contains_key(&("user-a".to_string(), "shared-state".to_string())));
@@ -804,7 +700,6 @@ mod tests {
         pending.insert(
             (user_id.to_string(), state.to_string()),
             PendingLogin {
-                csrf_token: CsrfToken::new(state.to_string()),
                 pkce_verifier,
                 auth_url: "https://auth.example.com/authorize".to_string(),
                 token_url: "https://auth.example.com/token".to_string(),

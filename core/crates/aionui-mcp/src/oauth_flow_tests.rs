@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 
 use aionui_db::{
     Database, IOAuthClientRepository, IOAuthTokenRepository, SqliteOAuthClientRepository, SqliteOAuthTokenRepository,
@@ -38,6 +39,10 @@ struct MockConfig {
     issuer_override: Option<String>,
     with_registration: bool,
     registration_rejected: bool,
+    /// The token endpoint answers the code exchange with `invalid_grant`.
+    token_rejected: bool,
+    /// Delay before the token endpoint answers.
+    token_delay: Duration,
 }
 
 impl Default for MockConfig {
@@ -50,6 +55,8 @@ impl Default for MockConfig {
             issuer_override: None,
             with_registration: true,
             registration_rejected: false,
+            token_rejected: false,
+            token_delay: Duration::ZERO,
         }
     }
 }
@@ -182,7 +189,16 @@ async fn mock_handler(
                 .into_response()
         }
         (Method::POST, "/oauth/token") => {
+            tokio::time::sleep(cfg.token_delay).await;
             let form = form_pairs(&body);
+            if cfg.token_rejected {
+                s.recorded.lock().unwrap().token_requests.push(form);
+                return (
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(json!({"error": "invalid_grant", "error_description": "code expired"})),
+                )
+                    .into_response();
+            }
             let access_token = if form.get("grant_type").map(String::as_str) == Some("refresh_token") {
                 "at-refreshed"
             } else {
@@ -224,11 +240,17 @@ fn query(url: &str) -> HashMap<String, String> {
     Url::parse(url).unwrap().query_pairs().into_owned().collect()
 }
 
-/// Play the browser: deliver `code` + `state` to the loopback redirect URI.
-async fn deliver_callback(redirect_uri: &str, state: &str) {
+/// Play the browser: deliver `code` + `state` to the loopback redirect URI and
+/// return the page it was answered with.
+async fn deliver_callback(redirect_uri: &str, state: &str) -> String {
     let url = format!("{redirect_uri}?code=the-code&state={state}");
     let resp = reqwest::get(url).await.unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    resp.text().await.unwrap()
+}
+
+fn port_of(redirect_uri: &str) -> u16 {
+    Url::parse(redirect_uri).unwrap().port().unwrap()
 }
 
 // -- Discovery ---------------------------------------------------------------
@@ -357,8 +379,9 @@ async fn login_registers_client_sends_resource_and_scope_and_refresh_reuses_clie
     let h = harness().await;
     let server_url = mock.server_url();
 
-    let (authorize_url, listener) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let (authorize_url, listener, state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
     let params = query(&authorize_url);
+    assert_eq!(params["state"], state);
     assert!(authorize_url.starts_with(&format!("{}/oauth/authorize?", mock.base)));
     assert_eq!(params["client_id"], "dcr-client-1");
     assert_eq!(params["resource"], server_url);
@@ -388,13 +411,11 @@ async fn login_registers_client_sends_resource_and_scope_and_refresh_reuses_clie
     assert_eq!(stored.redirect_uri, redirect_uri);
 
     // Browser redirect → loopback callback → token exchange.
-    let (callback, ()) = tokio::join!(
-        h.svc.wait_for_callback(USER, listener),
-        deliver_callback(&redirect_uri, &params["state"])
+    let (outcome, _page) = tokio::join!(
+        h.svc.complete_login(USER, &server_url, &state, listener),
+        deliver_callback(&redirect_uri, &state)
     );
-    let (code, state) = callback.unwrap();
-    assert_eq!(code, "the-code");
-    h.svc.exchange_code(USER, &server_url, code, state).await.unwrap();
+    assert!(outcome.success, "{:?}", outcome.error);
 
     {
         let recorded = mock.recorded();
@@ -410,12 +431,12 @@ async fn login_registers_client_sends_resource_and_scope_and_refresh_reuses_clie
     assert_eq!(token.access_token, "at-1");
 
     // A second login on the same redirect URI reuses the registration.
-    let (authorize_url, listener) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let (authorize_url, listener, state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
     assert_eq!(query(&authorize_url)["client_id"], "dcr-client-1");
     assert_eq!(query(&authorize_url)["redirect_uri"], redirect_uri);
     assert_eq!(mock.recorded().registrations.len(), 1);
     drop(listener);
-    h.svc.clear_pending_for_user(USER).await;
+    h.svc.remove_pending(USER, &state).await;
 
     // Expired token → refresh with the registered client id.
     h.tokens
@@ -460,7 +481,7 @@ async fn re_registers_when_the_registered_redirect_port_is_unavailable() {
         .await
         .unwrap();
 
-    let (authorize_url, _listener) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let (authorize_url, _listener, _state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
     let params = query(&authorize_url);
     assert_eq!(params["client_id"], "dcr-client-1");
     assert_ne!(params["redirect_uri"], old_redirect);
@@ -479,7 +500,7 @@ async fn uses_default_client_id_without_registration_endpoint() {
     let h = harness().await;
     let server_url = mock.server_url();
 
-    let (authorize_url, _listener) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let (authorize_url, _listener, _state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
     assert_eq!(query(&authorize_url)["client_id"], "aionui");
     assert!(h.clients.get_by_url(USER, &server_url).await.unwrap().is_none());
 }
@@ -499,4 +520,143 @@ async fn registration_rejection_is_reported_with_the_server_reason() {
         message.contains("HTTP 400 Bad Request: invalid_redirect_uri (loopback only)"),
         "{message}"
     );
+}
+
+// -- Callback wait, honest browser page, cancellation ---------------------------
+
+#[tokio::test]
+async fn callback_timeout_closes_the_listener_and_clears_pending_state() {
+    let mock = MockServer::start(MockConfig::default()).await;
+    let h = harness().await;
+    let svc = h
+        .svc
+        .clone()
+        .with_timeouts(Duration::from_millis(200), Duration::from_secs(5));
+    let server_url = mock.server_url();
+
+    let (authorize_url, listener, state) = svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let port = port_of(&query(&authorize_url)["redirect_uri"]);
+
+    let outcome = svc.complete_login(USER, &server_url, &state, listener).await;
+
+    assert!(!outcome.success);
+    let error = outcome.error.unwrap();
+    assert!(error.contains("no redirect received within"), "{error}");
+    // A late redirect gets a connection error, not a fake success page.
+    let late = tokio::net::TcpStream::connect(("127.0.0.1", port)).await;
+    assert!(
+        late.is_err(),
+        "callback listener still accepts connections after the timeout"
+    );
+    assert!(svc.pending.lock().await.is_empty());
+    assert!(h.tokens.get_by_url(USER, &server_url).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn redirect_stores_the_token_before_the_browser_gets_the_success_page() {
+    let mock = MockServer::start(MockConfig {
+        token_delay: Duration::from_millis(300),
+        ..MockConfig::default()
+    })
+    .await;
+    let h = harness().await;
+    let server_url = mock.server_url();
+
+    let (authorize_url, listener, state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let redirect_uri = query(&authorize_url)["redirect_uri"].clone();
+
+    let browser = async {
+        let page = deliver_callback(&redirect_uri, &state).await;
+        // Read the store the moment the page arrives.
+        let stored = h.tokens.get_by_url(USER, &server_url).await.unwrap();
+        (page, stored)
+    };
+    let (outcome, (page, stored)) = tokio::join!(h.svc.complete_login(USER, &server_url, &state, listener), browser);
+
+    assert!(outcome.success, "{:?}", outcome.error);
+    assert_eq!(stored.map(|t| t.access_token).as_deref(), Some("at-1"));
+    assert!(
+        page.contains("Signed in to 127.0.0.1. You can close this tab and return to Pixebot Browser."),
+        "{page}"
+    );
+    assert!(!page.contains("the-code"), "{page}");
+    assert!(!page.contains("at-1"), "{page}");
+    assert!(h.svc.pending.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn exchange_failure_shows_the_failure_page_and_stores_no_token() {
+    let mock = MockServer::start(MockConfig {
+        token_rejected: true,
+        ..MockConfig::default()
+    })
+    .await;
+    let h = harness().await;
+    let server_url = mock.server_url();
+
+    let (authorize_url, listener, state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let redirect_uri = query(&authorize_url)["redirect_uri"].clone();
+
+    let (outcome, page) = tokio::join!(
+        h.svc.complete_login(USER, &server_url, &state, listener),
+        deliver_callback(&redirect_uri, &state)
+    );
+
+    assert!(!outcome.success);
+    let error = outcome.error.unwrap();
+    assert!(error.contains("invalid_grant"), "{error}");
+    assert!(
+        page.contains("Sign-in failed: Token exchange failed: invalid_grant"),
+        "{page}"
+    );
+    assert!(page.contains("Return to Pixebot Browser and try again."), "{page}");
+    assert!(!page.contains("Signed in"), "{page}");
+    assert!(!page.contains("the-code"), "{page}");
+    assert!(h.tokens.get_by_url(USER, &server_url).await.unwrap().is_none());
+    assert!(h.svc.pending.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn new_login_cancels_the_older_pending_wait() {
+    let mock = MockServer::start(MockConfig::default()).await;
+    let h = harness().await;
+    let server_url = mock.server_url();
+
+    let (authorize_url, listener, old_state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+    let redirect_uri = query(&authorize_url)["redirect_uri"].clone();
+    let old_login = tokio::spawn({
+        let svc = h.svc.clone();
+        let (server_url, old_state) = (server_url.clone(), old_state.clone());
+        async move { svc.complete_login(USER, &server_url, &old_state, listener).await }
+    });
+    while !h.svc.waits.lock().await.contains_key(USER) {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    let (authorize_url, listener, new_state) = h.svc.prepare_login_flow(USER, &server_url).await.unwrap();
+
+    let old_outcome = tokio::time::timeout(Duration::from_secs(5), old_login)
+        .await
+        .expect("older wait was not cancelled")
+        .unwrap();
+    assert!(!old_outcome.success);
+    let error = old_outcome.error.unwrap();
+    assert!(error.contains("a newer sign-in started"), "{error}");
+    {
+        let pending = h.svc.pending.lock().await;
+        assert!(!pending.contains_key(&(USER.to_string(), old_state.clone())));
+        assert!(pending.contains_key(&(USER.to_string(), new_state.clone())));
+    }
+    // The old listener was closed before the new bind, so the registered
+    // redirect URI (and client) are reused.
+    assert_eq!(query(&authorize_url)["redirect_uri"], redirect_uri);
+    assert_eq!(mock.recorded().registrations.len(), 1);
+
+    let (outcome, page) = tokio::join!(
+        h.svc.complete_login(USER, &server_url, &new_state, listener),
+        deliver_callback(&redirect_uri, &new_state)
+    );
+    assert!(outcome.success, "{:?}", outcome.error);
+    assert!(page.contains("Signed in to 127.0.0.1"), "{page}");
+    assert!(h.tokens.get_by_url(USER, &server_url).await.unwrap().is_some());
 }
