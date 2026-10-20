@@ -4,7 +4,7 @@ use aionui_api_types::{
     AgentErrorCode, AgentErrorOwnership, AgentErrorResolution, AgentErrorResolutionKind, AgentErrorResolutionTarget,
 };
 
-use crate::protocol::send_error::AgentSendError;
+use crate::protocol::send_error::{AgentSendError, is_quota_exhausted_text};
 
 pub(super) fn aionrs_engine_error_to_send_error(error: &AionrsAgentError) -> AgentSendError {
     let detail = format!("Aionrs agent error: {error}");
@@ -97,6 +97,20 @@ pub(super) fn aionrs_runtime_error_summary(error: &AionrsAgentError) -> AionrsRu
 fn aionrs_provider_error_to_send_error(error: &ProviderError, detail: String) -> AgentSendError {
     match error {
         ProviderError::Api { status, .. } => aionrs_provider_status_to_send_error(*status, detail),
+        ProviderError::RateLimited { body, .. }
+            if body
+                .as_deref()
+                .is_some_and(|b| is_quota_exhausted_text(&b.to_ascii_lowercase())) =>
+        {
+            provider_send_error(
+                "The model provider quota is exhausted",
+                AgentErrorCode::UserLlmProviderRateLimited,
+                append_provider_body(detail, body.as_deref()),
+                false,
+                AgentErrorResolutionKind::SwitchEngine,
+                Some(AgentErrorResolutionTarget::ProviderSettings),
+            )
+        }
         ProviderError::RateLimited { body, .. } => provider_send_error(
             "The model provider rate limited the request",
             AgentErrorCode::UserLlmProviderRateLimited,
@@ -155,7 +169,7 @@ fn aionrs_provider_status_to_send_error(status: u16, detail: String) -> AgentSen
             AgentErrorCode::UserLlmProviderBillingRequired,
             detail,
             false,
-            AgentErrorResolutionKind::CheckProviderBilling,
+            AgentErrorResolutionKind::SwitchEngine,
             Some(AgentErrorResolutionTarget::ProviderSettings),
         ),
         403 => provider_send_error(

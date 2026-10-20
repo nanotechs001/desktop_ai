@@ -41,6 +41,7 @@ impl TurnRecoveryPolicy {
             && outcome.terminal.is_error()
             && retryable == Some(true)
             && error_code != Some(AgentErrorCode::UserLlmProviderModelNotFound)
+            && error_code != Some(AgentErrorCode::UserLlmProviderUsageLimited)
             && (session_recovery_signal.is_some() || !is_provider_turn_error(error_code, outcome))
             && safe_to_auto_replay
             && !already_replayed
@@ -101,6 +102,7 @@ fn is_provider_turn_error(error_code: Option<AgentErrorCode>, outcome: &RelayOut
                 | AgentErrorCode::UserLlmProviderInvalidToolSchema
                 | AgentErrorCode::UserLlmProviderContextTooLarge
                 | AgentErrorCode::UserLlmProviderRateLimited
+                | AgentErrorCode::UserLlmProviderUsageLimited
                 | AgentErrorCode::UserLlmProviderTimeout
                 | AgentErrorCode::UserLlmProviderNetworkError
                 | AgentErrorCode::UserLlmProviderEmptyResponse
@@ -218,6 +220,35 @@ mod tests {
         let decision = TurnRecoveryPolicy::decide(
             AgentType::Acp,
             Some("grok"),
+            &outcome,
+            RuntimeLifecycleState::Active,
+            false,
+        );
+
+        assert_eq!(decision, TurnRecoveryDecision::None);
+    }
+
+    #[test]
+    fn usage_limited_turn_never_auto_replays_even_with_resume_text() {
+        // A replay would hit the same plan limit; the user must switch engines instead.
+        let mut outcome = retryable_clean_error();
+        outcome.terminal = RelayTerminal::Error {
+            code: Some(AgentErrorCode::UserLlmProviderUsageLimited),
+            retryable: Some(true),
+        };
+        outcome.attempt.terminal_error = Some(AgentStreamErrorData::classified(
+            "The plan usage limit was reached",
+            AgentErrorCode::UserLlmProviderUsageLimited,
+            AgentErrorOwnership::UnknownUpstream,
+            Some("the task will not resume on its own when the usage limit resets".into()),
+            true,
+            false,
+            None,
+        ));
+
+        let decision = TurnRecoveryPolicy::decide(
+            AgentType::Acp,
+            Some("claude"),
             &outcome,
             RuntimeLifecycleState::Active,
             false,

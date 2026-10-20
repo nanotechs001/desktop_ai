@@ -165,3 +165,49 @@ fn aionrs_tool_call_failures_are_unknown_upstream_error() {
     assert_eq!(send_error.ownership(), Some(AgentErrorOwnership::UnknownUpstream));
     assert_eq!(send_error.stream_error().retryable, Some(true));
 }
+
+#[test]
+fn aionrs_quota_exhausted_rate_limit_offers_switch_and_is_not_retryable() {
+    let error = AionrsAgentError::Provider(ProviderError::RateLimited {
+        retry_after_ms: 5000,
+        body: Some(r#"{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}"#.to_owned()),
+    });
+    let send_error = aionrs_engine_error_to_send_error(&error);
+
+    assert_eq!(send_error.code(), Some(AgentErrorCode::UserLlmProviderRateLimited));
+    assert_eq!(send_error.stream_error().retryable, Some(false));
+    assert_eq!(
+        send_error.stream_error().resolution.map(|r| r.kind),
+        Some(aionui_api_types::AgentErrorResolutionKind::SwitchEngine)
+    );
+}
+
+#[test]
+fn aionrs_transient_rate_limit_stays_retryable() {
+    let error = AionrsAgentError::Provider(ProviderError::RateLimited {
+        retry_after_ms: 5000,
+        body: Some("Too Many Requests".to_owned()),
+    });
+    let send_error = aionrs_engine_error_to_send_error(&error);
+
+    assert_eq!(send_error.stream_error().retryable, Some(true));
+    assert_eq!(
+        send_error.stream_error().resolution.map(|r| r.kind),
+        Some(aionui_api_types::AgentErrorResolutionKind::Retry)
+    );
+}
+
+#[test]
+fn aionrs_402_offers_switch() {
+    let error = AionrsAgentError::Provider(ProviderError::Api {
+        status: 402,
+        message: "Payment Required".to_owned(),
+    });
+    let send_error = aionrs_engine_error_to_send_error(&error);
+
+    assert_eq!(send_error.code(), Some(AgentErrorCode::UserLlmProviderBillingRequired));
+    assert_eq!(
+        send_error.stream_error().resolution.map(|r| r.kind),
+        Some(aionui_api_types::AgentErrorResolutionKind::SwitchEngine)
+    );
+}

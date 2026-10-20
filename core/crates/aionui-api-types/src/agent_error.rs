@@ -51,6 +51,8 @@ pub enum AgentErrorCode {
     UserLlmProviderInvalidToolSchema,
     UserLlmProviderContextTooLarge,
     UserLlmProviderRateLimited,
+    /// A subscription plan's usage window (e.g. Claude / Codex) is exhausted.
+    UserLlmProviderUsageLimited,
     UserLlmProviderTimeout,
     UserLlmProviderNetworkError,
     UserLlmProviderEmptyResponse,
@@ -75,6 +77,8 @@ pub enum AgentErrorResolutionKind {
     ChangeModel,
     ReduceContext,
     SendFeedback,
+    /// Continue in a new chat on another engine or model.
+    SwitchEngine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +209,18 @@ mod tests {
         assert_eq!(json["code"], "AIONUI_CONVERSATION_BUSY");
         assert_eq!(json["resolution"]["kind"], "wait_for_current_response");
         assert_eq!(json["resolution"]["target"], "new_conversation");
+    }
+
+    #[test]
+    fn usage_limited_code_and_switch_engine_resolution_use_wire_names() {
+        assert_eq!(
+            serde_json::to_value(AgentErrorCode::UserLlmProviderUsageLimited).unwrap(),
+            "USER_LLM_PROVIDER_USAGE_LIMITED"
+        );
+        assert_eq!(
+            serde_json::to_value(AgentErrorResolutionKind::SwitchEngine).unwrap(),
+            "switch_engine"
+        );
     }
 
     #[test]

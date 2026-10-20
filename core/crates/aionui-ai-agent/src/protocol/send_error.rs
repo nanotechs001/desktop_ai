@@ -264,6 +264,15 @@ impl AgentSendError {
                     Some(AgentErrorResolutionTarget::AgentSettings),
                 ),
             ),
+            AcpError::Disconnected { stderr, .. } if is_usage_limit_text(&stderr.to_ascii_lowercase()) => Self::new(
+                "The plan usage limit was reached",
+                AgentErrorCode::UserLlmProviderUsageLimited,
+                AgentErrorOwnership::UserLlmProvider,
+                Some(detail),
+                false,
+                false,
+                resolution(AgentErrorResolutionKind::SwitchEngine, None),
+            ),
             AcpError::Disconnected { .. } => Self::new(
                 "The selected Agent disconnected",
                 AgentErrorCode::UserAgentDisconnected,
@@ -665,6 +674,16 @@ fn classify_provider_text(lower: &str) -> Option<ClassifiedError> {
             Some(AgentErrorResolutionTarget::ProviderSettings),
         ));
     }
+    // Before billing/429/quota: plan-limit text often also says "rate limit" or "quota".
+    if is_usage_limit_text(lower) {
+        return Some(provider_error(
+            "The plan usage limit was reached",
+            AgentErrorCode::UserLlmProviderUsageLimited,
+            false,
+            AgentErrorResolutionKind::SwitchEngine,
+            None,
+        ));
+    }
     if contains_any(
         lower,
         &[
@@ -684,7 +703,7 @@ fn classify_provider_text(lower: &str) -> Option<ClassifiedError> {
             "The model provider account requires billing attention",
             AgentErrorCode::UserLlmProviderBillingRequired,
             false,
-            AgentErrorResolutionKind::CheckProviderBilling,
+            AgentErrorResolutionKind::SwitchEngine,
             Some(AgentErrorResolutionTarget::ProviderSettings),
         ));
     }
@@ -832,6 +851,15 @@ fn classify_provider_text(lower: &str) -> Option<ClassifiedError> {
             Some(AgentErrorResolutionTarget::ProviderSettings),
         ));
     }
+    if is_quota_exhausted_text(lower) {
+        return Some(provider_error(
+            "The model provider quota is exhausted",
+            AgentErrorCode::UserLlmProviderRateLimited,
+            false,
+            AgentErrorResolutionKind::SwitchEngine,
+            Some(AgentErrorResolutionTarget::ProviderSettings),
+        ));
+    }
     if contains_any(lower, &["429", "rate limit", "rate_limit", "quota"]) {
         return Some(provider_error(
             "The model provider rate limited the request",
@@ -924,6 +952,55 @@ fn classify_provider_text(lower: &str) -> Option<ClassifiedError> {
     }
 
     None
+}
+
+/// Subscription plan usage-limit text (Claude / Codex). `lower` must be lowercased.
+/// Every needle is sourced; "5-hour limit" is left out because no source shows it in an
+/// error message (claude-code 2.1.301 names the 5-hour window "session limit", which the
+/// "you've hit your" prefix already covers).
+fn is_usage_limit_text(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            // codex-acp stderr fixture `aionui-common/src/error_extract.rs` STDERR_USAGE_LIMIT
+            // ("You've hit your usage limit. …"); claude-code 2.1.301 binary string
+            // "usage limit reached".
+            "usage limit",
+            // claude-code 2.1.301 binary: its limit-message prefix list
+            // `["You've hit your","You've reached your",…]` and the template
+            // `You've hit your ${"session limit"|"weekly limit"|"Opus limit"|…}`.
+            "you've hit your",
+            "you've reached your",
+            // claude-code 2.1.301 binary string `"You've hit your limit"`.
+            "hit your limit",
+            // claude-code 2.1.301 binary limit-name map `seven_day:"weekly limit"`.
+            "weekly limit",
+            // codex: stderr `Some(UsageLimitExceeded)` (same fixture) and the
+            // `codexErrorInfo` member `usageLimitExceeded` that codex_conn appends
+            // (schema per codex_conn.rs: codex-cli/0.137.0 schema-full CodexErrorInfo).
+            "usagelimitexceeded",
+        ],
+    )
+    // claude-code 2.1.301 binary: "Fast limit reached … · resets in …",
+    // "spend limit reached (daily; resets …)".
+    || (lower.contains("limit reached") && lower.contains("resets"))
+}
+
+/// Provider quota exhausted (as opposed to a transient 429). `lower` must be lowercased.
+/// "insufficient credits" is left out: no source in reach shows that text (a 402 status
+/// is matched by the billing arm instead).
+pub(crate) fn is_quota_exhausted_text(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            // aion-providers v0.2.11 `error_test.rs`: `{"error":{"code":429,"message":"quota exceeded"}}`.
+            "quota exceeded",
+            // OpenAI `insufficient_quota` body used by `manager/aionrs/error_test.rs` and
+            // matched by `services/provider_health.rs`.
+            "exceeded your current quota",
+            "insufficient_quota",
+        ],
+    )
 }
 
 fn classify_aionui_state(lower: &str) -> Option<ClassifiedError> {
@@ -1674,7 +1751,7 @@ mod tests {
             },
             AgentErrorCode::UserLlmProviderBillingRequired,
             AgentErrorOwnership::UserLlmProvider,
-            AgentErrorResolutionKind::CheckProviderBilling,
+            AgentErrorResolutionKind::SwitchEngine,
         );
     }
 
@@ -1814,13 +1891,13 @@ mod tests {
             "Aionrs agent error: Provider error: API error 402: {\"error\":{\"message\":\"Insufficient Balance\"}}",
             AgentErrorCode::UserLlmProviderBillingRequired,
             AgentErrorOwnership::UserLlmProvider,
-            AgentErrorResolutionKind::CheckProviderBilling,
+            AgentErrorResolutionKind::SwitchEngine,
         );
         assert_classification(
             "Aionrs agent error: Provider error: API error 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"}}",
             AgentErrorCode::UserLlmProviderBillingRequired,
             AgentErrorOwnership::UserLlmProvider,
-            AgentErrorResolutionKind::CheckProviderBilling,
+            AgentErrorResolutionKind::SwitchEngine,
         );
         assert_classification(
             "Aionrs agent error: Provider error: API error 401: invalid x-api-key",
@@ -1834,6 +1911,112 @@ mod tests {
             AgentErrorOwnership::UserLlmProvider,
             AgentErrorResolutionKind::Retry,
         );
+    }
+
+    fn assert_switch_engine(detail: &str, code: AgentErrorCode) {
+        let err = AgentSendError::from_agent_error(AgentError::bad_gateway(detail));
+        assert_eq!(err.code(), Some(code), "detail: {detail}");
+        assert_eq!(err.ownership(), Some(AgentErrorOwnership::UserLlmProvider));
+        assert_eq!(err.stream_error().retryable, Some(false), "detail: {detail}");
+        assert_eq!(
+            err.stream_error().resolution.map(|value| value.kind),
+            Some(AgentErrorResolutionKind::SwitchEngine),
+            "detail: {detail}"
+        );
+    }
+
+    #[test]
+    fn classifies_claude_plan_limits_as_usage_limited() {
+        // Message shapes composed by the claude-code 2.1.301 binary (see classify_usage_limit).
+        for detail in [
+            "You've hit your session limit · resets 3pm (Europe/Paris)",
+            "You've hit your weekly limit · resets Oct 23, 9am",
+            "You've hit your limit · resets 5pm",
+            "You've reached your Fable limit.",
+            "usage limit reached",
+            "Fast limit reached and temporarily disabled · resets in 12m",
+        ] {
+            assert_switch_engine(detail, AgentErrorCode::UserLlmProviderUsageLimited);
+        }
+    }
+
+    #[test]
+    fn classifies_codex_plan_limits_as_usage_limited() {
+        // codex-acp stderr fixture (aionui-common error_extract.rs STDERR_USAGE_LIMIT).
+        assert_switch_engine(
+            "Unhandled error during turn: You've hit your usage limit. To get more access now, send a request to your admin or try again at May 14th, 2026 8:16 PM. Some(UsageLimitExceeded)",
+            AgentErrorCode::UserLlmProviderUsageLimited,
+        );
+        // codex app-server turn.error.codexErrorInfo marker appended by codex_conn.
+        assert_switch_engine(
+            "Turn failed (codexErrorInfo: usageLimitExceeded)",
+            AgentErrorCode::UserLlmProviderUsageLimited,
+        );
+    }
+
+    #[test]
+    fn usage_limit_wins_over_rate_limit_and_quota_words() {
+        assert_switch_engine(
+            "429 rate limit: You've hit your usage limit",
+            AgentErrorCode::UserLlmProviderUsageLimited,
+        );
+    }
+
+    #[test]
+    fn crash_with_usage_limit_stderr_is_usage_limited_not_disconnected() {
+        let err = AgentSendError::from(AcpError::Disconnected {
+            exit_code: Some(1),
+            signal: None,
+            stderr: "You've hit your usage limit, try again later".into(),
+        });
+        assert_eq!(err.code(), Some(AgentErrorCode::UserLlmProviderUsageLimited));
+        assert_eq!(err.stream_error().retryable, Some(false));
+
+        let plain = AgentSendError::from(AcpError::Disconnected {
+            exit_code: Some(1),
+            signal: None,
+            stderr: String::new(),
+        });
+        assert_eq!(plain.code(), Some(AgentErrorCode::UserAgentDisconnected));
+    }
+
+    #[test]
+    fn classifies_provider_credit_and_quota_exhaustion_as_switchable() {
+        assert_switch_engine(
+            "Aionrs agent error: Provider error: API error 402: {\"error\":{\"message\":\"Insufficient Balance\"}}",
+            AgentErrorCode::UserLlmProviderBillingRequired,
+        );
+        assert_switch_engine(
+            "Your credit balance is too low to access the Anthropic API",
+            AgentErrorCode::UserLlmProviderBillingRequired,
+        );
+        assert_switch_engine(
+            "{\"error\":{\"code\":429,\"message\":\"quota exceeded\"}}",
+            AgentErrorCode::UserLlmProviderRateLimited,
+        );
+        assert_switch_engine(
+            "{\"error\":{\"code\":\"insufficient_quota\",\"message\":\"You exceeded your current quota\"}}",
+            AgentErrorCode::UserLlmProviderRateLimited,
+        );
+    }
+
+    #[test]
+    fn transient_rate_limits_stay_retryable_without_switch_offer() {
+        for detail in [
+            "Aionrs agent error: Provider error: Rate limited, retry after 5000ms",
+            "429 Too Many Requests",
+            // aion-providers v0.2.11 bedrock throttling text: a transient quota, not exhaustion.
+            "Service overloaded or throttled. You may have exceeded your provisioned throughput quota.",
+        ] {
+            let err = AgentSendError::from_agent_error(AgentError::bad_gateway(detail));
+            assert_eq!(err.code(), Some(AgentErrorCode::UserLlmProviderRateLimited), "{detail}");
+            assert_eq!(err.stream_error().retryable, Some(true), "{detail}");
+            assert_eq!(
+                err.stream_error().resolution.map(|value| value.kind),
+                Some(AgentErrorResolutionKind::Retry),
+                "{detail}"
+            );
+        }
     }
 
     #[test]

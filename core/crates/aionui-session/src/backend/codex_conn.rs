@@ -3812,8 +3812,9 @@ fn map_turn_completed(params: &Value) -> SessionEvent {
         // a FAILED turn carrying turn.error (e.g. contextWindowExceeded), already routed
         // via the "failed" arm above (is_error:true → TurnOutcome::Failed), not as a
         // clean Truncated outcome. If a truncation BADGE is wanted later, classify
-        // turn.error.codexErrorInfo (contextWindowExceeded/usageLimitExceeded) — but
-        // that is an additive enhancement, not the dead stopReason read.
+        // turn.error.codexErrorInfo (contextWindowExceeded) — but that is an additive
+        // enhancement, not the dead stopReason read. usageLimitExceeded is carried into
+        // result_text below.
         _ => (
             false,
             TurnOutcome::Completed {
@@ -3822,11 +3823,18 @@ fn map_turn_completed(params: &Value) -> SessionEvent {
         ),
     };
     let error = turn.get("error");
-    let result_text = error
+    let message = error
         .and_then(|e| e.get("message"))
         .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+        .unwrap_or("");
+    // The text classifier only sees `result_text`, so carry the structured usage-limit
+    // signal there (bare-string CodexErrorInfo member; see the schema note in tests).
+    let result_text = match error.and_then(|e| e.get("codexErrorInfo")).and_then(Value::as_str) {
+        Some("usageLimitExceeded") => format!("{message} (codexErrorInfo: usageLimitExceeded)")
+            .trim()
+            .to_string(),
+        _ => message.to_string(),
+    };
     // C-3 (correctness): httpStatusCode is NOT top-level on turn.error — it is
     // NESTED inside the externally-tagged `CodexErrorInfo` variant object on
     // `error.codexErrorInfo`, e.g. {"httpConnectionFailed":{"httpStatusCode":500}}
@@ -6232,6 +6240,38 @@ mod tests {
                 }
             )),
             "status-less error variant → is_error:true, api_error_status:None, got {events:?}"
+        );
+    }
+
+    /// `codexErrorInfo:"usageLimitExceeded"` (a bare-string CodexErrorInfo member, per the
+    /// schema note on the test above) must reach the text classifier, which only sees
+    /// `result_text` — so the marker is appended to the message.
+    #[tokio::test]
+    async fn failed_turn_with_usage_limit_exceeded_carries_marker_in_result_text() {
+        let events = drive_codex(&[
+            r#"{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th1","turn":{"id":"t1","status":"failed","error":{"message":"You've hit your usage limit.","codexErrorInfo":"usageLimitExceeded"}}}}"#,
+        ])
+        .await;
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                SessionEvent::TurnResult { is_error: true, result_text, .. }
+                    if result_text == "You've hit your usage limit. (codexErrorInfo: usageLimitExceeded)"
+            )),
+            "usageLimitExceeded must ride result_text, got {events:?}"
+        );
+
+        let bare = drive_codex(&[
+            r#"{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th1","turn":{"id":"t1","status":"failed","error":{"codexErrorInfo":"usageLimitExceeded"}}}}"#,
+        ])
+        .await;
+        assert!(
+            bare.iter().any(|e| matches!(
+                e,
+                SessionEvent::TurnResult { is_error: true, result_text, .. }
+                    if result_text == "(codexErrorInfo: usageLimitExceeded)"
+            )),
+            "a message-less usageLimitExceeded still yields classifiable text, got {bare:?}"
         );
     }
 
