@@ -71,7 +71,7 @@ const json = (status: number, payload: unknown) =>
   new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
 
 /** aioncore stand-in: GET returns the source chat, the clone POST answers `cloneStatus`. */
-const stubBackend = (cloneStatus = 200) => {
+const stubBackend = (cloneStatus = 200, mcpStatus = 200) => {
   const calls: Call[] = [];
   vi.stubGlobal(
     'fetch',
@@ -83,7 +83,11 @@ const stubBackend = (cloneStatus = 200) => {
       if (method === 'GET' && path === '/api/settings/client') {
         return json(200, { success: true, data: { 'mcp.config': CATALOG } });
       }
-      if (method === 'GET' && path === '/api/mcp/servers') return json(200, { success: true, data: [] });
+      if (method === 'GET' && path === '/api/mcp/servers') {
+        return mcpStatus === 200
+          ? json(200, { success: true, data: [] })
+          : json(mcpStatus, { success: false, error: 'down' });
+      }
       if (method === 'POST' && path === '/api/conversations/clone') {
         return cloneStatus === 200
           ? json(200, { success: true, data: { ...SOURCE, id: 'c2', name: '' } })
@@ -173,6 +177,22 @@ describe.each([
     await waitFor(() => expect(error).toHaveBeenCalled());
     expect(screen.getByTestId('location').textContent).toBe('/conversation/c1');
     expect(ipcEmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConversationNewChatButton without the MCP list', () => {
+  it('still creates the chat with the built-in MCPs when the MCP list cannot be fetched', async () => {
+    platform.electron = false;
+    const calls = stubBackend(200, 500);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderButton();
+    fireEvent.click(screen.getByRole('button', { name: LABEL }));
+
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/conversation/c2'));
+    expect((sentConversation(calls).extra as Record<string, unknown>).selected_session_mcp_servers).toEqual(
+      FRESH_SESSION_MCPS
+    );
+    expect(logged).toHaveBeenCalled();
   });
 });
 

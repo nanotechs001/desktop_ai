@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => {
     clone: vi.fn(),
     getMessages: vi.fn(),
     getAssistant: vi.fn(),
+    listAssistants: vi.fn(),
+    clientSetting: vi.fn(),
     updateAssistant: vi.fn(),
     catalog: vi.fn(),
     emit: vi.fn(),
@@ -41,13 +43,18 @@ vi.mock('@/common', () => ({
       createWithConversation: { invoke: mocks.clone },
     },
     database: { getConversationMessages: { invoke: mocks.getMessages } },
-    assistants: { get: { invoke: mocks.getAssistant }, update: { invoke: mocks.updateAssistant } },
+    assistants: {
+      get: { invoke: mocks.getAssistant },
+      update: { invoke: mocks.updateAssistant },
+      list: { invoke: mocks.listAssistants },
+    },
   },
 }));
 vi.mock('@/renderer/hooks/mcp/catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/renderer/hooks/mcp/catalog')>()),
   ensureBackendMcpCatalog: mocks.catalog,
 }));
+vi.mock('@/renderer/services/clientBusinessSettings', () => ({ getClientBusinessSetting: mocks.clientSetting }));
 vi.mock('@/renderer/utils/emitter', () => ({ emitter: { emit: mocks.emit } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -126,6 +133,26 @@ beforeEach(() => {
   mocks.updateAssistant.mockResolvedValue({});
   mocks.catalog.mockResolvedValue({ allServers: [BROWSER, ARTIFACTS, NOTES], userServers: [], builtinServers: [] });
   mocks.clone.mockResolvedValue({ id: 'c2' });
+  mocks.clientSetting.mockResolvedValue([BROWSER, ARTIFACTS, NOTES]);
+  mocks.listAssistants.mockResolvedValue([
+    { id: 'bot-1', source: 'user', name: 'Travel Bot', agent_id: 'claude' },
+    {
+      id: 'bare:claude',
+      source: 'generated',
+      name: 'Claude',
+      avatar: '🤖',
+      agent_id: 'claude',
+      agent: { type: 'acp', acp_backend: 'claude' },
+    },
+    {
+      id: 'bare:codex',
+      source: 'generated',
+      name: 'Codex',
+      avatar: '🧠',
+      agent_id: 'codex',
+      agent: { type: 'acp', acp_backend: 'codex' },
+    },
+  ]);
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -194,19 +221,68 @@ describe('switchAndContinue', () => {
     expect(sessionStorage.getItem('aionrs_initial_message_c2')).toContain('plan my trip');
   });
 
-  it('applies the choice only to the new chat when the chat has no bot of its own', async () => {
+  it('pins the default Agent like any bot, so the new chat keeps its rules, notes and skills', async () => {
+    mocks.store.set('agent.enginePins', {});
     mocks.getConversation.mockResolvedValue({
       ...SOURCE,
-      assistant: { ...SOURCE.assistant, id: 'aion-default-agent' },
+      assistant: { ...SOURCE.assistant, id: 'aion-default-agent', name: 'Agent' },
+    });
+    mocks.getAssistant.mockResolvedValue({ ...DETAIL, id: 'aion-default-agent' });
+
+    await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels });
+
+    expect(mocks.store.get('agent.enginePins')).toEqual({ 'aion-default-agent': 'codex' });
+    expect(mocks.store.get('agent.defaultAgentId')).toBe('claude');
+    expect(mocks.updateAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'aion-default-agent', agent_id: 'codex' })
+    );
+    expect(sent().assistant).toMatchObject({ id: 'aion-default-agent' });
+  });
+
+  it("continues an engine chat on the target engine's own entry, pinning nothing", async () => {
+    mocks.getConversation.mockResolvedValue({
+      ...SOURCE,
+      assistant: { id: 'bare:claude', source: 'generated', name: 'Claude', avatar: '🤖', backend: 'claude' },
+      extra: { ...SOURCE.extra, preset_assistant_id: 'bare:claude' },
     });
 
     await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels });
 
     expect(mocks.updateAssistant).not.toHaveBeenCalled();
     expect(mocks.store.get('agent.enginePins')).toEqual({ 'bot-1': 'claude', other: 'x' });
-    expect(sent().assistant).toBeUndefined();
-    expect(sent().extra).toMatchObject({ agent_id: 'codex', backend: 'codex' });
+    expect(sent().assistant).toEqual({
+      id: 'bare:codex',
+      source: 'generated',
+      name: 'Codex',
+      avatar: '🧠',
+      backend: 'codex',
+    });
     expect(sent().extra).not.toHaveProperty('preset_assistant_id');
+    expect(sessionStorage.getItem('acp_initial_message_c2')).toContain('plan my trip');
+  });
+
+  it('refuses an engine chat switch when the target engine has no entry, creating nothing', async () => {
+    mocks.getConversation.mockResolvedValue({
+      ...SOURCE,
+      assistant: { id: 'bare:claude', source: 'generated', name: 'Claude', avatar: '', backend: 'claude' },
+    });
+    mocks.listAssistants.mockResolvedValue([]);
+
+    await expect(
+      switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels })
+    ).rejects.toThrow(/codex/);
+    expect(mocks.clone).not.toHaveBeenCalled();
+  });
+
+  it('still creates the chat with the built-in MCPs when the MCP list cannot be fetched', async () => {
+    mocks.catalog.mockRejectedValue(new Error('mcp list down'));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels });
+
+    expect(sent().extra.selected_session_mcp_servers).toEqual(freshMcps);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 
   it('rolls the pin back and stashes nothing when the chat cannot be created', async () => {

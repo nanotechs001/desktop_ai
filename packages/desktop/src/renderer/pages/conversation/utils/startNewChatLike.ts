@@ -5,9 +5,16 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { ISessionMcpServer, TChatConversation, TProviderWithModel } from '@/common/config/storage';
+import type {
+  IMcpServer,
+  ISessionMcpServer,
+  TChatConversation,
+  TConversationAssistantIdentity,
+  TProviderWithModel,
+} from '@/common/config/storage';
 import { ensureBackendMcpCatalog, toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
 import { withBrowserMcp } from '@/renderer/hooks/mcp/withBrowserMcp';
+import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
 import { emitter } from '@/renderer/utils/emitter';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { getConversationOrNull } from './conversationCache';
@@ -54,16 +61,33 @@ export type NewChatChange = {
   engine?: Pick<ManagedAgent, 'id' | 'agent_type' | 'backend'>;
   /** The aionrs provider model, as the chat model selector stores it. */
   model?: TProviderWithModel;
-  /** Create without the source's assistant: `engine` then applies to this chat only. */
-  detachAssistant?: boolean;
+  /** Run as this assistant instead of the source's (an engine chat moving to another engine's own entry). */
+  assistant?: TConversationAssistantIdentity;
 };
+
+/**
+ * The MCP catalog. When the full list cannot be fetched (the user servers come from the backend), fall back to the
+ * built-in records alone, so a new chat still gets the built-in session MCPs; the failure is logged, not thrown.
+ */
+async function loadMcpCatalog(): Promise<IMcpServer[]> {
+  try {
+    return (await ensureBackendMcpCatalog()).allServers;
+  } catch (error) {
+    console.error('[startNewChatLike] Could not load the MCP catalog; using the built-in servers only:', error);
+    const local = await getClientBusinessSetting('mcp.config').catch((settingError: unknown): undefined => {
+      console.error('[startNewChatLike] Could not load the built-in MCP servers:', settingError);
+      return undefined;
+    });
+    return ((local ?? []) as IMcpServer[]).filter((server) => server.builtin === true);
+  }
+}
 
 /**
  * The source's session MCP servers re-read from the catalog, plus every built-in session MCP. The stored copy can be
  * stale (and `create` only reads `selected_session_mcp_servers`), so a carried list would not refresh it.
  */
 async function freshSessionMcpServers(stored: unknown): Promise<ISessionMcpServer[]> {
-  const catalog = (await ensureBackendMcpCatalog()).allServers;
+  const catalog = await loadMcpCatalog();
   const previous = Array.isArray(stored) ? (stored as ISessionMcpServer[]) : [];
   const refreshed = previous.map((server) => {
     const record = catalog.find((item) => item.id === server.id);
@@ -81,7 +105,8 @@ export async function startNewChatLike(source: TChatConversation, change: NewCha
   // The stored copy, so settings changed since the page loaded (e.g. session mode) carry over.
   const latest = (await getConversationOrNull(source.id)) ?? source;
   const sourceExtra: Record<string, unknown> = latest.extra ?? {};
-  const { engine, detachAssistant = false } = change;
+  const { engine } = change;
+  const assistant = change.assistant ?? latest.assistant;
   // A temporary folder belongs to its chat: without a workspace the backend makes a fresh one, as for any new chat.
   const dropWorkspace = sourceExtra.is_temporary_workspace === true;
   const carried = CARRIED_EXTRA_KEYS.filter(
@@ -89,19 +114,19 @@ export async function startNewChatLike(source: TChatConversation, change: NewCha
       key in sourceExtra &&
       !(dropWorkspace && key === 'workspace') &&
       !(engine && ENGINE_BOUND_EXTRA_KEYS.has(key)) &&
-      // Without the assistant, its id must not ride along either: the backend would resolve the assistant from it.
-      !(detachAssistant && key === 'preset_assistant_id')
+      // A replaced assistant's id must not ride along: the backend would resolve the old assistant from it.
+      !(change.assistant && key === 'preset_assistant_id')
   );
   const extra: Record<string, unknown> = {
     ...Object.fromEntries(carried.map((key) => [key, sourceExtra[key]])),
-    ...(engine && detachAssistant ? { agent_id: engine.id, backend: engine.backend } : {}),
+    // A chat without any assistant names its engine in `extra`, as such chats always have.
+    ...(engine && !assistant ? { agent_id: engine.id, backend: engine.backend } : {}),
     selected_session_mcp_servers: await freshSessionMcpServers(sourceExtra.session_mcp_servers),
   };
   const type: TChatConversation['type'] = engine?.agent_type ?? latest.type;
   // Only what creating the chat needs: never its source/channel binding, history or runtime state.
   // aionrs only: the other types carry their model in `extra`, and the backend rejects a top-level one.
   const model = type === 'aionrs' ? (change.model ?? ('model' in latest ? latest.model : undefined)) : undefined;
-  const assistant = detachAssistant ? undefined : latest.assistant;
   const conversation = { type, model, assistant, name: '', extra };
   const created = await ipcBridge.conversation.createWithConversation.invoke({
     conversation: conversation as TChatConversation,

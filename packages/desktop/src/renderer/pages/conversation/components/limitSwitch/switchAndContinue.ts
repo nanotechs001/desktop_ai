@@ -6,10 +6,15 @@
 
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
-import type { IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
-import { DEFAULT_AGENT_SETTING_KEY, isUndeletableAgent } from '@/common/types/agent/defaultAgent';
+import type {
+  IProvider,
+  TChatConversation,
+  TConversationAssistantIdentity,
+  TProviderWithModel,
+} from '@/common/config/storage';
 import { ENGINE_CHANGE_DEFAULTS_RESET, persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
 import { loadLatestConversationMessages, MAX_MESSAGE_PAGE_LIMIT } from '@/renderer/utils/chat/messagePagination';
+import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { isEngineEntry } from '@/renderer/utils/ui/agentPresentation';
 import { getConversationOrNull } from '../../utils/conversationCache';
 import { startNewChatLike } from '../../utils/startNewChatLike';
@@ -17,13 +22,27 @@ import { buildHandoffMessage, type HandoffLabels } from './handoffMessage';
 import type { SwitchTarget } from './switchTargets';
 
 /**
- * The bot a switch may re-pin: the user's own Agent. Not an engine's generated entry, and not the default Agent,
- * which follows the default engine; for those the switch applies to the new chat only.
+ * The bot a switch re-pins: any Agent, the default Agent included (pinning it moves only that bot; the default
+ * engine stays). An engine's own generated entry is not a bot: its chat moves to the target engine's entry instead.
  */
 export function pinnableAssistantId(conversation: TChatConversation): string | null {
   const assistant = conversation.assistant;
-  if (!assistant?.id || isEngineEntry(assistant)) return null;
-  return isUndeletableAgent(assistant.id, configService.get(DEFAULT_AGENT_SETTING_KEY)) ? null : assistant.id;
+  return assistant?.id && !isEngineEntry(assistant) ? assistant.id : null;
+}
+
+/** The target engine's own generated entry, as a conversation identity; throws when the engine has none. */
+async function engineEntryIdentity(engine: ManagedAgent): Promise<TConversationAssistantIdentity> {
+  const entry = (await ipcBridge.assistants.list.invoke()).find(
+    (assistant) => isEngineEntry(assistant) && assistant.agent_id === engine.id
+  );
+  if (!entry) throw new Error(`Engine ${engine.id} has no entry of its own`);
+  return {
+    id: entry.id,
+    source: entry.source,
+    name: entry.name,
+    avatar: entry.avatar ?? '',
+    backend: entry.agent?.acp_backend || entry.agent?.type || engine.backend || '',
+  };
 }
 
 /**
@@ -64,8 +83,8 @@ const toProviderModel = ({ models: _models, ...provider }: IProvider, model: str
 type SwitchAndContinueParams = { conversationId: string; target: SwitchTarget; labels: HandoffLabels };
 
 /**
- * Continue a chat that hit a usage limit on another engine or model: re-pin this bot (only), create a new chat like
- * this one, and stash a handoff of the recent conversation as its first message, which the chat sends when it opens.
+ * Continue a chat that hit a usage limit on another engine or model: re-pin this bot (only; an engine chat moves to
+ * the target engine's own entry instead), create a new chat like this one, and stash a handoff of the recent conversation as its first message, which the chat sends when it opens.
  * The old chat stays as it is. On failure nothing is stashed, the pin is rolled back and the error is rethrown.
  */
 export async function switchAndContinue({ conversationId, target, labels }: SwitchAndContinueParams): Promise<string> {
@@ -81,11 +100,13 @@ export async function switchAndContinue({ conversationId, target, labels }: Swit
   const sameModelEngine = target.kind === 'model' && conversation.type === 'aionrs';
   const engineChanges = !sameModelEngine && target.engine.id !== currentEngineId;
   const assistantId = engineChanges ? pinnableAssistantId(conversation) : null;
+  const onEngineEntry = engineChanges && conversation.assistant && !assistantId;
+  const entry = onEngineEntry ? await engineEntryIdentity(target.engine) : undefined;
   const undoPin = assistantId ? await pinAssistant(assistantId, target.engine.id) : null;
   try {
     const id = await startNewChatLike(conversation, {
       engine: engineChanges ? target.engine : undefined,
-      detachAssistant: engineChanges && !assistantId,
+      assistant: entry,
       model: target.kind === 'model' ? toProviderModel(target.provider, target.model) : undefined,
     });
     if (!id) throw new Error('The backend created no conversation');
