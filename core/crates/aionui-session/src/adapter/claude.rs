@@ -323,6 +323,10 @@ impl ClaudeAdapter {
             // uuid WE minted on the user frame, reporting where it landed in the
             // turn lifecycle (verified 2.1.226, design spec §6.1).
             "command_lifecycle" => self.parse_command_lifecycle(v),
+            // Plan usage-limit reading (verified: tests/fixtures/
+            // claude_2.1.220_background_bash_turn.ndjsonl line 26, and the 2.1.301
+            // binary's schema strings — sources cited in `claude_rate_limit`).
+            "rate_limit_event" => super::claude_rate_limit::parse_rate_limit_event(v),
             // unknown top-level type → opaque catch-all (I8/I13, never panic).
             other => vec![SessionEvent::AdapterSpecific {
                 tag: other.to_string(),
@@ -3087,6 +3091,28 @@ mod tests {
 
     /// ede_diagnostic filter: claude's internal `[ede_diagnostic] …` debug template
     /// in `errors[]` is dropped from `result_text` (it is NOT a user-readable error).
+    /// The `rate_limit_event` frame reaches the typed event through the adapter's
+    /// real framing path (it used to fall through to `AdapterSpecific`).
+    #[test]
+    fn rate_limit_event_frame_becomes_typed_event() {
+        let raw = include_str!("../../tests/fixtures/claude_2.1.220_background_bash_turn.ndjsonl");
+        let line = raw.lines().nth(25).expect("fixture line 26");
+        let mut adapter = ClaudeAdapter::new();
+        let out = adapter.frame_lines(format!("{line}\n").as_bytes());
+        let events: Vec<&SessionEvent> = out.iter().flat_map(|(_, evs)| evs).collect();
+        assert!(
+            matches!(
+                events.as_slice(),
+                [SessionEvent::RateLimitInfo {
+                    status: Some(crate::event::RateLimitStatus::Allowed),
+                    resets_at: Some(1_785_754_200),
+                    ..
+                }]
+            ),
+            "got {events:?}"
+        );
+    }
+
     #[test]
     fn parse_result_strips_ede_diagnostic_from_errors() {
         // ONLY the diagnostic → after stripping, errors is empty + is_error → falls

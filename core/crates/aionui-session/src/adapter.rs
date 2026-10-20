@@ -14,6 +14,7 @@ use crate::capability::Capabilities;
 use crate::event::{ExitStatusLite, SessionEvent};
 
 mod claude;
+mod claude_rate_limit;
 pub(crate) use claude::claude_permission_modes;
 pub use claude::{ClaudeAdapter, is_valid_claude_permission_mode};
 

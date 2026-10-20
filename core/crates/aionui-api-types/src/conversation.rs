@@ -445,6 +445,55 @@ pub struct MessageStatusChangedPayload {
     pub status: String,
 }
 
+/// Websocket event name for a conversation's plan usage-limit reading.
+pub const CONVERSATION_RATE_LIMIT_UPDATED_EVENT: &str = "conversation.rateLimitUpdated";
+
+/// Whether the plan still admits requests (`allowed_warning` = close to a limit).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitStatus {
+    Allowed,
+    AllowedWarning,
+    Rejected,
+}
+
+/// A subscription usage window: the 5-hour session, the weekly totals (all
+/// models or one model family), or paid extra usage.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitWindowKind {
+    FiveHour,
+    SevenDay,
+    SevenDayOpus,
+    SevenDaySonnet,
+    SevenDayOverageIncluded,
+    Overage,
+}
+
+/// One window's reading. `utilization` is a fraction (usually 0..=1, may
+/// exceed 1); `resets_at` is epoch seconds.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RateLimitWindowReading {
+    pub kind: RateLimitWindowKind,
+    pub utilization: Option<f64>,
+    pub resets_at: Option<u64>,
+}
+
+/// Payload of the `conversation.rateLimitUpdated` websocket event: the latest
+/// plan usage-limit reading the conversation's agent reported. Every reading
+/// field is optional; the renderer shows a near-limit warning from it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConversationRateLimitUpdatedPayload {
+    pub user_id: String,
+    pub conversation_id: String,
+    pub status: Option<RateLimitStatus>,
+    pub rate_limit_type: Option<RateLimitWindowKind>,
+    pub resets_at: Option<u64>,
+    pub utilization: Option<f64>,
+    pub windows: Vec<RateLimitWindowReading>,
+    pub surpassed_threshold: Option<f64>,
+}
+
 /// A single item from cross-conversation message search.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageSearchItem {
@@ -462,6 +511,34 @@ pub type MessageSearchResponse = PaginatedResult<MessageSearchItem>;
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn rate_limit_updated_payload_serializes_snake_case_contract() {
+        let payload = ConversationRateLimitUpdatedPayload {
+            user_id: "u".into(),
+            conversation_id: "c".into(),
+            status: Some(RateLimitStatus::AllowedWarning),
+            rate_limit_type: Some(RateLimitWindowKind::SevenDayOpus),
+            resets_at: Some(1_785_754_200),
+            utilization: None,
+            windows: vec![RateLimitWindowReading {
+                kind: RateLimitWindowKind::FiveHour,
+                utilization: Some(0.91),
+                resets_at: Some(1),
+            }],
+            surpassed_threshold: None,
+        };
+        let v = serde_json::to_value(&payload).unwrap();
+        assert_eq!(CONVERSATION_RATE_LIMIT_UPDATED_EVENT, "conversation.rateLimitUpdated");
+        assert_eq!(v["status"], "allowed_warning");
+        assert_eq!(v["rate_limit_type"], "seven_day_opus");
+        assert_eq!(v["resets_at"], 1_785_754_200);
+        assert_eq!(v["utilization"], serde_json::Value::Null);
+        assert_eq!(
+            v["windows"][0],
+            json!({ "kind": "five_hour", "utilization": 0.91, "resets_at": 1 })
+        );
+    }
 
     // ── CreateConversationRequest ───────────────────────────────────
 

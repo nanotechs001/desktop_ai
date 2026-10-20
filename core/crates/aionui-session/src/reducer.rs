@@ -421,6 +421,8 @@ pub fn step(state: &SessionState, event: SessionEvent) -> (SessionState, Vec<Tra
         // An out-of-turn advisory (codex warning/deprecation/config). Not a turn
         // signal, not requires-action — the conversation surfaces it; FSM no-op.
         | SessionEvent::Notice { .. }
+        // A plan usage-limit reading: display-only, never a turn signal.
+        | SessionEvent::RateLimitInfo { .. }
         | SessionEvent::MessageFinalized(..)
         | SessionEvent::Snapshot { .. }
         | SessionEvent::Lagged { .. }

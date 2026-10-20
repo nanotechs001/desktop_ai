@@ -457,6 +457,21 @@ pub enum SessionEvent {
         title: String,
     },
 
+    /// Plan usage-limit reading (claude `rate_limit_event`). Every field is
+    /// optional because the backend reports only what it knows: an API-key
+    /// session carries no per-window figures at all. `utilization` and
+    /// `surpassed_threshold` are fractions (0..=1, may exceed 1). Reducer no-op
+    /// and never persisted: a newer reading replaces it, and the conversation
+    /// layer only forwards it to the live view.
+    RateLimitInfo {
+        status: Option<RateLimitStatus>,
+        rate_limit_type: Option<RateLimitWindowKind>,
+        resets_at: Option<u64>,
+        utilization: Option<f64>,
+        windows: Vec<RateLimitWindow>,
+        surpassed_threshold: Option<f64>,
+    },
+
     /// Out-of-turn diagnostic NOTICE (codex `warning` / `guardianWarning` /
     /// `deprecationNotice` / `configWarning`). A user-facing message that is NOT a
     /// turn terminal and NOT a tool/MCP provisioning phase — e.g. "this config key is
@@ -925,6 +940,40 @@ pub struct ContextUsageCategory {
     pub tokens: u64,
 }
 
+/// Whether the plan still admits requests, on a [`SessionEvent::RateLimitInfo`].
+/// `AllowedWarning` = still served but close to a limit; `Rejected` = the limit
+/// is hit (the turn's own error terminal reports that separately).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitStatus {
+    Allowed,
+    AllowedWarning,
+    Rejected,
+}
+
+/// Which subscription usage window a [`SessionEvent::RateLimitInfo`] reading
+/// belongs to: the rolling 5-hour session, the weekly totals (all models or one
+/// model family), or paid extra usage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitWindowKind {
+    FiveHour,
+    SevenDay,
+    SevenDayOpus,
+    SevenDaySonnet,
+    SevenDayOverageIncluded,
+    Overage,
+}
+
+/// One per-window usage reading. `utilization` is a FRACTION of the window
+/// (usually 0..=1, may exceed 1); `resets_at` is epoch seconds.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RateLimitWindow {
+    pub kind: RateLimitWindowKind,
+    pub utilization: Option<f64>,
+    pub resets_at: Option<u64>,
+}
+
 /// 007 §1.2/§7.2 (Addendum 2b): the produced/lowered classifier — first-class
 /// pure total fn, NOT an enum split (which would break the reducer's single
 /// `match` entry). The storage layer calls this to decide what to append to the
@@ -976,6 +1025,7 @@ pub fn classify(event: &SessionEvent) -> EventClass {
         | SubagentDetail { .. }
         | WorkflowPhase { .. }
         | Notice { .. }
+        | RateLimitInfo { .. }
         | ToolOutputDelta { .. }
         | TurnDiffUpdated { .. }
         | ItemStarted { .. }
@@ -1017,6 +1067,7 @@ pub fn persist_tier(event: &SessionEvent) -> PersistTier {
             CatalogUpdated { .. } => PersistTier::Ephemeral, // async catalog discovery, re-discovered on open (not history)
             SessionInfo { .. } => PersistTier::Ephemeral, // on-demand query snapshot, re-queryable (not history)
             SessionTitle { .. } => PersistTier::Ephemeral, // applied to conversations.name by the conversation layer, not history
+            RateLimitInfo { .. } => PersistTier::Ephemeral, // live usage reading, superseded by the next one (not history)
             SubagentDetail { .. } => PersistTier::Ephemeral, // transient per-agent progress (roster fill, re-derivable)
             // the phase list is re-declared on the next run's first progress frame
             WorkflowPhase { .. } => PersistTier::Ephemeral,
@@ -1216,6 +1267,19 @@ mod additive_tests {
                 SessionEvent::MessageDelta {
                     item_id: "i".into(),
                     text: "t".into(),
+                },
+                BackendProduced,
+                Ephemeral,
+            ),
+            (
+                "RateLimitInfo",
+                SessionEvent::RateLimitInfo {
+                    status: Some(RateLimitStatus::AllowedWarning),
+                    rate_limit_type: Some(RateLimitWindowKind::FiveHour),
+                    resets_at: Some(1),
+                    utilization: Some(0.9),
+                    windows: Vec::new(),
+                    surpassed_threshold: None,
                 },
                 BackendProduced,
                 Ephemeral,
@@ -1487,14 +1551,14 @@ mod additive_tests {
             ),
         ];
 
-        // Tripwire: every SessionEvent variant must appear. 34 variants today
-        // (7 orchestration-lowered + 27 backend-produced, incl. Notice +
+        // Tripwire: every SessionEvent variant must appear. 35 variants today
+        // (7 orchestration-lowered + 28 backend-produced, incl. Notice +
         // ToolOutputDelta + TurnDiffUpdated + SessionInfo + SessionTitle +
-        // MessageLifecycle); AdapterSpecific appears twice for its raw-timing
-        // vs structured split → 35 rows. A new variant trips.
+        // MessageLifecycle + RateLimitInfo); AdapterSpecific appears twice for its
+        // raw-timing vs structured split → 36 rows. A new variant trips.
         assert_eq!(
             table.len(),
-            35,
+            36,
             "every SessionEvent variant (+ the AdapterSpecific timing split) must be routed here"
         );
 

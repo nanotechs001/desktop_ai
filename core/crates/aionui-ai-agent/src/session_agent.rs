@@ -2599,6 +2599,7 @@ fn session_event_name(e: &SessionEvent) -> &'static str {
                 SessionEvent::SubagentUpdate { .. } => "SubagentUpdate",
                 SessionEvent::SubagentDetail { .. } => "SubagentDetail",
                 SessionEvent::Notice { .. } => "Notice",
+                SessionEvent::RateLimitInfo { .. } => "RateLimitInfo",
                 SessionEvent::ToolOutputDelta { .. } => "ToolOutputDelta",
                 SessionEvent::TurnDiffUpdated { .. } => "TurnDiffUpdated",
                 SessionEvent::Provisioning { .. } => "Provisioning",
@@ -3350,6 +3351,11 @@ fn spawn_event_pump(
             if let (Some(bus), Some(_)) = (broadcaster.as_ref(), informative_usage(&env.event)) {
                 broadcast_usage_frame(bus.as_ref(), &conversation_id, &user_id, &env.event);
             }
+            // Plan usage-limit readings are conversation-scoped and can land after a
+            // turn's relay has closed, so they go straight to the bus as well.
+            if let Some(bus) = broadcaster.as_ref() {
+                broadcast_rate_limit_frame(bus.as_ref(), &conversation_id, &user_id, &env.event);
+            }
             for mut ev in translate_event(env.event, &conversation_id, terminal_result_seen) {
                 // Keep the tool name alive across a call's multi-frame lifecycle (see
                 // `stamp_tool_name`): the terminal ToolResult frame leaves the name
@@ -3638,6 +3644,75 @@ fn broadcast_usage_frame(bus: &dyn EventBroadcaster, conversation_id: &str, user
         "hidden": false,
     });
     bus.broadcast(aionui_api_types::WebSocketMessage::new("message.stream", payload));
+}
+
+/// Project a plan usage-limit reading into the `conversation.rateLimitUpdated`
+/// payload; `None` for every other event.
+fn rate_limit_payload(
+    event: &SessionEvent,
+    conversation_id: &str,
+    user_id: &str,
+) -> Option<aionui_api_types::ConversationRateLimitUpdatedPayload> {
+    let SessionEvent::RateLimitInfo {
+        status,
+        rate_limit_type,
+        resets_at,
+        utilization,
+        windows,
+        surpassed_threshold,
+    } = event
+    else {
+        return None;
+    };
+    Some(aionui_api_types::ConversationRateLimitUpdatedPayload {
+        user_id: user_id.to_owned(),
+        conversation_id: conversation_id.to_owned(),
+        status: status.map(|s| match s {
+            aionui_session::RateLimitStatus::Allowed => aionui_api_types::RateLimitStatus::Allowed,
+            aionui_session::RateLimitStatus::AllowedWarning => aionui_api_types::RateLimitStatus::AllowedWarning,
+            aionui_session::RateLimitStatus::Rejected => aionui_api_types::RateLimitStatus::Rejected,
+        }),
+        rate_limit_type: rate_limit_type.map(rate_limit_window_kind),
+        resets_at: *resets_at,
+        utilization: *utilization,
+        windows: windows
+            .iter()
+            .map(|w| aionui_api_types::RateLimitWindowReading {
+                kind: rate_limit_window_kind(w.kind),
+                utilization: w.utilization,
+                resets_at: w.resets_at,
+            })
+            .collect(),
+        surpassed_threshold: *surpassed_threshold,
+    })
+}
+
+fn rate_limit_window_kind(kind: aionui_session::RateLimitWindowKind) -> aionui_api_types::RateLimitWindowKind {
+    use aionui_api_types::RateLimitWindowKind as Api;
+    use aionui_session::RateLimitWindowKind as Session;
+    match kind {
+        Session::FiveHour => Api::FiveHour,
+        Session::SevenDay => Api::SevenDay,
+        Session::SevenDayOpus => Api::SevenDayOpus,
+        Session::SevenDaySonnet => Api::SevenDaySonnet,
+        Session::SevenDayOverageIncluded => Api::SevenDayOverageIncluded,
+        Session::Overage => Api::Overage,
+    }
+}
+
+/// Broadcast a plan usage-limit reading as `conversation.rateLimitUpdated`; a
+/// no-op for every other event.
+fn broadcast_rate_limit_frame(bus: &dyn EventBroadcaster, conversation_id: &str, user_id: &str, event: &SessionEvent) {
+    let Some(payload) = rate_limit_payload(event, conversation_id, user_id) else {
+        return;
+    };
+    match serde_json::to_value(&payload) {
+        Ok(value) => bus.broadcast(aionui_api_types::WebSocketMessage::new(
+            aionui_api_types::CONVERSATION_RATE_LIMIT_UPDATED_EVENT,
+            value,
+        )),
+        Err(err) => tracing::warn!(conversation_id, error = %err, "rate-limit broadcast: serialize failed"),
+    }
 }
 
 /// Merge one usage report into `acp_session.session_config.runtime.context_usage`.
@@ -6328,6 +6403,53 @@ mod persist_tests {
         assert_eq!(msg.data["data"]["used"], 26_420);
         assert_eq!(msg.data["data"]["size"], 1_000_000, "drives context_limit");
         assert_eq!(msg.data["conversation_id"], "conv-1");
+    }
+
+    /// A plan usage-limit reading reaches the bus as `conversation.rateLimitUpdated`
+    /// with the renderer's snake_case contract; other events broadcast nothing.
+    #[test]
+    fn rate_limit_reading_broadcasts_conversation_event() {
+        #[derive(Default)]
+        struct Recorder(std::sync::Mutex<Vec<aionui_api_types::WebSocketMessage<serde_json::Value>>>);
+        impl EventBroadcaster for Recorder {
+            fn broadcast(&self, event: aionui_api_types::WebSocketMessage<serde_json::Value>) {
+                self.0.lock().unwrap().push(event);
+            }
+        }
+
+        let bus = Recorder::default();
+        let reading = SessionEvent::RateLimitInfo {
+            status: Some(aionui_session::RateLimitStatus::AllowedWarning),
+            rate_limit_type: Some(aionui_session::RateLimitWindowKind::FiveHour),
+            resets_at: Some(1_785_754_200),
+            utilization: Some(0.92),
+            windows: vec![aionui_session::RateLimitWindow {
+                kind: aionui_session::RateLimitWindowKind::SevenDayOpus,
+                utilization: Some(0.5),
+                resets_at: Some(1_786_000_000),
+            }],
+            surpassed_threshold: Some(0.9),
+        };
+        broadcast_rate_limit_frame(&bus, "conv-1", "user-1", &reading);
+        broadcast_rate_limit_frame(&bus, "conv-1", "user-1", &SessionEvent::Heartbeat);
+
+        let sent = bus.0.lock().unwrap();
+        assert_eq!(sent.len(), 1, "only the reading broadcasts");
+        let msg = &sent[0];
+        assert_eq!(msg.name, "conversation.rateLimitUpdated");
+        assert_eq!(msg.data["conversation_id"], "conv-1");
+        assert_eq!(msg.data["user_id"], "user-1");
+        assert_eq!(msg.data["status"], "allowed_warning");
+        assert_eq!(msg.data["rate_limit_type"], "five_hour");
+        assert_eq!(msg.data["resets_at"], 1_785_754_200);
+        assert_eq!(msg.data["utilization"], 0.92);
+        assert_eq!(msg.data["surpassed_threshold"], 0.9);
+        assert_eq!(msg.data["windows"][0]["kind"], "seven_day_opus");
+        assert_eq!(msg.data["windows"][0]["resets_at"], 1_786_000_000);
+        assert!(
+            translate_event(reading, "conv-1", false).is_empty(),
+            "the reading never rides the per-turn message stream"
+        );
     }
 
     /// The gate is shared by the snapshot and the live broadcast, so a report can
