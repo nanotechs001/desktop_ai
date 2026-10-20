@@ -332,6 +332,24 @@ export const getSnapshotConversationName = (conversation_id: string): string | u
   return name ? name : undefined;
 };
 
+/**
+ * Whether the list snapshot holds a conversation of `assistantId` created after `createdAt` (other than this one). A
+ * brand-new chat may not be listed yet, so the question is asked of the others, never "is this one the latest".
+ */
+export const hasNewerSnapshotConversationOfAssistant = (
+  assistantId: string,
+  conversationId: string,
+  createdAt: number
+): boolean =>
+  conversationsState.some(
+    (item) => item.id !== conversationId && item.assistant?.id === assistantId && item.created_at > createdAt
+  );
+
+/** Test hook: seed the conversation list the snapshot lookups read. */
+export const setConversationListForTest = (conversations: TChatConversation[]): void => {
+  conversationsState = conversations;
+};
+
 const refreshConversations = () => {
   void ipcBridge.database.getUserConversations
     .invoke({ limit: 10000 })

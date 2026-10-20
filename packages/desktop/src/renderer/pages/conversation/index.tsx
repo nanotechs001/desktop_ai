@@ -11,7 +11,10 @@ import { setCurrentProject } from '@/renderer/pages/conversation/explorer/curren
 import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
+import {
+  getSnapshotConversationProjectId,
+  hasNewerSnapshotConversationOfAssistant,
+} from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { resolveAssistantConfigId } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -40,8 +43,10 @@ const ChatConversationIndex: React.FC = () => {
   const lastEnteredRef = useRef<{ conversationId: string; scope: string | null } | null>(null);
   const conversationId = data?.id;
   const scope = data ? previewScopeOfConversation(data) : null;
-  // A VA Bot's agent tabs come into this chat only once the relay says this chat's agent owns them (ruling R18).
+  // A VA Bot's agent tabs come into the chat that owns them in the relay, or into the bot's newest chat, which the
+  // relay hands them to on its first browser command (ruling R18): a new chat never starts on a blank tab.
   const agentId = data?.assistant?.id;
+  const createdAt = data?.created_at;
   useEffect(() => {
     if (!conversationId) return;
     const last = lastEnteredRef.current;
@@ -52,9 +57,14 @@ const ChatConversationIndex: React.FC = () => {
       openBrowserIfEmpty: isElectronDesktop(),
       carryFromScope,
       conversationId,
-      ...(agentId ? { agentId } : {}),
+      ...(agentId
+        ? {
+            agentId,
+            newestOfBot: !hasNewerSnapshotConversationOfAssistant(agentId, conversationId, createdAt ?? 0),
+          }
+        : {}),
     });
-  }, [conversationId, scope, agentId]);
+  }, [conversationId, scope, agentId, createdAt]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async

@@ -60,32 +60,34 @@ export const enterScope = (
   };
 };
 
+/** The chat a bot's tabs may move into: the one on screen, and whether it is that bot's newest chat. */
+export type BotChat = { conversationId: string; newest?: boolean };
+
 /**
- * A live tab an agent opened in the VA Bot's own browser profile (not the user's tab in that profile), which the
- * relay says chat `conversationId` owns now.
+ * A live tab an agent opened in the VA Bot's own browser profile (not the user's tab in that profile) that `chat`
+ * may show: the relay says it owns the tab, or it is the bot's newest chat, which the relay hands every one of the
+ * bot's tabs to on its first browser command.
  */
-const isBotAgentTab = (tab: PreviewTab, agentId: string, conversationId: string): boolean =>
+const isBotAgentTab = (tab: PreviewTab, agentId: string, chat: BotChat): boolean =>
   isBrowserTab(tab) &&
   tab.metadata?.agentOwned === true &&
-  tab.metadata.agentConversationId === conversationId &&
+  (chat.newest === true || tab.metadata.agentConversationId === chat.conversationId) &&
   tab.metadata.profile?.kind === 'agent' &&
   tab.metadata.profile.agentId === agentId;
 
 /**
- * A VA Bot's agent tabs follow the chat that drives them (ruling R18): those parked under other scopes that the
- * relay says chat `conversationId` owns move to `scope`, where that chat is on screen. An older chat of the bot gets
- * none: it cannot drive them. Their webviews stay as they are (same tab ids). `moved` keeps the scopes they left,
- * whose stored copies must go.
+ * A VA Bot's agent tabs follow the chat that drives them (ruling R18): those parked under other scopes that `chat`
+ * may show move to `scope`, where that chat is on screen. An older chat gets only the tabs it still owns: it cannot
+ * drive the others. Their webviews stay as they are (same tab ids). `moved` keeps the scopes they left, whose stored
+ * copies must go.
  */
 export const moveBotTabs = (
   background: readonly BackgroundTab[],
   agentId: string,
   scope: string,
-  conversationId: string
+  chat: BotChat
 ): { background: BackgroundTab[]; moved: BackgroundTab[] } => {
-  const moved = background.filter(
-    (entry) => entry.scope !== scope && isBotAgentTab(entry.tab, agentId, conversationId)
-  );
+  const moved = background.filter((entry) => entry.scope !== scope && isBotAgentTab(entry.tab, agentId, chat));
   return {
     background: background.map((entry) => (moved.includes(entry) ? { ...entry, scope } : entry)),
     moved,

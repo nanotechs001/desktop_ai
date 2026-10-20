@@ -24,7 +24,14 @@ import {
   type PreviewScopeKey,
 } from './previewScope';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { enterScope, leaveScope, liveBrowserTabs, moveBotTabs, type BackgroundTab } from './backgroundTabs';
+import {
+  enterScope,
+  leaveScope,
+  liveBrowserTabs,
+  moveBotTabs,
+  type BackgroundTab,
+  type BotChat,
+} from './backgroundTabs';
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { getCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
@@ -280,6 +287,8 @@ type ScopeChangeOptions = {
   conversationId?: string;
   /** The VA Bot of that conversation: its live agent tabs this chat drives (relay ownership) come along. */
   agentId?: string;
+  /** This is the bot's newest chat: all of the bot's live agent tabs come along, since the relay hands them over. */
+  newestOfBot?: boolean;
 };
 
 /** Drops tabs that moved to another scope from the stored state of the scopes they left. */
@@ -689,12 +698,12 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const onScreenChatRef = useRef<{ conversationId: string; agentId?: string } | null>(null);
 
   /**
-   * Brings the bot's live agent tabs that chat `conversationId` owns in the relay from other scopes into `scopeKey`,
-   * the scope on screen, after its own tabs. True when any came.
+   * Brings the bot's live agent tabs `chat` may show from other scopes into `scopeKey`, the scope on screen, after its
+   * own tabs. True when any came.
    */
   const pullBotTabs = useCallback(
-    (agentId: string, conversationId: string, scopeKey: string): boolean => {
-      const { background, moved } = moveBotTabs(backgroundRef.current, agentId, scopeKey, conversationId);
+    (agentId: string, chat: BotChat, scopeKey: string): boolean => {
+      const { background, moved } = moveBotTabs(backgroundRef.current, agentId, scopeKey, chat);
       if (moved.length === 0) return false;
       forgetMovedTabs(moved);
       const { tabs: botTabs, rest } = enterScope(background, scopeKey, []);
@@ -1294,7 +1303,11 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         : null;
       if (prev === scopeKey) {
         if (options?.agentId && options.conversationId && scopeKey != null) {
-          pullBotTabs(options.agentId, options.conversationId, scopeKey);
+          pullBotTabs(
+            options.agentId,
+            { conversationId: options.conversationId, newest: options.newestOfBot },
+            scopeKey
+          );
         }
         reopenUnlessUserClosed();
         return;
@@ -1352,7 +1365,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const left = prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
       const bot =
         options?.agentId && options.conversationId && scopeKey != null
-          ? moveBotTabs(left, options.agentId, scopeKey, options.conversationId)
+          ? moveBotTabs(left, options.agentId, scopeKey, {
+              conversationId: options.conversationId,
+              newest: options.newestOfBot,
+            })
           : null;
       if (bot) forgetMovedTabs(bot.moved);
       const background = bot?.background ?? left;
@@ -1473,7 +1489,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const chat = onScreenChatRef.current;
         const scopeKey = currentScopeRef.current;
         if (chat?.agentId && scopeKey != null && patch.metadata?.agentConversationId === chat.conversationId) {
-          pullBotTabs(chat.agentId, chat.conversationId, scopeKey);
+          pullBotTabs(chat.agentId, { conversationId: chat.conversationId }, scopeKey);
         }
       }
       setTabs((prevTabs) => prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab)));

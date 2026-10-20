@@ -129,6 +129,12 @@ describe('buildHandoffMessage', () => {
     expect(second.match(/HEADER/g)).toHaveLength(1);
   });
 
+  it('shows the Pixebot marker, and still reads a handoff tagged with the earlier marker', () => {
+    expect(buildHandoffMessage([text('right', 'go')], labels).split('\n')[0]).toBe('[Pixebot handoff]');
+    const legacy = buildHandoffMessage([text('right', 'old request')], labels).replace(HANDOFF_TAG, '[aionui-handoff]');
+    expect(handoffRequestOf(legacy)).toBe('old request');
+  });
+
   it('reads no request from a plain message, and an empty one from a handoff without a user turn', () => {
     expect(handoffRequestOf('just a message')).toBeNull();
     expect(handoffRequestOf(buildHandoffMessage([text('left', 'only the AI spoke')], labels))).toBe('');

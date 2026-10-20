@@ -15,7 +15,9 @@ export const HANDOFF_LIMITS = {
 } as const;
 
 /** The first line of every handoff message, never localized, so a later switch can tell a handoff apart (M6). */
-export const HANDOFF_TAG = '[aionui-handoff]';
+export const HANDOFF_TAG = '[Pixebot handoff]';
+/** Tags of handoffs written by earlier builds, still read back. */
+const LEGACY_HANDOFF_TAGS: ReadonlySet<string> = new Set(['[aionui-handoff]']);
 
 /** Localized lines of the handoff message. */
 export type HandoffLabels = {
@@ -59,7 +61,7 @@ const withoutMarkers = (text: string, labels: HandoffLabels): string => {
  */
 export function handoffRequestOf(text: string): string | null {
   const lines = text.split('\n');
-  if (lines[0] !== HANDOFF_TAG) return null;
+  if (lines[0] !== HANDOFF_TAG && !LEGACY_HANDOFF_TAGS.has(lines[0])) return null;
   let quoteEnd = FIRST_QUOTED_LINE;
   while (quoteEnd < lines.length && isQuoted(lines[quoteEnd])) quoteEnd += 1;
   return lines
