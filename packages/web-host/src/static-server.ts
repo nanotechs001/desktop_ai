@@ -11,7 +11,7 @@
  * login. Every proxied request and upgrade is classified (auth-gate/), and those
  * that need a session are checked against aioncore `GET /api/auth/user` first.
  *
- * Local routes (local-routes/): when configured, /api/browser-view/* is answered here after the same gate.
+ * Local routes (browserViewRoutes.ts): when configured, /api/browser-view/* is answered here after the same gate.
  *
  * Design: Node native http + serve-handler. No Express. No business routes.
  */
@@ -43,7 +43,7 @@ import {
   STREAM_REQUEST_LINE,
   STREAM_ROUTE_LIKE,
   TABS_PATH,
-} from './local-routes/browserViewRoutes.js';
+} from './browserViewRoutes.js';
 import type { LocalRoutes } from './types.js';
 
 export type StaticServerOptions = {

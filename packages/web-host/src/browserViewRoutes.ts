@@ -8,7 +8,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { BrowserViewPeer, BrowserViewRoutes, BrowserViewStreamHandle } from '../types.js';
+import type { BrowserViewPeer, BrowserViewRoutes, BrowserViewStreamHandle } from './types.js';
 
 export const TABS_PATH = '/api/browser-view/tabs';
 export const STREAM_PATH = '/api/browser-view/stream';

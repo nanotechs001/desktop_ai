@@ -3,7 +3,7 @@ import { createBrowserViewService, type StreamPeer } from '@process/services/age
 import { ALLOWED_VIEWER_METHODS, decodeFrame } from '@process/services/agentBrowser/relay/browserView/protocol';
 import { createDebuggerSessions, type DebuggerSessions } from '@process/services/agentBrowser/relay/debuggerSessions';
 import { createTargetRegistry, type TargetRegistry } from '@process/services/agentBrowser/relay/targetRegistry';
-import { FakeContents } from '../agentBrowser/relay/fakes';
+import { FakeContents } from '../fakes';
 
 type Handle = { onMessage(raw: string): void; close(): void };
 

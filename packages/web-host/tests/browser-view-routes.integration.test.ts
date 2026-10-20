@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import WebSocket, { type RawData } from 'ws';
-import { createBrowserViewStreams } from '../src/local-routes/browserViewRoutes.js';
+import { createBrowserViewStreams } from '../src/browserViewRoutes.js';
 import { startStaticServer, type StaticServerHandle } from '../src/static-server.js';
 import type { BrowserViewPeer, BrowserViewRoutes } from '../src/types.js';
 import {
