@@ -164,7 +164,8 @@ const BrowserTabLayer: React.FC = () => {
     [updateTab]
   );
   const handleAgentOwnedChange = useCallback(
-    (tabId: string, agentOwned: boolean) => updateTab?.(tabId, { metadata: { agentOwned } }),
+    (tabId: string, agentOwned: boolean, agentConversationId?: string) =>
+      updateTab?.(tabId, { metadata: { agentOwned, agentConversationId } }),
     [updateTab]
   );
 

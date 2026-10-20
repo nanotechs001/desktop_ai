@@ -76,6 +76,7 @@ export interface PreviewMetadata {
   favicon?: string; // 浏览器 tab 的站点图标 URL / Site icon URL for browser tabs
   agentActive?: boolean; // Agent 正在操作该浏览器 tab / Agent is currently driving this browser tab
   agentOwned?: boolean; // An agent opened this browser tab / Agent 打开了该浏览器 tab
+  agentConversationId?: string; // The chat whose agent owns this tab in the relay (live, never restored)
   profile?: BrowserTabProfile; // The Agent browser profile of this tab; Personal when absent. Fixed for the tab's life
 }
 
@@ -277,7 +278,7 @@ type ScopeChangeOptions = {
   carryFromScope?: string;
   /** The conversation entering the scope: a pending revealBrowserFor for it overrides a user close, once. */
   conversationId?: string;
-  /** The VA Bot of that conversation: the live tabs its agents opened in other chats come along. */
+  /** The VA Bot of that conversation: its live agent tabs this chat drives (relay ownership) come along. */
   agentId?: string;
 };
 
@@ -371,8 +372,8 @@ const tabForPersistence = (tab: PreviewTab): PreviewTab | null => {
     ...tab,
     // Agent activity and ownership are live, per-session signals — never restore them as set.
     metadata:
-      tab.metadata?.agentActive || tab.metadata?.agentOwned
-        ? { ...tab.metadata, agentActive: false, agentOwned: false }
+      tab.metadata?.agentActive || tab.metadata?.agentOwned || tab.metadata?.agentConversationId
+        ? { ...tab.metadata, agentActive: false, agentOwned: false, agentConversationId: undefined }
         : tab.metadata,
   };
 
@@ -684,6 +685,31 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // twice), so decisions with observable side effects are made up front.
   const tabsRef = useRef<PreviewTab[]>([]);
   tabsRef.current = tabs;
+  // The conversation on screen and its VA Bot: a bot tab the relay hands to this chat comes on screen (R18).
+  const onScreenChatRef = useRef<{ conversationId: string; agentId?: string } | null>(null);
+
+  /**
+   * Brings the bot's live agent tabs that chat `conversationId` owns in the relay from other scopes into `scopeKey`,
+   * the scope on screen, after its own tabs. True when any came.
+   */
+  const pullBotTabs = useCallback(
+    (agentId: string, conversationId: string, scopeKey: string): boolean => {
+      const { background, moved } = moveBotTabs(backgroundRef.current, agentId, scopeKey, conversationId);
+      if (moved.length === 0) return false;
+      forgetMovedTabs(moved);
+      const { tabs: botTabs, rest } = enterScope(background, scopeKey, []);
+      const isNew = (list: readonly PreviewTab[]) => botTabs.filter((tab) => !list.some((t) => t.id === tab.id));
+      setBackground(rest);
+      setTabs((prev) => [...prev, ...isNew(prev)]);
+      tabsRef.current = [...tabsRef.current, ...isNew(tabsRef.current)];
+      if (!activeTabIdRef.current) {
+        setActiveTabId(botTabs[0].id);
+        activeTabIdRef.current = botTabs[0].id;
+      }
+      return true;
+    },
+    [setBackground]
+  );
   // Set when a browser-tab open was folded into an existing tab because the cap
   // was reached, so the UI can tell the user instead of silently reusing a tab.
   const [browserTabLimitHitAt, setBrowserTabLimitHitAt] = useState<number | null>(null);
@@ -1263,21 +1289,12 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (tabsRef.current.length > 0) setIsOpen(true);
         else autoOpenedTabIdRef.current = openBrowserTab();
       };
+      onScreenChatRef.current = options?.conversationId
+        ? { conversationId: options.conversationId, agentId: options.agentId }
+        : null;
       if (prev === scopeKey) {
-        if (options?.agentId && scopeKey != null) {
-          const { background, moved } = moveBotTabs(backgroundRef.current, options.agentId, scopeKey);
-          if (moved.length > 0) {
-            forgetMovedTabs(moved);
-            const { tabs: botTabs, rest } = enterScope(background, scopeKey, []);
-            const merged = [...tabs, ...botTabs];
-            setBackground(rest);
-            setTabs(merged);
-            tabsRef.current = merged;
-            if (!activeTabId) {
-              setActiveTabId(botTabs[0].id);
-              activeTabIdRef.current = botTabs[0].id;
-            }
-          }
+        if (options?.agentId && options.conversationId && scopeKey != null) {
+          pullBotTabs(options.agentId, options.conversationId, scopeKey);
         }
         reopenUnlessUserClosed();
         return;
@@ -1333,7 +1350,10 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const loaded = scopeKey != null ? loadScopeState(scopeKey) : EMPTY_SCOPE_STATE;
       // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return.
       const left = prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
-      const bot = options?.agentId && scopeKey != null ? moveBotTabs(left, options.agentId, scopeKey) : null;
+      const bot =
+        options?.agentId && options.conversationId && scopeKey != null
+          ? moveBotTabs(left, options.agentId, scopeKey, options.conversationId)
+          : null;
       if (bot) forgetMovedTabs(bot.moved);
       const background = bot?.background ?? left;
       const entered = scopeKey != null ? enterScope(background, scopeKey, loaded.tabs) : { tabs: [], rest: background };
@@ -1359,7 +1379,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
     },
-    [isOpen, tabs, activeTabId, openBrowserTab, findPreviewTabInList, setBackground]
+    [isOpen, tabs, activeTabId, openBrowserTab, findPreviewTabInList, setBackground, pullBotTabs]
   );
 
   const closeTab = useCallback(
@@ -1449,10 +1469,16 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (parked >= 0) {
         const entry = backgroundRef.current[parked];
         setBackground(backgroundRef.current.with(parked, { ...entry, tab: patchTab(entry.tab, patch) }));
+        // The relay handed a parked bot tab to the chat on screen (its agent connected): it comes on screen now.
+        const chat = onScreenChatRef.current;
+        const scopeKey = currentScopeRef.current;
+        if (chat?.agentId && scopeKey != null && patch.metadata?.agentConversationId === chat.conversationId) {
+          pullBotTabs(chat.agentId, chat.conversationId, scopeKey);
+        }
       }
       setTabs((prevTabs) => prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab)));
     },
-    [setBackground]
+    [setBackground, pullBotTabs]
   );
 
   /**

@@ -145,7 +145,17 @@ describe('BrowserViewer agent chrome', () => {
     expect(await screen.findByText(`${KEY}.badge`)).toBeTruthy();
     expect(screen.queryByText(`${KEY}.share`)).toBeNull();
     expect(screen.queryByText('Some Vendor')).toBeNull();
-    await waitFor(() => expect(onAgentOwnedChange).toHaveBeenCalledWith('tab-1', true));
+    await waitFor(() => expect(onAgentOwnedChange).toHaveBeenCalledWith('tab-1', true, undefined));
+  });
+
+  it("reports the chat that owns the tab, again when the bot's new chat takes it over (R18)", async () => {
+    const owner = { clientId: 'c1', label: 'Bot', conversationId: 'chat-1' };
+    const { onAgentOwnedChange } = await mount([tab({ owner })]);
+    await waitFor(() => expect(onAgentOwnedChange).toHaveBeenCalledWith('tab-1', true, 'chat-1'));
+
+    act(() => mocks.ownership?.([tab({ owner: { ...owner, clientId: 'c2', conversationId: 'chat-2' } })]));
+    await waitFor(() => expect(onAgentOwnedChange).toHaveBeenLastCalledWith('tab-1', true, 'chat-2'));
+    expect(onAgentOwnedChange).toHaveBeenCalledTimes(2);
   });
 
   it('a user tab never reports agent-owned', async () => {

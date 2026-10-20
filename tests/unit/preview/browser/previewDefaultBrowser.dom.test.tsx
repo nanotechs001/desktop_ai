@@ -515,19 +515,22 @@ describe('watching a robot opens its chat browser pane', () => {
  */
 describe("a VA Bot's new chat shows the bot's browser tabs", () => {
   const BOT = { kind: 'agent', agentId: 'bot-b' } as const;
-  /** A tab an agent of bot B opened in the scope on screen; main's ownership report marks it agent-owned. */
-  const openBotTab = (url: string): string => {
+  /** A tab an agent of bot B opened in the scope on screen; main's ownership report names the chat that owns it. */
+  const openBotTab = (url: string, ownerChat = 'c1'): string => {
     act(() => ctx.openBrowserTab(url, BOT));
     const id = String(ctx.activeTabId);
-    act(() => ctx.updateTab(id, { metadata: { agentOwned: true } }));
+    act(() => ctx.updateTab(id, { metadata: { agentOwned: true, agentConversationId: ownerChat } }));
     return id;
   };
+  /** The relay hands the tab to another chat of the bot (its agent connected). */
+  const handOver = (id: string, chat: string) =>
+    act(() => ctx.updateTab(id, { metadata: { agentOwned: true, agentConversationId: chat } }));
 
-  it("moves the bot's live agent tabs into its new chat, with no blank tab and no duplicate", () => {
+  it("moves the bot's live agent tabs into the chat that owns them, with no blank tab and no duplicate", () => {
     mount();
     enterScope('/ws/c1', { ...OPEN_BROWSER, conversationId: 'c1', agentId: 'bot-b' });
     const blank = ctx.tabs[0].id;
-    const botTab = openBotTab('https://example.com/cart');
+    const botTab = openBotTab('https://example.com/cart', 'c2');
     act(() => ctx.openBrowserTab('https://example.com/mine', BOT)); // the user's own tab in the bot's profile
     const userTab = String(ctx.activeTabId);
 
@@ -543,17 +546,38 @@ describe("a VA Bot's new chat shows the bot's browser tabs", () => {
       vi.advanceTimersByTime(200);
     });
     expect(storedScope('/ws/c1').tabs.map((tab: { id: string }) => tab.id)).toEqual([blank, userTab]);
+  });
 
-    // Back in the earlier chat, the tab follows the user there.
+  it("returning to an old chat does not pull the tabs the bot's new chat owns (R18)", () => {
+    mount();
     enterScope('/ws/c1', { ...OPEN_BROWSER, conversationId: 'c1', agentId: 'bot-b' });
-    expect(ctx.tabs.map((tab) => tab.id)).toEqual([blank, userTab, botTab]);
+    const blank = ctx.tabs[0].id;
+    const botTab = openBotTab('https://example.com/cart', 'c2');
+    enterScope('/ws/c2', { ...OPEN_BROWSER, conversationId: 'c2', agentId: 'bot-b' });
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([botTab]);
+
+    enterScope('/ws/c1', { ...OPEN_BROWSER, conversationId: 'c1', agentId: 'bot-b' });
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([blank]);
+    expect(ctx.liveBrowserTabs.filter((tab) => tab.id === botTab)).toHaveLength(1); // still live, in the background
+  });
+
+  it('keeps the tabs in the old chat until the relay hands them to the new one, then brings them on screen', () => {
+    mount();
+    enterScope('/ws/c1', { ...OPEN_BROWSER, conversationId: 'c1', agentId: 'bot-b' });
+    const botTab = openBotTab('https://example.com/cart', 'c1');
+
+    enterScope('/ws/c2', { ...OPEN_BROWSER, conversationId: 'c2', agentId: 'bot-b' });
+    expect(ctx.tabs.map((tab) => tab.content)).toEqual([BROWSER_BLANK_URL]); // c1's agent still drives it
+
+    handOver(botTab, 'c2');
+    expect(ctx.tabs.map((tab) => tab.id)).toContain(botTab);
     expect(ctx.liveBrowserTabs.filter((tab) => tab.id === botTab)).toHaveLength(1);
   });
 
   it('takes the bot tabs into a chat of the same scope that is already on screen', () => {
     mount();
     enterScope('/ws/c1', { ...OPEN_BROWSER, conversationId: 'c1', agentId: 'bot-b' });
-    const botTab = openBotTab('https://example.com/cart');
+    const botTab = openBotTab('https://example.com/cart', 'c2');
     act(() => ctx.closeTab(ctx.tabs[0].id)); // the blank tab
     enterScope('/ws/shared', { conversationId: 'x' });
 

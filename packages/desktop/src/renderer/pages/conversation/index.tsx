@@ -40,7 +40,7 @@ const ChatConversationIndex: React.FC = () => {
   const lastEnteredRef = useRef<{ conversationId: string; scope: string | null } | null>(null);
   const conversationId = data?.id;
   const scope = data ? previewScopeOfConversation(data) : null;
-  // A VA Bot's browser tabs belong to the bot: its new chat shows the tabs its earlier chats' agents opened.
+  // A VA Bot's agent tabs come into this chat only once the relay says this chat's agent owns them (ruling R18).
   const agentId = data?.assistant?.id;
   useEffect(() => {
     if (!conversationId) return;

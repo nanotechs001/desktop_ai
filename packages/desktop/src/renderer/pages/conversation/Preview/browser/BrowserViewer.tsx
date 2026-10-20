@@ -72,7 +72,8 @@ export interface BrowserViewerProps {
   /** 是否为当前显示的浏览器 tab / Whether this is the browser tab on screen */
   active?: boolean;
   /** An agent opened this tab (or it stopped being agent-owned); lets the tab strip show an Agent badge */
-  onAgentOwnedChange?: (tabId: string, agentOwned: boolean) => void;
+  /** Ownership changed: whether an agent owns the tab, and the chat whose agent it is (relay ownership). */
+  onAgentOwnedChange?: (tabId: string, agentOwned: boolean, agentConversationId?: string) => void;
   /** The tab list already marks this tab as an agent's (it was opened for one); trusted until ownership is known */
   agentOwnedHint?: boolean;
   /** The browser profile the tab lives in; Personal when absent. Fixed for the tab's life (a new profile is a new tab) */
@@ -117,6 +118,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   const tabWebContentsId = useMemo(() => (webview ? ownWebContentsId(webview) : null), [webview]);
   const { ownership, actions } = useAgentBrowser(tabWebContentsId);
   const agentOwned = ownership !== null && ownership.owner !== 'user';
+  const agentConversationId = ownership && ownership.owner !== 'user' ? ownership.owner.conversationId : undefined;
   // Agents drive their own and shared tabs even while hidden. Chromium routes their (CDP) mouse input by
   // hit-testing the window, so such a tab must stay rendered and hit-testable: transparent and covered (the
   // layer keeps it under the tab on screen, or behind the app), never inert, visibility:hidden or
@@ -127,7 +129,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     : agentReachable
       ? { visibility: 'visible', opacity: 0, pointerEvents: 'auto' }
       : { visibility: 'hidden', pointerEvents: 'none' };
-  const reportedAgentOwned = useRef(agentOwnedHint);
+  const reportedAgentOwned = useRef<{ owned: boolean; chat?: string }>({ owned: agentOwnedHint });
 
   const handleUrlChange = useCallback((next: string) => onUrlChange(tabId, next), [tabId, onUrlChange]);
 
@@ -305,10 +307,11 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   // Only a change is reported, so an ordinary user tab never writes to the tab list; nor does a tab whose
   // ownership is not known yet, which would clear the mark an agent's tab is created with.
   useEffect(() => {
-    if (ownership === null || reportedAgentOwned.current === agentOwned) return;
-    reportedAgentOwned.current = agentOwned;
-    onAgentOwnedChange?.(tabId, agentOwned);
-  }, [ownership, agentOwned, tabId, onAgentOwnedChange]);
+    const reported = reportedAgentOwned.current;
+    if (ownership === null || (reported.owned === agentOwned && reported.chat === agentConversationId)) return;
+    reportedAgentOwned.current = { owned: agentOwned, chat: agentConversationId };
+    onAgentOwnedChange?.(tabId, agentOwned, agentConversationId);
+  }, [ownership, agentOwned, agentConversationId, tabId, onAgentOwnedChange]);
 
   return (
     <div

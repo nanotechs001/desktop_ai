@@ -60,24 +60,32 @@ export const enterScope = (
   };
 };
 
-/** A live tab an agent opened in the VA Bot's own browser profile (not the user's tab in that profile). */
-const isBotAgentTab = (tab: PreviewTab, agentId: string): boolean =>
+/**
+ * A live tab an agent opened in the VA Bot's own browser profile (not the user's tab in that profile), which the
+ * relay says chat `conversationId` owns now.
+ */
+const isBotAgentTab = (tab: PreviewTab, agentId: string, conversationId: string): boolean =>
   isBrowserTab(tab) &&
   tab.metadata?.agentOwned === true &&
+  tab.metadata.agentConversationId === conversationId &&
   tab.metadata.profile?.kind === 'agent' &&
   tab.metadata.profile.agentId === agentId;
 
 /**
- * A VA Bot's agent tabs belong to the bot, not one chat: those parked under other scopes move to `scope`, where a
- * chat of that bot is being entered. Their webviews stay as they are (same tab ids). `moved` keeps the scopes they
- * left, whose stored copies must go.
+ * A VA Bot's agent tabs follow the chat that drives them (ruling R18): those parked under other scopes that the
+ * relay says chat `conversationId` owns move to `scope`, where that chat is on screen. An older chat of the bot gets
+ * none: it cannot drive them. Their webviews stay as they are (same tab ids). `moved` keeps the scopes they left,
+ * whose stored copies must go.
  */
 export const moveBotTabs = (
   background: readonly BackgroundTab[],
   agentId: string,
-  scope: string
+  scope: string,
+  conversationId: string
 ): { background: BackgroundTab[]; moved: BackgroundTab[] } => {
-  const moved = background.filter((entry) => entry.scope !== scope && isBotAgentTab(entry.tab, agentId));
+  const moved = background.filter(
+    (entry) => entry.scope !== scope && isBotAgentTab(entry.tab, agentId, conversationId)
+  );
   return {
     background: background.map((entry) => (moved.includes(entry) ? { ...entry, scope } : entry)),
     moved,
