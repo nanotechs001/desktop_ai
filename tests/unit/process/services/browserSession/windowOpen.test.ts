@@ -69,8 +69,8 @@ const PERSONAL = 'persist:aionui-browser';
 const personalSession = {} as Electron.Session;
 rememberBrowserSession(PERSONAL, personalSession);
 
-const classify = (url: string, disposition: string, features = '') =>
-  classifyWindowOpen({ url, disposition, features });
+const classify = (url: string, disposition: string, features = '', frameName = '') =>
+  classifyWindowOpen({ url, disposition, features, frameName });
 
 const boom = (): never => {
   throw new Error('boom');
@@ -93,6 +93,40 @@ describe('classifyWindowOpen', () => {
       url: 'https://a.test/',
       background: true,
     });
+  });
+
+  it('a named foreground-tab or background-tab request becomes a default-size popup', () => {
+    for (const disposition of ['foreground-tab', 'background-tab']) {
+      expect(classify('https://a.test/', disposition, '', 'loginwin')).toEqual({
+        kind: 'popup',
+        url: 'https://a.test/',
+        width: 600,
+        height: 700,
+      });
+    }
+  });
+
+  it.each(['_blank', '_self', '_parent', '_top', '_BLANK', '_Top', '_Parent'])(
+    'the reserved name %s stays a tab',
+    (frameName) => {
+      expect(classify('https://a.test/', 'foreground-tab', '', frameName)).toMatchObject({ kind: 'tab' });
+    }
+  );
+
+  it('an empty frame name stays a tab', () => {
+    expect(classify('https://a.test/', 'foreground-tab', '', '')).toMatchObject({ kind: 'tab', background: false });
+  });
+
+  it('a sized request stays a popup of that size, named or not', () => {
+    expect(classify('https://a.test/', 'new-window', 'width=500,height=600', 'x')).toMatchObject({
+      kind: 'popup',
+      width: 500,
+      height: 600,
+    });
+  });
+
+  it('a named request to an unsafe url is still denied', () => {
+    expect(classify('javascript:alert(1)', 'foreground-tab', '', 'loginwin')).toEqual({ kind: 'deny' });
   });
 
   it('new-window with width and height features becomes a popup of that size', () => {
@@ -275,7 +309,7 @@ describe('installWindowOpenHandler', () => {
     overrideBrowserWindowOptions?: Electron.BrowserWindowConstructorOptions;
     createWindow?: (options: Electron.BrowserWindowConstructorOptions) => Electron.WebContents;
   };
-  type Handler = (details: { url: string; disposition: string; features: string }) => PopupResult;
+  type Handler = (details: { url: string; disposition: string; features: string; frameName: string }) => PopupResult;
 
   const install = (parent: { isDestroyed: () => boolean } | null, limiter = new OpenLimiter(), id = 1) => {
     const setWindowOpenHandler = vi.fn();
@@ -292,7 +326,7 @@ describe('installWindowOpenHandler', () => {
   it('asks the renderer for a tab and denies the native window', () => {
     const handler = install(null);
 
-    const result = handler({ url: 'https://a.test/', disposition: 'background-tab', features: '' });
+    const result = handler({ url: 'https://a.test/', disposition: 'background-tab', features: '', frameName: '' });
 
     expect(result).toEqual({ action: 'deny' });
     expect(mocks.emit).toHaveBeenCalledWith({
@@ -314,8 +348,8 @@ describe('installWindowOpenHandler', () => {
     );
     const handler = setWindowOpenHandler.mock.calls[0][0] as Handler;
 
-    handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '' });
-    const popup = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup' });
+    handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '', frameName: '' });
+    const popup = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup', frameName: '' });
 
     expect(mocks.emit).toHaveBeenCalledWith({
       url: 'https://a.test/',
@@ -334,7 +368,7 @@ describe('installWindowOpenHandler', () => {
     );
     const handler = setWindowOpenHandler.mock.calls[0][0] as Handler;
 
-    expect(handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup' })).toEqual({
+    expect(handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup', frameName: '' })).toEqual({
       action: 'deny',
     });
   });
@@ -343,7 +377,12 @@ describe('installWindowOpenHandler', () => {
     const parent = liveParent();
     const handler = install(parent);
 
-    const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'width=500,height=600' });
+    const result = handler({
+      url: 'https://a.test/',
+      disposition: 'new-window',
+      features: 'width=500,height=600',
+      frameName: '',
+    });
 
     expect(result.action).toBe('allow');
     expect(result.overrideBrowserWindowOptions).toEqual({
@@ -355,9 +394,31 @@ describe('installWindowOpenHandler', () => {
     expect(mocks.emit).not.toHaveBeenCalled();
   });
 
+  it('opens a named link or window.open as a popup that keeps window.opener, not as a tab', () => {
+    const parent = liveParent();
+    const handler = install(parent);
+
+    const result = handler({
+      url: 'https://a.test/login',
+      disposition: 'foreground-tab',
+      features: '',
+      frameName: 'loginwin',
+    });
+
+    expect(result.action).toBe('allow');
+    result.createWindow?.({ webContents: { id: 9 } as unknown as Electron.WebContents });
+    expect(mocks.windows.at(-1)?.options).toMatchObject({ parent, width: 600, height: 700 });
+    expect(mocks.emit).not.toHaveBeenCalled();
+  });
+
   it('builds the popup window from our options only: page features never reach it', () => {
     const handler = install(liveParent());
-    const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'width=500,height=600' });
+    const result = handler({
+      url: 'https://a.test/',
+      disposition: 'new-window',
+      features: 'width=500,height=600',
+      frameName: '',
+    });
     const guest = { id: 9 } as unknown as Electron.WebContents;
     // What Electron hands createWindow: the page's parsed features merged into the options.
     const pageFeatures = { show: false, opacity: 0.01, minWidth: 5000, type: 'panel', titleBarStyle: 'hidden' };
@@ -375,7 +436,7 @@ describe('installWindowOpenHandler', () => {
   it('does not parent a popup to a destroyed window', () => {
     const handler = install({ isDestroyed: () => true });
 
-    const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup' });
+    const result = handler({ url: 'https://a.test/', disposition: 'new-window', features: 'popup', frameName: '' });
     result.createWindow?.({ webContents: { id: 9 } as unknown as Electron.WebContents });
 
     expect(result.action).toBe('allow');
@@ -391,8 +452,8 @@ describe('installWindowOpenHandler', () => {
     try {
       const handler = install(liveParent(), new OpenLimiter(), 4);
 
-      handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '' });
-      const result = handler({ url: 'https://b.test/', disposition: 'new-window', features: 'popup' });
+      handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '', frameName: '' });
+      const result = handler({ url: 'https://b.test/', disposition: 'new-window', features: 'popup', frameName: '' });
       const created = result.createWindow?.({ webContents: { id: 12 } as unknown as Electron.WebContents });
 
       expect(tabRequested).toHaveBeenCalledWith(4, 'https://a.test/', PERSONAL);
@@ -414,8 +475,8 @@ describe('installWindowOpenHandler', () => {
     try {
       const handler = install(liveParent());
 
-      handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '' });
-      const result = handler({ url: 'https://b.test/', disposition: 'new-window', features: 'popup' });
+      handler({ url: 'https://a.test/', disposition: 'foreground-tab', features: '', frameName: '' });
+      const result = handler({ url: 'https://b.test/', disposition: 'new-window', features: 'popup', frameName: '' });
       const created = result.createWindow?.({ webContents: { id: 13 } as unknown as Electron.WebContents });
 
       expect(mocks.emit).toHaveBeenCalledWith({
@@ -433,9 +494,11 @@ describe('installWindowOpenHandler', () => {
   it('denies an unsafe scheme without opening anything', () => {
     const handler = install(null);
 
-    expect(handler({ url: 'javascript:alert(1)', disposition: 'foreground-tab', features: '' })).toEqual({
-      action: 'deny',
-    });
+    expect(handler({ url: 'javascript:alert(1)', disposition: 'foreground-tab', features: '', frameName: '' })).toEqual(
+      {
+        action: 'deny',
+      }
+    );
     expect(mocks.emit).not.toHaveBeenCalled();
   });
 });
@@ -482,7 +545,7 @@ describe('OpenLimiter', () => {
 });
 
 describe('installWindowOpenHandler popup blocking', () => {
-  type Handler = (details: { url: string; disposition: string; features: string }) => {
+  type Handler = (details: { url: string; disposition: string; features: string; frameName: string }) => {
     action: string;
     createWindow?: (options: Electron.BrowserWindowConstructorOptions) => Electron.WebContents;
   };
@@ -495,8 +558,9 @@ describe('installWindowOpenHandler popup blocking', () => {
     );
     return setWindowOpenHandler.mock.calls[0][0] as Handler;
   };
-  const popup = { url: 'https://a.test/', disposition: 'new-window', features: 'popup' };
-  const tab = { url: 'https://a.test/', disposition: 'foreground-tab', features: '' };
+  const popup = { url: 'https://a.test/', disposition: 'new-window', features: 'popup', frameName: '' };
+  const tab = { url: 'https://a.test/', disposition: 'foreground-tab', features: '', frameName: '' };
+  const named = { url: 'https://a.test/', disposition: 'foreground-tab', features: '', frameName: 'loginwin' };
 
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -511,6 +575,15 @@ describe('installWindowOpenHandler popup blocking', () => {
     expect(handler(popup)).toEqual({ action: 'deny' });
     mocks.windows[0].handlers.get('closed')?.();
     expect(handler(popup).action).toBe('allow');
+  });
+
+  it('a named window counts against the popup limit like any popup', () => {
+    const handler = install(new OpenLimiter());
+
+    const actions = [1, 2, 3].map(() => handler(named).action);
+
+    expect(actions).toEqual(['allow', 'allow', 'deny']);
+    expect(mocks.emit).not.toHaveBeenCalled();
   });
 
   it('a burst of window.open calls is capped before any window exists', () => {
@@ -849,7 +922,12 @@ describe('popup window title', () => {
       disposition: string;
       features: string;
     }) => { createWindow?: (options: Electron.BrowserWindowConstructorOptions) => Electron.WebContents };
-    handler({ url: 'https://login.example.com/', disposition: 'new-window', features: 'popup' }).createWindow?.({
+    handler({
+      url: 'https://login.example.com/',
+      disposition: 'new-window',
+      features: 'popup',
+      frameName: '',
+    }).createWindow?.({
       webContents: { id: 10 } as unknown as Electron.WebContents,
     } as Electron.BrowserWindowConstructorOptions);
     const popup = mocks.windows.at(-1) as FakeWindow & { setTitle: ReturnType<typeof vi.fn> };

@@ -17,7 +17,7 @@ export type WindowOpenDecision =
   | { kind: 'popup'; url: string; width: number; height: number }
   | { kind: 'deny' };
 
-type WindowOpenDetails = { url: string; disposition: string; features: string };
+type WindowOpenDetails = { url: string; disposition: string; features: string; frameName: string };
 type PopupSize = { width: number; height: number };
 type Area = { x: number; y: number; width: number; height: number };
 /** Electron hands createWindow the new guest as `options.webContents` and takes it back the same way; its types omit the key. */
@@ -28,6 +28,9 @@ const POPUP_WIDTH_RANGE = { min: 400, max: 1400 };
 const POPUP_HEIGHT_RANGE = { min: 300, max: 1000 };
 /** Values of the `popup` feature that mean "off", per the HTML window features rules. */
 const POPUP_OFF_VALUES = new Set(['0', 'no', 'false']);
+
+/** `window.open` / `target` names that mean "a new unnamed context" or "this one", not a window to find or create. */
+const RESERVED_TARGETS = new Set(['_blank', '_self', '_parent', '_top']);
 
 const MAX_POPUPS_PER_OPENER = 2;
 const MAX_POPUPS_TOTAL = 5;
@@ -128,15 +131,19 @@ const toPositiveInt = (value: string | undefined): number | undefined => {
 
 /**
  * Decides how the in-app browser handles a page's request to open a URL.
- * Links and plain `window.open` become tabs; requests that ask for a window (a `new-window`
- * disposition, the `popup` feature, or a size) become popups so `window.opener` keeps working
- * for sign-in flows; anything that is not http(s) or about:blank is denied.
+ * Unnamed links and plain `window.open` become tabs; requests that ask for a window (a `new-window`
+ * disposition, the `popup` feature, or a size) or name one (`window.open(url, 'login')`, `target="login"`)
+ * become popups so `window.opener` keeps working for sign-in flows; anything that is not http(s) or
+ * about:blank is denied. Reusing a name needs nothing here: Chromium navigates the open window of that name
+ * without asking the handler again (checked in Electron 44).
  */
 export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecision {
   const { url, disposition } = details;
   if (!isSafeUrl(url)) return { kind: 'deny' };
   if (disposition === 'foreground-tab' || disposition === 'background-tab') {
-    return { kind: 'tab', url, background: disposition === 'background-tab' };
+    const named = details.frameName !== '' && !RESERVED_TARGETS.has(details.frameName.toLowerCase());
+    if (!named) return { kind: 'tab', url, background: disposition === 'background-tab' };
+    return { kind: 'popup', url, ...DEFAULT_POPUP_SIZE };
   }
 
   const features = parseFeatures(details.features);
