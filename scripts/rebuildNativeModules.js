@@ -187,6 +187,14 @@ function rebuildSingleModule(options) {
   const normalizedBuildArch = normalizeArch(buildArch);
   const isCrossCompile = normalizedBuildArch !== targetArch;
 
+  // better-sqlite3 13+ ships N-API prebuilds (prebuilds/<platform>-<arch>.node) that load in any Electron
+  // version and that its loader prefers over build/, so there is nothing to rebuild.
+  const napiPrebuild = path.join(moduleRoot, 'prebuilds', `${platform}-${targetArch}.node`);
+  if (fs.existsSync(napiPrebuild)) {
+    console.log(`     ✓ Found N-API prebuild ${napiPrebuild}, skipping rebuild`);
+    return true;
+  }
+
   const env = buildEnvironment(platform, targetArch, electronVersion);
   env.npm_config_platform = platform;
   env.npm_config_target_platform = platform;
