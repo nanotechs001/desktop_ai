@@ -8,7 +8,7 @@ import type { TabOwnership } from '@/common/types/browser';
 import { targetIdFor, type RelayTargetInfo } from '../targetRegistry';
 
 /** A tab the WebUI may list, in the shape `GET /api/browser-view/tabs` returns. */
-export type ViewTab = { id: string; title: string; url: string; paused: boolean };
+export type ViewTab = { id: string; title: string; url: string };
 
 /** Only agent-owned or agent-shared tabs may be listed, streamed or controlled. */
 export const isViewable = (o: TabOwnership): boolean => o.owner !== 'user' || o.sharedWith === 'all';
@@ -21,5 +21,5 @@ export const viewableTabs = (all: TabOwnership[], targets: RelayTargetInfo[], co
   all.flatMap((o) => {
     if (!isViewable(o) || o.owner === 'user' || o.owner.conversationId !== conversationId) return [];
     const target = targets.find((t) => t.targetId === targetIdFor(o.webContentsId));
-    return target ? [{ id: target.targetId, title: target.title, url: target.url, paused: o.paused }] : [];
+    return target ? [{ id: target.targetId, title: target.title, url: target.url }] : [];
   });

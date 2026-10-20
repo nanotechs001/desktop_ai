@@ -106,8 +106,6 @@ export type TabOwnership = {
   owner: 'user' | { clientId: string; label: string; conversationId?: string };
   /** 'all' once the user clicked "Share with agent": agent clients of the tab's profile may act on it (see mayAct). */
   sharedWith: 'all' | null;
-  /** The user took over (typed or clicked) an agent or shared tab; agent input is refused until resume. */
-  paused: boolean;
   /** The browser profile the tab lives in; sharing an Agent-profile tab reaches only that Agent's clients. */
   profile: BrowserTabProfile;
 };

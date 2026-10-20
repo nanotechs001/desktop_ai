@@ -16,11 +16,10 @@ export type LiveClientMessage =
   | { type: 'tap'; nx: number; ny: number }
   | { type: 'scroll'; nx: number; ny: number; dy: number }
   | { type: 'text'; value: string }
-  | { type: 'key'; key: LiveKey }
-  | { type: 'resume' };
+  | { type: 'key'; key: LiveKey };
 
 export type LiveStatus = 'connecting' | 'live' | 'no-frames' | 'stopped';
-export type LiveTabInfo = { title: string; url: string; paused: boolean };
+export type LiveTabInfo = { title: string; url: string };
 
 const RECONNECT_DELAYS_MS = [1000, 3000, 10_000];
 /** 1001 the tab closed, 1008 not allowed or revoked: reconnecting cannot help. */
@@ -33,13 +32,12 @@ const parseTabInfo = (raw: string): LiveTabInfo | 'no-frames' | null => {
   try {
     const message: unknown = JSON.parse(raw);
     if (typeof message !== 'object' || message === null) return null;
-    const { type, title, url, paused } = message as Record<string, unknown>;
+    const { type, title, url } = message as Record<string, unknown>;
     if (type === 'no-frames') return 'no-frames';
     if (type !== 'tab') return null;
     return {
       title: typeof title === 'string' ? title : '',
       url: typeof url === 'string' ? url : '',
-      paused: paused === true,
     };
   } catch {
     return null;

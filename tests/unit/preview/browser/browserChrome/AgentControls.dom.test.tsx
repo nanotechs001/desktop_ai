@@ -32,7 +32,6 @@ const userTab = (profile: BrowserTabProfile, sharedWith: 'all' | null = null): T
   webContentsId: 3,
   owner: 'user',
   sharedWith,
-  paused: false,
   profile,
 });
 

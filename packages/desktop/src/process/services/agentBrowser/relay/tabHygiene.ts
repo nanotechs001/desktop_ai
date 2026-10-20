@@ -32,7 +32,7 @@ export type TabHygiene = {
 
 /**
  * Keeps agents from piling up tabs: a per-chat cap and an idle sweep every minute. Only a closable tab is ever
- * closed: agent-owned, not shared, not taken over, not on screen. "Used" is the registry's last use (an agent
+ * closed: agent-owned, not shared, not on screen. "Used" is the registry's last use (an agent
  * command or user input on the tab).
  */
 export function startTabHygiene({ registry, closeTab, shownTab }: TabHygieneDeps): TabHygiene {
@@ -42,7 +42,7 @@ export function startTabHygiene({ registry, closeTab, shownTab }: TabHygieneDeps
 
   const closable = (webContentsId: number): boolean => {
     const tab = registry.ownership(webContentsId);
-    if (!tab || tab.owner === 'user' || tab.paused || tab.sharedWith !== null) return false;
+    if (!tab || tab.owner === 'user' || tab.sharedWith !== null) return false;
     return !closing.has(webContentsId) && webContentsId !== shownTab();
   };
   const chatOf = (webContentsId: number): string | undefined => {

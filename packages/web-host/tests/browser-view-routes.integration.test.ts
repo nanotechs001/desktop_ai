@@ -21,7 +21,7 @@ import {
   type FakeBackend,
 } from './fixtures/fake-aioncore.js';
 
-const TABS = [{ id: 'wc-7', title: 'Example', url: 'https://example.com/', paused: false }];
+const TABS = [{ id: 'wc-7', title: 'Example', url: 'https://example.com/' }];
 
 type FakeRoutes = BrowserViewRoutes & {
   peers: BrowserViewPeer[];

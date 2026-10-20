@@ -6,14 +6,7 @@
 
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
 import { isRiskyLabel } from '@process/services/agentBrowser/confirmGate';
-import {
-  MAX_OPTION_LENGTH,
-  baselineOf,
-  frameBaseline,
-  isPausedRefusal,
-  rememberBaselines,
-  snapshotFrame,
-} from './actionSpace';
+import { MAX_OPTION_LENGTH, baselineOf, frameBaseline, rememberBaselines, snapshotFrame } from './actionSpace';
 import { FRAME_TIMEOUT_MS, collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
 import { sanitizePageText } from '@/common/utils/utils';
 import {
@@ -72,7 +65,7 @@ export const ACT_KEYS = Object.keys(PRESS_KEYS).concat(SCROLL_DIRECTIONS) as [st
 export type ActOp = (typeof ACT_OPS)[number];
 export type DragPosition = (typeof DRAG_POSITIONS)[number];
 export type ActStep = { op: ActOp; target?: string; text?: string; key?: string };
-export type Outcome = { result: 'done' | 'stale' | 'paused' | 'denied' | 'error'; reason?: string };
+export type Outcome = { result: 'done' | 'stale' | 'denied' | 'error'; reason?: string };
 export type StepResult = { op: ActOp; target?: string } & Outcome;
 
 /** Wait after input when the page shows no frame (spec §4: two animation frames or 50 ms). */
@@ -215,7 +208,7 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
     callIn(ctx.conn, frame, RESOLVE_TARGET, values(node, baseline.pageKey, guard, hitTest)),
     FRAME_TIMEOUT_MS,
     'The target check'
-  ).catch(staleUnlessPaused);
+  ).catch(staleUnlessStep);
   const found = parseResolved(value);
   if (typeof found === 'string') throw new StepError('stale', found);
   const rect = { ...found.rect, x: found.rect.x + frame.offset.x, y: found.rect.y + frame.offset.y };
@@ -225,9 +218,9 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   return { ...found, id, frame, isTop: frame === frames[0], node, rect, point };
 }
 
-/** A failed freshness call means the document changed (e.g. went away mid-call); the user taking over stays paused. */
-const staleUnlessPaused = (error: unknown): never => {
-  if (isPausedRefusal(error) || error instanceof StepError) throw error;
+/** A failed freshness call means the document changed (e.g. went away mid-call). */
+const staleUnlessStep = (error: unknown): never => {
+  if (error instanceof StepError) throw error;
   throw new StepError('stale', 'the page changed since observe');
 };
 
@@ -255,7 +248,7 @@ async function checkOwners(ctx: ActionContext, frames: FrameHandle[], frame: Fra
       const at = { x: point.x - root.offset.x, y: point.y - root.offset.y };
       return callIn(ctx.conn, root, OWNER_HIT, [{ objectId: object.objectId }, ...values(at.x, at.y)]);
     })();
-    const shown = await withTimeout(check, FRAME_TIMEOUT_MS, 'The cover check').catch(staleUnlessPaused);
+    const shown = await withTimeout(check, FRAME_TIMEOUT_MS, 'The cover check').catch(staleUnlessStep);
     if (shown !== true) throw new StepError('stale', 'the target is covered by another element');
   }
 }
@@ -363,11 +356,10 @@ const signature = (items: Labeled[]): string =>
 
 /**
  * Runs one of our in-page checks for the gate. One that fails or times out ends the step as `stale`: input never
- * goes out unchecked. The user taking over stays `paused`.
+ * goes out unchecked.
  */
 const checkIn = (ctx: ActionContext, frame: FrameHandle, fn: string, args: CallArgument[]): Promise<unknown> =>
-  withTimeout(callIn(ctx.conn, frame, fn, args), FRAME_TIMEOUT_MS, 'The check').catch((error: unknown): never => {
-    if (isPausedRefusal(error)) throw error;
+  withTimeout(callIn(ctx.conn, frame, fn, args), FRAME_TIMEOUT_MS, 'The check').catch((): never => {
     throw new StepError('stale', CHECK_FAILED);
   });
 
@@ -508,7 +500,7 @@ async function selectOption(ctx: ActionContext, first: Target, text: string): Pr
     callIn(ctx.conn, t.frame, SELECT_OPTION, values(t.node, optionFor(t, text))),
     FRAME_TIMEOUT_MS,
     'Choosing the option'
-  ).catch(staleUnlessPaused);
+  ).catch(staleUnlessStep);
   if (chose !== true) {
     throw new StepError('stale', 'the dropdown changed since observe');
   }
@@ -553,7 +545,7 @@ async function scroll(ctx: ActionContext, step: ActStep): Promise<FrameHandle | 
   return frame;
 }
 
-/** Runs `run`, turning what it throws into an outcome; the user taking over is `paused`, never an error. */
+/** Runs `run`, turning what it throws into an outcome. */
 async function attempt(
   run: () => Promise<FrameHandle | null>
 ): Promise<{ outcome: Outcome; frame: FrameHandle | null }> {
@@ -561,7 +553,7 @@ async function attempt(
     return { outcome: { result: 'done' }, frame: await run() };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    const result = error instanceof StepError ? error.result : isPausedRefusal(error) ? 'paused' : 'error';
+    const result = error instanceof StepError ? error.result : 'error';
     return { outcome: { result, reason }, frame: null };
   }
 }
@@ -569,10 +561,8 @@ async function attempt(
 /** Re-reads `frame` after an action: the new baseline for the next one, and whether its controls changed. */
 async function rebaseline(ctx: ActionContext, frame: FrameHandle): Promise<boolean> {
   const before = frameBaseline(ctx.conn, ctx.sessionId, frame.frameKey);
-  const snapshot = await snapshotFrame(ctx.conn, frame).catch((error: unknown): null => {
-    if (isPausedRefusal(error)) throw error;
-    return null; // the document went away (e.g. the click navigated): that is a change
-  });
+  // null: the document went away (e.g. the click navigated), which is a change.
+  const snapshot = await snapshotFrame(ctx.conn, frame).catch((): null => null);
   if (!snapshot) return true;
   const after = baselineOf(snapshot);
   rememberBaselines(ctx.conn, ctx.sessionId, [[frame.frameKey, after]]);
@@ -582,8 +572,6 @@ async function rebaseline(ctx: ActionContext, frame: FrameHandle): Promise<boole
 const notRun = (left: number): string => (left ? ` ${left} more action${left === 1 ? '' : 's'} not run.` : '');
 
 const stopNote = (outcome: Outcome, left: number): string => {
-  if (outcome.result === 'paused')
-    return `The user took over this tab; wait for them to resume, then observe again.${notRun(left)}`;
   if (outcome.result === 'denied') {
     return `The user denied this action; do not retry it or work around it unless they ask.${notRun(left)}`;
   }
@@ -612,8 +600,8 @@ export async function act(
       if ((await rebaseline(ctx, frame)) && stopOnChange) {
         return { results, stopped: `The page changed; observe again.${notRun(left)}` };
       }
-    } catch (error) {
-      return { results, stopped: stopNote({ result: isPausedRefusal(error) ? 'paused' : 'error' }, left) };
+    } catch {
+      return { results, stopped: stopNote({ result: 'error' }, left) };
     }
   }
   return { results };
@@ -791,7 +779,6 @@ export async function clickPoint(ctx: ActionContext, x: number, y: number): Prom
     await click(ctx, { x, y });
   } catch (error) {
     if (error instanceof StepError) return { result: error.result, reason: error.message };
-    if (isPausedRefusal(error)) return { result: 'paused', reason: stopNote({ result: 'paused' }, 0) };
     throw error;
   }
   await reportSafely(ctx, {

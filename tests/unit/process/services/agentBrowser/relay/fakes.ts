@@ -39,7 +39,6 @@ export class FakeContents extends EventEmitter {
   readonly reloadIgnoringCache = vi.fn();
   private destroyed = false;
 
-  zoom = 1;
   /** A navigation that has started but not committed: `getURL()` shows it, the main frame does not. */
   pendingUrl: string | null = null;
 
@@ -54,10 +53,6 @@ export class FakeContents extends EventEmitter {
 
   getType(): string {
     return this.type;
-  }
-
-  getZoomFactor(): number {
-    return this.zoom;
   }
 
   /** Emits the tab's first main-frame navigation the way Electron does. */

@@ -10,7 +10,6 @@ import type { BrowserShortcutAction, BrowserTabProfile } from '@/common/types/br
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { isPlatformPrimaryModifier } from '@/renderer/utils/ui/keyboardShortcuts';
 import { useOptionalPreviewContext } from '../context/PreviewContext';
-import AgentBanner from './BrowserChrome/AgentBanner';
 import AgentControls from './BrowserChrome/AgentControls';
 import AgentOverlay from './BrowserChrome/AgentOverlay';
 import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
@@ -373,11 +372,6 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
           </div>
         )}
         <AgentOverlay action={actions[actions.length - 1] ?? null} />
-        {tabWebContentsId !== null && ownership?.paused && (
-          <div className='absolute top-48px start-1/2 z-20 -translate-x-1/2'>
-            <AgentBanner webContentsId={tabWebContentsId} />
-          </div>
-        )}
         {findOpen && webview && (
           <div className='absolute top-48px end-16px z-20'>
             <FindBar webview={webview} onClose={closeFind} focusToken={findFocusToken} />

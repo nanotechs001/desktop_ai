@@ -1444,8 +1444,6 @@ export const agentBrowser = {
   agentAction: bridge.buildEmitter<AgentActionEvent>('agent-browser.agent-action'),
   // "Share with agent" toggle: on lets every agent client drive this user tab
   share: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; on: boolean }>('agent-browser.share'),
-  // clears the take-over pause so agents may send input to the tab again
-  resume: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>('agent-browser.resume'),
   getOwnership: bridge.buildProvider<IBridgeResponse<TabOwnership[]>, void>('agent-browser.get-ownership'),
   // main → renderer: every risky agent action waiting for Allow or Deny, on every change
   confirmRequested: bridge.buildEmitter<ConfirmRequest[]>('agent-browser.confirm-requested'),

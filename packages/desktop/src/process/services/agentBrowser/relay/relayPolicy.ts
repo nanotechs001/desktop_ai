@@ -11,7 +11,7 @@
  * The relay's job is therefore:
  *   (a) keep web pages and non-app processes out (loopback, token, no Origin, no HTTP discovery);
  *   (b) give the MCP tools (our code) a minimal, safe CDP surface (this file);
- *   (c) keep the user in control: ownership, take-over pause and confirmation.
+ *   (c) keep the user in control: ownership and confirmation.
  * No per-origin approval, by design. Each Agent browses in its own profile (Task 14), and sharing reaches only the
  * shared tab's profile (ruling N-16).
  *
@@ -151,11 +151,6 @@ const ALLOWED_PARAMS: Readonly<Record<string, ReadonlySet<string>>> = {
   'Input.dispatchDragEvent': keys('type', 'x', 'y', 'data', 'modifiers'),
 };
 
-/** Refused while the user has taken over the tab. */
-const PAUSED_PREFIXES = ['Input.', 'Runtime.'];
-// Everything that moves the page or answers its dialogs (a beforeunload "Leave" navigates too).
-const PAUSED_METHODS = new Set(['Page.navigate', 'Page.reload', 'Page.stopLoading', 'Page.handleJavaScriptDialog']);
-
 const ALLOWED = { allow: true } as const;
 const deny = (message: string): PolicyDecision => ({ allow: false, code: POLICY_ERROR_CODE, message });
 
@@ -211,7 +206,7 @@ const decideValues = (ctx: PolicyContext): PolicyDecision => {
 
 /**
  * Decides whether an agent's command on a tab session may reach the page (spec §3.2): the method and
- * param allowlist, tab ownership, the user take-over pause, own isolated worlds and safe navigation.
+ * param allowlist, tab ownership, own isolated worlds and safe navigation.
  */
 export function decideRelayCommand(ctx: PolicyContext): PolicyDecision {
   const { method, params, tab } = ctx;
@@ -221,10 +216,5 @@ export function decideRelayCommand(ctx: PolicyContext): PolicyDecision {
   if (unknown) return deny(`${method}: param "${unknown}" is not allowed for agents`);
   if (!tab) return deny('No such target: the tab is gone');
   if (!mayAct(tab, ctx.client)) return deny('This tab is not shared with agents');
-  // Switching drag interception off ends an agent drag the user interrupted; left on, it would eat the user's drags.
-  const endsDrag = method === 'Input.setInterceptDrags' && params.enabled === false;
-  const pausable =
-    !endsDrag && (PAUSED_METHODS.has(method) || PAUSED_PREFIXES.some((prefix) => method.startsWith(prefix)));
-  if (tab.paused && pausable) return deny('Paused: the user took over this tab. Wait for the user to resume.');
   return decideValues(ctx);
 }

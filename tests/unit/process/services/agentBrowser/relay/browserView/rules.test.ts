@@ -8,12 +8,11 @@ const tab = (webContentsId: number, patch: Partial<TabOwnership> = {}): TabOwner
   webContentsId,
   owner: 'user',
   sharedWith: null,
-  paused: false,
   profile: PERSONAL,
   ...patch,
 });
-const agentTab = (id: number, conversationId?: string, patch: Partial<TabOwnership> = {}): TabOwnership =>
-  tab(id, { owner: { clientId: `c${id}`, label: 'claude', conversationId }, ...patch });
+const agentTab = (id: number, conversationId?: string): TabOwnership =>
+  tab(id, { owner: { clientId: `c${id}`, label: 'claude', conversationId } });
 const target = (id: number): RelayTargetInfo => ({
   targetId: `wc-${id}`,
   type: 'page',
@@ -32,17 +31,11 @@ describe('isViewable', () => {
 });
 
 describe('viewableTabs', () => {
-  it("keeps only the conversation's agent tabs, with title, url and paused", () => {
-    const all = [
-      tab(1),
-      agentTab(2, 'conv'),
-      agentTab(3, 'other'),
-      agentTab(4, undefined),
-      agentTab(5, 'conv', { paused: true }),
-    ];
+  it("keeps only the conversation's agent tabs, with title and url", () => {
+    const all = [tab(1), agentTab(2, 'conv'), agentTab(3, 'other'), agentTab(4, undefined), agentTab(5, 'conv')];
     expect(viewableTabs(all, [1, 2, 3, 4, 5].map(target), 'conv')).toEqual([
-      { id: 'wc-2', title: 'Title 2', url: 'https://example.com/2', paused: false },
-      { id: 'wc-5', title: 'Title 5', url: 'https://example.com/5', paused: true },
+      { id: 'wc-2', title: 'Title 2', url: 'https://example.com/2' },
+      { id: 'wc-5', title: 'Title 5', url: 'https://example.com/5' },
     ]);
   });
 

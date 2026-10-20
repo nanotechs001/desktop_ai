@@ -86,9 +86,9 @@ export const frame = (): ArrayBuffer => {
 };
 
 export type Tab = { id: string; title: string; url: string; paused: boolean };
-export const TAB_ONE: Tab = { id: 'wc-1', title: 'One', url: 'https://one.example/', paused: false };
-export const TAB_TWO: Tab = { id: 'wc-2', title: 'Two', url: 'https://two.example/', paused: false };
-export const TAB_THREE: Tab = { id: 'wc-3', title: '', url: 'https://three.example/path?q=1', paused: false };
+export const TAB_ONE: Tab = { id: 'wc-1', title: 'One', url: 'https://one.example/' };
+export const TAB_TWO: Tab = { id: 'wc-2', title: 'Two', url: 'https://two.example/' };
+export const TAB_THREE: Tab = { id: 'wc-3', title: '', url: 'https://three.example/path?q=1' };
 
 /** What the tabs route answers; tests reassign it. */
 export const route = { tabs: [TAB_ONE] as Tab[] };

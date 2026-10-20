@@ -83,10 +83,6 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
       </Button>
     ) : status === 'no-frames' ? (
       <div className='text-13px text-t-secondary text-center'>{t('preview.browser.liveNoFrames')}</div>
-    ) : shown?.paused ? (
-      <Button long type='primary' onClick={() => send({ type: 'resume' })}>
-        {t('preview.browser.livePaused')}
-      </Button>
     ) : status === 'connecting' ? (
       <div className='text-13px text-t-secondary text-center'>{t('preview.browser.liveConnecting')}</div>
     ) : null;

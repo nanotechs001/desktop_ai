@@ -67,12 +67,11 @@ describe('per-chat agent tab cap', () => {
     expect(closeTab).not.toHaveBeenCalled();
   });
 
-  it('never closes a paused, shared, user or on-screen tab, and asks to close a tab only once', () => {
+  it('never closes a shared, user or on-screen tab, and asks to close a tab only once', () => {
     agentTab(1);
     agentTab(2);
     agentTab(3);
     agentTab(4);
-    registry.setPaused(1, true);
     registry.share(2, true);
     shown = 3;
     const user = new FakeContents(9);
@@ -116,12 +115,10 @@ describe('idle sweep', () => {
     expect(closeTab.mock.calls).toEqual([[1], [2]]);
   });
 
-  it('never sweeps a shared, paused or on-screen tab, nor a user tab', () => {
+  it('never sweeps a shared or on-screen tab, nor a user tab', () => {
     agentTab(1);
-    agentTab(2);
     agentTab(3);
     registry.share(1, true);
-    registry.setPaused(2, true);
     shown = 3;
     registry.track(new FakeContents(9));
     hygiene.adopt(9);

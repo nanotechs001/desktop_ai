@@ -30,8 +30,6 @@ const MAX_FRAME_LABEL_LENGTH = 80;
 const MAX_OPTIONS = 50;
 const STATE_KEYS = ['checked', 'selected', 'expanded'] as const;
 const STATE_VALUES = new Set(['true', 'false', 'mixed']);
-/** The relay's refusal while the user has taken over the tab: the world is fine, so keep it (and its key). */
-const PAUSED_PREFIX = 'Paused:';
 /** Roles whose value is what the user typed or picked (a checkbox's value is just "on"). */
 const VALUE_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobox']);
 
@@ -259,9 +257,6 @@ export const snapshotFrame = async (conn: CdpConnection, frame: FrameHandle): Pr
   return reply.result?.value === null ? empty : parseSnapshot(reply.result?.value);
 };
 
-export const isPausedRefusal = (error: unknown): boolean =>
-  error instanceof Error && error.message.startsWith(PAUSED_PREFIX);
-
 const describeFailure = ({ frameKey, label }: FrameFailure): string =>
   frameKey ?? JSON.stringify(sanitizePageText(label, MAX_FRAME_LABEL_LENGTH));
 
@@ -269,7 +264,7 @@ const describeFailure = ({ frameKey, label }: FrameFailure): string =>
  * Observes the tab behind `pageSessionId`: one snapshot per visible frame, all in parallel, merged into one table.
  * `scope` (a frame label or key) limits the snapshots to matching frames. A frame that fails or does not answer
  * within {@link FRAME_TIMEOUT_MS} is reported and the others still return; when the top frame or no frame can be read,
- * it throws ({@link PAGE_NOT_READABLE}, or the relay's refusal when the user took over). Remembers each read frame's
+ * it throws ({@link PAGE_NOT_READABLE}, or the frames' own error when none can be read). Remembers each read frame's
  * baseline for act. Never takes a screenshot.
  */
 export async function observePage(
@@ -293,15 +288,12 @@ export async function observePage(
     }
     failed.push(frame.frameKey);
     // A stale or broken world must not break this document for good; the next observe gets a new world and key.
-    if (result.status === 'fulfilled' || !isPausedRefusal(result.reason))
-      forgetWorld(conn, pageSessionId, frame.frameKey);
+    forgetWorld(conn, pageSessionId, frame.frameKey);
   });
-  // Without the top document an observation would be empty, not true (the user taking over is said as such).
+  // Without the top document an observation would be empty, not true.
   const top = results[chosen.indexOf(frames[0])];
-  if (top && !(top.status === 'fulfilled' && top.value)) {
-    throw top.status === 'rejected' && isPausedRefusal(top.reason) ? top.reason : new Error(PAGE_NOT_READABLE);
-  }
-  // Nothing readable at all (e.g. the relay refused because the user took over): say why instead of listing keys.
+  if (top && !(top.status === 'fulfilled' && top.value)) throw new Error(PAGE_NOT_READABLE);
+  // Nothing readable at all (e.g. the relay refused): say why instead of listing keys.
   const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (firstError && results.every((r) => r.status === 'rejected')) throw firstError.reason;
   rememberBaselines(

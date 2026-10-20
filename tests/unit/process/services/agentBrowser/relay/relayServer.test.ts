@@ -586,10 +586,6 @@ describe('relay server: sessions', () => {
     expect((await client.send('Runtime.evaluate', { expression: '1', contextId: 77 }, session)).error).toBeDefined();
     await client.send('Page.createIsolatedWorld', { frameId: 'F', worldName: 'aion' }, session);
     expect((await client.send('Runtime.evaluate', { expression: '1', contextId: 77 }, session)).error).toBeUndefined();
-
-    registry.setPaused(12, true);
-    expect((await client.send('Input.insertText', { text: 'x' }, session)).error?.message).toContain('user took over');
-    expect(tab.debugger.sendCommand).not.toHaveBeenCalledWith('Input.insertText', expect.anything());
   });
 
   it('forgets own isolated worlds when the top frame navigates to a new document', async () => {
@@ -625,51 +621,6 @@ describe('relay server: sessions', () => {
     expect(tab.reloadIgnoringCache).toHaveBeenCalledTimes(1);
     expect(tab.debugger.sendCommand).not.toHaveBeenCalledWith('Page.reload', expect.anything());
     expect((await client.send('Page.reload', { scriptToEvaluateOnLoad: 'x' }, session)).error).toBeDefined();
-  });
-
-  it('marks an agent mousePressed in flight so its own mouseDown does not pause the tab, but a user click does', async () => {
-    const handle = await start();
-    const client = await connect(handle);
-    const tab = ownedTab(13, 'claude');
-    const session = await attach(client, 13);
-    // Electron fires before-mouse-event for CDP mouse input while the command is pending.
-    tab.debugger.handler = () => {
-      registry.noteUserInput(13, { kind: 'mouse', x: 10.5, y: 21 });
-      return {};
-    };
-    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 10, y: 20 }, session);
-    expect(registry.ownership(13)?.paused).toBe(false);
-
-    // A user click elsewhere while an agent click is still pending pauses the tab.
-    tab.debugger.handler = () => {
-      registry.noteUserInput(13, { kind: 'mouse', x: 200, y: 300 });
-      return {};
-    };
-    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 10, y: 20 }, session);
-    expect(registry.ownership(13)?.paused).toBe(true);
-  });
-
-  it('marks an agent keyDown and rawKeyDown in flight so their own keyDown does not pause the tab, but a user key does', async () => {
-    const handle = await start();
-    const client = await connect(handle);
-    const tab = ownedTab(14, 'claude');
-    const session = await attach(client, 14);
-    // Electron reports both CDP keyDown and rawKeyDown as a keyDown in before-input-event.
-    tab.debugger.handler = () => {
-      registry.noteUserInput(14, { kind: 'key', key: 'a', code: 'KeyA' });
-      return {};
-    };
-    for (const type of ['keyDown', 'rawKeyDown']) {
-      await client.send('Input.dispatchKeyEvent', { type, key: 'a', code: 'KeyA', commands: ['selectAll'] }, session);
-    }
-    expect(registry.ownership(14)?.paused).toBe(false);
-
-    tab.debugger.handler = () => {
-      registry.noteUserInput(14, { kind: 'key', key: 'q', code: 'KeyQ' });
-      return {};
-    };
-    await client.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter' }, session);
-    expect(registry.ownership(14)?.paused).toBe(true);
   });
 
   it('unsharing a user tab detaches agent sessions on it', async () => {
@@ -1313,7 +1264,6 @@ describe('relay server: shared debugger sessions', () => {
     await attach(client, 60);
     const view = await viewer(sessions, tab);
 
-    registry.setPaused(60, true);
     registry.share(60, true);
 
     expect(sessions.session(view.id)).not.toBeNull();

@@ -28,7 +28,7 @@ export type BackendSystemDirs = {
 };
 
 /** One tab the WebUI may watch (mirrors the desktop's browser-view ViewTab). */
-export type BrowserViewTab = { id: string; title: string; url: string; paused: boolean };
+export type BrowserViewTab = { id: string; title: string; url: string };
 
 /** How the desktop pushes one stream to the phone; `close` codes are forwarded as WebSocket close codes. */
 export type BrowserViewPeer = {

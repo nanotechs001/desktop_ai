@@ -17,7 +17,6 @@ const h = vi.hoisted(() => {
         ownershipChanged: emitter(),
         agentAction: emitter(),
         share: provider('share'),
-        resume: provider('resume'),
         getOwnership: provider('getOwnership'),
         confirmRequested: emitter(),
         getConfirmRequests: provider('getConfirmRequests'),
@@ -150,7 +149,6 @@ describe('agent browser services: IPC', () => {
     expect(h.created).toHaveLength(0);
     expect((await call('getOwnership')).success).toBe(false);
     expect((await call('share', { webContentsId: 1, on: true })).success).toBe(false);
-    expect((await call('resume', { webContentsId: 1 })).success).toBe(false);
   });
 
   it('validates arguments and unknown tabs', async () => {
@@ -164,7 +162,6 @@ describe('agent browser services: IPC', () => {
       success: false,
       msg: 'Invalid arguments',
     });
-    expect(await call('resume', { webContentsId: 5.5 })).toMatchObject({ success: false, msg: 'Invalid arguments' });
     expect(await call('share', { webContentsId: 6, on: true })).toMatchObject({
       success: false,
       msg: 'No such browser tab',
@@ -252,7 +249,7 @@ describe('agent browser services: tabs', () => {
     const tab = newTab(7);
     const emits = h.ipcBridge.agentBrowser.ownershipChanged.emit.mock.calls;
     expect(emits.at(-1)?.[0]).toEqual([
-      { webContentsId: 7, owner: 'user', sharedWith: null, paused: false, profile: DEFAULT_AGENT_PROFILE },
+      { webContentsId: 7, owner: 'user', sharedWith: null, profile: DEFAULT_AGENT_PROFILE },
     ]);
     tab.navigate('https://a.test/');
 
@@ -476,14 +473,11 @@ describe('agent browser services: leave site', () => {
     expect(hooks.current.unloadBlocked?.(70)).toEqual({ kind: 'leave' });
   });
 
-  it('asks on a paused agent tab, in its chat as well', async () => {
+  it("still lets an agent's own tab leave unasked after the user typed and clicked in it", async () => {
     const { tab } = await agentTab(71);
     tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
-    expect((await ownership(71))?.paused).toBe(true);
-
-    const plan = hooks.current.unloadBlocked?.(71);
-    expect(plan).toMatchObject({ kind: 'ask' });
-    expect(plan?.kind === 'ask' && typeof plan.askChat).toBe('function');
+    tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 1, y: 1 });
+    expect(hooks.current.unloadBlocked?.(71)).toEqual({ kind: 'leave' });
   });
 
   it('asks on a user tab only on the desktop: no chat drives it', async () => {
@@ -647,48 +641,23 @@ describe('agent browser services: confirm gate', () => {
   });
 });
 
-describe('agent browser services: take-over', () => {
-  it('pauses a shared tab on a user keyDown (not a modifier alone) or mouseDown; resume clears it', async () => {
-    await start();
-    const tab = newTab(9);
-    await call('share', { webContentsId: 9, on: true });
-
-    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'Shift' });
-    tab.emit('before-input-event', {}, { type: 'keyUp', key: 'a' });
-    expect((await ownership(9))?.paused).toBe(false);
-    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a' });
-    expect((await ownership(9))?.paused).toBe(true);
-
-    expect(await call('resume', { webContentsId: 9 })).toEqual({ success: true });
-    expect((await ownership(9))?.paused).toBe(false);
-    tab.emit('before-mouse-event', {}, { type: 'mouseMove', x: 1, y: 1 });
-    expect((await ownership(9))?.paused).toBe(false);
-    tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 1, y: 1 });
-    expect((await ownership(9))?.paused).toBe(true);
-  });
-
-  it("does not pause on the mouseDown Electron reports for the agent's own click, in zoomed coordinates", async () => {
+describe('agent browser services: user input', () => {
+  it("a user click or key on an agent's tab does not block the agent's next Input.dispatchMouseEvent", async () => {
     const relay = await start();
     const send = await connect(relay, 'claude');
     const tab = newTab(11);
-    tab.zoom = 2;
     await call('share', { webContentsId: 11, on: true });
     const session = String(
       (await send('Target.attachToTarget', { targetId: 'wc-11', flatten: true })).result?.sessionId
     );
-    tab.debugger.handler = (method) => {
-      if (method === 'Input.dispatchMouseEvent')
-        tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 20, y: 40 });
-      return {};
-    };
 
-    await send(
-      'Input.dispatchMouseEvent',
-      { type: 'mousePressed', x: 10, y: 20, button: 'left', clickCount: 1 },
-      session
-    );
+    tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 20, y: 40 });
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+    const click = { type: 'mousePressed', x: 10, y: 20, button: 'left', clickCount: 1 };
+    const reply = await send('Input.dispatchMouseEvent', click, session);
 
-    expect((await ownership(11))?.paused).toBe(false);
+    expect(reply.error).toBeUndefined();
+    expect(tab.debugger.sendCommand.mock.calls.map(([method]) => method)).toContain('Input.dispatchMouseEvent');
   });
 });
 

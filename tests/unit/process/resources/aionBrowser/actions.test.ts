@@ -12,7 +12,7 @@ import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowse
 import { FakeRelay } from './fakeRelay';
 
 const PANE_SENTENCE = 'Use this Pixebot browser pane tool, never an external browser.';
-const PAUSED = 'Paused: the user took over this tab. Wait for the user to resume.';
+const REFUSED = 'Input.dispatchMouseEvent is not allowed for agents';
 
 type ToolReply = {
   isError?: boolean;
@@ -112,10 +112,10 @@ describe('act tool', () => {
     expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
   });
 
-  it('Input on a paused tab surfaces "user took over" and stops the batch', async () => {
+  it('a relay refusal of Input is an error and stops the batch', async () => {
     const id = await openAndObserve();
     relay.on('Input.dispatchMouseEvent', () => {
-      throw new Error(PAUSED);
+      throw new Error(REFUSED);
     });
     const reply = await call('act', {
       actions: [
@@ -124,8 +124,8 @@ describe('act tool', () => {
       ],
     });
     const { results, stopped } = JSON.parse(textOf(reply)) as { results: unknown[]; stopped: string };
-    expect(results).toEqual([{ op: 'click', target: id, result: 'paused', reason: PAUSED }]);
-    expect(stopped).toMatch(/user took over/);
+    expect(results).toEqual([{ op: 'click', target: id, result: 'error', reason: REFUSED }]);
+    expect(stopped).toBe('Stopped at an error. 1 more action not run.');
     expect(inputRequests()).toHaveLength(1);
     expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
   });
@@ -150,15 +150,15 @@ describe('act tool', () => {
     expect(relay.callsTo('Page.createIsolatedWorld')).toHaveLength(1);
   });
 
-  it('surfaces "user took over" when the relay refuses the freshness check, with no input', async () => {
+  it('a refused freshness check is stale, with no input', async () => {
     const id = await openAndObserve();
     relay.on('Runtime.callFunctionOn', () => {
-      throw new Error(PAUSED);
+      throw new Error('Runtime.callFunctionOn needs an isolated-world context');
     });
     const reply = JSON.parse(textOf(await call('act', { actions: [{ op: 'click', target: id }] }))) as {
-      results: unknown[];
+      results: Array<{ result: string }>;
     };
-    expect(reply.results).toEqual([{ op: 'click', target: id, result: 'paused', reason: PAUSED }]);
+    expect(reply.results.map((r) => r.result)).toEqual(['stale']);
     expect(inputRequests()).toEqual([]);
   });
 
@@ -733,17 +733,14 @@ describe('fallback tools', () => {
     expect(relay.callsTo('Page.captureScreenshot').map((p) => (p.clip as { scale: number }).scale)).toEqual([1, 0.5]);
   }, 10_000);
 
-  it('click_point on a tab the user took over returns paused with the note, not an error', async () => {
+  it('click_point passes a relay refusal of its input on as an error', async () => {
     await call('tabs', { action: 'open' });
     relay.on('Input.dispatchMouseEvent', () => {
-      throw new Error(PAUSED);
+      throw new Error(REFUSED);
     });
     const reply = await call('click_point', { x: 5, y: 6 });
-    expect(reply.isError).toBeFalsy();
-    expect(JSON.parse(textOf(reply))).toEqual({
-      result: 'paused',
-      reason: 'The user took over this tab; wait for them to resume, then observe again.',
-    });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toContain(REFUSED);
     expect(inputRequests()).toHaveLength(1);
   });
 

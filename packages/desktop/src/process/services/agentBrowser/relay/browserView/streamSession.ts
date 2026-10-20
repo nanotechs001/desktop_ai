@@ -60,8 +60,6 @@ const KEY_CODES: Record<AllowedKey, number> = {
   ArrowRight: 39,
   ArrowDown: 40,
 };
-/** Inserted text has no key of its own; any non-agent key report pauses the agent. */
-const TEXT_INPUT = { kind: 'key', key: 'Unidentified', code: '' } as const;
 
 /** The tab's contents when a phone may stream it, else why not. */
 export const viewableContents = (registry: TargetRegistry, webContentsId: number): RelayContents | StreamRefusal => {
@@ -73,7 +71,7 @@ export const viewableContents = (registry: TargetRegistry, webContentsId: number
 
 /**
  * One phone watching one tab: its frames come from the tab's shared {@link TabCast}; its taps, scrolls and keys go
- * out as CDP input (pausing the agent like a desktop take-over); it hears the tab's title, url and pause state. Ends
+ * out as CDP input (the agent keeps working and sees the change); it hears the tab's title and url. Ends
  * itself when the tab closes or stops being viewable. Joins the cast at once, so the cast outlives its attach.
  */
 export function createStream({ registry, cast, webContentsId, peer, onClose }: StreamDeps): Stream {
@@ -88,9 +86,8 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
 
   const syncTab = (): void => {
     const target = registry.listTargets().find((t) => t.targetId === targetIdFor(webContentsId));
-    const ownership = registry.ownership(webContentsId);
-    if (!target || !ownership) return;
-    const text = JSON.stringify({ type: 'tab', title: target.title, url: target.url, paused: ownership.paused });
+    if (!target) return;
+    const text = JSON.stringify({ type: 'tab', title: target.title, url: target.url });
     if (text === lastTab) return;
     lastTab = text;
     peer.sendText(text);
@@ -106,20 +103,17 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
   const tap = (nx: number, ny: number): void => {
     if (!shown) return;
     const { x, y } = mapTap(nx, ny, shown);
-    registry.noteUserInput(webContentsId, { kind: 'mouse', x, y });
     const click = { x, y, button: 'left', clickCount: 1 };
     cast.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     cast.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...click });
     cast.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...click });
   };
-  // Deliberately no noteUserInput: a phone scroll does not pause the agent, as on the desktop (only mouseDown and keyDown pause).
   const scroll = (nx: number, ny: number, dy: number): void => {
     if (!shown) return;
     const { x, y } = mapTap(nx, ny, shown);
     cast.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: dy });
   };
   const key = (name: AllowedKey): void => {
-    registry.noteUserInput(webContentsId, { kind: 'key', key: name, code: name });
     const base = { key: name, code: name, windowsVirtualKeyCode: KEY_CODES[name] };
     // As the agent's pressKey: only a key that types text is a keyDown; the rest are rawKeyDown.
     const down = name === 'Enter' ? { type: 'keyDown', text: '\r' } : { type: 'rawKeyDown' };
@@ -138,12 +132,9 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
       case 'scroll':
         return scroll(message.nx, message.ny, message.dy);
       case 'text':
-        registry.noteUserInput(webContentsId, TEXT_INPUT);
         return cast.send('Input.insertText', { text: message.value });
       case 'key':
         return key(message.key);
-      case 'resume':
-        return registry.setPaused(webContentsId, false);
     }
   };
 

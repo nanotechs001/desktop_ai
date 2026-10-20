@@ -208,17 +208,7 @@ describe('observe tool', () => {
     );
   });
 
-  it('passes the relay refusal on when no frame can be read (user took over)', async () => {
-    relay.on('Runtime.evaluate', () => {
-      throw new Error('Paused: the user took over this tab. Wait for the user to resume.');
-    });
-    await client.callTool({ name: 'tabs', arguments: { action: 'open' } });
-    const reply = await observe({});
-    expect(reply.isError).toBe(true);
-    expect(reply.content[0].text).toBe('Paused: the user took over this tab. Wait for the user to resume.');
-  });
-
-  it('a failed snapshot retires its frame key with its world; the Paused refusal keeps both', async () => {
+  it('a failed snapshot retires its frame key with its world', async () => {
     await client.callTool({ name: 'tabs', arguments: { action: 'open' } });
     const keyOf = (reply: ToolReply) => /\[(f\d+):3\]/.exec(reply.content[0].text ?? '')?.[1];
     const first = keyOf(await observe({}));
@@ -228,11 +218,6 @@ describe('observe tool', () => {
         relay.on('Runtime.evaluate', evaluate as NonNullable<typeof evaluate>);
         throw new Error(message);
       });
-
-    failOnce('Paused: the user took over this tab. Wait for the user to resume.');
-    expect((await observe({})).isError).toBe(true);
-    expect(keyOf(await observe({}))).toBe(first);
-    expect(relay.callsTo('Page.createIsolatedWorld')).toHaveLength(1);
 
     failOnce('Cannot find context with specified id');
     expect((await observe({})).isError).toBe(true);

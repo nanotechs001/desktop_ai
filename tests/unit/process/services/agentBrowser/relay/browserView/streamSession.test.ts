@@ -96,9 +96,7 @@ afterEach(() => {
 
 describe('browser view: listing and opening', () => {
   it('lists the viewable tabs of a conversation', () => {
-    expect(service.listTabs('conv-1')).toEqual([
-      { id: 'wc-7', title: 'Example', url: 'https://example.com/', paused: false },
-    ]);
+    expect(service.listTabs('conv-1')).toEqual([{ id: 'wc-7', title: 'Example', url: 'https://example.com/' }]);
     expect(service.listTabs('other')).toEqual([]);
   });
 
@@ -111,7 +109,7 @@ describe('browser view: listing and opening', () => {
 
   it('sends the tab on open', async () => {
     const { peer } = await stream('wc-7');
-    expect(peer.texts[0]).toEqual({ type: 'tab', title: 'Example', url: 'https://example.com/', paused: false });
+    expect(peer.texts[0]).toEqual({ type: 'tab', title: 'Example', url: 'https://example.com/' });
   });
 });
 
@@ -238,7 +236,7 @@ describe('browser view: phone input', () => {
     return s;
   };
 
-  it('tap moves, presses and releases at the mapped point and pauses the agent', async () => {
+  it('tap moves, presses and releases at the mapped point', async () => {
     const { handle } = await streaming();
     send(handle, { type: 'tap', nx: 0.5, ny: 0.25 });
     expect(sent('Input.dispatchMouseEvent').map((c) => c.params)).toEqual([
@@ -246,7 +244,6 @@ describe('browser view: phone input', () => {
       { type: 'mousePressed', x: 100, y: 100, button: 'left', clickCount: 1 },
       { type: 'mouseReleased', x: 100, y: 100, button: 'left', clickCount: 1 },
     ]);
-    expect(registry.ownership(7)?.paused).toBe(true);
   });
 
   it('scroll, text and key send their commands', async () => {
@@ -297,22 +294,9 @@ describe('browser view: phone input', () => {
     handle.close();
     for (const { method } of commands()) expect(ALLOWED_VIEWER_METHODS.has(method)).toBe(true);
   });
-
-  it('resume unpauses the agent', async () => {
-    const { handle } = await streaming();
-    registry.setPaused(7, true);
-    send(handle, { type: 'resume' });
-    expect(registry.ownership(7)?.paused).toBe(false);
-  });
 });
 
 describe('browser view: registry changes', () => {
-  it('a paused change sends the tab again', async () => {
-    const { peer } = await stream('wc-7');
-    registry.setPaused(7, true);
-    expect(peer.texts.at(-1)).toEqual({ type: 'tab', title: 'Example', url: 'https://example.com/', paused: true });
-  });
-
   it('unsharing closes the stream as not-allowed and stops input', async () => {
     const shared = new FakeContents(9);
     registry.track(shared);
@@ -342,7 +326,7 @@ describe('browser view: registry changes', () => {
     tab.pendingUrl = 'https://example.com/next';
     vi.spyOn(tab, 'getTitle').mockReturnValue('Next');
     vi.advanceTimersByTime(1000);
-    expect(peer.texts.at(-1)).toEqual({ type: 'tab', title: 'Next', url: 'https://example.com/next', paused: false });
+    expect(peer.texts.at(-1)).toEqual({ type: 'tab', title: 'Next', url: 'https://example.com/next' });
     const count = peer.texts.length;
     vi.advanceTimersByTime(3000);
     expect(peer.texts).toHaveLength(count);

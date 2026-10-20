@@ -29,7 +29,7 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
 import WatchBrowserButton from '@/renderer/components/media/browserLive/WatchBrowserButton';
 
 const LABEL = 'preview.browser.watchBrowser';
-const TAB = { id: 'wc-1', title: 'One', url: 'https://one.example/', paused: false };
+const TAB = { id: 'wc-1', title: 'One', url: 'https://one.example/' };
 
 let tabs: Array<typeof TAB> = [TAB];
 const answer = () => ({ ok: true, status: 200, json: async () => ({ tabs }) });

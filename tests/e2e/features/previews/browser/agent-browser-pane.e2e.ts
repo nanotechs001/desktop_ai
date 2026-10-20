@@ -3,7 +3,7 @@
  *
  * Drives the built `aionui-browser` MCP server (out/main/builtin-mcp-browser.js) the way an agent does: spawned
  * over stdio with the app's relay url and token, called with the MCP SDK client. Its calls go through the real
- * relay in main into the pane's `<webview>` tabs, so these tests cover ownership, take-over, the ConfirmGate
+ * relay in main into the pane's `<webview>` tabs, so these tests cover ownership, user input alongside the agent, the ConfirmGate
  * prompt and the action overlay together. Pages come from the integration fixtures, served on two loopback
  * origins so the builder's iframe is cross-origin (an OOPIF).
  */
@@ -269,7 +269,7 @@ test.describe('Agents in the browser pane', () => {
     const inputOnScreen = { ...input, x: pane.x + 30 + input.x, y: pane.y + 20 + input.y };
     expect(overlaps(highlightBox, inputOnScreen), JSON.stringify({ highlightBox, inputOnScreen })).toBe(true);
 
-    // type is select-all (a keyDown) plus insertText: the agent's own keys must not count as the user taking over.
+    // type is select-all (a keyDown) plus insertText.
     const typed = await act(client, [
       {
         op: 'type',
@@ -280,20 +280,18 @@ test.describe('Agents in the browser pane', () => {
     expect(typed.results.map((r) => r.result)).toEqual(['done']);
     await expect.poll(titleValue).toBe('Spring Sale');
 
-    // A keyDown that carries text (Space) must not leave a stray Char report that pauses the tab either.
-    // Ids last only until the page changes, and typing changed it: observe again, as an agent does.
+    // A keyDown that carries text (Space). Ids last only until the page changes, and typing changed it: observe again, as an agent does.
     const fresh = await observeControl(client, 'textbox', 'Page title', servers.originB);
     const pressed = await act(client, [{ op: 'press', key: 'Space', target: fresh }]);
     expect(pressed.results.map((r) => r.result)).toEqual(['done']);
     await expect.poll(titleValue).toBe('Spring Sale ');
-    await expect(page.getByText('Paused: you took over.')).toHaveCount(0);
     const again = await act(client, [
       { op: 'hover', target: await observeControl(client, 'textbox', 'Page title', servers.originB) },
     ]);
     expect(again.results.map((r) => r.result)).toEqual(['done']);
   });
 
-  test('user click on the agent tab pauses: next act returns "user took over"; Resume clears it', async ({ page }) => {
+  test("a user click on the agent tab does not stop the agent's next act", async ({ page }) => {
     const client = agent as Client;
     const title = await observeControl(client, 'textbox', 'Page title', servers.originB);
     const box = await page.locator('webview:visible').boundingBox();
@@ -303,16 +301,8 @@ test.describe('Agents in the browser pane', () => {
     // A real click in the AionUi window, on an empty part of the page: what a user's click does.
     await page.mouse.click(x + width - 20, y + height - 20);
 
-    const banner = page.getByText('Paused: you took over.');
-    await expect(banner).toBeVisible();
-    const paused = await act(client, [{ op: 'hover', target: title }]);
-    expect(paused.results[0].result).toBe('paused');
-    expect(paused.stopped).toContain('The user took over this tab');
-
-    await page.getByRole('button', { name: 'Resume agent' }).click();
-    await expect(banner).toBeHidden();
-    const resumed = await act(client, [{ op: 'hover', target: title }]);
-    expect(resumed.results.map((r) => r.result)).toEqual(['done']);
+    const next = await act(client, [{ op: 'hover', target: title }]);
+    expect(next.results.map((r) => r.result)).toEqual(['done']);
   });
 
   test('a "Publish" click prompts; Deny blocks it', async ({ electronApp, page }) => {
@@ -397,7 +387,7 @@ test.describe('Agents in the browser pane', () => {
       const hover = await act(client, [
         { op: 'hover', target: await observeControl(client, 'textbox', 'Page title', servers.originB) },
       ]);
-      expect(hover.results.map((r) => r.result)).toEqual(['done']); // never paused
+      expect(hover.results.map((r) => r.result)).toEqual(['done']);
     } finally {
       await httpInvoke(page, 'DELETE', `/api/conversations/${otherChat}`).catch(() => undefined);
       await page.goto(`${page.url().split('#')[0]}#/conversation/${conversationId}`);
@@ -447,10 +437,7 @@ test.describe('Agents in the browser pane', () => {
     }
   });
 
-  test('a user click over an agent tab hidden behind the app never reaches it or pauses it', async ({
-    electronApp,
-    page,
-  }) => {
+  test('a user click over an agent tab hidden behind the app never reaches it', async ({ electronApp, page }) => {
     const client = agent as Client;
     const wc = webContentsIdOf(builderTab);
     await observeControl(client, 'button', 'Publish', servers.originB); // the OOPIF is attached
@@ -476,7 +463,7 @@ test.describe('Agents in the browser pane', () => {
       const hover = await act(client, [
         { op: 'hover', target: await observeControl(client, 'button', 'Publish', servers.originB) },
       ]);
-      expect(hover.results.map((r) => r.result)).toEqual(['done']); // not paused: no user input reached the tab
+      expect(hover.results.map((r) => r.result)).toEqual(['done']);
       expect(await mouseDowns()).toBe(0);
     } finally {
       await page.goto(`${page.url().split('#')[0]}#/conversation/${conversationId}`);

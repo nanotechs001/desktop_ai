@@ -55,7 +55,6 @@ const clientMessage = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal('text'), value: z.string().max(MAX_TEXT_CHARS) }),
   z.strictObject({ type: z.literal('key'), key: z.enum(ALLOWED_KEYS) }),
-  z.strictObject({ type: z.literal('resume') }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessage>;

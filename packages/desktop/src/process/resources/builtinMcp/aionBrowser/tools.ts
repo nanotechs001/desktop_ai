@@ -133,7 +133,7 @@ const observeInput = {
   text: z.boolean().optional().describe('Include the visible page text. Defaults to true.'),
 };
 
-const ACT_DESCRIPTION = `${PANE_SENTENCE} Act on controls from the latest observe, by id only (f<k>:<n>); works inside iframes, also cross-origin. Runs the actions in order and returns one result per action run: done, stale (the page or target changed, is covered or off-screen: observe again), paused (the user took over the tab), denied (the user refused a risky click or Enter, such as Publish, Send, Pay or Delete: do not retry or work around it unless they ask) or error.
+const ACT_DESCRIPTION = `${PANE_SENTENCE} Act on controls from the latest observe, by id only (f<k>:<n>); works inside iframes, also cross-origin. Runs the actions in order and returns one result per action run: done, stale (the page or target changed, is covered or off-screen: observe again), denied (the user refused a risky click or Enter, such as Publish, Send, Pay or Delete: do not retry or work around it unless they ask) or error.
 - click {target} · hover {target}
 - type {target, text}: replaces the field's text.
 - select {target, text}: picks the option with that label in a native dropdown. For other dropdowns click them open, observe, then click the option.
@@ -169,7 +169,7 @@ const actInput = {
   stop_on_change: z.boolean().optional().describe('Stop once an action changes the page controls. Defaults to true.'),
 };
 
-const DRAG_DESCRIPTION = `${PANE_SENTENCE} Drag one observed control onto another, by ids from observe: HTML5 drag and drop (e.g. a builder panel widget into its preview iframe, also cross-origin) and pointer-based sortable lists. position: before, after or inside (default) the target. The drag must move at least 4 px (a shorter one is a click: use act). A release on a risky control (Publish, Send, Pay, Delete…) asks the user first. Returns done, stale (observe again), paused (the user took over), denied (the user refused: do not retry or work around it unless they ask) or error. ${UNTRUSTED_SENTENCE}`;
+const DRAG_DESCRIPTION = `${PANE_SENTENCE} Drag one observed control onto another, by ids from observe: HTML5 drag and drop (e.g. a builder panel widget into its preview iframe, also cross-origin) and pointer-based sortable lists. position: before, after or inside (default) the target. The drag must move at least 4 px (a shorter one is a click: use act). A release on a risky control (Publish, Send, Pay, Delete…) asks the user first. Returns done, stale (observe again), denied (the user refused: do not retry or work around it unless they ask) or error. ${UNTRUSTED_SENTENCE}`;
 
 const dragInput = {
   tab: z.string().optional().describe('A tab id from tabs. Defaults to the current tab.'),
@@ -185,7 +185,7 @@ const screenshotInput = {
   target: targetId.optional(),
 };
 
-const CLICK_POINT_DESCRIPTION = `${PANE_SENTENCE} Fallback only: click at x, y in CSS px of the tab's visible area (the pixels of a screenshot without target). It skips the freshness checks act makes, so prefer act with an observed id; use this for canvases or controls observe does not list. On a risky control (Publish, Send, Pay, Delete…) the user is asked first: denied means they refused, so do not retry or work around it unless they ask. Returns done, stale (observe again), denied or paused. ${UNTRUSTED_SENTENCE}`;
+const CLICK_POINT_DESCRIPTION = `${PANE_SENTENCE} Fallback only: click at x, y in CSS px of the tab's visible area (the pixels of a screenshot without target). It skips the freshness checks act makes, so prefer act with an observed id; use this for canvases or controls observe does not list. On a risky control (Publish, Send, Pay, Delete…) the user is asked first: denied means they refused, so do not retry or work around it unless they ask. Returns done, stale (observe again) or denied. ${UNTRUSTED_SENTENCE}`;
 
 const clickPointInput = {
   tab: z.string().optional().describe('A tab id from tabs. Defaults to the current tab.'),

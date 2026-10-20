@@ -134,9 +134,7 @@ describe('BrowserViewer tab activation', () => {
   });
 
   it('never makes a hidden agent tab inert (agent input must reach it), only takes it out of the tab order', async () => {
-    mocks.ownership = [
-      { webContentsId: 7, owner: { clientId: 'c', label: 'claude' }, sharedWith: null, paused: false },
-    ];
+    mocks.ownership = [{ webContentsId: 7, owner: { clientId: 'c', label: 'claude' }, sharedWith: null }];
     const { container, rerender } = render(viewer(false));
     act(() => {
       container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
@@ -154,7 +152,7 @@ describe('BrowserViewer tab activation', () => {
   });
 
   it('never makes a hidden tab the user shared with agents inert', async () => {
-    mocks.ownership = [{ webContentsId: 7, owner: 'user', sharedWith: 'all', paused: false }];
+    mocks.ownership = [{ webContentsId: 7, owner: 'user', sharedWith: 'all' }];
     const { container } = render(viewer(false));
     act(() => {
       container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
@@ -163,9 +161,7 @@ describe('BrowserViewer tab activation', () => {
   });
 
   it('keeps the chrome of a hidden agent tab inert, but never the page, and hides the tab from screen readers', async () => {
-    mocks.ownership = [
-      { webContentsId: 7, owner: { clientId: 'c', label: 'claude' }, sharedWith: null, paused: false },
-    ];
+    mocks.ownership = [{ webContentsId: 7, owner: { clientId: 'c', label: 'claude' }, sharedWith: null }];
     const { container, rerender } = render(viewer(false));
     const webview = container.querySelector('webview') as HTMLElement;
     act(() => {

@@ -215,15 +215,6 @@ describe('BrowserLiveView input', () => {
 });
 
 describe('BrowserLiveView status', () => {
-  it('a paused tab shows the bar, and Resume sends resume', async () => {
-    const ws = await connected();
-    ws.receive(JSON.stringify({ type: 'tab', title: 'One', url: 'https://one.example/', paused: true }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'preview.browser.livePaused' }));
-
-    expect(ws.messages().at(-1)).toEqual({ type: 'resume' });
-  });
-
   it('no-frames shows the keep-the-window-open message', async () => {
     const ws = await connected();
 

@@ -385,7 +385,7 @@ describe('WebviewHost outside Electron', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ tabs: [{ id: 'wc-3', title: 'Agent', url: 'https://example.com', paused: false }] }),
+        json: async () => ({ tabs: [{ id: 'wc-3', title: 'Agent', url: 'https://example.com' }] }),
       }))
     );
     optionalPreview.value = { closePreview: vi.fn() };

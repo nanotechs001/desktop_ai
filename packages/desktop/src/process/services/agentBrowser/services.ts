@@ -43,7 +43,7 @@ export type AgentBrowserOptions = {
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
 
 const TAB_CREATE_TIMEOUT_MS = 15_000;
-/** A keyDown of one of these alone is not the user taking over (e.g. Cmd held for a shortcut). */
+/** A keyDown of one of these alone does not mark a tab used (e.g. Cmd held for a shortcut). */
 const MODIFIER_KEYS = new Set(['Meta', 'Shift', 'Alt', 'Control']);
 const OFF: Reply = { success: false, msg: 'Agent browser control is off' };
 const UNKNOWN_TAB: Reply = { success: false, msg: 'No such browser tab' };
@@ -88,28 +88,20 @@ export const webuiConfirms = {
   },
 };
 
-/**
- * A key or click marks the tab used (for the idle sweep) and pauses agent input on a tab the user types or clicks in
- * (agent-owned or shared tabs only).
- */
+/** A key or click marks the tab used, for the idle sweep. The agent keeps working: it sees the change on its next observe. */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
   contents.on('before-input-event', (_event, input) => {
     if (input.type === 'keyDown' && !MODIFIER_KEYS.has(input.key)) {
       registry.touch(contents.id);
-      registry.noteUserInput(contents.id, { kind: 'key', key: input.key, code: input.code });
     }
   });
   contents.on('before-mouse-event', (_event, mouse) => {
-    if (mouse.type !== 'mouseDown') return;
-    registry.touch(contents.id);
-    // Electron reports zoomed (DIP) coordinates; CDP input uses CSS px (measured on 37.10.3).
-    const zoom = contents.getZoomFactor() || 1;
-    registry.noteUserInput(contents.id, { kind: 'mouse', x: mouse.x / zoom, y: mouse.y / zoom });
+    if (mouse.type === 'mouseDown') registry.touch(contents.id);
   });
 };
 
 /**
- * A page's "Leave site?": an agent's own tab (not shared, not taken over) leaves unasked, since the agent cannot
+ * A page's "Leave site?": an agent's own tab (not shared) leaves unasked, since the agent cannot
  * answer and the user may not be watching. Any other tab asks on the desktop and, when a chat drives it (its owner's,
  * else the last agent that used it), in that chat too.
  */
@@ -117,7 +109,7 @@ const unloadPlan = (registry: TargetRegistry, confirms: PendingConfirms, webCont
   const tab = registry.ownership(webContentsId);
   if (!tab) return { kind: 'ask' };
   const { owner } = tab;
-  if (owner !== 'user' && tab.sharedWith === null && !tab.paused) return { kind: 'leave' };
+  if (owner !== 'user' && tab.sharedWith === null) return { kind: 'leave' };
   const conversationId =
     (owner === 'user' ? undefined : owner.conversationId) ?? registry.lastUse(webContentsId)?.conversationId;
   if (!conversationId) return { kind: 'ask' };
@@ -211,16 +203,6 @@ const registerProviders = (
       if (!registry) return OFF;
       if (!registry.ownership(webContentsId)) return UNKNOWN_TAB;
       registry.share(webContentsId, on);
-      return { success: true };
-    })
-  );
-  ipcBridge.agentBrowser.resume.provider(({ webContentsId }) =>
-    guard(() => {
-      if (!Number.isInteger(webContentsId)) return INVALID;
-      const registry = getRegistry();
-      if (!registry) return OFF;
-      if (!registry.ownership(webContentsId)) return UNKNOWN_TAB;
-      registry.setPaused(webContentsId, false);
       return { success: true };
     })
   );

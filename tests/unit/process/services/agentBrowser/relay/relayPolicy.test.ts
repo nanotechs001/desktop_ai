@@ -5,8 +5,8 @@ import { decideRelayCommand, mayAct, type PolicyContext } from '@process/service
 
 const agent = { clientId: 'c1', label: 'claude' };
 const PERSONAL = { kind: 'personal' } as const;
-const ownTab: TabOwnership = { webContentsId: 7, owner: agent, sharedWith: null, paused: false, profile: PERSONAL };
-const userTab: TabOwnership = { webContentsId: 8, owner: 'user', sharedWith: null, paused: false, profile: PERSONAL };
+const ownTab: TabOwnership = { webContentsId: 7, owner: agent, sharedWith: null, profile: PERSONAL };
+const userTab: TabOwnership = { webContentsId: 8, owner: 'user', sharedWith: null, profile: PERSONAL };
 const RELAY_PORT = 4100;
 const BACKEND_PORT = 4200;
 
@@ -170,7 +170,7 @@ describe('isAgentNavigableUrl', () => {
   });
 });
 
-describe('decideRelayCommand: ownership and pause', () => {
+describe('decideRelayCommand: ownership', () => {
   it('denies commands on a user tab that is not shared; allows after share(on)', () => {
     expect(decide('Page.getFrameTree', {}, { tab: userTab })).toMatchObject({
       allow: false,
@@ -205,36 +205,5 @@ describe('decideRelayCommand: ownership and pause', () => {
 
   it('denies everything when the tab is gone', () => {
     expect(decide('Page.getFrameTree', {}, { tab: null }).allow).toBe(false);
-  });
-
-  it('denies input, script, navigation and dialog answers on a paused tab with "user took over"', () => {
-    const tab = { ...ownTab, paused: true };
-    for (const [method, params] of [
-      ['Input.insertText', { text: 'x' }],
-      ['Input.dispatchMouseEvent', { type: 'mousePressed', x: 1, y: 1 }],
-      ['Runtime.evaluate', { expression: '1', contextId: 3 }],
-      ['Page.navigate', { url: 'https://example.com' }],
-      ['Page.reload', {}],
-      ['Page.stopLoading', {}],
-      ['Page.handleJavaScriptDialog', { accept: true }],
-    ] as const) {
-      expect(decide(method, params, { tab })).toMatchObject({
-        allow: false,
-        message: expect.stringContaining('user took over'),
-      });
-    }
-    // Reading the page stays allowed while paused.
-    expect(decide('Page.getFrameTree', {}, { tab }).allow).toBe(true);
-    expect(decide('Page.captureScreenshot', { format: 'png' }, { tab }).allow).toBe(true);
-  });
-
-  it('lets an agent switch drag interception off on a paused tab, never on', () => {
-    // A drag the user interrupted must not leave the user's own drags intercepted.
-    const tab = { ...ownTab, paused: true };
-    expect(decide('Input.setInterceptDrags', { enabled: false }, { tab })).toEqual({ allow: true });
-    expect(decide('Input.setInterceptDrags', { enabled: true }, { tab })).toMatchObject({
-      allow: false,
-      message: expect.stringContaining('user took over'),
-    });
   });
 });

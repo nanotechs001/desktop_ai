@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   share: vi.fn(
     (_arg: { webContentsId: number; on: boolean }): Promise<{ success: boolean }> => Promise.resolve({ success: true })
   ),
-  resume: vi.fn((_arg: { webContentsId: number }): Promise<{ success: boolean }> => Promise.resolve({ success: true })),
   messageError: vi.fn(),
   getOwnership: vi.fn(),
   ownership: null as ((list: TabOwnership[]) => void) | null,
@@ -37,7 +36,6 @@ vi.mock('@/common', () => ({
     },
     agentBrowser: {
       share: { invoke: mocks.share },
-      resume: { invoke: mocks.resume },
       getOwnership: { invoke: mocks.getOwnership },
       ownershipChanged: {
         on: (handler: (list: TabOwnership[]) => void) => {
@@ -81,7 +79,6 @@ const tab = (patch: Partial<TabOwnership> = {}): TabOwnership => ({
   webContentsId: WEB_CONTENTS_ID,
   owner: 'user',
   sharedWith: null,
-  paused: false,
   ...patch,
 });
 
@@ -157,18 +154,6 @@ describe('BrowserViewer agent chrome', () => {
     expect(onAgentOwnedChange).not.toHaveBeenCalled();
   });
 
-  it('shows the take-over banner only while the tab is paused; Resume calls resume', async () => {
-    await mount([tab({ sharedWith: 'all' })]);
-    expect(screen.queryByText(`${KEY}.paused`)).toBeNull();
-
-    act(() => mocks.ownership?.([tab({ sharedWith: 'all', paused: true })]));
-    fireEvent.click(screen.getByText(`${KEY}.resume`));
-    expect(mocks.resume).toHaveBeenCalledWith({ webContentsId: WEB_CONTENTS_ID });
-
-    act(() => mocks.ownership?.([tab({ sharedWith: 'all' })]));
-    expect(screen.queryByText(`${KEY}.paused`)).toBeNull();
-  });
-
   it('highlights an action for this tab and ignores actions for other tabs', async () => {
     const { container } = await mount([tab({ sharedWith: 'all' })]);
 
@@ -212,15 +197,6 @@ describe('BrowserViewer agent failures', () => {
     fireEvent.click(await screen.findByText(`${KEY}.share`));
     await waitFor(() => expect(mocks.share).toHaveBeenCalled());
     expect(mocks.messageError).not.toHaveBeenCalled();
-  });
-
-  it.each(failures)('tells the user when resume %s', async (_name, outcome) => {
-    mocks.resume.mockImplementationOnce(outcome);
-    await mount([tab({ sharedWith: 'all', paused: true })]);
-
-    fireEvent.click(await screen.findByText(`${KEY}.resume`));
-
-    await waitFor(() => expect(mocks.messageError).toHaveBeenCalledWith(`${KEY}.actionFailed`));
   });
 });
 

@@ -32,7 +32,6 @@ const ownership = (webContentsId: number): TabOwnership => ({
   webContentsId,
   owner: 'user',
   sharedWith: null,
-  paused: false,
 });
 
 beforeEach(() => {

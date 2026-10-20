@@ -31,7 +31,6 @@ describe('parseClientMessage', () => {
     });
     expect(parse({ type: 'text', value: 'hi' })).toEqual({ type: 'text', value: 'hi' });
     expect(parse({ type: 'key', key: 'Enter' })).toEqual({ type: 'key', key: 'Enter' });
-    expect(parse({ type: 'resume' })).toEqual({ type: 'resume' });
   });
 
   it('accepts every allowed key and nothing else', () => {
@@ -43,6 +42,7 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage('{nope')).toBeNull();
     expect(parseClientMessage('"tap"')).toBeNull();
     expect(parse({ type: 'launch-missiles' })).toBeNull();
+    expect(parse({ type: 'resume' })).toBeNull();
     expect(parse({ type: 'text', value: 'a'.repeat(2001) })).toBeNull();
     expect(parse({ type: 'text', value: 'a'.repeat(2000) })).not.toBeNull();
     expect(parse({ type: 'tap', nx: '0.5', ny: 0.5 })).toBeNull();
