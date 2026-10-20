@@ -171,6 +171,16 @@ describe('persistEnginePin', () => {
     expect(mocks.store.get('agent.enginePins')).toEqual({ y: 'b' });
     expect(original).toEqual({ x: 'a' });
   });
+
+  it("tags a usage-limit pin, and a user's own pin or a cleared pin drops the tag", async () => {
+    await persistEnginePin('y', 'b', 'limit');
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({ y: 'limit' });
+    await persistEnginePin('y', 'c');
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({});
+    await persistEnginePin('y', 'b', 'limit');
+    await persistEnginePin('y', null, 'limit');
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({});
+  });
 });
 
 describe('useDefaultEngine', () => {
@@ -232,6 +242,24 @@ describe('useDefaultEngine', () => {
 
     expect(mocks.updateAssistant).toHaveBeenCalledTimes(1);
     expect(mocks.updateAssistant).toHaveBeenCalledWith({ id: 'free', agent_id: 'b', defaults: DEFAULTS_RESET });
+  });
+
+  it("setDefault releases pins a usage-limit switch made and keeps the user's own pins (R17)", async () => {
+    mocks.store.set('agent.enginePins', { limited: 'c', mine: 'c' });
+    mocks.store.set('agent.enginePinOrigins', { limited: 'limit' });
+    mocks.getManagedAgents.mockResolvedValue([agent('a'), agent('b'), agent('c')]);
+    mocks.listAssistants.mockResolvedValue([assistant('limited', 'c'), assistant('mine', 'c')]);
+    const { result } = renderHook(() => useDefaultEngine(), { wrapper });
+    await waitFor(() => expect(result.current.agentId).toBe('a'));
+
+    await act(async () => {
+      await result.current.setDefault('b');
+    });
+
+    expect(mocks.store.get('agent.enginePins')).toEqual({ mine: 'c' });
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({});
+    expect(mocks.updateAssistant).toHaveBeenCalledTimes(1);
+    expect(mocks.updateAssistant).toHaveBeenCalledWith({ id: 'limited', agent_id: 'b', defaults: DEFAULTS_RESET });
   });
 
   it('reports a failed re-bind per Agent and still changes the default', async () => {

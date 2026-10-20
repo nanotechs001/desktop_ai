@@ -61,10 +61,42 @@ export function planEngineRebinds(
     .filter(({ assistant, agentId }) => assistant.agent_id !== agentId);
 }
 
-/** Pin an Agent to an engine, or clear the pin with `null`. */
-export async function persistEnginePin(assistantId: string, engineId: string | null): Promise<void> {
+/** Who made a pin: the user (Settings, the Agent editor) or a usage-limit switch, which a default change releases. */
+export type EnginePinOrigin = 'user' | 'limit';
+
+/** Pin an Agent to an engine, or clear the pin with `null`. `origin` tags it; a user pin drops a `limit` tag. */
+export async function persistEnginePin(
+  assistantId: string,
+  engineId: string | null,
+  origin: EnginePinOrigin = 'user'
+): Promise<void> {
   const { [assistantId]: _previous, ...others } = configService.get('agent.enginePins') ?? {};
   await configService.set('agent.enginePins', engineId ? { ...others, [assistantId]: engineId } : others);
+  const origins = configService.get('agent.enginePinOrigins') ?? {};
+  const limit = engineId !== null && origin === 'limit';
+  if (limit === (origins[assistantId] === 'limit')) return;
+  const { [assistantId]: _origin, ...otherOrigins } = origins;
+  await configService.set('agent.enginePinOrigins', limit ? { ...otherOrigins, [assistantId]: 'limit' } : otherOrigins);
+}
+
+/** Who made an Agent's pin; `user` when it has none. */
+export const enginePinOrigin = (assistantId: string): EnginePinOrigin =>
+  configService.get('agent.enginePinOrigins')?.[assistantId] === 'limit' ? 'limit' : 'user';
+
+/**
+ * Drops the pins usage-limit switches made (ruling R17), so those Agents follow the new default engine; the user's
+ * own pins stay. Only pins still tagged are dropped: a pin the user re-made since then is theirs.
+ */
+export async function releaseLimitPins(): Promise<void> {
+  const origins = configService.get('agent.enginePinOrigins') ?? {};
+  const released = new Set(Object.keys(origins).filter((id) => origins[id] === 'limit'));
+  if (released.size === 0) return;
+  const pins = configService.get('agent.enginePins') ?? {};
+  await configService.set(
+    'agent.enginePins',
+    Object.fromEntries(Object.entries(pins).filter(([id]) => !released.has(id)))
+  );
+  await configService.set('agent.enginePinOrigins', {});
 }
 
 /**
@@ -230,8 +262,8 @@ export type UseDefaultEngineResult = {
 };
 
 /**
- * The default engine (Settings -> Engine). `setDefault` seeds pins on a first run, stores the
- * choice and then re-binds every unpinned Agent to it; re-bind errors only warn.
+ * The default engine (Settings -> Engine). `setDefault` releases the pins usage-limit switches made, seeds pins on a
+ * first run, stores the choice and then re-binds every unpinned Agent to it; re-bind errors only warn.
  */
 export function useDefaultEngine(): UseDefaultEngineResult {
   const { agent, engineIds, loading, error, hasConnectedEngine, retry } = useEngineState();
@@ -240,6 +272,12 @@ export function useDefaultEngine(): UseDefaultEngineResult {
 
   const setDefault = useCallback(
     async (id: string) => {
+      // Bots a usage-limit switch moved go back to following the default, as the switch's tooltip says.
+      if (id !== currentId) {
+        await releaseLimitPins().catch((releaseError: unknown) => {
+          console.error('[engine] Could not release the usage-limit pins:', releaseError);
+        });
+      }
       await sync({ defaultId: id, engineIds, seedFromId: currentId ?? id, commitDefault: true });
     },
     [currentId, engineIds, sync]

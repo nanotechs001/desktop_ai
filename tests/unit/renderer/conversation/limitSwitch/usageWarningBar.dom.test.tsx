@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SWRConfig } from 'swr';
@@ -128,9 +128,21 @@ const withAlternatives = (conversationId: string) => {
 };
 
 describe('UsageWarningBar', () => {
+  // The readings' resets are in 2026-08; the bar ignores readings whose window has already reset.
+  beforeEach(() => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_785_000_000_000);
+  });
   afterEach(() => {
     cleanup();
     mocks.switchAndContinue.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it('hides a reading whose window has already reset (M4)', () => {
+    withAlternatives('c-stale');
+    renderBar('c-stale');
+    push('c-stale', { utilization: 0.97, resets_at: 1_784_000_000 });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('shows the used percent of the window at 90% and offers the switch buttons', async () => {

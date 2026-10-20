@@ -12,7 +12,11 @@ import type {
   TConversationAssistantIdentity,
   TProviderWithModel,
 } from '@/common/config/storage';
-import { ENGINE_CHANGE_DEFAULTS_RESET, persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
+import {
+  ENGINE_CHANGE_DEFAULTS_RESET,
+  enginePinOrigin,
+  persistEnginePin,
+} from '@/renderer/hooks/agent/useDefaultEngine';
 import { loadLatestConversationMessages, MAX_MESSAGE_PAGE_LIMIT } from '@/renderer/utils/chat/messagePagination';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { isEngineEntry } from '@/renderer/utils/ui/agentPresentation';
@@ -47,12 +51,14 @@ async function engineEntryIdentity(engine: ManagedAgent): Promise<TConversationA
 
 /**
  * Pin a bot to `engineId` and re-bind its record, as the default-engine sync does (model, permission and thought
- * level go back to auto). Returns an undo that restores the previous pin, engine and those defaults.
+ * level go back to auto). The pin is tagged `limit`: the next default-engine change releases it (ruling R17). Returns
+ * an undo that restores the previous pin (and its origin), engine and those defaults.
  */
 async function pinAssistant(assistantId: string, engineId: string): Promise<() => Promise<void>> {
   const previousPin = configService.get('agent.enginePins')?.[assistantId] ?? null;
+  const previousOrigin = enginePinOrigin(assistantId);
   const detail = await ipcBridge.assistants.get.invoke({ id: assistantId });
-  await persistEnginePin(assistantId, engineId);
+  await persistEnginePin(assistantId, engineId, 'limit');
   try {
     await ipcBridge.assistants.update.invoke({
       id: assistantId,
@@ -60,7 +66,7 @@ async function pinAssistant(assistantId: string, engineId: string): Promise<() =
       defaults: ENGINE_CHANGE_DEFAULTS_RESET,
     });
   } catch (error) {
-    await persistEnginePin(assistantId, previousPin);
+    await persistEnginePin(assistantId, previousPin, previousOrigin);
     throw error;
   }
   return async () => {
@@ -70,7 +76,7 @@ async function pinAssistant(assistantId: string, engineId: string): Promise<() =
       agent_id: detail.engine.agent_id,
       defaults: { model, permission, thought_level },
     });
-    await persistEnginePin(assistantId, previousPin);
+    await persistEnginePin(assistantId, previousPin, previousOrigin);
   };
 }
 
@@ -83,9 +89,23 @@ const toProviderModel = ({ models: _models, ...provider }: IProvider, model: str
 type SwitchAndContinueParams = { conversationId: string; target: SwitchTarget; labels: HandoffLabels };
 
 /**
+ * Hands `handoff` to the new chat: stashed as its first message, which the chat sends when it opens; when the stash
+ * cannot be written (storage full or blocked), sent to the backend right away instead (M7).
+ */
+async function deliverHandoff(id: string, kind: 'acp' | 'aionrs', handoff: string): Promise<void> {
+  try {
+    sessionStorage.setItem(`${kind}_initial_message_${id}`, JSON.stringify({ input: handoff }));
+  } catch (stashError) {
+    console.warn('[limitSwitch] Could not stash the handoff, sending it now:', stashError);
+    await ipcBridge.conversation.sendMessage.invoke({ input: handoff, conversation_id: id, files: [] });
+  }
+}
+
+/**
  * Continue a chat that hit a usage limit on another engine or model: re-pin this bot (only; an engine chat moves to
- * the target engine's own entry instead), create a new chat like this one, and stash a handoff of the recent conversation as its first message, which the chat sends when it opens.
- * The old chat stays as it is. On failure nothing is stashed, the pin is rolled back and the error is rethrown.
+ * the target engine's own entry instead), create a new chat like this one, and give it a handoff of the recent
+ * conversation as its first message. The old chat stays as it is. On failure nothing is left behind: the new chat, if
+ * created, is removed (never an empty chat), the pin is rolled back and the error is rethrown.
  */
 export async function switchAndContinue({ conversationId, target, labels }: SwitchAndContinueParams): Promise<string> {
   const conversation = await getConversationOrNull(conversationId);
@@ -103,17 +123,22 @@ export async function switchAndContinue({ conversationId, target, labels }: Swit
   const onEngineEntry = engineChanges && conversation.assistant && !assistantId;
   const entry = onEngineEntry ? await engineEntryIdentity(target.engine) : undefined;
   const undoPin = assistantId ? await pinAssistant(assistantId, target.engine.id) : null;
+  let createdId: string | undefined;
   try {
-    const id = await startNewChatLike(conversation, {
+    createdId = await startNewChatLike(conversation, {
       engine: engineChanges ? target.engine : undefined,
       assistant: entry,
       model: target.kind === 'model' ? toProviderModel(target.provider, target.model) : undefined,
     });
-    if (!id) throw new Error('The backend created no conversation');
-    const initialMessageKind = target.engine.agent_type === 'aionrs' ? 'aionrs' : 'acp';
-    sessionStorage.setItem(`${initialMessageKind}_initial_message_${id}`, JSON.stringify({ input: handoff }));
-    return id;
+    if (!createdId) throw new Error('The backend created no conversation');
+    await deliverHandoff(createdId, target.engine.agent_type === 'aionrs' ? 'aionrs' : 'acp', handoff);
+    return createdId;
   } catch (error) {
+    if (createdId) {
+      await ipcBridge.conversation.remove.invoke({ id: createdId }).catch((removeError: unknown) => {
+        console.error('[limitSwitch] Could not remove the new chat:', removeError);
+      });
+    }
     await undoPin?.().catch((undoError: unknown) => {
       console.error('[limitSwitch] Could not roll back the engine pin:', undoError);
     });

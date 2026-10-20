@@ -15,7 +15,7 @@ import {
   formatResetTime,
   isUsageWarningDismissed,
   pickUsageWarning,
-  usageWarningKey,
+  usageWarningKeys,
 } from './usageWarning';
 import { useRateLimitInfo } from './useRateLimitInfo';
 
@@ -42,8 +42,8 @@ const UsageWarningBar: React.FC<{ conversationId: string }> = ({ conversationId 
   const [, setDismissals] = useState(0);
   const warning = info ? pickUsageWarning(info) : null;
   if (!warning) return null;
-  const key = usageWarningKey(conversationId, warning);
-  if (isUsageWarningDismissed(key)) return null;
+  const keys = usageWarningKeys(conversationId, warning);
+  if (isUsageWarningDismissed(keys)) return null;
 
   const windowName = t(`${PREFIX}.windows.${warning.window ? WINDOW_KEYS[warning.window] : 'unknown'}`);
   const usage =
@@ -68,7 +68,7 @@ const UsageWarningBar: React.FC<{ conversationId: string }> = ({ conversationId 
           aria-label={t(`${PREFIX}.dismiss`)}
           icon={<Close theme='outline' size='12' />}
           onClick={() => {
-            dismissUsageWarning(key);
+            dismissUsageWarning(keys);
             setDismissals((n) => n + 1);
           }}
         />

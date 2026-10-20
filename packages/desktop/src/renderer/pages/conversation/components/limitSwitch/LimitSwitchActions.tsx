@@ -35,6 +35,7 @@ const useHandoffLabels = (reason: SwitchReason): HandoffLabels => {
   const { t } = useTranslation();
   return {
     header: t(reason === 'nearLimit' ? `${PREFIX}.handoff.headerNearLimit` : `${PREFIX}.handoff.header`),
+    dataOnly: t(`${PREFIX}.handoff.dataOnly`),
     quoteStart: t(`${PREFIX}.handoff.quoteStart`),
     quoteEnd: t(`${PREFIX}.handoff.quoteEnd`),
     user: t(`${PREFIX}.handoff.user`),
@@ -70,11 +71,12 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
   const targets = listSwitchTargets({ conversation, engines, providers, getAvailableModels });
   const { modelEngine } = targets;
   const botId = pinnableAssistantId(conversation);
-  // Mirrors switchAndContinue: only an engine change re-pins, and only the chat's own bot.
+  const engineName = (engine: ManagedAgent): string => engine.name_i18n?.[i18n.language] || engine.name;
+  // Mirrors switchAndContinue: only an engine change re-pins, and only the chat's own bot (until the next default change).
   const tooltipFor = (engine: ManagedAgent, isModel: boolean): string => {
     const engineChanges = !(isModel && conversation.type === 'aionrs') && engine.id !== currentEngineId(conversation);
     return botId && engineChanges
-      ? t(`${PREFIX}.tooltipBot`, { name: conversation.assistant?.name || t('agent.displayName') })
+      ? t(`${PREFIX}.tooltipBot`, { engine: engineName(engine) })
       : t(`${PREFIX}.tooltipChatOnly`);
   };
 
@@ -112,7 +114,7 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
         {targets.engines.map((engine) => (
           <Tooltip key={engine.id} content={tooltipFor(engine, false)}>
             <Button size='mini' disabled={busy} onClick={() => void run({ kind: 'engine', engine })}>
-              {engine.name_i18n?.[i18n.language] || engine.name}
+              {engineName(engine)}
             </Button>
           </Tooltip>
         ))}

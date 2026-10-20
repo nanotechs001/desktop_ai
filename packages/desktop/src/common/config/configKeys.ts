@@ -33,6 +33,8 @@ export type ConfigKeyMap = {
   'agent.builtinDefaultId': string | undefined;
   /** Agents pinned to one engine: assistant id -> managed agent id. */
   'agent.enginePins': Record<string, string> | undefined;
+  /** Pins a usage-limit switch made (assistant id -> 'limit'); released on the next default-engine change. Absent: the user's own. */
+  'agent.enginePinOrigins': Record<string, 'limit'> | undefined;
   /** Color of each VA Bot's dot: assistant id -> `#rrggbb`. */
   'agent.colors': Record<string, string> | undefined;
   /** Chats left by deleted VA Bots that the user chose to keep: never offered for cleanup again. */

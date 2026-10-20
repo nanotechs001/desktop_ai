@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
     updateAssistant: vi.fn(),
     catalog: vi.fn(),
     emit: vi.fn(),
+    send: vi.fn(),
+    remove: vi.fn(),
   };
 });
 
@@ -41,6 +43,8 @@ vi.mock('@/common', () => ({
     conversation: {
       get: { invoke: mocks.getConversation },
       createWithConversation: { invoke: mocks.clone },
+      sendMessage: { invoke: mocks.send },
+      remove: { invoke: mocks.remove },
     },
     database: { getConversationMessages: { invoke: mocks.getMessages } },
     assistants: {
@@ -59,10 +63,11 @@ vi.mock('@/renderer/utils/emitter', () => ({ emitter: { emit: mocks.emit } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 import { switchAndContinue } from '@/renderer/pages/conversation/components/limitSwitch/switchAndContinue';
-import type { HandoffLabels } from '@/renderer/pages/conversation/components/limitSwitch/handoffMessage';
+import { HANDOFF_TAG, type HandoffLabels } from '@/renderer/pages/conversation/components/limitSwitch/handoffMessage';
 
 const labels: HandoffLabels = {
   header: 'HEADER',
+  dataOnly: 'DATA',
   quoteStart: 'START',
   quoteEnd: 'END',
   user: 'User',
@@ -163,6 +168,7 @@ describe('switchAndContinue', () => {
 
     expect(id).toBe('c2');
     expect(mocks.store.get('agent.enginePins')).toEqual({ 'bot-1': 'codex', other: 'x' });
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({ 'bot-1': 'limit' });
     expect(mocks.store.get('agent.defaultAgentId')).toBe('claude');
     expect(mocks.configService.set).not.toHaveBeenCalledWith('agent.defaultAgentId', expect.anything());
     expect(mocks.updateAssistant).toHaveBeenCalledWith({
@@ -190,7 +196,20 @@ describe('switchAndContinue', () => {
 
     const stored = JSON.parse(sessionStorage.getItem('acp_initial_message_c2') ?? 'null');
     expect(stored.input).toBe(
-      ['HEADER', '', 'START', 'User: plan my trip', 'END', '', 'LAST', 'plan my trip', '', 'CLOSING'].join('\n')
+      [
+        HANDOFF_TAG,
+        'HEADER',
+        'DATA',
+        '',
+        'START',
+        '> User: plan my trip',
+        'END',
+        '',
+        'LAST',
+        'plan my trip',
+        '',
+        'CLOSING',
+      ].join('\n')
     );
     expect(mocks.getMessages).toHaveBeenCalledWith(
       expect.objectContaining({ conversation_id: 'c1', content_mode: 'full' })
@@ -293,11 +312,55 @@ describe('switchAndContinue', () => {
     ).rejects.toThrow('boom');
 
     expect(mocks.store.get('agent.enginePins')).toEqual({ 'bot-1': 'claude', other: 'x' });
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({});
     expect(mocks.updateAssistant).toHaveBeenLastCalledWith({
       id: 'bot-1',
       agent_id: 'claude',
       defaults: DETAIL.defaults,
     });
     expect(sessionStorage.length).toBe(0);
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  describe('when the handoff cannot be stashed (M7)', () => {
+    const stashFails = () =>
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+
+    it('sends it to the new chat right away and keeps the pin', async () => {
+      const setItem = stashFails();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mocks.send.mockResolvedValue({});
+
+      const id = await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels });
+
+      expect(id).toBe('c2');
+      expect(mocks.send).toHaveBeenCalledWith({
+        input: expect.stringContaining('> User: plan my trip'),
+        conversation_id: 'c2',
+        files: [],
+      });
+      expect(mocks.store.get('agent.enginePins')).toEqual({ 'bot-1': 'codex', other: 'x' });
+      expect(mocks.remove).not.toHaveBeenCalled();
+      setItem.mockRestore();
+      warn.mockRestore();
+    });
+
+    it('removes the new chat and rolls the pin back when the send fails too: no empty chat is left', async () => {
+      const setItem = stashFails();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mocks.send.mockRejectedValue(new Error('send down'));
+      mocks.remove.mockResolvedValue(true);
+
+      await expect(
+        switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels })
+      ).rejects.toThrow('send down');
+
+      expect(mocks.remove).toHaveBeenCalledWith({ id: 'c2' });
+      expect(mocks.store.get('agent.enginePins')).toEqual({ 'bot-1': 'claude', other: 'x' });
+      setItem.mockRestore();
+      warn.mockRestore();
+    });
   });
 });

@@ -21,6 +21,11 @@ export type UsageWarning = {
   resetsAt: number | null;
   /** 100, 95 or 90 by usage; 0 when only the status or a threshold triggered the warning. */
   bucket: number;
+  /**
+   * What a dismissal covers (M5): each window at or above the threshold, by kind, reset and bucket; the shown reading
+   * alone when none is. Stable while the readings only reorder or the most-used window changes.
+   */
+  dismissKeys: readonly string[];
 };
 
 type Reading = { window: RateLimitWindowKind | null; utilization: number | null; resetsAt: number | null };
@@ -29,6 +34,9 @@ const toBucket = (utilization: number | null): number => {
   const bucket = DISMISS_BUCKETS.find((b) => utilization !== null && utilization >= b);
   return bucket === undefined ? 0 : Math.round(bucket * 100);
 };
+
+const readingKey = (r: Reading): string =>
+  [r.window ?? 'unknown', r.resetsAt ?? 'none', toBucket(r.utilization)].join('|');
 
 /**
  * The near-limit warning for a usage reading, or null when there is none to show: it shows when any window is at
@@ -49,37 +57,44 @@ export function pickUsageWarning(info: IConversationRateLimitUpdatedEvent): Usag
   const nearLimit = top !== null && (top.utilization ?? 0) >= USAGE_WARNING_THRESHOLD;
   if (!nearLimit && info.status !== 'allowed_warning' && info.surpassed_threshold === null) return null;
   const shown = nearLimit ? top : headline;
+  const atThreshold = readings.filter((r) => (r.utilization ?? 0) >= USAGE_WARNING_THRESHOLD);
   return {
     window: shown.window,
     pct: shown.utilization === null ? null : Math.floor(shown.utilization * 100),
     resetsAt: shown.resetsAt,
     bucket: toBucket(shown.utilization),
+    dismissKeys: [...new Set((atThreshold.length > 0 ? atThreshold : [shown]).map(readingKey))],
   };
 }
 
-/** Dismissal identity: the conversation, the window, its reset and the usage bucket. */
-export const usageWarningKey = (conversationId: string, warning: UsageWarning): string =>
-  [conversationId, warning.window ?? 'unknown', warning.resetsAt ?? 'none', warning.bucket].join('|');
+/** Dismissal identities: the conversation with each of the warning's {@link UsageWarning.dismissKeys}. */
+export const usageWarningKeys = (conversationId: string, warning: UsageWarning): string[] =>
+  warning.dismissKeys.map((key) => `${conversationId}|${key}`);
 
 const STORAGE_PREFIX = 'usageWarningDismissed:';
 const dismissedInMemory = new Set<string>();
 
-export function isUsageWarningDismissed(key: string): boolean {
+const isKeyDismissed = (key: string): boolean => {
   if (dismissedInMemory.has(key)) return true;
   try {
     return sessionStorage.getItem(STORAGE_PREFIX + key) !== null;
   } catch {
     return false;
   }
-}
+};
 
-export function dismissUsageWarning(key: string): void {
-  dismissedInMemory.add(key);
-  try {
-    sessionStorage.setItem(STORAGE_PREFIX + key, '1');
-  } catch {
-    // shortcut: storage unavailable, so the dismissal lasts only until reload
-  }
+/** Dismissed when every one of its keys was: a window that newly reaches the threshold brings it back. */
+export const isUsageWarningDismissed = (keys: readonly string[]): boolean => keys.every(isKeyDismissed);
+
+export function dismissUsageWarning(keys: readonly string[]): void {
+  keys.forEach((key) => {
+    dismissedInMemory.add(key);
+    try {
+      sessionStorage.setItem(STORAGE_PREFIX + key, '1');
+    } catch {
+      // shortcut: storage unavailable, so the dismissal lasts only until reload
+    }
+  });
 }
 
 const SECONDS_TO_MS = 1000;
