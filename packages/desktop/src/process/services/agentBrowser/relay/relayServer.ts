@@ -358,8 +358,9 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       const origin = webOriginOf(contents.mainFrame.url);
       const frameOrigin = origin ? await frameOriginOf(sessionId, frameId) : null;
       if (!origin || !frameOrigin) return { allow: false };
+      // The asking agent's chat first (ruling R9): an ask on a user tab shared with it still reaches that chat.
       const owner = registry.ownership(id)?.owner;
-      const conversationId = owner && owner !== 'user' ? owner.conversationId : undefined;
+      const conversationId = conn.conversationId ?? (owner && owner !== 'user' ? owner.conversationId : undefined);
       const request = {
         origin,
         frameOrigin: frameOrigin === 'opaque' ? null : frameOrigin,

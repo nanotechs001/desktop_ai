@@ -837,6 +837,26 @@ describe('relay server: AionRelay methods', () => {
       expect(requestConfirm.mock.calls[1][0]).not.toHaveProperty('conversationId');
     });
 
+    it("names the asking agent's own chat first, so an ask on a shared user tab reaches that chat", async () => {
+      const client = await connect(await start(), 'claude', { 'X-Aion-Conversation': 'conv_B-2' });
+      const shared = new FakeContents(51, 'https://bank.test/');
+      shared.debugger.handler = (method) =>
+        method === 'Page.getFrameTree'
+          ? { frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } } }
+          : {};
+      registry.track(shared);
+      registry.share(51, true);
+      // Shared Personal tabs are open to every client; the lookup has to finish before the attach.
+      await client.send('AionRelay.listTabs');
+      const sessionId = await attach(client, 51);
+      requestConfirm.mockResolvedValue(true);
+      await client.send('AionRelay.requestConfirm', { webContentsId: 51, label: 'Send', sessionId, frameId: 'TOP' });
+      expect(requestConfirm.mock.calls[0][0]).toMatchObject({
+        origin: 'https://bank.test',
+        conversationId: 'conv_B-2',
+      });
+    });
+
     it('takes the origin of a control in a cross-origin frame from the frame tree', async () => {
       const { ask } = await confirmTab();
       requestConfirm.mockResolvedValue(true);
