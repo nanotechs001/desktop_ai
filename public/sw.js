@@ -24,30 +24,28 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.map((key) => {
-            if (key === CACHE_NAME) {
-              return Promise.resolve();
-            }
-            return caches.delete(key);
+    caches.keys().then((keys) => {
+      // An older cache means open tabs may still run under the previous SW.
+      // On a first install (every new tunnel origin) there is nothing to fix,
+      // and a reload would interrupt the page mid sign-in.
+      const hadOld = keys.some((key) => key !== CACHE_NAME);
+      return (
+        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+          .then(() => self.clients.claim())
+          // After claim, tell any open WebUI tabs running under the previous SW
+          // to reload so they pick up the fixed fetch handler immediately.
+          // Without this, an already-open tab keeps serving from the old v1 SW
+          // until the user manually refreshes.
+          .then(() => {
+            if (!hadOld) return undefined;
+            return self.clients.matchAll({ type: 'window' }).then((clients) => {
+              for (const client of clients) {
+                client.navigate(client.url).catch(() => undefined);
+              }
+            });
           })
-        )
-      )
-      .then(() => self.clients.claim())
-      // After claim, tell any open WebUI tabs running under the previous SW
-      // to reload so they pick up the fixed fetch handler immediately.
-      // Without this, an already-open tab keeps serving from the old v1 SW
-      // until the user manually refreshes.
-      .then(() =>
-        self.clients.matchAll({ type: 'window' }).then((clients) => {
-          for (const client of clients) {
-            client.navigate(client.url).catch(() => undefined);
-          }
-        })
-      )
+      );
+    })
   );
 });
 
