@@ -22,6 +22,10 @@ import { isElectronDesktop } from '@/renderer/utils/platform';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 
+/** A load faster than this shows no spinner and no dimming at all. */
+const SPINNER_DELAY_MS = 150;
+const PREVIOUS_CHAT_OPACITY = 0.6;
+
 const ChatConversationIndex: React.FC = () => {
   const { id } = useParams();
   const { t } = useTranslation();
@@ -33,9 +37,16 @@ const ChatConversationIndex: React.FC = () => {
   const listLoaded = useConversationListLoaded();
   const defaultConversationTitle = t('conversation.welcome.newConversation');
 
-  const { data, isLoading, mutate } = useSWR(id ? `conversation/${id}` : null, () => {
-    return getConversationOrNull(id!);
-  });
+  // keepPreviousData: a cold switch keeps the last chat on screen (dimmed, below) until the next one loads, instead of
+  // unmounting the whole layout, header, panes and the browser slot, behind a spinner.
+  const { data, isLoading, mutate } = useSWR(
+    id ? `conversation/${id}` : null,
+    () => {
+      return getConversationOrNull(id!);
+    },
+    { keepPreviousData: true }
+  );
+  const showingPrevious = Boolean(data && id && data.id !== id);
 
   // Enter the preview scope once per conversation and scope, not on every render or data refresh.
   // The scope is `previewScopeKey` = project (falling back to workspace until the backend populates
@@ -152,8 +163,27 @@ const ChatConversationIndex: React.FC = () => {
     if (isHiddenAgentChat) navigate('/guid', { replace: true });
   }, [isHiddenAgentChat, navigate]);
 
-  if (isLoading || isHiddenAgentChat) return <Spin loading></Spin>;
-  return <ChatConversation conversation={data ?? undefined}></ChatConversation>;
+  if ((isLoading && !data) || isHiddenAgentChat) {
+    return (
+      <div className='flex flex-1 items-center justify-center min-h-0'>
+        <Spin delay={SPINNER_DELAY_MS} />
+      </div>
+    );
+  }
+  return (
+    <div
+      className='flex flex-col flex-1 min-h-0 min-w-0 h-full'
+      // The last chat dims only if the next one is slow, and takes no input meanwhile; the new one undims in.
+      style={{
+        opacity: showingPrevious ? PREVIOUS_CHAT_OPACITY : 1,
+        pointerEvents: showingPrevious ? 'none' : undefined,
+        transition: `opacity var(--motion-fast) var(--motion-ease-out) ${showingPrevious ? SPINNER_DELAY_MS : 0}ms`,
+      }}
+      aria-busy={showingPrevious || undefined}
+    >
+      <ChatConversation conversation={data ?? undefined}></ChatConversation>
+    </div>
+  );
 };
 
 export default ChatConversationIndex;
