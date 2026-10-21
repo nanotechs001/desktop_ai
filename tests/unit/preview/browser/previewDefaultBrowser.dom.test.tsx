@@ -692,6 +692,30 @@ describe("an older chat of a VA Bot gets the bot's browser back only when it con
     expect(ctx.isOpen).toBe(true);
   });
 
+  it("a Watch, or the main window following a robot, onto the older chat shows the bot's browser", () => {
+    mount();
+    const { botTab } = botTabInNewerChat();
+
+    act(() => ctx.revealBrowserFor('c1'));
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+
+    expect(ctx.tabs.map((tab) => tab.id)).toContain(botTab);
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('a Watch on the older chat already on screen brings the bot tabs in too', () => {
+    mount();
+    const { botTab } = botTabInNewerChat();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+    setCurrentConversation('c1');
+
+    act(() => ctx.revealBrowserFor('c1'));
+
+    expect(ctx.tabs.map((tab) => tab.id)).toContain(botTab);
+    expect(ctx.activeTabId).toBe(botTab);
+    expect(ctx.isOpen).toBe(true);
+  });
+
   it("brings the bot's tabs in, opens the pane and shows the agent's tab once the relay hands them over", () => {
     mount();
     const { botTab } = botTabInNewerChat();

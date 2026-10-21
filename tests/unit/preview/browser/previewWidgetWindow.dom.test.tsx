@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   openTab: [] as ((request: OpenTabRequest) => void)[],
   profileRemoved: [] as ((event: { agentId: string }) => void)[],
   refuseTab: vi.fn(async () => ({ success: true })),
+  openFileInMain: vi.fn(async () => undefined),
   subscribe:
     <T,>(list: ((event: T) => void)[]) =>
     (handler: (event: T) => void) => {
@@ -40,6 +41,7 @@ vi.mock('@/common', () => ({
       profileRemoved: { on: h.subscribe(h.profileRemoved) },
     },
     agentBrowser: { refuseTab: { invoke: h.refuseTab } },
+    agentWidget: { openFileInMain: { invoke: h.openFileInMain } },
     conversation: { responseStream: { on: () => () => {} } },
   },
 }));
@@ -48,6 +50,10 @@ const PROJECT_OF: Record<string, string> = { 'chat-a': 'proj-a', 'chat-b': 'proj
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
   getConversationOrNull: async (id: string) =>
     PROJECT_OF[id] ? { id, project_id: PROJECT_OF[id], extra: { workspace: `/ws/${id}` } } : null,
+}));
+vi.mock('@/renderer/utils/file/previewPayload', () => ({
+  upgradeFileRef: async (ref: unknown) => ref,
+  resolvePreviewPayload: async () => ({ content: '# report', oversized: false }),
 }));
 vi.mock('@/renderer/pages/conversation/Preview/browser/firstUseNotice', () => ({
   maybeNotifyFirstAgentBrowserUse: vi.fn(),
@@ -112,6 +118,8 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   h.refuseTab.mockClear();
+  h.openFileInMain.mockClear();
+  window.location.hash = '';
 });
 
 describe('only the main window owns browser tab state', () => {
@@ -178,5 +186,48 @@ describe('only the main window owns browser tab state', () => {
     expect(main.tabs.map((t) => t.id)).toEqual([user.id, copies[2].id]);
     expect(main.activeTabId).toBe(copies[2].id);
     await waitFor(() => expect(storedUrls('proj-a')).toEqual(['https://user.test/', URL_A]));
+  });
+});
+
+describe('a robot window shows nothing of its own', () => {
+  let robot: PreviewContextValue;
+  const RobotProbe: React.FC = () => {
+    robot = usePreviewContext();
+    return null;
+  };
+
+  it('entering a scope and opening tabs there never writes the shared preview state', async () => {
+    render(
+      <PreviewProvider readOnly>
+        <RobotProbe />
+      </PreviewProvider>
+    );
+    act(() => robot.closePreviewIfScopeChanged('proj-a', { openBrowserIfEmpty: true, conversationId: 'chat-a' }));
+    act(() => void robot.openPreview('# notes', 'markdown', { title: 'notes' }));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("sends a file a robot's chat opens to the main window, on that chat", () => {
+    window.location.hash = '#/widget/chat-a';
+    render(
+      <PreviewProvider readOnly>
+        <RobotProbe />
+      </PreviewProvider>
+    );
+    act(
+      () => void robot.openPreview('# report', 'markdown', { title: 'report.md', file_path: '/ws/chat-a/report.md' })
+    );
+    expect(h.openFileInMain).toHaveBeenCalledWith({ conversation_id: 'chat-a', path: '/ws/chat-a/report.md' });
+    expect(robot.tabs).toEqual([]);
+  });
+
+  it('the main window opens that file once the chat is on screen, instead of a blank browser tab', async () => {
+    render(<Windows />);
+    enterScope('proj-b');
+    act(() => main.revealFileFor('chat-a', '/ws/chat-a/report.md'));
+    act(() => main.closePreviewIfScopeChanged('proj-a', { openBrowserIfEmpty: true, conversationId: 'chat-a' }));
+    await waitFor(() => expect(main.tabs.map((tab) => tab.metadata?.file_path)).toEqual(['/ws/chat-a/report.md']));
+    expect(main.isOpen).toBe(true);
   });
 });

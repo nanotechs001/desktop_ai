@@ -39,6 +39,7 @@ import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { getCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { onPreviewWatchChange, reconcilePreviewWatch, resetPreviewWatch } from './previewWatchStore';
+import { openFileInPreview } from '@/renderer/pages/conversation/Messages/fileLinks/openFileInPreview';
 
 /** DOM 片段数据结构 / DOM snippet data structure */
 export interface DomSnippet {
@@ -176,6 +177,11 @@ export interface PreviewContextValue {
    * (a link clicked in that conversation's robot chat).
    */
   revealBrowserFor: (conversationId: string, url?: string) => void;
+  /**
+   * Preview the file at `path` in this conversation (a file link clicked in its robot chat): at once when the
+   * conversation is on screen, otherwise when it is entered next, in place of the blank tab a fresh scope opens.
+   */
+  revealFileFor: (conversationId: string, path: string) => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
   /** The open conversation runs on a VA Bot (a user-created Agent): browser on top, chat underneath. */
@@ -844,7 +850,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
     const scope = currentScopeRef.current;
-    if (scope == null) return undefined;
+    // A robot window never writes it: the windows share one origin's storage, and the last writer would win.
+    if (scope == null || readOnly) return undefined;
     // A held-back tab that came on screen is stored from `tabs` from now on (and dropped if it is closed there).
     const held = heldBackRef.current;
     if (held) heldBackRef.current = { ...held, tabs: held.tabs.filter((tab) => !tabs.some((t) => t.id === tab.id)) };
@@ -853,7 +860,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       persistScopeState(scope, { isOpen, tabs: stored, activeTabId, userClosed: userClosedRef.current });
     }, 150);
     return () => clearTimeout(timer);
-  }, [tabs, activeTabId, isOpen]);
+  }, [tabs, activeTabId, isOpen, readOnly]);
 
   // Keep the panel's directory subscriptions in step with its open tabs.
   //
@@ -976,6 +983,16 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
        * does not focus it". The updater must also stay pure, since StrictMode
        * invokes it twice.
        */
+      // A robot window has no preview pane: a file its chat opens is shown in the main window, on that chat.
+      const robotChat = readOnly ? getWidgetConversationId() : null;
+      if (robotChat && meta?.file_path) {
+        ipcBridge.agentWidget.openFileInMain
+          .invoke({ conversation_id: robotChat, path: meta.file_path })
+          .catch((error: unknown) =>
+            console.warn('[PreviewContext] could not open the file in the main window:', error)
+          );
+        return '';
+      }
       const currentTabs = tabsRef.current;
 
       // 记下打开时的 mtime，作为下次保存的 If-Match 条件。
@@ -1087,7 +1104,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       userClosedRef.current = false;
       return targetTabId;
     },
-    [extractFileName, findPreviewTabInList]
+    [readOnly, extractFileName, findPreviewTabInList]
   );
 
   /**
@@ -1249,7 +1266,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   }, [closePreview]);
 
   // A Watch (or a link) for a conversation not on screen yet; consumed when the route enters its scope.
-  const revealRequestRef = useRef<{ conversationId: string; url?: string; at: number } | null>(null);
+  const revealRequestRef = useRef<{ conversationId: string; url?: string; filePath?: string; at: number } | null>(null);
   const revealBrowserFor = useCallback(
     (conversationId: string, url?: string) => {
       if (getCurrentConversation() !== conversationId) {
@@ -1257,11 +1274,28 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         return;
       }
       userClosedRef.current = false;
+      // An older chat of a VA Bot on screen holds its browser back; asked to show it, the bot's tabs come in.
+      const chat = onScreenChatRef.current;
+      const scopeKey = currentScopeRef.current;
+      if (chat?.agentId && chat.conversationId === conversationId && scopeKey != null) {
+        pullBotTabs(chat.agentId, { conversationId, newest: true }, scopeKey);
+      }
       if (url) openBrowserTab(url);
       else if (tabsRef.current.length > 0) setIsOpen(true);
       else openBrowserTab();
     },
-    [openBrowserTab]
+    [openBrowserTab, pullBotTabs]
+  );
+  const revealFileFor = useCallback(
+    (conversationId: string, path: string) => {
+      if (getCurrentConversation() !== conversationId) {
+        revealRequestRef.current = { conversationId, filePath: path, at: Date.now() };
+        return;
+      }
+      userClosedRef.current = false;
+      void openFileInPreview(openPreview, path);
+    },
+    [openPreview]
   );
 
   const openBrowserTabOrForward = useCallback(
@@ -1330,6 +1364,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   // survives conversation-page remounts.
   const closePreviewIfScopeChanged = useCallback(
     (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => {
+      // A robot window keeps no scopes: it would restore, pull and store tabs the main window owns.
+      if (readOnly) return;
       const prev = currentScopeRef.current;
       const request = revealRequestRef.current;
       const revealing =
@@ -1339,10 +1375,18 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       // An expired request for this conversation is dropped too, so a chat that never loaded cannot open a tab later.
       if (revealing || (request && request.conversationId === options?.conversationId)) revealRequestRef.current = null;
       const revealUrl = revealing ? request?.url : undefined;
-      // An older chat of a VA Bot holds its browser back (no restored, pulled or blank tab) until its agent uses it.
-      const holdsBrowser = Boolean(options?.agentId) && options?.newestOfBot === false;
-      // A link from that conversation's robot chat: a new tab, in place of the blank one a fresh scope would open.
+      const revealFile = revealing ? request?.filePath : undefined;
+      // An older chat of a VA Bot holds its browser back (no restored, pulled or blank tab) until its agent uses it, or
+      // the user asks to see it (Watch, the main window following its robot): then the bot's tabs come in.
+      const holdsBrowser = Boolean(options?.agentId) && options?.newestOfBot === false && !revealing;
+      const newest = options?.newestOfBot === true || revealing;
+      // A link or a file from that conversation's robot chat: in place of the blank tab a fresh scope would open.
       const openRevealUrl = (): boolean => {
+        if (revealFile) {
+          userClosedRef.current = false;
+          void openFileInPreview(openPreview, revealFile);
+          return true;
+        }
         if (!revealUrl) return false;
         userClosedRef.current = false;
         openBrowserTab(revealUrl);
@@ -1362,11 +1406,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         : null;
       if (prev === scopeKey) {
         if (!holdsBrowser && options?.agentId && options.conversationId && scopeKey != null) {
-          pullBotTabs(
-            options.agentId,
-            { conversationId: options.conversationId, newest: options.newestOfBot },
-            scopeKey
-          );
+          pullBotTabs(options.agentId, { conversationId: options.conversationId, newest }, scopeKey);
         }
         reopenUnlessUserClosed();
         return;
@@ -1437,10 +1477,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       const left = prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
       const bot =
         !holdsBrowser && options?.agentId && options.conversationId && scopeKey != null
-          ? moveBotTabs(left, options.agentId, scopeKey, {
-              conversationId: options.conversationId,
-              newest: options.newestOfBot,
-            })
+          ? moveBotTabs(left, options.agentId, scopeKey, { conversationId: options.conversationId, newest })
           : null;
       if (bot) forgetMovedTabs(bot.moved);
       const background = bot?.background ?? left;
@@ -1475,7 +1512,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         }
       }
     },
-    [isOpen, tabs, activeTabId, openBrowserTab, findPreviewTabInList, setBackground, pullBotTabs]
+    [readOnly, isOpen, tabs, activeTabId, openBrowserTab, openPreview, findPreviewTabInList, setBackground, pullBotTabs]
   );
 
   const closeTab = useCallback(
@@ -1843,6 +1880,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
    * signal that separates the two.
    */
   useEffect(() => {
+    // A robot window shows no tabs to badge, and its one-time notice would land clipped in the robot.
+    if (readOnly) return;
     const markBrowserTabs = (agentActive: boolean) => {
       setTabs((prevTabs) => {
         // 只标记浏览器 tab；没有浏览器 tab 时返回原数组，避免无意义的重渲染
@@ -1884,7 +1923,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     });
 
     return unsubscribe;
-  }, []);
+  }, [readOnly]);
 
   const liveTabs = useMemo(() => liveBrowserTabs(tabs, backgroundTabs), [tabs, backgroundTabs]);
 
@@ -1900,6 +1939,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       closePreview,
       collapsePreview,
       revealBrowserFor,
+      revealFileFor,
       toggleMaximized,
       isVaBotMode,
       setVaBotMode,
@@ -1939,6 +1979,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     closePreview,
     collapsePreview,
     revealBrowserFor,
+    revealFileFor,
     toggleMaximized,
     isVaBotMode,
     setVaBotMode,

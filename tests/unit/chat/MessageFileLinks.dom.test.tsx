@@ -137,6 +137,20 @@ describe('useAutoOpenTurnFiles', () => {
     expect(openPreview).toHaveBeenCalledTimes(1);
   });
 
+  it('does not auto-open in a robot window, whose files would pull the main window to the chat mid-turn', async () => {
+    window.location.hash = '#/widget/c1';
+    try {
+      const { rerender } = renderHook(({ messages }) => useAutoOpenTurnFiles('c1', messages), {
+        initialProps: { messages: [user] as TMessage[] },
+      });
+      rerender({ messages: [user, write('completed', Date.now() + 1000)] });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(openPreview).not.toHaveBeenCalled();
+    } finally {
+      window.location.hash = '';
+    }
+  });
+
   it('does not auto-open in VA Bot mode', async () => {
     previewState.isVaBotMode = true;
     const { rerender } = renderHook(({ messages }) => useAutoOpenTurnFiles('c1', messages), {
