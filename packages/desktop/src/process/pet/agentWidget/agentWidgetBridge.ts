@@ -8,7 +8,9 @@ import { z } from 'zod';
 import { ipcBridge } from '@/common';
 import {
   AGENT_ANIMATION_STATES,
+  AGENT_WIDGET_PREVIEW_TYPES,
   AGENT_WIDGET_WINDOW_GESTURES,
+  MAX_AGENT_WIDGET_PREVIEW_CHARS,
   CONVERSATION_ID_PATTERN,
   isHttpUrl,
 } from '@/common/types/agent/agentWidget';
@@ -58,6 +60,15 @@ const schemas = {
     .extend({ path: z.string().regex(/^\/(settings\/(agent|model)|scheduled\/[\w-]{1,128})$/) })
     .strict(),
   openFileInMain: target.extend({ path: z.string().min(1).max(4096) }).strict(),
+  openPreviewInMain: target
+    .extend({
+      content: z.string().max(MAX_AGENT_WIDGET_PREVIEW_CHARS),
+      content_type: z.enum(AGENT_WIDGET_PREVIEW_TYPES),
+      title: z.string().max(512).optional(),
+      file_name: z.string().max(512).optional(),
+      language: z.string().max(64).optional(),
+    })
+    .strict(),
   animationDone: target.extend({ animation: z.enum(['appearing', 'disappearing']) }).strict(),
   setSuspended: target.extend({ suspended: z.boolean() }).strict(),
 };
@@ -135,6 +146,14 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   w.openFileInMain.provider(async (p) => {
     const { conversation_id, path } = parse(schemas.openFileInMain, p, 'openFileInMain');
     manager.openFileInMain(conversation_id, path);
+  });
+  w.openPreviewInMain.provider(async (p) => {
+    const { conversation_id, content, content_type, title, file_name, language } = parse(
+      schemas.openPreviewInMain,
+      p,
+      'openPreviewInMain'
+    );
+    manager.openPreviewInMain(conversation_id, { content, content_type, title, file_name, language });
   });
   w.followActivity.provider(async (p) =>
     manager.followAgentActivity(parse(target, p, 'followActivity').conversation_id)

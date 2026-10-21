@@ -150,6 +150,21 @@ export const DEFAULT_AGENT_WIDGET_SETTINGS: AgentWidgetSettings = {
 };
 
 /** Conversation ids are backend UUIDs; anything else is rejected at the IPC boundary. */
+/** The text previews a robot window hands to the main window by content (no file behind them: a diagram, a diff). */
+export const AGENT_WIDGET_PREVIEW_TYPES = ['markdown', 'diff', 'code', 'html', 'csv'] as const;
+export type AgentWidgetPreviewType = (typeof AGENT_WIDGET_PREVIEW_TYPES)[number];
+/** The longest preview content a robot window may forward. */
+export const MAX_AGENT_WIDGET_PREVIEW_CHARS = 2_000_000;
+
+/** A preview a robot window forwards to the main window, shown read-only there. */
+export type AgentWidgetPreview = {
+  content: string;
+  content_type: AgentWidgetPreviewType;
+  title?: string;
+  file_name?: string;
+  language?: string;
+};
+
 export const CONVERSATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** True for an absolute http(s) URL: the only links a robot's chat may hand to the main window's browser. */

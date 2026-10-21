@@ -82,6 +82,7 @@ import type {
   AgentWidgetHiddenRobot,
   AgentWidgetLayout,
   AgentWidgetLifecycleAnimation,
+  AgentWidgetPreview,
   AgentWidgetRobot,
   AgentWidgetSettings,
   AgentWidgetSnapshot,
@@ -1654,6 +1655,10 @@ export const agentWidget = {
   openPageInMain: bridge.buildProvider<void, AgentWidgetTarget & { path: string }>('agent-widget:open-page-in-main'),
   /** Preview a file a robot's chat links to in the main window, on that conversation; the popup stays. */
   openFileInMain: bridge.buildProvider<void, AgentWidgetTarget & { path: string }>('agent-widget:open-file-in-main'),
+  /** Show a preview with no file behind it (a diagram, a diff) from a robot's chat in the main window; the popup stays. */
+  openPreviewInMain: bridge.buildProvider<void, AgentWidgetTarget & AgentWidgetPreview>(
+    'agent-widget:open-preview-in-main'
+  ),
   /** The widget renderer has its first frames decoded: show the window and play `appearing`. */
   rendererReady: bridge.buildProvider<void, AgentWidgetTarget & { agent_id?: string; modified_at?: number }>(
     'agent-widget:renderer-ready'

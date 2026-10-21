@@ -14,6 +14,7 @@ import type {
   AgentWidgetHiddenRobot,
   AgentWidgetLayout,
   AgentWidgetPersistedState,
+  AgentWidgetPreview,
   AgentWidgetRecord,
   AgentWidgetRobot,
   AgentWidgetSettings,
@@ -799,6 +800,15 @@ export class AgentWidgetManager {
   openFileInMain(conversationId: string, path: string): void {
     if (!this.entries.has(conversationId)) return;
     this.focusMain()?.webContents.send('tray:open-file-in-conversation', { conversation_id: conversationId, path });
+  }
+
+  /** Show a preview with no file behind it (a diagram, a diff) from a robot's chat in the main window, on that chat. */
+  openPreviewInMain(conversationId: string, preview: AgentWidgetPreview): void {
+    if (!this.entries.has(conversationId)) return;
+    this.focusMain()?.webContents.send('tray:open-preview-in-conversation', {
+      conversation_id: conversationId,
+      ...preview,
+    });
   }
 
   /** The user pressed inside this robot's open popup (compact or expanded): the main window follows its chat. */

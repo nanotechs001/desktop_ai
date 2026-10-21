@@ -150,6 +150,7 @@ vi.mock('@/common', () => {
     'followActivity',
     'openPageInMain',
     'openFileInMain',
+    'openPreviewInMain',
     'rendererReady',
     'animationDone',
     'setSuspended',
@@ -2303,7 +2304,7 @@ describe('robot windows in combination with the main window', () => {
     expect(win.webContents.setZoomMode).toHaveBeenCalledWith('disabled');
   });
 
-  it('opens a page or a file of a live robot chat in the main window, and validates the request', async () => {
+  it('opens a page, a file or a preview of a live robot chat in the main window, and validates the request', async () => {
     const { manager } = await makeManager();
     initAgentWidgetBridge(manager);
     manager.ensure(A);
@@ -2325,9 +2326,26 @@ describe('robot windows in combination with the main window', () => {
     await expect(h.providers.openFileInMain({ conversation_id: A, path: '' })).rejects.toThrow();
     await expect(h.providers.openFileInMain({ conversation_id: A, path: 'x'.repeat(5000) })).rejects.toThrow();
 
+    const diagram = { content: '```mermaid\ngraph TD\n```', content_type: 'markdown', title: 'Diagram' };
+    await h.providers.openPreviewInMain({ conversation_id: A, ...diagram });
+    expect(main.webContents.send).toHaveBeenLastCalledWith('tray:open-preview-in-conversation', {
+      conversation_id: A,
+      ...diagram,
+      file_name: undefined,
+      language: undefined,
+    });
+    await expect(
+      h.providers.openPreviewInMain({ conversation_id: A, content: '<x>', content_type: 'browser' })
+    ).rejects.toThrow();
+    await expect(
+      h.providers.openPreviewInMain({ conversation_id: A, ...diagram, content: 'x'.repeat(2_000_001) })
+    ).rejects.toThrow();
+    await expect(h.providers.openPreviewInMain({ conversation_id: A, ...diagram, editable: true })).rejects.toThrow();
+
     main.webContents.send.mockClear();
     await h.providers.openPageInMain({ conversation_id: B, path: '/settings/agent' }); // no robot: ignored
     await h.providers.openFileInMain({ conversation_id: B, path: '/work/report.md' });
+    await h.providers.openPreviewInMain({ conversation_id: B, ...diagram });
     expect(main.webContents.send).not.toHaveBeenCalled();
   });
 });
