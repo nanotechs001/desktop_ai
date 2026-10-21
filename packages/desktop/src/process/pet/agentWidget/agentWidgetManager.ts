@@ -170,6 +170,8 @@ export class AgentWidgetManager {
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   /** Conversations whose chat the user is watching in the main window: their robots step away meanwhile. */
   private readonly suspended = new Set<string>();
+  /** The robot whose popup the user last opened or pressed in: the only one whose agent the main window follows. */
+  private activeRobot: string | null = null;
   private readonly relayoutAll = () => {
     for (const entry of this.entries.values()) {
       // A walk toward a spot the re-place moved out of reach would never arrive.
@@ -237,7 +239,7 @@ export class AgentWidgetManager {
     this.state.settings = next;
     if (next.enabled !== prev.enabled) {
       if (next.enabled) this.restoreAll();
-      else for (const entry of this.entries.values()) this.disappear(entry, 'destroy');
+      else this.giveChatsBack();
     } else {
       for (const entry of this.entries.values()) this.applyAlwaysOnTop(entry.win);
       if (next.scale !== prev.scale) this.relayoutAll();
@@ -246,6 +248,14 @@ export class AgentWidgetManager {
     ipcBridge.agentWidget.settingsChanged.emit(next);
     void this.persist();
     return next;
+  }
+
+  /** Robots off: every chat goes back to the main window (no placeholder without a robot), then the windows go. */
+  private giveChatsBack(): void {
+    for (const record of Object.values(this.state.widgets)) {
+      if (record.chat_location === 'widget') this.setChatLocation(record.conversation_id, 'main');
+    }
+    for (const entry of this.entries.values()) this.disappear(entry, 'destroy');
   }
 
   /**
@@ -258,7 +268,8 @@ export class AgentWidgetManager {
     if (!this.state.settings.enabled) return false;
     // One robot per VA Bot: a new conversation of a bot that already has a robot moves that robot over.
     const sibling = agentId ? this.recordForAgent(agentId, conversationId) : undefined;
-    if (sibling) this.retarget(sibling.conversation_id, conversationId);
+    // Started elsewhere (the main window, a phone): it never moves into the sibling's open popup.
+    if (sibling) this.retarget(sibling.conversation_id, conversationId, false);
     const existing = this.state.widgets[conversationId];
     if (!force && (existing ? existing.hidden : !this.state.settings.autoLaunch)) return false;
     const wasHidden = existing?.hidden === true;
@@ -319,6 +330,7 @@ export class AgentWidgetManager {
     const record = this.state.widgets[conversationId];
     if (!record) return;
     this.setChatLocation(conversationId, 'main');
+    if (this.activeRobot === conversationId) this.activeRobot = null;
     record.hidden = true;
     record.expanded = false;
     const entry = this.entries.get(conversationId);
@@ -330,6 +342,8 @@ export class AgentWidgetManager {
 
   /** The conversation is gone (deleted/archived/terminated): drop window, draft and saved state. */
   remove(conversationId: string): void {
+    this.setChatLocation(conversationId, 'main');
+    if (this.activeRobot === conversationId) this.activeRobot = null;
     const entry = this.entries.get(conversationId);
     if (entry) this.disappear(entry, 'destroy');
     this.drafts.delete(conversationId);
@@ -368,7 +382,10 @@ export class AgentWidgetManager {
     this.stopWindowTransition(entry);
     if (expanded) {
       this.finishLanding(entry);
-      this.setChatLocation(conversationId, 'widget');
+      // Announced even when the saved location already says so (a restart while the robots were off): the main window
+      // must drop its own send box for this chat.
+      this.setChatLocation(conversationId, 'widget', true);
+      this.activeRobot = conversationId;
     }
     this.place(entry);
     if (leavingBand && fromBand === 'drop') this.drop(entry);
@@ -475,12 +492,13 @@ export class AgentWidgetManager {
     return expandedBandHeight(this.botSize());
   }
 
-  setChatLocation(conversationId: string, location: AgentChatLocation): void {
+  /** `announce`: tell the windows even when the saved location already says so. */
+  setChatLocation(conversationId: string, location: AgentChatLocation, announce = false): void {
     const record = this.state.widgets[conversationId];
     const entry = this.entries.get(conversationId);
     // The chat came back to the main window: a popup still waiting for the robot to appear is no longer wanted.
     if (location === 'main' && entry) entry.expandWhenLive = false;
-    if (!record || record.chat_location === location) return;
+    if (!record || (record.chat_location === location && !announce)) return;
     record.chat_location = location;
     // Collapse the usual way, so a walk in the expanded window's band stops too.
     if (location === 'main' && entry?.record.expanded) this.setExpanded(conversationId, false);
@@ -498,10 +516,11 @@ export class AgentWidgetManager {
   }
 
   handoffDraft(conversationId: string, text: string): void {
-    const record = this.state.widgets[conversationId];
-    if (!record || !text) return;
+    if (!text) return;
+    // A robot that moved to another chat left no record for this one: its chat is back in the main window.
+    const to = this.state.widgets[conversationId]?.chat_location ?? 'main';
     this.drafts.set(conversationId, text.slice(0, MAX_DRAFT_LENGTH));
-    ipcBridge.agentWidget.draftReady.emit({ conversation_id: conversationId, to: record.chat_location });
+    ipcBridge.agentWidget.draftReady.emit({ conversation_id: conversationId, to });
   }
 
   takeDraft(conversationId: string): string {
@@ -694,9 +713,11 @@ export class AgentWidgetManager {
 
   /**
    * Move a robot to another conversation of the same VA Bot (its newest session, or one picked from its history).
-   * The window stays and nothing replays; the old conversation's chat goes back to the main window.
+   * The window stays and nothing replays; the old conversation's chat goes back to the main window. `keepPopup`: the
+   * popup asked for the move (a Recent pick, its own new chat), so an open popup stays open on it; any other move
+   * (a new chat started in the main window or on a phone) closes it first.
    */
-  retarget(from: string, to: string): void {
+  retarget(from: string, to: string, keepPopup = true): void {
     const record = this.state.widgets[from];
     if (!record || from === to) return;
     if (this.state.widgets[to]) {
@@ -704,6 +725,7 @@ export class AgentWidgetManager {
       delete this.state.widgets[to];
     }
     const entry = this.entries.get(from);
+    if (!keepPopup && record.expanded) this.setExpanded(from, false);
     // An open popup stays open on the new conversation (picked from the bot's history), as it is: no resize, and the
     // robot keeps its spot in the expanded window's band.
     const keepOpen = record.expanded && entry !== undefined;
@@ -718,6 +740,7 @@ export class AgentWidgetManager {
     record.chat_location = keepOpen ? 'widget' : 'main';
     record.modified_at = Date.now();
     this.state.widgets[to] = record;
+    if (this.activeRobot === from) this.activeRobot = to;
     if (entry) {
       this.entries.delete(from);
       this.entries.set(to, entry);
@@ -765,16 +788,39 @@ export class AgentWidgetManager {
     this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId, url });
   }
 
-  /**
-   * The chat in a robot's popup changed (opened, a new chat, one from its history): the main window may switch its
-   * browser pane to it (Layout.tsx decides). It is not brought forward.
-   */
-  /** The user pressed inside this robot's open popup (compact or expanded): the main window follows its chat. */
-  followFromPopup(conversationId: string): void {
-    if (this.entries.has(conversationId) && this.state.widgets[conversationId]?.expanded)
-      this.followInMain(conversationId);
+  /** Show a main-window page (engine settings, a scheduled task) a robot's chat links to; the chat stays in its popup. */
+  openPageInMain(conversationId: string, path: string): void {
+    // Only a live robot may ask; the bridge checked the path against the pages a chat links to.
+    if (!this.entries.has(conversationId)) return;
+    this.focusMain()?.webContents.send('tray:navigate-to-page', { path });
   }
 
+  /** Preview a file a robot's chat links to in the main window, on that conversation; the chat stays in its popup. */
+  openFileInMain(conversationId: string, path: string): void {
+    if (!this.entries.has(conversationId)) return;
+    this.focusMain()?.webContents.send('tray:open-file-in-conversation', { conversation_id: conversationId, path });
+  }
+
+  /** The user pressed inside this robot's open popup (compact or expanded): the main window follows its chat. */
+  followFromPopup(conversationId: string): void {
+    if (!this.entries.has(conversationId) || !this.state.widgets[conversationId]?.expanded) return;
+    this.activeRobot = conversationId;
+    this.followInMain(conversationId);
+  }
+
+  /**
+   * The agent of this chat opened, switched or navigated a browser tab: the main window follows only while this is the
+   * robot the user works with (last opened or pressed in) and its popup is open.
+   */
+  followAgentActivity(conversationId: string): void {
+    if (this.activeRobot !== conversationId || !this.entries.has(conversationId)) return;
+    if (this.state.widgets[conversationId]?.expanded) this.followInMain(conversationId);
+  }
+
+  /**
+   * The chat in a robot's popup changed (opened, a new chat, one from its history) or its agent is working: the main
+   * window may switch its browser pane to it (Layout.tsx decides). It is not brought forward.
+   */
   private followInMain(conversationId: string): void {
     const main = this.host.getMainWindow();
     if (main && !main.isDestroyed())
@@ -867,6 +913,12 @@ export class AgentWidgetManager {
     this.entries.set(id, entry);
 
     this.applyAlwaysOnTop(win);
+    // The robot and popup bounds are fixed in DIPs: a zoomed page (the main window's Cmd +, a pinch) would be clipped
+    // and its click-through areas offset. `disabled` also keeps the main window's zoom from reaching it.
+    win.webContents.setZoomMode('disabled');
+    win.webContents
+      .setVisualZoomLevelLimits(1, 1)
+      .catch((error: unknown) => console.warn('[AgentWidget] could not lock the pinch zoom:', error));
     const detachAdapter = initMainAdapterWithWindow(win);
     // The renderer has the window shown once its first frames are decoded (rendererReady), so the robot never
     // flashes a default image; this only covers a renderer that never reports in.

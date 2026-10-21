@@ -33,7 +33,7 @@ vi.mock('electron', () => {
     visible = false;
     ignoreMouse = false;
     focused = false;
-    webContents = { send: vi.fn() };
+    webContents = { send: vi.fn(), setZoomMode: vi.fn(), setVisualZoomLevelLimits: vi.fn(() => Promise.resolve()) };
     private handlers: Record<string, Array<() => void>> = {};
     constructor(opts: Rect) {
       this.bounds = { x: opts.x, y: opts.y, width: opts.width, height: opts.height };
@@ -147,11 +147,16 @@ vi.mock('@/common', () => {
     'openLinkInMain',
     'watchInMain',
     'followInMain',
+    'followActivity',
+    'openPageInMain',
+    'openFileInMain',
     'rendererReady',
     'animationDone',
     'setSuspended',
     'showConversation',
     'broadcastBotColors',
+    'broadcastConfig',
+    'broadcastAssistantsChanged',
   ];
   const emitterNames = [
     'layoutChanged',
@@ -163,6 +168,8 @@ vi.mock('@/common', () => {
     'hiddenChanged',
     'robotsChanged',
     'botColorsChanged',
+    'configChanged',
+    'assistantsChanged',
   ];
   const agentWidget: Record<string, unknown> = {};
   for (const name of providerNames) {
@@ -2158,5 +2165,169 @@ describe('expanded window mode', () => {
     await expect(h.providers.setWindowMode({ conversation_id: '../x', mode: 'expanded' })).rejects.toThrow();
     await expect(h.providers.setWindowMode({ conversation_id: A, mode: 'expanded' })).resolves.toBeUndefined();
     expect(manager.getSnapshot(A)?.record.window_mode).toBe('expanded');
+  });
+});
+
+describe('robot windows in combination with the main window', () => {
+  const BOT_ID = 'bot-1';
+  const makeMain = () => ({
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
+    webContents: { send: vi.fn() },
+  });
+  const followsOf = (main: ReturnType<typeof makeMain>) =>
+    main.webContents.send.mock.calls.filter(([channel]) => channel === 'tray:follow-robot-chat').map(([, d]) => d);
+
+  it('hands an unsent popup draft to the main window when the robot moves to another chat', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, BOT_ID);
+    appear(manager, A);
+    manager.setExpanded(A, true);
+    manager.retarget(A, B); // a Recent pick: the popup's window learns its chat went back to main, then hands it over
+    manager.handoffDraft(A, 'half-typed');
+    expect(emittedOf('draftReady')).toContainEqual({ conversation_id: A, to: 'main' });
+    expect(manager.takeDraft(A)).toBe('half-typed');
+  });
+
+  it('a new chat started in the main window does not move into the open popup', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, BOT_ID);
+    appear(manager, A);
+    manager.setExpanded(A, true);
+    manager.ensure(B, false, BOT_ID);
+    expect(manager.getSnapshot(B)?.layout.expanded).toBe(false);
+    expect(manager.getChatLocations()).toEqual({});
+    expect(emittedOf('chatLocationChanged')).toContainEqual({ conversation_id: A, location: 'main' });
+    expect(emittedOf('chatLocationChanged')).not.toContainEqual({ conversation_id: B, location: 'widget' });
+  });
+
+  it('agent activity is followed only for the open popup the user last opened or pressed in', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A, false, BOT_ID);
+    manager.ensure(C, false, 'bot-2');
+    appear(manager, A);
+    appear(manager, C);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    await h.providers.followActivity({ conversation_id: A });
+    expect(followsOf(main)).toEqual([]); // collapsed: never
+
+    manager.openPopup(A, BOT_ID);
+    manager.openPopup(C, 'bot-2');
+    main.webContents.send.mockClear();
+    await h.providers.followActivity({ conversation_id: A });
+    expect(followsOf(main)).toEqual([]); // C was opened last
+    await h.providers.followActivity({ conversation_id: C });
+    expect(followsOf(main)).toEqual([{ conversation_id: C }]);
+
+    await h.providers.followInMain({ conversation_id: A }); // the user pressed in A's popup
+    main.webContents.send.mockClear();
+    await h.providers.followActivity({ conversation_id: C });
+    await h.providers.followActivity({ conversation_id: A });
+    expect(followsOf(main)).toEqual([{ conversation_id: A }]);
+
+    manager.setExpanded(A, false);
+    main.webContents.send.mockClear();
+    await h.providers.followActivity({ conversation_id: A });
+    expect(followsOf(main)).toEqual([]);
+    await expect(h.providers.followActivity({ conversation_id: '../x' })).rejects.toThrow();
+  });
+
+  it('the robot the user works with follows it to another chat', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, BOT_ID);
+    appear(manager, A);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+    manager.openPopup(A, BOT_ID);
+    manager.retarget(A, B);
+    main.webContents.send.mockClear();
+    manager.followAgentActivity(B);
+    expect(followsOf(main)).toEqual([{ conversation_id: B }]);
+  });
+
+  it('turning the robots off gives every chat back to the main window', async () => {
+    const { manager, mem } = await makeManager();
+    manager.ensure(A, false, BOT_ID);
+    appear(manager, A);
+    manager.setExpanded(A, true);
+    manager.setSettings({ enabled: false });
+    expect(emittedOf('chatLocationChanged').at(-1)).toEqual({ conversation_id: A, location: 'main' });
+    expect(mem.get().widgets[A].chat_location).toBe('main');
+  });
+
+  it('a popup opened on a chat saved as in its robot still tells the windows (no two send boxes)', async () => {
+    const { manager } = await makeManager({
+      settings: { enabled: true },
+      widgets: {
+        [A]: { widget_id: 'w-a', conversation_id: A, expanded: false, hidden: false, chat_location: 'widget' },
+      },
+    });
+    appear(manager, A);
+    h.emitted.length = 0;
+    manager.openPopup(A);
+    expect(emittedOf('chatLocationChanged')).toContainEqual({ conversation_id: A, location: 'widget' });
+  });
+
+  it('removing a robot whose chat was in it gives the chat back to the main window', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, BOT_ID);
+    appear(manager, A);
+    manager.setExpanded(A, true);
+    manager.remove(A);
+    expect(emittedOf('chatLocationChanged').at(-1)).toEqual({ conversation_id: A, location: 'main' });
+  });
+
+  it("relays one window's stored settings and Agent changes to every window, and validates them", async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    const news = { origin: 'robot-1', entries: { 'agent.enginePins': { bot: 'codex' }, 'agent.colors': null } };
+    await h.providers.broadcastConfig(news);
+    await h.providers.broadcastAssistantsChanged({ origin: 'robot-1' });
+    expect(emittedOf('configChanged')).toEqual([news]);
+    expect(emittedOf('assistantsChanged')).toEqual([{ origin: 'robot-1' }]);
+    await expect(h.providers.broadcastConfig({ origin: '', entries: {} })).rejects.toThrow();
+    await expect(h.providers.broadcastConfig({ origin: 'x', entries: {}, extra: 1 })).rejects.toThrow();
+    await expect(h.providers.broadcastAssistantsChanged({})).rejects.toThrow();
+  });
+
+  it('locks the robot window zoom, so a main-window zoom never clips the robot', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    const win = liveWindows()[0] as unknown as { webContents: { setZoomMode: ReturnType<typeof vi.fn> } };
+    expect(win.webContents.setZoomMode).toHaveBeenCalledWith('disabled');
+  });
+
+  it('opens a page or a file of a live robot chat in the main window, and validates the request', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    await h.providers.openPageInMain({ conversation_id: A, path: '/settings/agent' });
+    expect(main.webContents.send).toHaveBeenLastCalledWith('tray:navigate-to-page', { path: '/settings/agent' });
+    await h.providers.openPageInMain({ conversation_id: A, path: '/scheduled/cron_1' });
+    expect(main.webContents.send).toHaveBeenLastCalledWith('tray:navigate-to-page', { path: '/scheduled/cron_1' });
+    await expect(h.providers.openPageInMain({ conversation_id: A, path: '/settings/../x' })).rejects.toThrow();
+    await expect(h.providers.openPageInMain({ conversation_id: A, path: 'https://example.com' })).rejects.toThrow();
+
+    await h.providers.openFileInMain({ conversation_id: A, path: '/work/report.md' });
+    expect(main.webContents.send).toHaveBeenLastCalledWith('tray:open-file-in-conversation', {
+      conversation_id: A,
+      path: '/work/report.md',
+    });
+    await expect(h.providers.openFileInMain({ conversation_id: A, path: '' })).rejects.toThrow();
+    await expect(h.providers.openFileInMain({ conversation_id: A, path: 'x'.repeat(5000) })).rejects.toThrow();
+
+    main.webContents.send.mockClear();
+    await h.providers.openPageInMain({ conversation_id: B, path: '/settings/agent' }); // no robot: ignored
+    await h.providers.openFileInMain({ conversation_id: B, path: '/work/report.md' });
+    expect(main.webContents.send).not.toHaveBeenCalled();
   });
 });

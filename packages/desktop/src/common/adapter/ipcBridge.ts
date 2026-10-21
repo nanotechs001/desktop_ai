@@ -1582,6 +1582,8 @@ export const systemSettings = {
 // ---------------------------------------------------------------------------
 
 type AgentWidgetTarget = { conversation_id: string };
+/** Settings a window stored, tagged with that window, so it can ignore its own echo. */
+type AgentWidgetConfigNews = { origin: string; entries: Record<string, unknown> };
 
 export const agentWidget = {
   getSettings: bridge.buildProvider<AgentWidgetSettings, void>('agent-widget:get-settings'),
@@ -1646,6 +1648,12 @@ export const agentWidget = {
   watchInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:watch-in-main'),
   /** The user pressed inside a robot's open popup: the main window may switch to that chat (it is not brought forward). */
   followInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:follow-in-main'),
+  /** Main window: this chat's agent used a browser tab; main has the main window follow only the robot in use. */
+  followActivity: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:follow-activity'),
+  /** A robot's chat links to a main-window page (engine or model settings, a scheduled task); the popup stays. */
+  openPageInMain: bridge.buildProvider<void, AgentWidgetTarget & { path: string }>('agent-widget:open-page-in-main'),
+  /** Preview a file a robot's chat links to in the main window, on that conversation; the popup stays. */
+  openFileInMain: bridge.buildProvider<void, AgentWidgetTarget & { path: string }>('agent-widget:open-file-in-main'),
   /** The widget renderer has its first frames decoded: show the window and play `appearing`. */
   rendererReady: bridge.buildProvider<void, AgentWidgetTarget & { agent_id?: string; modified_at?: number }>(
     'agent-widget:renderer-ready'
@@ -1674,6 +1682,14 @@ export const agentWidget = {
   broadcastBotColors: bridge.buildProvider<void, Record<string, string>>('agent-widget:broadcast-bot-colors'),
   /** Main -> every window: the current Agent colors (assistant id -> `#rrggbb`), so widget windows follow edits. */
   botColorsChanged: bridge.buildEmitter<Record<string, string>>('agent-widget:bot-colors-changed'),
+  /** A window stored settings (`null`: removed); main re-emits them via `configChanged` to every window's cache. */
+  broadcastConfig: bridge.buildProvider<void, AgentWidgetConfigNews>('agent-widget:broadcast-config'),
+  configChanged: bridge.buildEmitter<AgentWidgetConfigNews>('agent-widget:config-changed'),
+  /** A window changed an Agent; main re-emits it via `assistantsChanged`, so every window reloads the Agents list. */
+  broadcastAssistantsChanged: bridge.buildProvider<void, { origin: string }>(
+    'agent-widget:broadcast-assistants-changed'
+  ),
+  assistantsChanged: bridge.buildEmitter<{ origin: string }>('agent-widget:assistants-changed'),
 };
 
 // ---------------------------------------------------------------------------

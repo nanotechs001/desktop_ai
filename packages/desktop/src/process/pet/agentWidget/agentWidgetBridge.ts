@@ -26,6 +26,10 @@ const conversationId = z.string().regex(CONVERSATION_ID_PATTERN);
 const target = z.object({ conversation_id: conversationId }).strict();
 const agentId = z.string().min(1).max(256);
 const botColors = z.record(agentId, z.string().refine(isBotColor));
+const windowOrigin = z.string().min(1).max(64);
+const configNews = z
+  .object({ origin: windowOrigin, entries: z.record(z.string().min(1).max(128), z.unknown()) })
+  .strict();
 // A pointer delta in DIP: finite, and no larger than any desktop.
 const screenDelta = z.number().finite().min(-100_000).max(100_000);
 const schemas = {
@@ -49,6 +53,11 @@ const schemas = {
   showConversation: target.extend({ to: conversationId }).strict(),
   openAgentSettings: target.extend({ agent_id: agentId }).strict(),
   openLinkInMain: target.extend({ url: z.string().max(8192).refine(isHttpUrl) }).strict(),
+  // Only the main-window pages a chat links to: engine and model settings, a scheduled task.
+  openPageInMain: target
+    .extend({ path: z.string().regex(/^\/(settings\/(agent|model)|scheduled\/[\w-]{1,128})$/) })
+    .strict(),
+  openFileInMain: target.extend({ path: z.string().min(1).max(4096) }).strict(),
   animationDone: target.extend({ animation: z.enum(['appearing', 'disappearing']) }).strict(),
   setSuspended: target.extend({ suspended: z.boolean() }).strict(),
 };
@@ -119,6 +128,17 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
     const { conversation_id, url } = parse(schemas.openLinkInMain, p, 'openLinkInMain');
     manager.openLinkInMain(conversation_id, url);
   });
+  w.openPageInMain.provider(async (p) => {
+    const { conversation_id, path } = parse(schemas.openPageInMain, p, 'openPageInMain');
+    manager.openPageInMain(conversation_id, path);
+  });
+  w.openFileInMain.provider(async (p) => {
+    const { conversation_id, path } = parse(schemas.openFileInMain, p, 'openFileInMain');
+    manager.openFileInMain(conversation_id, path);
+  });
+  w.followActivity.provider(async (p) =>
+    manager.followAgentActivity(parse(target, p, 'followActivity').conversation_id)
+  );
   w.watchInMain.provider(async (p) => manager.watchInMain(parse(target, p, 'watchInMain').conversation_id));
   w.followInMain.provider(async (p) => manager.followFromPopup(parse(target, p, 'followInMain').conversation_id));
   w.rendererReady.provider(async (p) => {
@@ -135,6 +155,15 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   });
   w.broadcastBotColors.provider(async (p) => {
     w.botColorsChanged.emit(parse(botColors, p, 'broadcastBotColors'));
+  });
+  // Each window keeps its own settings cache: a stored change reaches the others. Main only relays it.
+  w.broadcastConfig.provider(async (p) => {
+    const { origin, entries } = parse(configNews, p, 'broadcastConfig');
+    w.configChanged.emit({ origin, entries });
+  });
+  w.broadcastAssistantsChanged.provider(async (p) => {
+    const { origin } = parse(z.object({ origin: windowOrigin }).strict(), p, 'broadcastAssistantsChanged');
+    w.assistantsChanged.emit({ origin });
   });
   w.setSuspended.provider(async (p) => {
     const { conversation_id, suspended } = parse(schemas.setSuspended, p, 'setSuspended');
