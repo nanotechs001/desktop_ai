@@ -253,6 +253,22 @@ describe('subscription usage store', () => {
     expect(result.current?.windows.five_hour?.utilization).toBe(0.9);
   });
 
+  it('leaves storage to the main window: a robot window shows a reading but does not store it', async () => {
+    window.location.hash = '#/widget/c-1';
+    try {
+      const store = await load();
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      const { result } = renderHook(() => store.useSubscriptionUsage('claude', 'c-1'));
+
+      push(reading({ windows: [{ kind: 'five_hour', utilization: 0.42, resets_at: NOW_S + 600 }] }));
+
+      expect(result.current?.windows.five_hour?.utilization).toBe(0.42);
+      expect(setItem).not.toHaveBeenCalled();
+    } finally {
+      window.location.hash = '';
+    }
+  });
+
   it('ignores a corrupt stored value', async () => {
     localStorage.setItem(KEY, '{"claude":{"windows":"nope"}}');
     const store = await load();

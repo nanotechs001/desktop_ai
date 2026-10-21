@@ -9,6 +9,7 @@ import { ipcBridge } from '@/common';
 import type { IConversationRateLimitUpdatedEvent, RateLimitWindowKind } from '@/common/adapter/ipcBridge';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { resolvePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
+import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { resolveConversationBackend } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
 
@@ -144,10 +145,13 @@ function apply(backend: string, event: IConversationRateLimitUpdatedEvent, arriv
   const next = mergeReading(state, backend, event, arrivedAt);
   if (next === state) return;
   state = next;
-  try {
-    localStorage.setItem(SUBSCRIPTION_USAGE_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // shortcut: storage unavailable, so the usage lasts only until reload
+  // Every window gets each reading; only the main one stores it, and robot windows follow its `storage` events.
+  if (getWidgetConversationId() === null) {
+    try {
+      localStorage.setItem(SUBSCRIPTION_USAGE_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // shortcut: storage unavailable, so the usage lasts only until reload
+    }
   }
   notify();
 }
