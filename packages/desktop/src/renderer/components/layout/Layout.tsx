@@ -39,6 +39,7 @@ import {
   onAgentTabActivity,
   useAgentWidgetSync,
 } from '@renderer/pages/agentWidget/useAgentWidgetSync';
+import { startSubscriptionUsageFeed } from '@renderer/pages/conversation/components/limitSwitch/subscriptionUsage';
 import { isChatInWidget } from '@renderer/pages/agentWidget/chatLocation';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
 import { useBrowserNotification } from '@renderer/hooks/system/notification/useBrowserNotification';
@@ -163,6 +164,8 @@ const Layout: React.FC<{
   }, []);
   useConversationShortcuts({ navigate, toggleSider });
   useAgentWidgetSync();
+  // Usage readings can arrive before any chat's send box mounts.
+  useEffect(startSubscriptionUsageFeed, []);
   // Expose navigate to code running outside the Router tree (e.g. the globally
   // mounted FeedbackReportModal's "via chat" action).
   useEffect(() => {

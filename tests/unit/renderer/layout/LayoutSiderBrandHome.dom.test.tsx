@@ -68,6 +68,9 @@ vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({
   onAgentTabActivity: () => () => {},
 }));
 vi.mock('@renderer/components/OrphanChatsPrompt', () => ({ default: () => null }));
+vi.mock('@renderer/pages/conversation/components/limitSwitch/subscriptionUsage', () => ({
+  startSubscriptionUsageFeed: () => {},
+}));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 const revealBrowserFor = vi.hoisted(() => vi.fn());
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({

@@ -13,6 +13,7 @@ import type { IConversationRateLimitUpdatedEvent } from '@/common/adapter/ipcBri
 const mocks = vi.hoisted(() => ({
   listeners: new Set<(event: IConversationRateLimitUpdatedEvent) => void>(),
   conversation: null as unknown,
+  assistants: [] as unknown[],
 }));
 vi.mock('@/common', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/common')>();
@@ -20,6 +21,7 @@ vi.mock('@/common', async (importOriginal) => {
     ...actual,
     ipcBridge: {
       ...actual.ipcBridge,
+      assistants: { ...actual.ipcBridge.assistants, list: { invoke: async () => mocks.assistants } },
       conversation: {
         ...actual.ipcBridge.conversation,
         rateLimitUpdated: {
@@ -70,6 +72,7 @@ describe('subscription usage store', () => {
     localStorage.clear();
     mocks.listeners.clear();
     mocks.conversation = null;
+    mocks.assistants = [];
     vi.spyOn(Date, 'now').mockReturnValue(NOW_MS);
   });
   afterEach(() => {
@@ -191,6 +194,38 @@ describe('subscription usage store', () => {
     push(reading({ conversation_id: 'c-bg', windows: [{ kind: 'seven_day', utilization: 0.3, resets_at: null }] }));
 
     await waitFor(() => expect(result.current?.windows.seven_day?.utilization).toBe(0.3));
+  });
+
+  it('files a background chat under its preset assistant engine, as the on-screen chat does', async () => {
+    const store = await load();
+    mocks.conversation = {
+      id: 'c-bg',
+      type: 'acp',
+      extra: { backend: 'claude', preset_assistant_id: 'builtin-coder' },
+    };
+    mocks.assistants = [{ id: 'coder', name: 'Coder', agent: { type: 'acp', acp_backend: 'codex' } }];
+    const { result } = renderHook(() => store.useSubscriptionUsage('codex', 'c-1'));
+
+    push(reading({ conversation_id: 'c-bg', windows: [{ kind: 'five_hour', utilization: 0.7, resets_at: null }] }));
+
+    await waitFor(() => expect(result.current?.windows.five_hour?.utilization).toBe(0.7));
+    expect(JSON.parse(localStorage.getItem(KEY) ?? '{}').claude).toBeUndefined();
+  });
+
+  it('keeps a reading that arrives before any send box mounts once the app starts the feed', async () => {
+    const store = await load();
+    store.startSubscriptionUsageFeed();
+    store.startSubscriptionUsageFeed();
+    mocks.conversation = { id: 'c-early', type: 'acp', extra: { backend: 'claude' } };
+
+    push(reading({ conversation_id: 'c-early', windows: [{ kind: 'five_hour', utilization: 0.25, resets_at: null }] }));
+
+    expect(mocks.listeners.size).toBe(1);
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(KEY) ?? '{}').claude?.windows.five_hour.utilization).toBe(0.25)
+    );
+    const { result } = renderHook(() => store.useSubscriptionUsage('claude', 'c-1'));
+    expect(result.current?.windows.five_hour?.utilization).toBe(0.25);
   });
 
   it('ignores a corrupt stored value', async () => {

@@ -7,6 +7,8 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { ipcBridge } from '@/common';
 import type { IConversationRateLimitUpdatedEvent, RateLimitWindowKind } from '@/common/adapter/ipcBridge';
+import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { resolvePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { resolveConversationBackend } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
 
@@ -133,17 +135,35 @@ function apply(backend: string, event: IConversationRateLimitUpdatedEvent): void
   listeners.forEach((listener) => listener());
 }
 
-/** Feeds every reading, from any chat, into the store once something reads it. */
-function startFeed(): void {
+/** The engine of a chat that is not on screen, preset-aware like the on-screen chat's (`ChatConversation`). */
+async function lookUpBackend(conversationId: string): Promise<string | undefined> {
+  const [conversation, assistantsList] = await Promise.all([
+    getConversationOrNull(conversationId),
+    ipcBridge.assistants.list.invoke().catch(() => [] as Assistant[]),
+  ]);
+  if (!conversation) return undefined;
+  // shortcut: no agent logos or extension adapters (they pick a logo, not an engine), upgrade if a legacy row resolves wrong.
+  const preset = resolvePresetAssistantInfo(conversation, {
+    locale: '',
+    logos: {},
+    assistantsList,
+    isLoadingAssistants: false,
+    extensionAcpAdapters: undefined,
+    isLoadingExtAdapters: false,
+  });
+  return resolveConversationBackend(conversation, preset.info?.backend);
+}
+
+/** Feeds every reading, from any chat, into the store. Idempotent; the app starts it at launch (`Layout`). */
+export function startSubscriptionUsageFeed(): void {
   if (feedStarted) return;
   feedStarted = true;
   ipcBridge.conversation.rateLimitUpdated.on((event) => {
     const known = backendByConversation.get(event.conversation_id);
     if (known) return apply(known, event);
     if (!event.windows.some((w) => w.utilization !== null)) return;
-    getConversationOrNull(event.conversation_id)
-      .then((conversation) => {
-        const backend = conversation ? resolveConversationBackend(conversation) : undefined;
+    lookUpBackend(event.conversation_id)
+      .then((backend) => {
         if (backend) apply(backend, event);
       })
       .catch((error: unknown) => {
@@ -153,7 +173,7 @@ function startFeed(): void {
 }
 
 const subscribe = (listener: () => void): (() => void) => {
-  startFeed();
+  startSubscriptionUsageFeed();
   listeners.add(listener);
   return () => listeners.delete(listener);
 };

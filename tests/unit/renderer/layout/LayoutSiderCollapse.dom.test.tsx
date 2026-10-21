@@ -52,6 +52,10 @@ vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({
   onAgentTabActivity: () => () => {},
 }));
 vi.mock('@renderer/components/OrphanChatsPrompt', () => ({ default: () => null }));
+const startSubscriptionUsageFeed = vi.hoisted(() => vi.fn());
+vi.mock('@renderer/pages/conversation/components/limitSwitch/subscriptionUsage', () => ({
+  startSubscriptionUsageFeed,
+}));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 const preview = vi.hoisted(() => ({
   closePreview: () => {},
@@ -110,6 +114,11 @@ describe('Layout sider icon-only mode', () => {
     localStorage.clear();
     shortcutMocks.params = undefined;
     route.pathname = '/settings/about';
+  });
+
+  it('starts the subscription usage feed at launch, before any send box mounts', () => {
+    renderLayout();
+    expect(startSubscriptionUsageFeed).toHaveBeenCalled();
   });
 
   it('renders no left sider on desktop chat routes (navigation lives in the titlebar)', () => {

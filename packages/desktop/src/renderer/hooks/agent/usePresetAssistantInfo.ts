@@ -270,6 +270,141 @@ function inferLegacyAssistantInfo(
   return null;
 }
 
+/** What {@link resolvePresetAssistantInfo} matches a conversation against. */
+export type PresetAssistantSources = {
+  locale: string;
+  logos: AgentLogoMap;
+  assistantsList: Assistant[] | undefined;
+  isLoadingAssistants: boolean;
+  extensionAcpAdapters: Record<string, unknown>[] | undefined;
+  isLoadingExtAdapters: boolean;
+};
+
+export type PresetAssistantResult = { info: PresetAssistantInfo | null; isLoading: boolean };
+
+/**
+ * A conversation's preset assistant info, outside React: {@link usePresetAssistantInfo} without the fetching, for
+ * code that already holds the catalogs.
+ */
+export function resolvePresetAssistantInfo(
+  conversation: TChatConversation | undefined,
+  sources: PresetAssistantSources
+): PresetAssistantResult {
+  const { logos, assistantsList, isLoadingAssistants, extensionAcpAdapters, isLoadingExtAdapters } = sources;
+  if (!conversation) return { info: null, isLoading: false };
+
+  const locale = sources.locale || 'en-US';
+
+  if (conversation.assistant) {
+    const snapshotAvatar =
+      typeof conversation.assistant.avatar === 'string' ? conversation.assistant.avatar.trim() : '';
+    if (snapshotAvatar && isLikelyLocalFilePath(snapshotAvatar)) {
+      const snapshotCandidates = [
+        conversation.assistant.id,
+        ...collectExplicitAssistantIdentityCandidates(conversation),
+        ...collectLegacyAssistantIdentityCandidates(conversation),
+      ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+      const catalogAssistant = findAssistantByIdentityCandidates(assistantsList, snapshotCandidates);
+      if (catalogAssistant) {
+        return { info: buildPresetInfoFromAssistant(catalogAssistant, locale), isLoading: false };
+      }
+      if (isLoadingAssistants) return { info: null, isLoading: true };
+    }
+
+    return {
+      info: buildPresetInfoFromConversationAssistant(conversation.assistant),
+      isLoading: false,
+    };
+  }
+
+  const explicitAssistantCandidates = collectExplicitAssistantIdentityCandidates(conversation);
+  const legacyAssistantCandidates = collectLegacyAssistantIdentityCandidates(conversation);
+  const hasExplicitAssistantId = hasExplicitAssistantIdentity(conversation);
+  const assistantMatch = hasExplicitAssistantId
+    ? findAssistantByIdentityCandidates(assistantsList, explicitAssistantCandidates)
+    : findAssistantByIdentityCandidates(assistantsList, legacyAssistantCandidates);
+  const runtimeRowAgentId = resolveLegacyRuntimeRowId(conversation);
+  const adapterIdentity = (hasExplicitAssistantId ? explicitAssistantCandidates : legacyAssistantCandidates).find(
+    (candidate) => candidate.startsWith('ext:')
+  );
+
+  const resolveLegacyRuntimeInfo = (): { info: PresetAssistantInfo; isLoading: false } | null => {
+    if (!runtimeRowAgentId) return null;
+    const name = resolveLegacyRuntimeDisplayName(conversation);
+    if (!name) return null;
+    const legacyBackend =
+      typeof (conversation.extra as { backend?: unknown })?.backend === 'string'
+        ? ((conversation.extra as { backend?: string }).backend ?? '').trim()
+        : '';
+    const backendLogo = resolveAgentLogo(logos, { backend: legacyBackend });
+    if (backendLogo) {
+      return {
+        info: { name, logo: backendLogo, isEmoji: false, backend: legacyBackend },
+        isLoading: false,
+      };
+    }
+    return { info: { name, logo: '', isEmoji: false, isFallback: true }, isLoading: false };
+  };
+
+  if (assistantMatch) {
+    return { info: buildPresetInfoFromAssistant(assistantMatch, locale), isLoading: false };
+  }
+
+  const inferredInfo = inferLegacyAssistantInfo(conversation, locale, assistantsList);
+  if (inferredInfo) return { info: inferredInfo, isLoading: false };
+
+  const { hasPayload } = extractLegacyPresetPayload(conversation);
+  if (
+    (hasPayload || explicitAssistantCandidates.length > 0 || legacyAssistantCandidates.length > 0) &&
+    isLoadingAssistants
+  ) {
+    return { info: null, isLoading: true };
+  }
+
+  if (adapterIdentity && isLoadingExtAdapters) return { info: null as PresetAssistantInfo | null, isLoading: true };
+
+  // Extension ACP adapters (custom_agent_id like ext:{extensionName}:{adapterId})
+  if (adapterIdentity && extensionAcpAdapters && Array.isArray(extensionAcpAdapters)) {
+    const parts = adapterIdentity.split(':');
+    if (parts.length >= 3) {
+      const extensionName = parts[1];
+      const adapterId = parts.slice(2).join(':');
+      const adapter = extensionAcpAdapters.find((a) => {
+        const extName = typeof a._extensionName === 'string' ? a._extensionName : '';
+        const id = typeof a.id === 'string' ? a.id : '';
+        return extName === extensionName && id === adapterId;
+      });
+      if (adapter) {
+        const name = typeof adapter.name === 'string' ? adapter.name : adapterId;
+        const avatar = typeof adapter.avatar === 'string' ? adapter.avatar : '';
+        const normalized = normalizeAvatar(avatar);
+        return {
+          info: {
+            name,
+            logo: normalized.logo,
+            isEmoji: normalized.isEmoji,
+            isFallback: normalized.isFallback,
+          },
+          isLoading: false,
+        };
+      }
+    }
+  }
+
+  // Custom ACP row short-circuit: only when there is no explicit assistant
+  // identity. Legacy `custom_agent_id` sometimes carries a runtime row id,
+  // not an assistant id, so let assistant-based restore win first.
+  if (!hasExplicitAssistantId) {
+    const runtimeInfo = resolveLegacyRuntimeInfo();
+    if (runtimeInfo) return runtimeInfo;
+  }
+
+  const runtimeInfo = resolveLegacyRuntimeInfo();
+  if (runtimeInfo) return runtimeInfo;
+
+  return { info: null, isLoading: false };
+}
+
 /**
  * 获取预设助手信息的 Hook
  * Hook to get preset assistant info from conversation
@@ -277,10 +412,7 @@ function inferLegacyAssistantInfo(
  * @param conversation - 会话对象 / Conversation object
  * @returns 预设助手信息或 null / Preset assistant info or null
  */
-export function usePresetAssistantInfo(conversation: TChatConversation | undefined): {
-  info: PresetAssistantInfo | null;
-  isLoading: boolean;
-} {
+export function usePresetAssistantInfo(conversation: TChatConversation | undefined): PresetAssistantResult {
   const { i18n } = useTranslation();
   const logos = useAgentLogos();
 
@@ -294,126 +426,24 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     ipcBridge.extensions.getAcpAdapters.invoke().catch(() => [] as Record<string, unknown>[])
   );
 
-  return useMemo(() => {
-    if (!conversation) return { info: null, isLoading: false };
-
-    const locale = i18n.language || 'en-US';
-
-    if (conversation.assistant) {
-      const snapshotAvatar =
-        typeof conversation.assistant.avatar === 'string' ? conversation.assistant.avatar.trim() : '';
-      if (snapshotAvatar && isLikelyLocalFilePath(snapshotAvatar)) {
-        const snapshotCandidates = [
-          conversation.assistant.id,
-          ...collectExplicitAssistantIdentityCandidates(conversation),
-          ...collectLegacyAssistantIdentityCandidates(conversation),
-        ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
-        const catalogAssistant = findAssistantByIdentityCandidates(assistantsList, snapshotCandidates);
-        if (catalogAssistant) {
-          return { info: buildPresetInfoFromAssistant(catalogAssistant, locale), isLoading: false };
-        }
-        if (isLoadingAssistants) return { info: null, isLoading: true };
-      }
-
-      return {
-        info: buildPresetInfoFromConversationAssistant(conversation.assistant),
-        isLoading: false,
-      };
-    }
-
-    const explicitAssistantCandidates = collectExplicitAssistantIdentityCandidates(conversation);
-    const legacyAssistantCandidates = collectLegacyAssistantIdentityCandidates(conversation);
-    const hasExplicitAssistantId = hasExplicitAssistantIdentity(conversation);
-    const assistantMatch = hasExplicitAssistantId
-      ? findAssistantByIdentityCandidates(assistantsList, explicitAssistantCandidates)
-      : findAssistantByIdentityCandidates(assistantsList, legacyAssistantCandidates);
-    const runtimeRowAgentId = resolveLegacyRuntimeRowId(conversation);
-    const adapterIdentity = (hasExplicitAssistantId ? explicitAssistantCandidates : legacyAssistantCandidates).find(
-      (candidate) => candidate.startsWith('ext:')
-    );
-
-    const resolveLegacyRuntimeInfo = (): { info: PresetAssistantInfo; isLoading: false } | null => {
-      if (!runtimeRowAgentId) return null;
-      const name = resolveLegacyRuntimeDisplayName(conversation);
-      if (!name) return null;
-      const legacyBackend =
-        typeof (conversation.extra as { backend?: unknown })?.backend === 'string'
-          ? ((conversation.extra as { backend?: string }).backend ?? '').trim()
-          : '';
-      const backendLogo = resolveAgentLogo(logos, { backend: legacyBackend });
-      if (backendLogo) {
-        return {
-          info: { name, logo: backendLogo, isEmoji: false, backend: legacyBackend },
-          isLoading: false,
-        };
-      }
-      return { info: { name, logo: '', isEmoji: false, isFallback: true }, isLoading: false };
-    };
-
-    if (assistantMatch) {
-      return { info: buildPresetInfoFromAssistant(assistantMatch, locale), isLoading: false };
-    }
-
-    const inferredInfo = inferLegacyAssistantInfo(conversation, locale, assistantsList);
-    if (inferredInfo) return { info: inferredInfo, isLoading: false };
-
-    const { hasPayload } = extractLegacyPresetPayload(conversation);
-    if (
-      (hasPayload || explicitAssistantCandidates.length > 0 || legacyAssistantCandidates.length > 0) &&
-      isLoadingAssistants
-    ) {
-      return { info: null, isLoading: true };
-    }
-
-    if (adapterIdentity && isLoadingExtAdapters) return { info: null as PresetAssistantInfo | null, isLoading: true };
-
-    // Extension ACP adapters (custom_agent_id like ext:{extensionName}:{adapterId})
-    if (adapterIdentity && extensionAcpAdapters && Array.isArray(extensionAcpAdapters)) {
-      const parts = adapterIdentity.split(':');
-      if (parts.length >= 3) {
-        const extensionName = parts[1];
-        const adapterId = parts.slice(2).join(':');
-        const adapter = extensionAcpAdapters.find((a) => {
-          const extName = typeof a._extensionName === 'string' ? a._extensionName : '';
-          const id = typeof a.id === 'string' ? a.id : '';
-          return extName === extensionName && id === adapterId;
-        });
-        if (adapter) {
-          const name = typeof adapter.name === 'string' ? adapter.name : adapterId;
-          const avatar = typeof adapter.avatar === 'string' ? adapter.avatar : '';
-          const normalized = normalizeAvatar(avatar);
-          return {
-            info: {
-              name,
-              logo: normalized.logo,
-              isEmoji: normalized.isEmoji,
-              isFallback: normalized.isFallback,
-            },
-            isLoading: false,
-          };
-        }
-      }
-    }
-
-    // Custom ACP row short-circuit: only when there is no explicit assistant
-    // identity. Legacy `custom_agent_id` sometimes carries a runtime row id,
-    // not an assistant id, so let assistant-based restore win first.
-    if (!hasExplicitAssistantId) {
-      const runtimeInfo = resolveLegacyRuntimeInfo();
-      if (runtimeInfo) return runtimeInfo;
-    }
-
-    const runtimeInfo = resolveLegacyRuntimeInfo();
-    if (runtimeInfo) return runtimeInfo;
-
-    return { info: null, isLoading: false };
-  }, [
-    conversation,
-    i18n.language,
-    logos,
-    assistantsList,
-    isLoadingAssistants,
-    extensionAcpAdapters,
-    isLoadingExtAdapters,
-  ]);
+  return useMemo(
+    () =>
+      resolvePresetAssistantInfo(conversation, {
+        locale: i18n.language,
+        logos,
+        assistantsList,
+        isLoadingAssistants,
+        extensionAcpAdapters,
+        isLoadingExtAdapters,
+      }),
+    [
+      conversation,
+      i18n.language,
+      logos,
+      assistantsList,
+      isLoadingAssistants,
+      extensionAcpAdapters,
+      isLoadingExtAdapters,
+    ]
+  );
 }
