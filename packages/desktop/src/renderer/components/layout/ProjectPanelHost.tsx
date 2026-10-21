@@ -30,6 +30,7 @@ import React, { useRef } from 'react';
 
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
 import { useCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
+import { MOTION_MS, useAnimating } from '@/renderer/hooks/ui/useMotion';
 
 export type ProjectPanelHostProps = {
   /** Rendered width in px (clamped by Layout against the chat+preview reserve). */
@@ -45,6 +46,8 @@ export type ProjectPanelHostProps = {
 export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, collapsed, dragHandle, fill = false }) => {
   const projectId = useCurrentProject();
   const mountIdRef = useRef<string>('');
+  // The column eases open and shut only while the toggle runs, so dragging its edge stays immediate.
+  const toggling = useAnimating(collapsed, MOTION_MS.base);
   if (mountIdRef.current === '') mountIdRef.current = `pec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   // No active project (no-project conversation / non-chat route) → no host.
@@ -60,12 +63,17 @@ export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, col
       style={{
         width: collapsed ? '0px' : fill ? undefined : `${widthPx}px`,
         flexGrow: fill && !collapsed ? 1 : undefined,
-        borderLeft: collapsed || fill ? 'none' : '1px solid var(--bg-3)',
+        // An inset line, not a border: it shrinks away with the column instead of popping.
+        boxShadow: collapsed || fill ? undefined : 'inset 1px 0 0 var(--bg-3)',
+        transition: toggling ? 'width var(--motion-base) var(--motion-ease-out)' : undefined,
       }}
     >
       {!collapsed && !fill && dragHandle}
-      {/* Hosted project component (this round: Explorer). Seam = projectId only. */}
-      <ExplorerContainer projectId={projectId} />
+      {/* Keeps its width while the column eases, so the tree does not reflow every frame. */}
+      <div className='h-full' style={{ width: fill ? '100%' : `${widthPx}px` }}>
+        {/* Hosted project component (this round: Explorer). Seam = projectId only. */}
+        <ExplorerContainer projectId={projectId} />
+      </div>
     </div>
   );
 };

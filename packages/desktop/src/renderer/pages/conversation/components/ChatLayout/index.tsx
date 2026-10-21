@@ -191,6 +191,7 @@ const ChatLayout: React.FC<{
   // ease open again: a display:none node has no start value to transition from.
   const chatFolded = previewMaximized && !maximizeChanging;
   const chatHidden = (isPreviewOpen && isMobile) || (chatFolded && !vaLayout);
+  const workspaceToggling = useAnimating(rightSiderCollapsed, MOTION_MS.base);
   const previewSharePct = `${100 - chatSplitRatio}%`;
   // The chat's width beside the preview, held while maximizing so its messages do not reflow every frame.
   const chatWidthPx =
@@ -272,6 +273,8 @@ const ChatLayout: React.FC<{
   );
 
   const siderWidth = rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`;
+  // The files pane eases open and shut only while the toggle runs, so dragging its edge stays immediate.
+  const siderToggling = workspaceToggling && !vaChatHidden;
   const workspaceSider =
     workspaceEnabled && !layout?.isMobile ? (
       <div
@@ -282,9 +285,13 @@ const ChatLayout: React.FC<{
           flexShrink: 0,
           flexBasis: vaChatHidden ? 0 : siderWidth,
           width: vaChatHidden ? undefined : siderWidth,
-          minWidth: rightSiderCollapsed ? '0px' : `${MIN_WORKSPACE_PANEL_PX}px`,
+          minWidth: rightSiderCollapsed || siderToggling ? '0px' : `${MIN_WORKSPACE_PANEL_PX}px`,
           overflow: 'hidden',
-          borderLeft: rightSiderCollapsed || vaChatHidden ? 'none' : '1px solid var(--bg-3)',
+          // An inset line, not a border: it shrinks away with the pane instead of popping.
+          boxShadow: rightSiderCollapsed || vaChatHidden ? undefined : 'inset 1px 0 0 var(--bg-3)',
+          transition: siderToggling
+            ? 'width var(--motion-base) var(--motion-ease-out), flex-basis var(--motion-base) var(--motion-ease-out)'
+            : undefined,
         }}
       >
         {isDesktop &&
@@ -295,18 +302,29 @@ const ChatLayout: React.FC<{
             style: {},
             reverse: true,
           })}
-        <WorkspacePanelHeader
-          collapsed={rightSiderCollapsed}
-          onToggle={() => dispatchWorkspaceToggleEvent()}
-          togglePlacement={layout?.isMobile ? 'left' : 'right'}
-          workspacePath={workspacePath}
-          isTemporaryWorkspace={isTemporaryWorkspace}
+        {/* Keeps its width while the pane eases, so the tree does not reflow every frame. */}
+        <div
+          className='h-full'
+          style={{
+            // Collapsed, the metrics width is 0: hold the pane's own width while it eases shut.
+            width: vaChatHidden
+              ? '100%'
+              : `${Math.round(rightSiderCollapsed ? workspaceWidthPxPref : workspaceWidthPx)}px`,
+          }}
         >
-          {props.siderTitle}
-        </WorkspacePanelHeader>
-        <ArcoLayout.Content style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>
-          {props.sider}
-        </ArcoLayout.Content>
+          <WorkspacePanelHeader
+            collapsed={rightSiderCollapsed}
+            onToggle={() => dispatchWorkspaceToggleEvent()}
+            togglePlacement={layout?.isMobile ? 'left' : 'right'}
+            workspacePath={workspacePath}
+            isTemporaryWorkspace={isTemporaryWorkspace}
+          >
+            {props.siderTitle}
+          </WorkspacePanelHeader>
+          <ArcoLayout.Content style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>
+            {props.sider}
+          </ArcoLayout.Content>
+        </div>
       </div>
     ) : null;
 

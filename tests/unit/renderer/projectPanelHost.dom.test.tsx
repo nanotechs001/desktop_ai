@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render, screen, cleanup } from '@testing-library/react';
+import { act, render, screen, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Stub the heavy tree; the column test only covers host chrome (gating, collapse).
@@ -54,5 +54,27 @@ describe('ProjectPanelHost (Layout-level host chrome)', () => {
     setCurrentProject('proj-9');
     render(<ProjectPanelHost widthPx={280} collapsed={false} />);
     expect(screen.queryByLabelText('Collapse explorer')).not.toBeInTheDocument();
+  });
+
+  it('eases the column only while the toggle runs, with the tree held at its width', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: false, media: query }))
+    );
+    setCurrentProject('proj-9');
+    const { rerender } = render(<ProjectPanelHost widthPx={280} collapsed={false} />);
+    const col = document.querySelector('[data-explorer-column]') as HTMLElement;
+    expect(col.style.transition).toBe('');
+
+    rerender(<ProjectPanelHost widthPx={280} collapsed />);
+    expect(col.style.width).toBe('0px');
+    expect(col.style.transition).toContain('width');
+    expect(screen.getByTestId('explorer').parentElement?.style.width).toBe('280px');
+
+    act(() => vi.advanceTimersByTime(300));
+    expect(col.style.transition).toBe('');
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });
