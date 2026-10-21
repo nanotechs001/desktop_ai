@@ -33,7 +33,7 @@ import {
   carriedPosition,
   cascadeBounds,
   computePlacement,
-  easeOutRect,
+  easeInOutRect,
   expandedBandHeight,
   expandedWindowBounds,
   fitsSomeWorkArea,
@@ -92,7 +92,7 @@ const READY_FALLBACK_MS = 8000;
 const LIFECYCLE_SLACK_MS = 1000;
 const LAND_TICK_MS = 16;
 // Switching between the compact popup and the expanded window eases the window bounds this long, at ~60 fps.
-const WINDOW_TRANSITION_MS = 220;
+const WINDOW_TRANSITION_MS = 280;
 const WINDOW_TRANSITION_TICK_MS = 16;
 // A moved or resized expanded window's bounds are written to disk this long after the gesture ends.
 const BOUNDS_SAVE_DELAY_MS = 500;
@@ -1114,7 +1114,7 @@ export class AgentWidgetManager {
     if (!transition) return;
     if (entry.win.isDestroyed()) return this.stopWindowTransition(entry);
     const t = (Date.now() - transition.startedAt) / WINDOW_TRANSITION_MS;
-    const bounds = t >= 1 ? transition.to : easeOutRect(transition.from, transition.to, t);
+    const bounds = t >= 1 ? transition.to : easeInOutRect(transition.from, transition.to, t);
     // Every frame resizes in place: no hide/show (the win32 workaround in setBounds would flash every frame).
     entry.win.setBounds(bounds, false);
     entry.lastSize = { width: bounds.width, height: bounds.height };

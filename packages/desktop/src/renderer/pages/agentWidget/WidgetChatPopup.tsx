@@ -46,6 +46,8 @@ type WidgetChatPopupProps = {
   state: AgentAnimationState;
   layout: AgentWidgetLayout;
   visible: boolean;
+  /** Closing from the popup itself: it fades toward the robot before the window shrinks. */
+  closing?: boolean;
   /** The chat is mounted here (lazy: only after the first open, and only while the widget owns it). */
   chatReady: boolean;
   /** Escape: close the popup back to the robot. */
@@ -270,6 +272,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
     <section
       className={classNames(styles.popup, !props.visible && styles.hidden)}
       data-layout={expandedWindow ? 'expanded' : 'compact'}
+      data-closing={(props.visible && props.closing) || undefined}
       role='dialog'
       aria-label={botName}
       data-widget-hit

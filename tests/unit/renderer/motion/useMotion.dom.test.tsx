@@ -8,11 +8,6 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const settings = vi.hoisted(() => ({ value: null as { reduceMotion: boolean } | null }));
-vi.mock('@/renderer/pages/agentWidget/useAgentWidgetSync', () => ({
-  useAgentWidgetSettings: () => settings.value,
-}));
-
 import { isMotionReduced, useAnimating, useMotionPreference } from '@/renderer/hooks/ui/useMotion';
 
 /** A matchMedia that answers `prefers-reduced-motion: reduce` with `reduce`. */
@@ -37,7 +32,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   delete document.documentElement.dataset.reduceMotion;
-  settings.value = null;
 });
 
 describe('isMotionReduced', () => {
@@ -65,16 +59,14 @@ describe('isMotionReduced', () => {
 
 describe('useMotionPreference', () => {
   it("mirrors the app's Reduce motion setting on <html data-reduce-motion>", () => {
-    settings.value = { reduceMotion: true };
-    const Probe = () => {
-      useMotionPreference();
+    const Probe: React.FC<{ reduce: boolean }> = ({ reduce }) => {
+      useMotionPreference(reduce);
       return null;
     };
-    const { rerender } = render(<Probe />);
+    const { rerender } = render(<Probe reduce />);
     expect(document.documentElement.dataset.reduceMotion).toBe('true');
 
-    settings.value = { reduceMotion: false };
-    rerender(<Probe />);
+    rerender(<Probe reduce={false} />);
     expect(document.documentElement.dataset.reduceMotion).toBeUndefined();
   });
 });

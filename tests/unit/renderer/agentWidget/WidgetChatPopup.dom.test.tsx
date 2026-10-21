@@ -7,6 +7,8 @@
  * asks to open that bot's settings.
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Message } from '@arco-design/web-react';
@@ -215,5 +217,39 @@ describe('WidgetChatPopup follow in the main window', () => {
     fireEvent.pointerDown(dialog.querySelector('[data-resize="se"]')!, { button: 0, pointerId: 1 });
     fireEvent.pointerDown(dialog.querySelector('aside')!, { button: 0 });
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('WidgetChatPopup motion', () => {
+  const css = readFileSync(
+    path.resolve(__dirname, '../../../../packages/desktop/src/renderer/pages/agentWidget/AgentWidget.module.css'),
+    'utf8'
+  );
+
+  it('marks the popup while it plays its exit, before the window shrinks', () => {
+    render(
+      <WidgetChatPopup
+        conversation={{ id: 'c1' } as never}
+        name='Bot'
+        state='idle'
+        layout={LAYOUT as never}
+        visible
+        closing
+        chatReady
+        onMinimize={vi.fn()}
+        onClose={vi.fn()}
+        onReturnToMain={vi.fn()}
+        onHideWidget={vi.fn()}
+        onShowConversation={vi.fn()}
+        onOpenBotSettings={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-closing', 'true');
+    expect(css).toMatch(/\.popup\[data-closing\]\s*{[^}]*popup-out/);
+  });
+
+  it('keeps the panel on screen while the window changes shape, fading only its content', () => {
+    expect(css).not.toMatch(/\[data-transitioning='true'\] \.popup\s*{/);
+    expect(css).toMatch(/\[data-transitioning='true'\] \.popup > \*\s*{[^}]*opacity: 0/);
   });
 });

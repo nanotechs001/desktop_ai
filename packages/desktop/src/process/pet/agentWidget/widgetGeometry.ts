@@ -296,9 +296,13 @@ export function landingY(fromY: number, toY: number, elapsedMs: number, impactMs
   return Math.round(fromY + (toY - fromY) * t * t);
 }
 
-/** The rect `t` (0..1) of the way from `from` to `to` along an ease-out curve (fast start, gentle stop). */
-export function easeOutRect(from: Rect, to: Rect, t: number): Rect {
-  const k = 1 - (1 - clamp(t, 0, 1)) ** 3;
+/**
+ * The rect `t` (0..1) of the way from `from` to `to` along an ease-in-out curve (cubic): a gentle start and stop, so
+ * the window does not leap on its first step the way an ease-out does.
+ */
+export function easeInOutRect(from: Rect, to: Rect, t: number): Rect {
+  const u = clamp(t, 0, 1);
+  const k = u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2;
   const at = (a: number, b: number) => Math.round(a + (b - a) * k);
   return {
     x: at(from.x, to.x),

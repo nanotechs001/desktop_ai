@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useAgentWidgetSettings } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 
 /**
  * Durations of the motion tokens in `styles/themes/base.css` (`--motion-fast|base|slow`), for code that must wait
@@ -27,11 +26,11 @@ export const isMotionReduced = (): boolean => {
 };
 
 /**
- * Mirrors the app's "Reduce motion" setting on `<html data-reduce-motion>`, which zeroes the motion tokens for the
- * whole window (the OS preference does that through `@media`). Mount once, at the layout.
+ * Mirrors the app's "Reduce motion" setting (`reduce`) on `<html data-reduce-motion>`, which zeroes the motion tokens
+ * for the whole window (the OS preference does that through `@media`). Mount once per window: the main layout and
+ * each robot window.
  */
-export function useMotionPreference(): void {
-  const reduce = Boolean(useAgentWidgetSettings()?.reduceMotion);
+export function useMotionPreference(reduce: boolean): void {
   useEffect(() => {
     const root = document.documentElement;
     if (reduce) root.dataset.reduceMotion = 'true';

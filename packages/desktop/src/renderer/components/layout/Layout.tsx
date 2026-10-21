@@ -37,6 +37,7 @@ import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import {
   followRobotChat,
   onAgentTabActivity,
+  useAgentWidgetSettings,
   useAgentWidgetSync,
 } from '@renderer/pages/agentWidget/useAgentWidgetSync';
 import { startSubscriptionUsageFeed } from '@renderer/pages/conversation/components/limitSwitch/subscriptionUsage';
@@ -154,7 +155,7 @@ const Layout: React.FC<{
   useEngineDriftSync();
   useDefaultAgentSync();
   useBotColorSeed();
-  useMotionPreference();
+  useMotionPreference(Boolean(useAgentWidgetSettings()?.reduceMotion));
   const navigate = useNavigate();
   const location = useLocation();
   // Read by window event handlers that are not re-bound on every route change.

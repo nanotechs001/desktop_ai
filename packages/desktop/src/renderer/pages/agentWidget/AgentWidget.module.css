@@ -89,7 +89,7 @@
 
 .popup {
   /* Opens with a short fade + scale from the robot's side, in step with its turn toward the user. */
-  animation: popup-in 180ms ease-out;
+  animation: popup-in var(--motion-base) var(--motion-ease-out);
   transform-origin: 50% 100%;
   position: absolute;
   top: 0;
@@ -103,17 +103,23 @@
   background: var(--bg-1);
   box-shadow: 0 8px 28px color-mix(in srgb, var(--text-primary) 18%, transparent);
   user-select: text;
-  /* Fades back in once the window has eased into its new shape. */
-  transition:
-    opacity 160ms ease-out,
-    transform 160ms ease-out;
 }
 
-/* Switching between the compact popup and the expanded window: the content fades out quickly while the window eases,
-   so no squashed in-between layout shows. */
-.root[data-transitioning='true'] .popup {
+/* Closing from the popup: it fades and shrinks toward the robot, then the window shrinks (see index.tsx). */
+.popup[data-closing] {
+  animation: popup-out var(--motion-fast) var(--motion-ease-in) forwards;
+  pointer-events: none;
+}
+
+/* Switching between the compact popup and the expanded window: the panel itself stays and grows or shrinks with the
+   window, while only its content fades out quickly (no squashed in-between layout shows) and back in once the window
+   has its new shape. */
+.popup > * {
+  transition: opacity var(--motion-fast) var(--motion-ease-out);
+}
+
+.root[data-transitioning='true'] .popup > * {
   opacity: 0;
-  transform: scale(0.98);
   transition-duration: 60ms;
 }
 
@@ -236,8 +242,16 @@
   }
 }
 
+@keyframes popup-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .popup {
+  .popup,
+  .popup > * {
     animation-duration: 1ms;
     transition: none;
   }

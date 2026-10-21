@@ -17,6 +17,7 @@ import {
   resolveSlot,
   xFromRatio,
   type DisplayLike,
+  easeInOutRect,
 } from '@process/pet/agentWidget/widgetGeometry';
 
 const display = (workArea: DisplayLike['workArea'], bounds = { x: 0, y: 0, width: 1920, height: 1080 }) => ({
@@ -168,5 +169,23 @@ describe('following the mouse', () => {
     expect(stepToward(100, 1000, track, () => 0.5)).toBe(200); // 40 + 60 px
     expect(stepToward(1000, 100, track, () => 0)).toBe(960); // 40 px to the left
     expect(stepToward(100, 120, track, () => 1)).toBe(120); // stops at the target
+  });
+});
+
+describe('easeInOutRect', () => {
+  const from = { x: 0, y: 0, width: 100, height: 100 };
+  const to = { x: 100, y: 200, width: 500, height: 300 };
+
+  it('starts and ends exactly on the two rects, and is halfway at half time', () => {
+    expect(easeInOutRect(from, to, 0)).toEqual(from);
+    expect(easeInOutRect(from, to, 1)).toEqual(to);
+    expect(easeInOutRect(from, to, 0.5)).toEqual({ x: 50, y: 100, width: 300, height: 200 });
+  });
+
+  it('starts and stops gently, symmetric around the middle', () => {
+    const early = easeInOutRect(from, to, 0.1).width - from.width;
+    const late = to.width - easeInOutRect(from, to, 0.9).width;
+    expect(early).toBeLessThan((to.width - from.width) * 0.02);
+    expect(late).toBe(early);
   });
 });

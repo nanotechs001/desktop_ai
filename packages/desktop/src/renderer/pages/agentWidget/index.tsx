@@ -20,6 +20,7 @@ import { isTurning, resolveRobotVisual, type RobotInteraction, type RobotStrip }
 import RobotSprite, { preloadRobotStrips } from './RobotSprite';
 import { useAgentAnimationState, useRobotPresentation } from './useAgentAnimationState';
 import { retireRobotChat } from './useAgentWidgetSync';
+import { MOTION_MS, isMotionReduced, useMotionPreference } from '@/renderer/hooks/ui/useMotion';
 import WidgetChatPopup from './WidgetChatPopup';
 import styles from './AgentWidget.module.css';
 
@@ -58,6 +59,7 @@ const AgentWidgetPage: React.FC = () => {
   const [chatMounted, setChatMounted] = useState(false);
   const { state, awaitingUser, wake } = useAgentAnimationState(id, expanded && chatLocation === 'widget');
   const reduceMotion = Boolean(settings?.reduceMotion);
+  useMotionPreference(reduceMotion);
   // The expanded window: the robot stands in the band above the chat, walking it, instead of turning to the user.
   const windowExpanded = expanded && layout?.window_mode === 'expanded';
   const [presentation, advancePresentation] = useRobotPresentation(expanded && !windowExpanded, reduceMotion);
@@ -232,11 +234,36 @@ const AgentWidgetPage: React.FC = () => {
     if (id) setIgnoreMouse(false);
   }, [id, expanded, setIgnoreMouse]);
 
+  // A close from the popup (minimize, the robot, Escape) plays the popup's exit first, then asks the main process,
+  // which shrinks the window: no frame of a clipped popup, no hard cut. A close from main (a click elsewhere) is
+  // immediate.
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!expanded) setClosing(false);
+  }, [expanded]);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
   const setExpanded = (next: boolean): void => {
     const now = Date.now();
-    if (now - lastToggleAtRef.current < CLICK_DEBOUNCE_MS) return;
+    if (now - lastToggleAtRef.current < CLICK_DEBOUNCE_MS || closeTimerRef.current !== null) return;
     lastToggleAtRef.current = now;
-    void ipcBridge.agentWidget.setExpanded.invoke({ ...target, expanded: next });
+    const request = (): void => {
+      void ipcBridge.agentWidget.setExpanded.invoke({ ...target, expanded: next });
+    };
+    if (next || reduceMotion || isMotionReduced()) {
+      request();
+      return;
+    }
+    setClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      request();
+    }, MOTION_MS.fast);
   };
   const endPress = (cancelled: boolean) => {
     const press = pressRef.current;
@@ -274,6 +301,7 @@ const AgentWidgetPage: React.FC = () => {
           state={state}
           layout={layout}
           visible={expanded}
+          closing={closing}
           chatReady={chatMounted && chatLocation === 'widget'}
           onMinimize={() => setExpanded(false)}
           onClose={() => void ipcBridge.agentWidget.setChatLocation.invoke({ ...target, location: 'main' })}

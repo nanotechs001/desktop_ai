@@ -1576,20 +1576,23 @@ describe('expanded window mode', () => {
     }
     const transitioning = () => (layoutOf(A) as { window_transitioning?: boolean } | undefined)?.window_transitioning;
 
-    it('eases the window to the expanded bounds over about 220 ms and ends exactly on them', async () => {
+    it('eases the window in and out to the expanded bounds over about 280 ms and ends exactly on them', async () => {
       const { manager, win, compact } = await openCompact();
       manager.setWindowMode(A, 'expanded');
       expect(win.bounds).toEqual(compact); // nothing snaps
       expect(transitioning()).toBe(true);
       const widths: number[] = [];
-      for (let t = 0; t < 200; t += 16) {
+      for (let t = 0; t < 260; t += 16) {
         vi.advanceTimersByTime(16);
         widths.push(win.bounds.width);
       }
+      const span = EXPANDED.width - compact.width;
       expect(between(widths[3], compact.width, EXPANDED.width)).toBe(true);
       expect(widths.slice(1).every((w, i) => w >= widths[i])).toBe(true);
-      // Ease-out: most of the way is covered in the first half.
-      expect(widths[6] - compact.width).toBeGreaterThan((EXPANDED.width - compact.width) / 2);
+      // Ease-in-out: no leap on the first steps (under a fifth of the way after a quarter of the time), and a gentle
+      // stop (most of the way done by three quarters).
+      expect(widths[3] - compact.width).toBeLessThan(span / 5);
+      expect(widths[12] - compact.width).toBeGreaterThan(span * 0.8);
       vi.advanceTimersByTime(40);
       expect(win.bounds).toEqual(EXPANDED);
       expect(transitioning()).toBe(false);
@@ -1624,9 +1627,9 @@ describe('expanded window mode', () => {
       const mid = { ...win.bounds };
       manager.setWindowMode(A, 'compact');
       expect(win.bounds).toEqual(mid);
-      vi.advanceTimersByTime(32);
+      vi.advanceTimersByTime(64);
       expect(between(win.bounds.width, compact.width, mid.width)).toBe(true);
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(230);
       expect(win.bounds).toEqual(compact);
       vi.advanceTimersByTime(1_000);
       expect(win.bounds).toEqual(compact);
