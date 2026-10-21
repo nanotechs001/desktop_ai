@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
+import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
@@ -247,6 +248,19 @@ const persistManualUnread = () => {
   } catch {
     // ignore
   }
+};
+
+/**
+ * The set as stored, with `id` added or removed. Every window (main, each robot) shares it through storage and may
+ * hold a stale copy, so a change starts from what is stored, never from this window's copy.
+ */
+const changeStoredManualUnread = (id: string, marked: boolean): void => {
+  const next = readStoredManualUnread();
+  if (marked) next.add(id);
+  else next.delete(id);
+  manualUnreadConversationIdsState = next;
+  persistManualUnread();
+  emitStoreChange();
 };
 
 const listeners = new Set<() => void>();
@@ -549,24 +563,20 @@ const clearCompletionUnreadState = (conversation_id: string) => {
 };
 
 const markManualUnreadState = (conversation_id: string) => {
-  if (manualUnreadConversationIdsState.has(conversation_id)) {
-    return;
-  }
-
-  manualUnreadConversationIdsState = new Set(manualUnreadConversationIdsState).add(conversation_id);
-  persistManualUnread();
-  emitStoreChange();
+  changeStoredManualUnread(conversation_id, true);
 };
 
 const clearManualUnreadState = (conversation_id: string) => {
-  if (!manualUnreadConversationIdsState.has(conversation_id)) {
+  if (!manualUnreadConversationIdsState.has(conversation_id) && !readStoredManualUnread().has(conversation_id)) {
     return;
   }
+  changeStoredManualUnread(conversation_id, false);
+};
 
-  const next = new Set(manualUnreadConversationIdsState);
-  next.delete(conversation_id);
-  manualUnreadConversationIdsState = next;
-  persistManualUnread();
+/** Another window stored the manual-unread set. */
+const onManualUnreadStorage = (event: StorageEvent) => {
+  if (event.key !== MANUAL_UNREAD_STORAGE_KEY) return;
+  manualUnreadConversationIdsState = readStoredManualUnread();
   emitStoreChange();
 };
 
@@ -608,6 +618,16 @@ const setActiveConversationState = (conversation_id: string | null) => {
   activeConversationIdState = conversation_id;
 };
 
+/** Unsubscribers of the running store, so a robot window can stop it when its last list closes. */
+let stopStore: Array<() => void> = [];
+/** Mounted list hooks (useConversationListSync). */
+let storeUsers = 0;
+
+const stopConversationListSyncStore = () => {
+  for (const stop of stopStore.splice(0)) stop();
+  isStoreInitialized = false;
+};
+
 const initializeConversationListSyncStore = () => {
   if (isStoreInitialized) {
     return;
@@ -615,85 +635,105 @@ const initializeConversationListSyncStore = () => {
 
   isStoreInitialized = true;
   refreshConversations();
+  window.addEventListener('storage', onManualUnreadStorage);
+  stopStore.push(() => window.removeEventListener('storage', onManualUnreadStorage));
 
-  addEventListener('chat.history.refresh', refreshConversations);
-  ipcBridge.conversation.listChanged.on((event) => {
-    if (event.action === 'deleted') {
-      clearGenerating(event.conversation_id, 'deleted');
-      clearAllWaitingConfirmation(event.conversation_id);
-      clearCompletionUnreadState(event.conversation_id);
-      clearManualUnreadState(event.conversation_id);
-      clearCompleted(event.conversation_id);
-    }
-    refreshConversations();
-  });
-  ipcBridge.conversation.confirmation.remove.on((event) => {
-    if (!event?.conversation_id || !event.id) {
-      return;
-    }
-    clearWaitingConfirmationById(event.conversation_id, event.id);
-  });
-  ipcBridge.conversation.responseStream.on((message) => {
-    const conversation_id = message.conversation_id;
-    if (!conversation_id) {
-      return;
-    }
-
-    if (!conversation_idsState.has(conversation_id)) {
+  const off = (unsubscribe: unknown) => {
+    if (typeof unsubscribe === 'function') stopStore.push(unsubscribe as () => void);
+  };
+  off(addEventListener('chat.history.refresh', refreshConversations));
+  off(
+    ipcBridge.conversation.listChanged.on((event) => {
+      if (event.action === 'deleted') {
+        clearGenerating(event.conversation_id, 'deleted');
+        clearAllWaitingConfirmation(event.conversation_id);
+        clearCompletionUnreadState(event.conversation_id);
+        clearManualUnreadState(event.conversation_id);
+        clearCompleted(event.conversation_id);
+      }
       refreshConversations();
-    }
-
-    if (isTerminalStreamMessage(message)) {
-      const wasGenerating = generatingConversationIdsState.has(conversation_id);
-      if (wasGenerating && activeConversationIdState !== conversation_id) {
-        markCompletionUnread(conversation_id);
+    })
+  );
+  off(
+    ipcBridge.conversation.confirmation.remove.on((event) => {
+      if (!event?.conversation_id || !event.id) {
+        return;
       }
-      clearGenerating(conversation_id, 'terminal');
-      clearAllWaitingConfirmation(conversation_id);
-      return;
-    }
-
-    // A permission/acp_permission/ask frame pauses the turn on the user — light
-    // the distinct "waiting" icon. This is independent of the generating guard
-    // (an `ask` frame is not in the generating whitelist, and waiting takes
-    // display precedence over the spinner regardless).
-    if (isWaitingConfirmationStreamMessage(message.type)) {
-      const confirmationId = extractConfirmationId(message);
-      if (confirmationId) {
-        markWaitingConfirmation(conversation_id, confirmationId);
+      clearWaitingConfirmationById(event.conversation_id, event.id);
+    })
+  );
+  off(
+    ipcBridge.conversation.responseStream.on((message) => {
+      const conversation_id = message.conversation_id;
+      if (!conversation_id) {
+        return;
       }
-    }
 
-    const decision = getSidebarStreamGuardDecision({
-      type: message.type,
-      completed: completedConversationIdsState.has(conversation_id),
-      completedTurnId: completedTurnIdByConversation.get(conversation_id) ?? null,
-      streamTurnId: message.turn_id ?? null,
-    });
-    if (decision.clearCompleted) {
-      clearCompleted(conversation_id);
-    }
-    if (decision.lateIgnored) {
-      logLateStreamIgnored(conversation_id, message.type);
-      return;
-    }
-    if (decision.markGenerating) {
-      markGenerating(conversation_id, 'stream');
-    }
-  });
-  ipcBridge.conversation.turnCompleted.on((event) => {
-    if (isTerminalTurnState(event.state) && activeConversationIdState !== event.session_id) {
-      markCompletionUnread(event.session_id);
-    }
-    markCompleted(event.session_id, event.turn_id);
-    clearGenerating(event.session_id, 'turnCompleted');
-    refreshConversations();
-  });
+      if (!conversation_idsState.has(conversation_id)) {
+        refreshConversations();
+      }
+
+      if (isTerminalStreamMessage(message)) {
+        const wasGenerating = generatingConversationIdsState.has(conversation_id);
+        if (wasGenerating && activeConversationIdState !== conversation_id) {
+          markCompletionUnread(conversation_id);
+        }
+        clearGenerating(conversation_id, 'terminal');
+        clearAllWaitingConfirmation(conversation_id);
+        return;
+      }
+
+      // A permission/acp_permission/ask frame pauses the turn on the user — light
+      // the distinct "waiting" icon. This is independent of the generating guard
+      // (an `ask` frame is not in the generating whitelist, and waiting takes
+      // display precedence over the spinner regardless).
+      if (isWaitingConfirmationStreamMessage(message.type)) {
+        const confirmationId = extractConfirmationId(message);
+        if (confirmationId) {
+          markWaitingConfirmation(conversation_id, confirmationId);
+        }
+      }
+
+      const decision = getSidebarStreamGuardDecision({
+        type: message.type,
+        completed: completedConversationIdsState.has(conversation_id),
+        completedTurnId: completedTurnIdByConversation.get(conversation_id) ?? null,
+        streamTurnId: message.turn_id ?? null,
+      });
+      if (decision.clearCompleted) {
+        clearCompleted(conversation_id);
+      }
+      if (decision.lateIgnored) {
+        logLateStreamIgnored(conversation_id, message.type);
+        return;
+      }
+      if (decision.markGenerating) {
+        markGenerating(conversation_id, 'stream');
+      }
+    })
+  );
+  off(
+    ipcBridge.conversation.turnCompleted.on((event) => {
+      if (isTerminalTurnState(event.state) && activeConversationIdState !== event.session_id) {
+        markCompletionUnread(event.session_id);
+      }
+      markCompleted(event.session_id, event.turn_id);
+      clearGenerating(event.session_id, 'turnCompleted');
+      refreshConversations();
+    })
+  );
 };
 
 export const useConversationListSync = () => {
   useEffect(() => {
+    storeUsers += 1;
     initializeConversationListSyncStore();
+    return () => {
+      storeUsers -= 1;
+      // A robot window lists chats only while Recent or History is open: closed, it stops refetching the whole list
+      // on every chat event. The main window keeps it (notifications and the chat route read the snapshot).
+      if (storeUsers === 0 && getWidgetConversationId()) stopConversationListSyncStore();
+    };
   }, []);
 
   const {

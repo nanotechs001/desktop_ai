@@ -190,10 +190,20 @@ function cachedBackend(conversationId: string): Promise<string | undefined> {
   return lookup;
 }
 
-/** Feeds every reading, from any chat, into the store. Idempotent; the app starts it at launch (`Layout`). */
+/**
+ * Feeds every reading, from any chat, into the store, and follows what other windows (each robot keeps its own copy)
+ * store. Idempotent; the app starts it at launch (`Layout`), a robot window when its usage indicator mounts.
+ */
 export function startSubscriptionUsageFeed(): void {
   if (feedStarted) return;
   feedStarted = true;
+  // What other windows stored since this module loaded (every write is persisted, so nothing is lost).
+  state = readStorage();
+  window.addEventListener('storage', (event) => {
+    if (event.key !== SUBSCRIPTION_USAGE_STORAGE_KEY) return;
+    state = parseStored(event.newValue);
+    notify();
+  });
   ipcBridge.conversation.rateLimitUpdated.on((event) => {
     // Strictly increasing, so readings that arrive in the same millisecond keep their order.
     const arrivedAt = (lastArrival = Math.max(Date.now(), lastArrival + 1));

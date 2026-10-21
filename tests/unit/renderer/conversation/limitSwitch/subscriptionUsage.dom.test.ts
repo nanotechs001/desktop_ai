@@ -237,6 +237,22 @@ describe('subscription usage store', () => {
     expect(result.current?.windows.five_hour?.utilization).toBe(0.25);
   });
 
+  it('follows the readings another window stores (a robot window would otherwise keep what it read at load)', async () => {
+    const store = await load();
+    const { result } = renderHook(() => store.useSubscriptionUsage('claude', 'c-1'));
+    expect(result.current).toBeNull();
+
+    const stored = JSON.stringify({
+      claude: { windows: { five_hour: { utilization: 0.9, resets_at: null } }, updated_at: NOW_MS },
+    });
+    localStorage.setItem(KEY, stored);
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: KEY, newValue: stored }));
+    });
+
+    expect(result.current?.windows.five_hour?.utilization).toBe(0.9);
+  });
+
   it('ignores a corrupt stored value', async () => {
     localStorage.setItem(KEY, '{"claude":{"windows":"nope"}}');
     const store = await load();
