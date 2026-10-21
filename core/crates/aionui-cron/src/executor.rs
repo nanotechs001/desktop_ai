@@ -1209,6 +1209,9 @@ async fn build_conversation_extra(
             "exclude_auto_inject_skills".to_owned(),
             serde_json::Value::Array(vec![serde_json::Value::String("cron".to_owned())]),
         );
+        // A run's own chat, unlike a user's chat a job is bound to (which also carries `cron_job_id`): the app keeps
+        // it from counting as the bot's newest chat and from taking over the bot's browser tabs.
+        extra.insert("scheduled_run".to_owned(), serde_json::Value::Bool(true));
     }
 
     if let Some(saved_skill) = saved_skill {
@@ -1861,6 +1864,7 @@ mod tests {
 
         assert_eq!(extra["cron_job_id"], "cron_test1");
         assert_eq!(extra["exclude_auto_inject_skills"], serde_json::json!(["cron"]));
+        assert_eq!(extra["scheduled_run"], true);
         assert!(extra.get("preset_enabled_skills").is_none());
     }
 
@@ -1876,6 +1880,7 @@ mod tests {
 
         assert_eq!(extra["cron_job_id"], "cron_test1");
         assert!(extra.get("exclude_auto_inject_skills").is_none());
+        assert!(extra.get("scheduled_run").is_none());
         assert!(extra.get("preset_enabled_skills").is_none());
     }
 
