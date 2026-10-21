@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   closeTab: vi.fn(),
-  takeAgentTab: vi.fn(),
   context: { liveBrowserTabs: [] as unknown[], activeTabId: null as string | null },
   viewerProps: [] as Array<{
     tabId: string;
@@ -25,7 +24,6 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   useOptionalPreviewContext: () => ({
     ...mocks.context,
     closeTab: mocks.closeTab,
-    takeAgentTab: mocks.takeAgentTab,
     updateTab: vi.fn(),
   }),
 }));
@@ -110,14 +108,6 @@ describe('BrowserTabLayer', () => {
     mocks.viewerProps[0].onRequestClose?.('tab-1');
 
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-1');
-  });
-
-  it("hands an agent action on any live tab to the context, so a parked tab of the chat's agent comes on screen", () => {
-    render(layout(TABS, 'tab-1'));
-
-    act(() => mocks.viewerProps.at(-1)?.onAgentAction?.('tab-2'));
-
-    expect(mocks.takeAgentTab).toHaveBeenCalledWith('tab-2');
   });
 
   it('tells only the active tab that it is active, once the panel slot is on screen', () => {

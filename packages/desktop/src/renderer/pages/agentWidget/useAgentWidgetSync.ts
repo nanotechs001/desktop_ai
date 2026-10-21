@@ -57,7 +57,7 @@ export async function launchWidgetWhenReady(conversationId: string): Promise<boo
 // shortcut: one page of the list (the list store reads the same), page through it if a user ever has more chats.
 const CHAT_LIST_LIMIT = 10_000;
 
-/** The bot's newest chat other than `except` (created last: the one its tabs and robot go to), if any. */
+/** The bot's newest chat other than `except` (created last: the one its robot goes to), if any. */
 async function newestChatOfBot(agentId: string, except: string): Promise<string | undefined> {
   const page = await ipcBridge.database.getUserConversations.invoke({ limit: CHAT_LIST_LIMIT });
   return (page?.items ?? [])

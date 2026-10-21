@@ -27,6 +27,8 @@ const h = vi.hoisted(() => ({
   openFileInMain: vi.fn(async () => undefined),
   openPreviewInMain: vi.fn(async () => undefined),
   scopes: {} as Record<string, string>,
+  /** The VA Bot each chat runs as. */
+  bots: {} as Record<string, string>,
   subscribe:
     <T,>(list: ((event: T) => void)[]) =>
     (handler: (event: T) => void) => {
@@ -54,7 +56,15 @@ vi.mock('@/common', () => ({
   },
 }));
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
-  getConversationOrNull: async (id: string) => (h.scopes[id] ? { id, project_id: h.scopes[id], extra: {} } : null),
+  getConversationOrNull: async (id: string) =>
+    h.scopes[id] || h.bots[id]
+      ? {
+          id,
+          project_id: h.scopes[id] ?? `/s/${id}`,
+          extra: {},
+          ...(h.bots[id] ? { assistant: { id: h.bots[id], source: 'user' } } : {}),
+        }
+      : null,
 }));
 vi.mock('@/renderer/pages/conversation/Preview/browser/firstUseNotice', () => ({
   maybeNotifyFirstAgentBrowserUse: vi.fn(),
@@ -95,8 +105,9 @@ const enter = (scope: string | null, options?: EnterOptions) => {
   if (options?.conversationId) setCurrentConversation(options.conversationId);
   act(() => ctx.closePreviewIfScopeChanged(scope, options));
 };
-const botChat = (conversationId: string, newestOfBot: boolean) =>
-  ({ ...OPEN, conversationId, agentId: 'bot-b', newestOfBot }) as const;
+/** A chat of bot B: all of the bot's chats share its one browser scope. */
+const botChat = (conversationId: string) => ({ ...OPEN, conversationId }) as const;
+const BOT_SCOPE = 'bot:bot-b';
 /** A tab an agent of bot B opened on screen; the relay reports `ownerChat` as its owner. */
 const openBotTab = (url: string, ownerChat: string): string => {
   act(() => ctx.openBrowserTab(url, BOT));
@@ -120,13 +131,17 @@ const flushPersist = () =>
     vi.advanceTimersByTime(200);
   });
 
+let testClock = 0;
+
 beforeEach(() => {
   localStorage.clear();
   resetCurrentConversationForTest();
   h.scopes = {};
+  h.bots = {};
   vi.useFakeTimers();
-  // Past any pane input an earlier test noted.
-  vi.setSystemTime(Date.now() + 10 * USER_INPUT_GRACE_MS);
+  // Past any pane input an earlier test noted: each test starts later than every earlier one, on a clock of its own.
+  testClock = Math.max(testClock, Date.now()) + 10 * USER_INPUT_GRACE_MS;
+  vi.setSystemTime(testClock);
 });
 
 afterEach(() => {
@@ -139,23 +154,6 @@ afterEach(() => {
 });
 
 describe('an agent never switches the tab under the user', () => {
-  it('a handed-over tab comes into the pane, but the tab the user works in stays on screen', () => {
-    mount();
-    enter('/s/c1', botChat('c1', true));
-    const botTab = openBotTab('https://example.com/cart', 'c1');
-    enter('/s/c2', botChat('c2', true));
-    act(() => ctx.updateTab(botTab, { metadata: { agentOwned: true, agentConversationId: 'c2' } }));
-    enter('/s/c1', botChat('c1', false));
-    act(() => ctx.openBrowserTab('https://mine.test/'));
-    const mine = String(ctx.activeTabId);
-
-    notePaneInput();
-    act(() => ctx.updateTab(botTab, { metadata: { agentOwned: true, agentConversationId: 'c1' } }));
-
-    expect(ctx.tabs.map((tab) => tab.id)).toContain(botTab);
-    expect(ctx.activeTabId).toBe(mine);
-  });
-
   it("an agent's new tab for the chat on screen opens behind the tab the user works in, and in front after", async () => {
     h.scopes.c1 = '/s/c1';
     mount();
@@ -183,65 +181,16 @@ describe('an agent never switches the tab under the user', () => {
   });
 });
 
-describe('two chats of one bot in the same scope', () => {
-  it("an older chat entered after the newest one parks the newest chat's browser tabs, and they come back", () => {
-    mount();
-    enter('/s/shared', botChat('c2', true));
-    const botTab = openBotTab('https://example.com/cart', 'c2');
-
-    enter('/s/shared', botChat('c1', false));
-
-    expect(browserTabs()).toEqual([]);
-    expect(ctx.liveBrowserTabs.map((tab) => tab.id)).toContain(botTab);
-    flushPersist();
-    expect(storedIds('/s/shared')).toContain(botTab);
-
-    enter('/s/shared', botChat('c2', true));
-
-    expect(ctx.tabs.map((tab) => tab.id)).toContain(botTab);
-    expect(ctx.isOpen).toBe(true);
-  });
-
-  it('a regular chat entered in the scope gets back the browser tabs an older bot chat held there', () => {
-    mount();
-    enter('/s/shared', { ...OPEN, conversationId: 'r1' });
-    const userTab = String(ctx.activeTabId);
-    enter('/s/other', { ...OPEN, conversationId: 'x' });
-    enter('/s/shared', botChat('c1', false));
-    expect(browserTabs()).toEqual([]);
-
-    enter('/s/shared', { ...OPEN, conversationId: 'r1' });
-
-    expect(ctx.tabs.map((tab) => tab.id)).toEqual([userTab]);
-    expect(ctx.isOpen).toBe(true);
-  });
-
-  it('the same older chat re-entered keeps the tab its agent took', () => {
-    mount();
-    enter('/s/c2', botChat('c2', true));
-    const botTab = openBotTab('https://example.com/cart', 'c2');
-    enter('/s/c1', botChat('c1', false));
-    act(() => ctx.updateTab(botTab, { metadata: { agentOwned: true, agentConversationId: 'c1' } }));
-    expect(ctx.tabs.map((tab) => tab.id)).toEqual([botTab]);
-
-    enter('/s/c1', botChat('c1', false));
-
-    expect(ctx.tabs.map((tab) => tab.id)).toEqual([botTab]);
-  });
-});
-
 describe('the chat under an agent that opens the pane', () => {
-  it('stays visible when the relay hands a tab to an older chat with no pane', () => {
+  it("stays visible when an agent's tab opens the pane", async () => {
+    h.scopes.c1 = '/s/c1';
+    h.bots.c1 = 'bot-b';
     mount();
     act(() => ctx.setVaBotMode(true));
-    enter('/s/c1', botChat('c1', true));
-    const botTab = openBotTab('https://example.com/cart', 'c1');
-    enter('/s/c2', botChat('c2', true));
-    act(() => ctx.updateTab(botTab, { metadata: { agentOwned: true, agentConversationId: 'c2' } }));
-    enter('/s/c1', botChat('c1', false));
+    enter(BOT_SCOPE, { conversationId: 'c2' }); // no tab yet, so no pane
     expect(ctx.isOpen).toBe(false);
 
-    act(() => ctx.updateTab(botTab, { metadata: { agentOwned: true, agentConversationId: 'c1' } }));
+    await requestTab({ url: 'https://agent.test/', background: false, conversationId: 'c1', profile: BOT });
 
     expect(ctx.isOpen).toBe(true);
     expect(ctx.isVaChatCollapsed).toBe(false);
@@ -250,7 +199,7 @@ describe('the chat under an agent that opens the pane', () => {
   it('starts collapsed when the user enters a bot chat with its browser', () => {
     mount();
     act(() => ctx.setVaBotMode(true));
-    enter('/s/c1', botChat('c1', true));
+    enter(BOT_SCOPE, botChat('c1'));
     expect(ctx.isOpen).toBe(true);
     expect(ctx.isVaChatCollapsed).toBe(true);
   });
@@ -330,25 +279,54 @@ describe('only the user closes the pane for good', () => {
   });
 });
 
-describe("a Watch on an older bot chat shows the bot's browser", () => {
-  it("opens a tab in the bot's profile, not a Personal one, when the bot has no live tab", () => {
+describe("a Watch on a bot chat shows the bot's browser", () => {
+  it("opens a tab in the bot's profile, not a Personal one, for the chat on screen with no tab", () => {
     mount();
-    act(() => ctx.revealBrowserFor('c1'));
-    enter('/s/c1', botChat('c1', false));
-
-    expect(browserTabs()).toHaveLength(1);
-    expect(browserTabs()[0].metadata?.profile).toEqual(BOT);
-    expect(ctx.isOpen).toBe(true);
-  });
-
-  it('does the same for the older chat already on screen', () => {
-    mount();
-    enter('/s/c1', botChat('c1', false));
+    enter(BOT_SCOPE, { conversationId: 'c1' });
     expect(browserTabs()).toEqual([]);
 
     act(() => ctx.revealBrowserFor('c1'));
 
     expect(browserTabs().map((tab) => tab.metadata?.profile)).toEqual([BOT]);
+    expect(ctx.isOpen).toBe(true);
+  });
+});
+
+/**
+ * Whichever chat of the bot the user continues, its agent works in the bot's one browser: a tab it opens joins the
+ * shared set, on screen when any chat of the bot is, and the pane follows it.
+ */
+describe("an agent of any chat of the bot opens its tab in the bot's shared browser", () => {
+  it('on screen while another chat of the bot is on screen, and the pane follows it', async () => {
+    h.bots.c1 = 'bot-b';
+    mount();
+    enter(BOT_SCOPE, botChat('c2'));
+    const shared = browserTabs().map((tab) => tab.id);
+
+    await requestTab({ url: 'https://agent.test/', background: false, conversationId: 'c1', profile: BOT });
+
+    expect(browserTabs().map((tab) => tab.id)).toEqual([...shared, expect.any(String)]);
+    expect(ctx.activeTab?.content).toBe('https://agent.test/');
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it("in the bot's browser while a regular chat is on screen, shown with the bot's other tabs next time", async () => {
+    h.bots.c1 = 'bot-b';
+    h.scopes.r1 = '/s/r1';
+    mount();
+    enter(BOT_SCOPE, botChat('c2'));
+    const shared = browserTabs().map((tab) => tab.id);
+    enter('/s/r1', { ...OPEN, conversationId: 'r1' });
+    const regular = browserTabs().map((tab) => tab.id);
+
+    await requestTab({ url: 'https://agent.test/', background: false, conversationId: 'c1', profile: BOT });
+    expect(browserTabs().map((tab) => tab.id)).toEqual(regular);
+
+    enter(BOT_SCOPE, botChat('c1'));
+    expect(browserTabs().map((tab) => tab.content)).toEqual([
+      ...shared.map(() => BROWSER_BLANK_URL),
+      'https://agent.test/',
+    ]);
   });
 });
 
@@ -367,7 +345,7 @@ describe('the agent activity dot', () => {
 
   it("marks only the on-screen chat's own agent tabs, and never for another chat", () => {
     mount();
-    enter('/s/c1', botChat('c1', true));
+    enter(BOT_SCOPE, botChat('c1'));
     const blank = String(ctx.activeTabId);
     const own = openBotTab('https://example.com/own', 'c1');
 
@@ -439,26 +417,6 @@ describe('scope changes read the tabs as they are, not as last rendered', () => 
     enter('/s/a', { conversationId: 'a' });
 
     expect(browserTabs().map((tab) => tab.content)).toEqual(['https://just-now.test/']);
-  });
-
-  it('tabs an older bot chat holds back in its workspace scope move with it to its project scope', () => {
-    mount();
-    enter('/ws/c1', botChat('c1', true));
-    act(() => ctx.openBrowserTab('https://mine.test/', BOT));
-    const userTab = String(ctx.activeTabId);
-    enter('/s/x', { conversationId: 'x' });
-    enter('/ws/c1', botChat('c1', false));
-    expect(browserTabs()).toEqual([]);
-
-    enter('/p/c1', { ...botChat('c1', false), carryFromScope: '/ws/c1' });
-    flushPersist();
-    expect(storedIds('/p/c1')).toContain(userTab);
-    enter('/s/x', { conversationId: 'x' });
-
-    enter('/p/c1', botChat('c1', true));
-
-    expect(ctx.tabs.map((tab) => tab.id)).toContain(userTab);
-    expect(ctx.liveBrowserTabs.filter((tab) => tab.id === userTab)).toHaveLength(1);
   });
 });
 

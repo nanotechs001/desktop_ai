@@ -16,8 +16,14 @@
  * for conversations without a bound project, it falls back to the **workspace**
  * path — preserving the previous per-workspace behavior with no regression.
  *
+ * A chat of a VA Bot is the exception: every chat of the bot shares the bot's own scope (`bot:<agentId>`), since the
+ * bot has one browser, and its files and diffs live there with its tabs ({@link previewScopeOfChat}).
+ *
  * Pure: no React, no I/O — so it is trivially unit-testable in isolation.
  */
+
+import { isVaBotAgent } from '@/common/types/agent/defaultAgent';
+
 export type PreviewScopeKey = string | null;
 
 /**
@@ -39,6 +45,31 @@ export function previewScopeOfConversation(conversation: {
 }): PreviewScopeKey {
   const workspace = (conversation.extra as { workspace?: string } | undefined)?.workspace ?? null;
   return previewScopeKey(conversation.project_id ?? null, workspace);
+}
+
+/** The prefix of a VA Bot's own scope: all of the bot's chats share it, so they show its one browser. */
+const BOT_SCOPE_PREFIX = 'bot:';
+
+/** The one preview scope every chat of VA Bot `agentId` shares. */
+export const botScopeKey = (agentId: string): string => `${BOT_SCOPE_PREFIX}${agentId}`;
+
+/** The VA Bot whose scope `scope` is; undefined for a project or workspace scope. */
+export const botOfScope = (scope: PreviewScopeKey): string | undefined =>
+  scope?.startsWith(BOT_SCOPE_PREFIX) ? scope.slice(BOT_SCOPE_PREFIX.length) : undefined;
+
+/**
+ * The preview scope a chat's tabs live in: its VA Bot's own scope for a chat of a VA Bot (see `isVaBotAgent`), so all
+ * of the bot's chats show the same browser; else its project or workspace ({@link previewScopeOfConversation}). The
+ * default Agent and the presets keep a browser per chat. `storedDefaultAgentId` is the stored default Agent's id.
+ */
+export function previewScopeOfChat(
+  conversation: { project_id?: string | null; extra?: unknown; assistant?: { id?: string; source?: string } | null },
+  storedDefaultAgentId: string | undefined
+): PreviewScopeKey {
+  const agentId = conversation.assistant?.id;
+  return agentId && isVaBotAgent(conversation.assistant, storedDefaultAgentId)
+    ? botScopeKey(agentId)
+    : previewScopeOfConversation(conversation);
 }
 
 /**

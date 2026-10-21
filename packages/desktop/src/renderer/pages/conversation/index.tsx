@@ -1,26 +1,23 @@
 import { ipcBridge } from '@/common';
 import { Message, Spin } from '@arco-design/web-react';
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 import ChatConversation from './components/ChatConversation';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
-import { previewScopeOfConversation } from '@/renderer/pages/conversation/Preview/context/previewScope';
+import { previewScopeOfChat } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { setCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import {
-  getSnapshotConversationProjectId,
-  hasNewerSnapshotConversationOfAssistant,
-  useConversationListLoaded,
-} from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
+import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { resolveAssistantConfigId } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import { DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
+import { configService } from '@/common/config/configService';
 
 /** A load faster than this shows no spinner and no dimming at all. */
 const SPINNER_DELAY_MS = 150;
@@ -34,7 +31,6 @@ const ChatConversationIndex: React.FC = () => {
   const { syncTitleFromHistory } = useAutoTitle();
   const notFoundHandledIdRef = useRef<string | undefined>(undefined);
   const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
-  const listLoaded = useConversationListLoaded();
   const defaultConversationTitle = t('conversation.welcome.newConversation');
 
   // keepPreviousData: a cold switch keeps the last chat on screen (dimmed, below) until the next one loads, instead of
@@ -49,8 +45,8 @@ const ChatConversationIndex: React.FC = () => {
   const showingPrevious = Boolean(data && id && data.id !== id);
 
   // Enter the preview scope once per conversation and scope, not on every render or data refresh.
-  // The scope is `previewScopeKey` = project (falling back to workspace until the backend populates
-  // project_id). Same-scope conversations keep their preview; entering one reopens it unless the
+  // The scope is the chat's VA Bot's, else `previewScopeKey` = project (falling back to workspace until the backend
+  // populates project_id). Same-scope conversations keep their preview; entering one reopens it unless the
   // user closed it. When project_id arrives for the conversation we are already in, the live tabs
   // follow the scope change (`carryFromScope`) instead of being swapped for the project's saved ones.
   // The ref lives in PreviewContext (app-root level) so it survives remounts.
@@ -58,35 +54,35 @@ const ChatConversationIndex: React.FC = () => {
   enterScopeRef.current = closePreviewIfScopeChanged;
   const lastEnteredRef = useRef<{ conversationId: string; scope: string | null } | null>(null);
   const conversationId = data?.id;
-  const scope = data ? previewScopeOfConversation(data) : null;
-  // A VA Bot's agent tabs come into the chat that owns them in the relay, or into the bot's newest chat, which the
-  // relay hands them to on its first browser command (ruling R18): a new chat never starts on a blank tab. An older
-  // chat starts with no browser until its agent uses it again. The default Agent and presets are no bots: each of their
-  // chats keeps its own temporary browser. Until the default id is known an adopted default Agent looks like a bot,
-  // so no chat counts as one before then.
-  const agentId =
-    storedDefaultAgentId && isVaBotAgent(data?.assistant, storedDefaultAgentId) ? data?.assistant?.id : undefined;
-  const createdAt = data?.created_at;
+  // A chat of a VA Bot lives in the bot's one scope, shared by all of its chats: moving between them changes nothing
+  // in the pane. Whether an Agent is a bot depends on the default Agent's id (an adopted default Agent is no bot), so
+  // a chat of an Agent waits for it, unless the settings have loaded without one.
+  const [configLoaded, setConfigLoaded] = useState(() => configService.isInitialized());
+  const knowsBots = storedDefaultAgentId !== undefined || configLoaded;
+  const waitsForBots = Boolean(data?.assistant?.id) && !knowsBots;
   useEffect(() => {
-    if (!conversationId) return;
+    if (!waitsForBots) return;
+    let live = true;
+    // A failed load counts as loaded without a default id: the chat must not wait forever.
+    configService
+      .whenReady()
+      .catch((error: unknown) => console.warn('[Conversation] settings did not load:', error))
+      .finally(() => {
+        if (live) setConfigLoaded(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [waitsForBots]);
+  const scope = data ? previewScopeOfChat(data, storedDefaultAgentId) : null;
+  useEffect(() => {
+    if (!conversationId || waitsForBots) return;
     const last = lastEnteredRef.current;
     const carryFromScope = last?.conversationId === conversationId ? (last.scope ?? undefined) : undefined;
     lastEnteredRef.current = { conversationId, scope };
     // The WebUI cannot show a webview, so it gets no blank browser tab over the chat.
-    enterScopeRef.current(scope, {
-      openBrowserIfEmpty: isElectronDesktop(),
-      carryFromScope,
-      conversationId,
-      ...(agentId
-        ? {
-            agentId,
-            // Until the list loads, a newer chat may exist: hold back, and decide again once it arrives.
-            newestOfBot:
-              listLoaded && !hasNewerSnapshotConversationOfAssistant(agentId, conversationId, createdAt ?? 0),
-          }
-        : {}),
-    });
-  }, [conversationId, scope, agentId, createdAt, listLoaded]);
+    enterScopeRef.current(scope, { openBrowserIfEmpty: isElectronDesktop(), carryFromScope, conversationId });
+  }, [conversationId, scope, waitsForBots]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async
