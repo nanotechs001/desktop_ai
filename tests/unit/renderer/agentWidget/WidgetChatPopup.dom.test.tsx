@@ -27,6 +27,9 @@ import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import WidgetChatPopup from '@/renderer/pages/agentWidget/WidgetChatPopup';
 
+// jsdom has no pointer capture; the popup's title-bar gestures call it on press.
+if (!Element.prototype.setPointerCapture) Element.prototype.setPointerCapture = () => {};
+
 const SETTINGS_LABEL = 'pet.widget.botSettings';
 const LAYOUT = { conversation_id: 'c1', bot_offset_x: 0, bot_size: 64, window_mode: 'compact' };
 
