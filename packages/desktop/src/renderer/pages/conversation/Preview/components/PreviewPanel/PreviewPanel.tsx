@@ -28,7 +28,8 @@ import { PreviewToolbarExtrasProvider, type PreviewToolbarExtras } from '../../c
 import { usePreviewContext } from '../../context/PreviewContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
 import { Link, Message } from '@arco-design/web-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { MOTION_MS, isMotionReduced } from '@/renderer/hooks/ui/useMotion';
 import DiffPreview from '../viewers/DiffViewer';
 import ExcelPreview from '../viewers/ExcelViewer';
 import HTMLEditor from '../editors/HTMLEditor';
@@ -844,6 +845,23 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
     }
   }, [metadata?.fileRef, metadata?.file_path, messageApi, t]);
 
+  // A file tab switch fades the next file in, so a remounting viewer does not blink from blank. A browser tab swaps at
+  // once, like a browser (its webview is not in here).
+  const contentRef = useRef<HTMLDivElement>(null);
+  const lastContentTabRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const previous = lastContentTabRef.current;
+    lastContentTabRef.current = activeTabId;
+    const content = contentRef.current;
+    if (!content || !previous || previous === activeTabId || isMotionReduced()) return;
+    for (const child of Array.from(content.children)) {
+      child.animate?.([{ opacity: 0 }, { opacity: 1 }], {
+        duration: MOTION_MS.fast,
+        easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      });
+    }
+  }, [activeTabId]);
+
   // Every hook has now run, so bailing out here keeps the hook count stable.
   if ((!isOpen && !closing) || !activeTab) return null;
 
@@ -1283,8 +1301,10 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
           />
         )}
 
-        {/* 预览内容 / Preview content */}
-        {renderContent()}
+        {/* 预览内容 / Preview content (display: contents, so the layout is the same as without it) */}
+        <div ref={contentRef} style={{ display: 'contents' }}>
+          {renderContent()}
+        </div>
 
         {/* 浏览器 tab 的位置：webview 常驻在 app 布局的 BrowserTabLayer 里，覆盖在这里
             Where the browser tab goes: its webview lives, always mounted, in the layout's BrowserTabLayer */}

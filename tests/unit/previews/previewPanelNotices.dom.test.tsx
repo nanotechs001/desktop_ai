@@ -519,3 +519,50 @@ describe('the refresh control reflects what it can promise', () => {
     TIMEOUT_MS
   );
 });
+
+// A file tab switch fades the next file in, so a remounting viewer does not blink from blank; under reduced motion
+// (or jsdom without matchMedia) it swaps at once.
+describe('preview tab switch motion', () => {
+  const openTwoTabs = (): void => {
+    act(() => {
+      ctx.openPreview('', 'unsupported', { title: 'a.heic', file_name: 'a.heic', editable: false });
+    });
+    act(() => {
+      ctx.openPreview('', 'unsupported', { title: 'b.heic', file_name: 'b.heic', editable: false });
+    });
+  };
+  const stubMotionQuery = (reduce: boolean) =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: reduce && query.includes('reduce'), media: query }))
+    );
+
+  it('fades the next file in on a tab switch', () => {
+    stubMotionQuery(false);
+    const animate = vi.fn();
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, value: animate });
+    const { rerender } = render(<Harness showPanel={false} />);
+    openTwoTabs();
+    rerender(<Harness showPanel />);
+    expect(animate).not.toHaveBeenCalled();
+
+    act(() => ctx.switchTab(ctx.tabs[0].id));
+
+    expect(animate).toHaveBeenCalledWith([{ opacity: 0 }, { opacity: 1 }], expect.objectContaining({ duration: 150 }));
+    Reflect.deleteProperty(Element.prototype, 'animate');
+  });
+
+  it('swaps at once under reduced motion', () => {
+    stubMotionQuery(true);
+    const animate = vi.fn();
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, value: animate });
+    const { rerender } = render(<Harness showPanel={false} />);
+    openTwoTabs();
+    rerender(<Harness showPanel />);
+
+    act(() => ctx.switchTab(ctx.tabs[0].id));
+
+    expect(animate).not.toHaveBeenCalled();
+    Reflect.deleteProperty(Element.prototype, 'animate');
+  });
+});
