@@ -1486,6 +1486,11 @@ impl CodexSessionBackend {
                     .await?;
             }
         }
+        // Subscription usage: fire-and-forget; the reader claims the response by
+        // its string id. Best-effort, so a failed write does not fail the handshake.
+        if let Err(e) = self.write_frame(super::codex_rate_limits::read_request()).await {
+            tracing::debug!(conversation_id = %self.session_id, error = %e, "codex rate-limit read not sent");
+        }
         // Discovery (B-CODEX-MODEL-LIST): fire-and-forget; the reader claims the
         // responses by rpc id and fills `discovered`.
         let model_list_id = self.next_rpc_id();
@@ -1634,6 +1639,9 @@ async fn reader_task(
     // wait so an unfollowed systemError still terminates the turn.
     let mut system_error_pending = false;
     let mut system_error_deadline: Option<tokio::time::Instant> = None;
+    // Last `account/rateLimits/read` snapshot, with the sparse `updated`
+    // notifications merged in. Per reader: a wake's handshake reads it afresh.
+    let mut rate_limits = Value::Null;
 
     let mut lines = BufReader::new(stdout).lines();
     // Unbounded mid-turn read (AGENTS.md §"出了问题必须查到根因": NO mid-turn
@@ -1796,6 +1804,12 @@ async fn reader_task(
                                     title_gen.fire(&session_id, result_text, &event_tx, cur);
                                 }
                                 emit(&event_tx, &session_id, cur, ev);
+                                // The turn spent quota: refresh the usage reading.
+                                if let Err(e) =
+                                    write_reader_frame(&stdin, &super::codex_rate_limits::read_request()).await
+                                {
+                                    tracing::debug!(conversation_id = %session_id, error = %e, "codex rate-limit read not sent");
+                                }
                             } else if system_error_pending && !was_pending {
                                 // systemError was just deferred: arm the bounded grace
                                 // for the rich follow-up (error{willRetry:false} /
@@ -1876,6 +1890,16 @@ async fn reader_task(
                             }
                             continue;
                         }
+                        if m == "account/rateLimits/updated" {
+                            rate_limits = super::codex_rate_limits::merge(
+                                &rate_limits,
+                                params.get("rateLimits").unwrap_or(&Value::Null),
+                            );
+                            if let Some(ev) = super::codex_rate_limits::to_event(&rate_limits) {
+                                emit(&event_tx, &session_id, cur, ev);
+                            }
+                            continue;
+                        }
                         for ev in map_notification(m, params) {
                             emit(&event_tx, &session_id, cur, scope_notice_to_turn(ev, cur));
                         }
@@ -1890,6 +1914,24 @@ async fn reader_task(
                         // ERROR terminates the turn / surfaces a Notice (below) —
                         // never a silent drop. Other responses (settings/rollback/etc)
                         // flow via notifications; diagnostic only.
+                        if frame.get("id").and_then(Value::as_str) == Some(super::codex_rate_limits::READ_ID) {
+                            // Usage is best-effort: an old codex (method not found) or a
+                            // failed read stays silent, never a notice or a failed turn.
+                            match frame.get("result").and_then(|r| r.get("rateLimits")) {
+                                Some(snapshot) => {
+                                    rate_limits = snapshot.clone();
+                                    if let Some(ev) = super::codex_rate_limits::to_event(&rate_limits) {
+                                        emit(&event_tx, &session_id, turn_gen.load(Ordering::SeqCst), ev);
+                                    }
+                                }
+                                None => tracing::debug!(
+                                    conversation_id = %session_id,
+                                    error = ?frame.get("error"),
+                                    "codex account/rateLimits/read unavailable; no usage reading"
+                                ),
+                            }
+                            continue;
+                        }
                         if let Some(rid) = frame.get("id").and_then(Value::as_u64) {
                             let error_message = frame.get("error").map(|e| {
                                 e.get("message")
@@ -2770,14 +2812,23 @@ async fn write_reverse_error(
         return; // a notification, not a request — nothing to answer
     }
     let frame = json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } });
+    let _ = write_reader_frame(stdin, &frame).await;
+}
+
+/// Write one frame from the reader task (which has no `write_frame`).
+async fn write_reader_frame(
+    stdin: &Arc<Mutex<Option<aionui_process::BoxedStdin>>>,
+    frame: &Value,
+) -> std::io::Result<()> {
     let mut guard = stdin.lock().await;
-    let Some(w) = guard.as_mut() else { return };
+    let Some(w) = guard.as_mut() else {
+        return Err(std::io::ErrorKind::BrokenPipe.into());
+    };
     use tokio::io::AsyncWriteExt;
-    if let Ok(mut line) = serde_json::to_vec(&frame) {
-        line.push(b'\n');
-        let _ = w.write_all(&line).await;
-        let _ = w.flush().await;
-    }
+    let mut line = serde_json::to_vec(frame)?;
+    line.push(b'\n');
+    w.write_all(&line).await?;
+    w.flush().await
 }
 
 /// Map a codex server notification → canonical SessionEvent(s). The A1 fix lives
@@ -5757,6 +5808,78 @@ mod tests {
             written.contains("-32601"),
             "the unsupported-method code, got: {written}"
         );
+    }
+
+    // ===== subscription usage (account/rateLimits/*) =====
+
+    fn rate_limit_windows(events: &[SessionEvent]) -> Vec<Vec<crate::event::RateLimitWindow>> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                SessionEvent::RateLimitInfo { windows, .. } => Some(windows.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_read_then_a_sparse_update_emit_merged_readings() {
+        let events = drive_codex(&[
+            r#"{"jsonrpc":"2.0","id":"aionui-rate-limits-read","result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":40,"windowDurationMins":300,"resetsAt":1785754200},"secondary":{"usedPercent":10,"windowDurationMins":10080,"resetsAt":1786000000},"credits":null,"planType":"plus","rateLimitReachedType":null},"accountId":"acct-1"}}"#,
+            r#"{"jsonrpc":"2.0","method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":null,"primary":{"usedPercent":60,"windowDurationMins":null,"resetsAt":null},"secondary":null,"credits":null,"planType":null,"rateLimitReachedType":null}}}"#,
+        ])
+        .await;
+        let readings = rate_limit_windows(&events);
+        assert_eq!(readings.len(), 2, "one reading per frame, got {events:?}");
+        let used = |r: &[crate::event::RateLimitWindow]| r.iter().map(|w| w.utilization).collect::<Vec<_>>();
+        assert_eq!(used(&readings[0]), vec![Some(0.4), Some(0.1)]);
+        assert_eq!(
+            used(&readings[1]),
+            vec![Some(0.6), Some(0.1)],
+            "the update merges into the read"
+        );
+        assert_eq!(
+            readings[1][0].resets_at,
+            Some(1785754200),
+            "a null reset keeps the old one"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_rate_limit_read_or_api_key_snapshot_is_silent() {
+        let events = drive_codex(&[
+            r#"{"jsonrpc":"2.0","id":"aionui-rate-limits-read","error":{"code":-32601,"message":"method not found"}}"#,
+            r#"{"jsonrpc":"2.0","id":"aionui-rate-limits-read","result":{"rateLimits":{"primary":null,"secondary":null,"planType":null,"rateLimitReachedType":null}}}"#,
+        ])
+        .await;
+        assert!(events.is_empty(), "no reading, notice or opaque event, got {events:?}");
+    }
+
+    #[tokio::test]
+    async fn the_handshake_and_each_completed_turn_read_rate_limits() {
+        let bytes = format!(
+            "{}\n",
+            r#"{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th1","turn":{"id":"t1","status":"completed"}}}"#
+        )
+        .into_bytes();
+        let fake = FakeAgentIo::never_exits(bytes);
+        let captured = fake.captured_stdin();
+        let backend = CodexSessionBackend::build_with_io("codex-1", Box::new(fake)).await;
+        let after_turn = captured_str(&captured).await;
+        assert_eq!(
+            after_turn.matches(r#""method":"account/rateLimits/read""#).count(),
+            1,
+            "a completed turn reads usage, got: {after_turn}"
+        );
+        backend.run_handshake(HandshakeMode::Fresh).await.expect("handshake");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let written = String::from_utf8_lossy(&captured.lock().await.clone()).to_string();
+        assert_eq!(
+            written.matches(r#""method":"account/rateLimits/read""#).count(),
+            2,
+            "the handshake reads usage too, got: {written}"
+        );
+        assert!(written.contains(r#""supportsLunaReserve":false"#), "got: {written}");
     }
 
     // ===== notification → SessionEvent mapping (transport-agnostic fold) =====
