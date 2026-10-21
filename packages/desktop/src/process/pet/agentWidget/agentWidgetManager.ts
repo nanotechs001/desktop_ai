@@ -705,7 +705,10 @@ export class AgentWidgetManager {
       }, READY_FALLBACK_MS);
     });
     win.on('focus', () => {
-      if (entry.record.expanded && !entry.resizing) entry.focusedSinceOpen = true;
+      if (!entry.record.expanded || entry.resizing) return;
+      entry.focusedSinceOpen = true;
+      // The user moved into this robot's chat (maybe from another robot's): the main window's pane follows it.
+      this.followInMain(entry.record.conversation_id);
     });
     // Opening the popup hides/re-shows the window on Windows (see setBounds), which fires blur
     // before the user ever touched it. Only a blur after real focus means "clicked outside".

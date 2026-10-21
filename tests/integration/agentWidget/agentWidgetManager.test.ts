@@ -1362,6 +1362,20 @@ describe('the main window follows the robot chat', () => {
     expect(main.show).not.toHaveBeenCalled();
   });
 
+  it('tells the main window when the user moves into an open popup of another robot', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    appear(manager, A);
+    manager.openPopup(A, 'bot-1');
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    liveWindows()[0].emit('focus');
+
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:follow-robot-chat', { conversation_id: A });
+    expect(main.focus).not.toHaveBeenCalled();
+  });
+
   it('says nothing when the popup closes', async () => {
     const { manager } = await makeManager();
     manager.ensure(A, false, 'bot-1');
