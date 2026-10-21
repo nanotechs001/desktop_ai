@@ -120,6 +120,7 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
     manager.openLinkInMain(conversation_id, url);
   });
   w.watchInMain.provider(async (p) => manager.watchInMain(parse(target, p, 'watchInMain').conversation_id));
+  w.followInMain.provider(async (p) => manager.followFromPopup(parse(target, p, 'followInMain').conversation_id));
   w.rendererReady.provider(async (p) => {
     const { conversation_id, agent_id, modified_at } = parse(schemas.rendererReady, p, 'rendererReady');
     manager.rendererReady(conversation_id, { agent_id, modified_at });

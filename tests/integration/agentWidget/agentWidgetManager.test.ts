@@ -146,6 +146,7 @@ vi.mock('@/common', () => {
     'openAgentSettings',
     'openLinkInMain',
     'watchInMain',
+    'followInMain',
     'rendererReady',
     'animationDone',
     'setSuspended',
@@ -1379,6 +1380,26 @@ describe('the main window follows the robot chat', () => {
     liveWindows()[0].emit('focus');
 
     expect(main.webContents.send).not.toHaveBeenCalled();
+  });
+
+  it('a press inside an open popup (compact or expanded) asks the main window to follow; a closed one does not', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A, false, 'bot-1');
+    appear(manager, A);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    await h.providers.followInMain({ conversation_id: A });
+    expect(main.webContents.send).not.toHaveBeenCalled();
+
+    manager.openPopup(A, 'bot-1');
+    main.webContents.send.mockClear();
+    manager.setWindowMode(A, 'expanded');
+    await h.providers.followInMain({ conversation_id: A });
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:follow-robot-chat', { conversation_id: A });
+    expect(main.focus).not.toHaveBeenCalled();
+    await expect(h.providers.followInMain({ conversation_id: '../x' })).rejects.toThrow();
   });
 
   it('says nothing when the popup closes', async () => {

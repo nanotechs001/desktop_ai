@@ -769,6 +769,12 @@ export class AgentWidgetManager {
    * The chat in a robot's popup changed (opened, a new chat, one from its history): the main window may switch its
    * browser pane to it (Layout.tsx decides). It is not brought forward.
    */
+  /** The user pressed inside this robot's open popup (compact or expanded): the main window follows its chat. */
+  followFromPopup(conversationId: string): void {
+    if (this.entries.has(conversationId) && this.state.widgets[conversationId]?.expanded)
+      this.followInMain(conversationId);
+  }
+
   private followInMain(conversationId: string): void {
     const main = this.host.getMainWindow();
     if (main && !main.isDestroyed())

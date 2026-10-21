@@ -1644,6 +1644,8 @@ export const agentWidget = {
   openLinkInMain: bridge.buildProvider<void, AgentWidgetTarget & { url: string }>('agent-widget:open-link-in-main'),
   /** Watch: the main window comes forward on this conversation's browser pane (its tabs as they are); the popup stays. */
   watchInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:watch-in-main'),
+  /** The user pressed inside a robot's open popup: the main window may switch to that chat (it is not brought forward). */
+  followInMain: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:follow-in-main'),
   /** The widget renderer has its first frames decoded: show the window and play `appearing`. */
   rendererReady: bridge.buildProvider<void, AgentWidgetTarget & { agent_id?: string; modified_at?: number }>(
     'agent-widget:renderer-ready'

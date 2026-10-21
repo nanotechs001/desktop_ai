@@ -270,6 +270,14 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
       role='dialog'
       aria-label={botName}
       data-widget-hit
+      onPointerDownCapture={(e) => {
+        // Working in this chat brings its browser up in the main window; the title-bar buttons (close, hide,
+        // settings...) are not working in the chat.
+        if (e.button !== 0 || (e.target as Element).closest('header button') || !props.conversation?.id) return;
+        ipcBridge.agentWidget.followInMain
+          .invoke({ conversation_id: props.conversation.id })
+          .catch((error: unknown) => console.warn('[WidgetChatPopup] could not ask the main window to follow:', error));
+      }}
       onKeyDown={(e) => {
         // Escape that something inside already handled, from a portal (an Arco menu), or inside Recent/Settings (an
         // editor with unsaved edits) is not a request to close the window.

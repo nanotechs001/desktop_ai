@@ -184,3 +184,22 @@ describe('WidgetChatPopup window mode', () => {
     expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'compact' });
   });
 });
+
+describe('WidgetChatPopup follow in the main window', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a press in the chat asks the main window to show this chat', () => {
+    const invoke = vi.spyOn(ipcBridge.agentWidget.followInMain, 'invoke').mockResolvedValue(undefined);
+    renderPopup({ id: 'bot-1', name: 'Bot' });
+    fireEvent.pointerDown(screen.getByRole('dialog'), { button: 0 });
+    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1' });
+  });
+
+  it('a press on a title-bar button (close, hide, settings) does not', () => {
+    const invoke = vi.spyOn(ipcBridge.agentWidget.followInMain, 'invoke').mockResolvedValue(undefined);
+    renderPopup({ id: 'bot-1', name: 'Bot' });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'pet.widget.closePopup' }), { button: 0 });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'pet.widget.hideWidget' }), { button: 0 });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
