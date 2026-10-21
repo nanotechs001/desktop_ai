@@ -71,11 +71,12 @@ export interface BrowserViewerProps {
   onRequestClose?: (tabId: string) => void;
   /** 是否为当前显示的浏览器 tab / Whether this is the browser tab on screen */
   active?: boolean;
-  /** An agent opened this tab (or it stopped being agent-owned); lets the tab strip show an Agent badge */
   /** Ownership changed: whether an agent owns the tab, and the chat whose agent it is (relay ownership). */
   onAgentOwnedChange?: (tabId: string, agentOwned: boolean, agentConversationId?: string) => void;
   /** The tab list already marks this tab as an agent's (it was opened for one); trusted until ownership is known */
   agentOwnedHint?: boolean;
+  /** An agent acted on this tab (each action the relay reports, a tab switch or load included) */
+  onAgentAction?: (tabId: string) => void;
   /** The browser profile the tab lives in; Personal when absent. Fixed for the tab's life (a new profile is a new tab) */
   profile?: BrowserTabProfile;
 }
@@ -103,6 +104,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   active = false,
   onAgentOwnedChange,
   agentOwnedHint = false,
+  onAgentAction,
   profile,
 }) => {
   const preview = useOptionalPreviewContext();
@@ -312,6 +314,11 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     reportedAgentOwned.current = { owned: agentOwned, chat: agentConversationId };
     onAgentOwnedChange?.(tabId, agentOwned, agentConversationId);
   }, [ownership, agentOwned, agentConversationId, tabId, onAgentOwnedChange]);
+
+  const latestAction = actions.at(-1);
+  useEffect(() => {
+    if (latestAction) onAgentAction?.(tabId);
+  }, [latestAction, tabId, onAgentAction]);
 
   return (
     <div

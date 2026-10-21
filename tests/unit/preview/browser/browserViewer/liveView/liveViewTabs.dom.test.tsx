@@ -118,6 +118,26 @@ describe('BrowserLiveView follows the newest tab', () => {
   });
 });
 
+describe('BrowserLiveView follows the tab the agent works in', () => {
+  it('prefers the tab the desktop marks active over the newest one', async () => {
+    route.tabs = [{ ...TAB_ONE, active: true }, TAB_TWO];
+    renderLive();
+    await openSocket();
+
+    expect(streamedTab(0)).toBe('wc-1');
+  });
+
+  it('moves the stream when the agent moves to another tab', async () => {
+    route.tabs = [{ ...TAB_ONE, active: true }, TAB_TWO];
+    renderLive();
+    await openSocket();
+
+    route.tabs = [TAB_ONE, { ...TAB_TWO, active: true }];
+    await nextPoll();
+    expect(streamedTab(1)).toBe('wc-2');
+  });
+});
+
 describe('BrowserLiveView tab picker', () => {
   it('is hidden with one tab', async () => {
     renderLive();

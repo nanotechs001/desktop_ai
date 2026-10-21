@@ -47,3 +47,23 @@ describe('viewableTabs', () => {
     expect(viewableTabs([agentTab(2, 'conv')], [], 'conv')).toEqual([]);
   });
 });
+
+describe('viewableTabs active tab', () => {
+  it('marks the listed tab the agent acted on last as active', () => {
+    const all = [agentTab(2, 'conv'), agentTab(3, 'conv'), agentTab(4, 'other')];
+    const actedAt = new Map([
+      [2, 200],
+      [3, 100],
+      [4, 300],
+    ]);
+    expect(viewableTabs(all, [2, 3, 4].map(target), 'conv', actedAt)).toEqual([
+      { id: 'wc-2', title: 'Title 2', url: 'https://example.com/2', active: true },
+      { id: 'wc-3', title: 'Title 3', url: 'https://example.com/3' },
+    ]);
+  });
+
+  it('marks none before the agent acts on any of them', () => {
+    const tabs = viewableTabs([agentTab(2, 'conv')], [target(2)], 'conv', new Map([[9, 100]]));
+    expect(tabs).toEqual([{ id: 'wc-2', title: 'Title 2', url: 'https://example.com/2' }]);
+  });
+});

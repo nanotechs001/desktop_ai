@@ -27,8 +27,8 @@ export type BackendSystemDirs = {
   logDir: string;
 };
 
-/** One tab the WebUI may watch (mirrors the desktop's browser-view ViewTab). */
-export type BrowserViewTab = { id: string; title: string; url: string };
+/** One tab the WebUI may watch (mirrors the desktop's browser-view ViewTab); `active` is the one the agent works in. */
+export type BrowserViewTab = { id: string; title: string; url: string; active?: true };
 
 /** How the desktop pushes one stream to the phone; `close` codes are forwarded as WebSocket close codes. */
 export type BrowserViewPeer = {

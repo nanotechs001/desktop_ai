@@ -366,7 +366,10 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent),
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentTab: (webContentsId) => hygiene.adopt(webContentsId),
-    onAgentAction: (event) => ipcBridge.agentBrowser.agentAction.emit(event),
+    onAgentAction: (event) => {
+      browserView?.noteAgentAction(event.webContentsId);
+      ipcBridge.agentBrowser.agentAction.emit(event);
+    },
     requestConfirm,
     blockedPorts: options.blockedPorts,
   });

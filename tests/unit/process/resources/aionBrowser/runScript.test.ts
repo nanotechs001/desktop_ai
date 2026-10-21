@@ -74,6 +74,13 @@ describe('run_script description', () => {
 });
 
 describe('run_script, read mode (the default)', () => {
+  it('reports its tab first, so the pane shows the tab the script runs on', async () => {
+    relay.on('AionRelay.reportAction', () => ({}));
+    await runScript({ code: 'document.title' });
+    const reports = relay.callsTo('AionRelay.reportAction').filter((r) => r.op !== 'open');
+    expect(reports).toEqual([{ webContentsId: expect.any(Number), op: 'script', label: '', rect: null }]);
+  });
+
   it('returns the value as JSON from its own isolated world, read-only, without asking the user', async () => {
     const reply = await runScript({ code: '({ title: document.title })' });
     expect(reply.isError).toBeFalsy();

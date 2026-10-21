@@ -32,13 +32,13 @@ const HIDDEN_INPUT_STYLE: React.CSSProperties = { fontSize: IOS_NO_ZOOM_FONT_PX 
 /**
  * The WebUI's stand-in for `<webview>` in the browser preview: a live picture of the conversation's agent tab on the
  * desktop, streamed over `/api/browser-view/stream`. Taps, vertical swipes and typing go back to that tab; the picture
- * can be zoomed and panned on the phone. It follows the agent's newest tab until the user picks one.
+ * can be zoomed and panned on the phone. It follows the tab the agent works in (else its newest) until the user picks one.
  */
 const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, style }) => {
   const { t } = useTranslation();
   const preview = useOptionalPreviewContext();
   const conversationId = useCurrentConversation();
-  /** The tab the user picked; null follows the agent's newest tab. */
+  /** The tab the user picked; null follows the agent's tab. */
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -47,9 +47,9 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
   const canWatch = Boolean(preview) && isWatchableConversation(conversationId);
   const tabs = useLiveTabs(canWatch ? conversationId : null, generation);
 
-  // The list is in creation order, so the last tab is the one the agent opened most recently.
+  // The desktop marks the tab the agent acted on last; before any action, the list's last tab is its newest.
   const picked = tabs?.find((tab) => tab.id === pickedId);
-  const listed = picked ?? tabs?.at(-1) ?? null;
+  const listed = picked ?? tabs?.find((tab) => tab.active) ?? tabs?.at(-1) ?? null;
   const { status, tab, metaRef, send } = useBrowserLiveStream(listed?.id ?? null, imgRef, surfaceRef);
   const shown = tab ?? listed;
   const hasTabs = Boolean(tabs?.length);

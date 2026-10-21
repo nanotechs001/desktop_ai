@@ -95,6 +95,7 @@ const event = (patch: Partial<AgentActionEvent> = {}): AgentActionEvent => ({
 const mount = async (initial: TabOwnership[]) => {
   mocks.getOwnership.mockResolvedValue({ success: true, data: initial });
   const onAgentOwnedChange = vi.fn();
+  const onAgentAction = vi.fn();
   const view = render(
     <BrowserViewer
       url='https://example.com'
@@ -103,12 +104,13 @@ const mount = async (initial: TabOwnership[]) => {
       onTitleChange={vi.fn()}
       onFaviconChange={vi.fn()}
       onAgentOwnedChange={onAgentOwnedChange}
+      onAgentAction={onAgentAction}
     />
   );
   await act(async () => {
     view.container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
   });
-  return { ...view, onAgentOwnedChange };
+  return { ...view, onAgentOwnedChange, onAgentAction };
 };
 
 beforeEach(() => {
@@ -174,6 +176,18 @@ describe('BrowserViewer agent chrome', () => {
     act(() => mocks.action?.(event()));
     expect(screen.getByText('Buy now')).toBeTruthy();
     expect(container.querySelector('[data-testid="agent-highlight"]')).not.toBeNull();
+  });
+
+  it('tells the layer about each agent action on this tab only, so the pane can follow the agent', async () => {
+    const { onAgentAction } = await mount([tab({ sharedWith: 'all' })]);
+    expect(onAgentAction).not.toHaveBeenCalled();
+
+    act(() => mocks.action?.(event({ webContentsId: 99 })));
+    expect(onAgentAction).not.toHaveBeenCalled();
+
+    act(() => mocks.action?.(event({ op: 'navigate', label: 'https://example.com/next', rect: null })));
+    act(() => mocks.action?.(event({ op: 'switch', label: '', rect: null })));
+    expect(onAgentAction.mock.calls).toEqual([['tab-1'], ['tab-1']]);
   });
 
   it("lists this tab's actions in the feed, with the neutral Agent name", async () => {

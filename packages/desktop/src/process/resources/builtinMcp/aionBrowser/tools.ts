@@ -52,6 +52,8 @@ const NO_TAB = 'No current tab. Open one with tabs open, or pick one with tabs l
 const UNSAFE_NAVIGATE_URL = 'tabs navigate needs an http(s) url.';
 /** Page.navigate answers once the new page commits (or fails); a hung load is given up after this. */
 const NAVIGATE_TIMEOUT_MS = 30_000;
+/** A tab report is cosmetic: given up after this, like an action's report. */
+const REPORT_TIMEOUT_MS = 5000;
 
 /** Actions per act call; the agent observes again between batches anyway. */
 const MAX_ACTIONS = 20;
@@ -103,6 +105,15 @@ const tabsInput = {
 
 type TabsArgs = { action: 'open' | 'list' | 'navigate' | 'close' | 'switch'; url?: string; tab?: string };
 
+/**
+ * Tells the pane the agent is working in `tab` now (AionRelay.reportAction, no highlight), so it brings that tab to the
+ * front of its chat. Cosmetic: a refused, rate-limited or slow report never fails the call.
+ */
+const reportTab = (relay: RelayClient, tab: string, op: string, label: string): Promise<void> =>
+  withTimeout(relay.reportAction(tab, { op, label, rect: null }), REPORT_TIMEOUT_MS, 'Report').catch(
+    (): void => undefined
+  );
+
 const tabsAction = async (relay: RelayClient, { action, url, tab }: TabsArgs): Promise<CallToolResult> => {
   if (action === 'list') {
     const tabs = (await relay.listTabs()).map((t) => ({
@@ -117,6 +128,7 @@ const tabsAction = async (relay: RelayClient, { action, url, tab }: TabsArgs): P
     if (!isSafeUrl(target)) return fail(UNSAFE_URL);
     const opened = await relay.openTab(target);
     relay.currentTab = opened;
+    await reportTab(relay, opened, 'open', target);
     return ok({ tab: opened });
   }
   if (!tab) return fail(`tabs ${action} needs a tab id; call tabs list to see them.`);
@@ -124,9 +136,10 @@ const tabsAction = async (relay: RelayClient, { action, url, tab }: TabsArgs): P
     await relay.closeTab(tab);
     return ok({ closed: tab });
   }
-  const known = await relay.listTabs();
-  if (!known.some((t) => t.tab === tab)) return fail(`No tab ${tab} that you may use; call tabs list to see them.`);
+  const known = (await relay.listTabs()).find((t) => t.tab === tab);
+  if (!known) return fail(`No tab ${tab} that you may use; call tabs list to see them.`);
   relay.currentTab = tab;
+  await reportTab(relay, tab, 'switch', sanitizePageText(known.url, MAX_URL_LENGTH));
   return ok({ current: tab });
 };
 
@@ -333,7 +346,7 @@ const onTab = async (
 /** Loads `url` in the tab (Page.navigate, which the relay checks again) and returns once the new page commits. */
 const navigateTab = (relay: RelayClient, queue: TabQueue, url: string | undefined, tab: string | undefined) => {
   if (!url || url === DEFAULT_URL || !isSafeUrl(url)) return Promise.resolve(fail(UNSAFE_NAVIGATE_URL));
-  return onTab(relay, queue, tab, async ({ conn, sessionId }) => {
+  return onTab(relay, queue, tab, async ({ conn, sessionId }, target) => {
     const reply = await withTimeout(
       conn.send<{ errorText?: unknown }>('Page.navigate', { url }, sessionId),
       NAVIGATE_TIMEOUT_MS,
@@ -341,6 +354,7 @@ const navigateTab = (relay: RelayClient, queue: TabQueue, url: string | undefine
     );
     if (typeof reply.errorText === 'string' && reply.errorText)
       return fail(`Could not load the page: ${reply.errorText}`);
+    await reportTab(relay, target, 'navigate', url);
     return ok({ tab: tab ?? relay.currentTab, url });
   });
 };
@@ -408,7 +422,10 @@ export function createBrowserMcpServer(relay: RelayClient): McpServer {
     { description: RUN_SCRIPT_DESCRIPTION, inputSchema: runScriptInput },
     ({ tab, code, form, mode, world }) =>
       guarded(() =>
-        onTab(relay, queue, tab, (ctx, target) => runScript(relay, ctx, target, { code, form, mode, world }))
+        onTab(relay, queue, tab, async (ctx, target) => {
+          await reportTab(relay, target, 'script', '');
+          return runScript(relay, ctx, target, { code, form, mode, world });
+        })
       )
   );
   return server;

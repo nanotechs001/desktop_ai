@@ -299,3 +299,40 @@ describe('tabs navigate', () => {
     expect(textOf(reply)).toBe('Could not load the page: net::ERR_NAME_NOT_RESOLVED');
   });
 });
+
+// Each tab the agent moves to is reported (AionRelay.reportAction), so the pane brings that tab to the front.
+describe('tabs report the tab the agent moved to', () => {
+  beforeEach(() => {
+    relay.on('Target.attachToTarget', () => ({ sessionId: 's1' }));
+    relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
+    relay.on('Page.navigate', () => ({ frameId: 'TOP', loaderId: 'L1' }));
+    relay.on('AionRelay.reportAction', () => ({}));
+  });
+
+  it('open, switch and navigate each report their tab, without a highlight rect', async () => {
+    const client = await connectClient(relay.env);
+    await callTabs(client, { action: 'open', url: 'https://example.com/' });
+    await callTabs(client, { action: 'switch', tab: 'wc-9' });
+    await callTabs(client, { action: 'navigate', url: 'https://example.com/next', tab: 'wc-7' });
+
+    expect(relay.callsTo('AionRelay.reportAction')).toEqual([
+      { webContentsId: 7, op: 'open', label: 'https://example.com/', rect: null },
+      { webContentsId: 9, op: 'switch', label: 'https://docs.example.com/', rect: null },
+      { webContentsId: 7, op: 'navigate', label: 'https://example.com/next', rect: null },
+    ]);
+  });
+
+  it('a refused report never fails the call', async () => {
+    relay.handlers.delete('AionRelay.reportAction');
+    const client = await connectClient(relay.env);
+    const reply = await callTabs(client, { action: 'switch', tab: 'wc-9' });
+    expect(jsonOf(reply)).toEqual({ current: 'wc-9' });
+  });
+
+  it('a failed load reports nothing', async () => {
+    relay.on('Page.navigate', () => ({ frameId: 'TOP', errorText: 'net::ERR_NAME_NOT_RESOLVED' }));
+    const client = await connectClient(relay.env);
+    await callTabs(client, { action: 'navigate', url: 'https://nope.example/', tab: 'wc-7' });
+    expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+  });
+});

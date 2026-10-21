@@ -11,6 +11,7 @@ import { useOptionalPreviewContext } from '../context/PreviewContext';
 import ConfirmPrompt from './BrowserChrome/ConfirmPrompt';
 import PermissionPrompt from './BrowserChrome/PermissionPrompt';
 import BrowserViewer from './BrowserViewer';
+import { useFollowAgentTab } from './useFollowAgentTab';
 
 type Box = { left: number; top: number; width: number; height: number };
 
@@ -124,6 +125,8 @@ const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } =>
   return slot ? state : { box: clampToWindow(state.box, viewport), visible: state.visible };
 };
 
+const noop = (): void => undefined;
+
 /** A stable key per browser profile. */
 const profileKey = (profile: BrowserTabProfile | undefined): string => profileKeyOf(profile);
 
@@ -152,6 +155,12 @@ const BrowserTabLayer: React.FC = () => {
   const shownByAgent = Boolean(shownTab?.metadata?.agentOwned);
   const updateTab = preview?.updateTab;
   const closeTab = preview?.closeTab;
+  // The pane on screen follows the agent to the tab it works in (only this chat's tabs, never while the user is busy).
+  const followAgent = useFollowAgentTab({
+    tabs: preview?.tabs ?? [],
+    activeTabId: preview?.activeTabId ?? null,
+    switchTab: preview?.switchTab ?? noop,
+  });
 
   const handleUrlChange = useCallback(
     // 地址存在 content 里，与其他 tab 类型保持一致 / Address lives in content, like other tab types
@@ -284,6 +293,7 @@ const BrowserTabLayer: React.FC = () => {
               onRequestClose={closeTab}
               onAgentOwnedChange={handleAgentOwnedChange}
               agentOwnedHint={Boolean(tab.metadata?.agentOwned)}
+              onAgentAction={followAgent}
               active={shown}
             />
           </div>

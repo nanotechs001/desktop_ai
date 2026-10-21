@@ -6,8 +6,8 @@
 
 import { useEffect, useState } from 'react';
 
-/** A desktop tab the WebUI may watch, as `GET /api/browser-view/tabs` lists it. */
-export type LiveTab = { id: string; title: string; url: string };
+/** A desktop tab the WebUI may watch, as `GET /api/browser-view/tabs` lists it; `active`: the agent acted there last. */
+export type LiveTab = { id: string; title: string; url: string; active: boolean };
 
 const CONVERSATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** The stream route's own rule for a tab id. */
@@ -18,12 +18,13 @@ export const isWatchableConversation = (id: string | null): id is string => id !
 
 const parseTab = (tab: unknown): LiveTab | null => {
   if (typeof tab !== 'object' || tab === null) return null;
-  const { id, title, url } = tab as Record<string, unknown>;
+  const { id, title, url, active } = tab as Record<string, unknown>;
   if (typeof id !== 'string' || !TAB_ID.test(id)) return null;
   return {
     id,
     title: typeof title === 'string' ? title : '',
     url: typeof url === 'string' ? url : '',
+    active: active === true,
   };
 };
 

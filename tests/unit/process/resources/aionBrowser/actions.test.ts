@@ -45,6 +45,8 @@ const jpegOfWidth = (width: number): string =>
     'base64'
   );
 const inputRequests = () => relay.requests.filter((r) => r.method.startsWith('Input.'));
+/** The actions reported to the pane, without the tab report of `tabs open`. */
+const actionReports = () => relay.callsTo('AionRelay.reportAction').filter((r) => r.op !== 'open');
 
 /** Opens wc-7 and observes it; returns the id of its "Save" button. */
 const openAndObserve = async (): Promise<string> => {
@@ -109,7 +111,7 @@ describe('act tool', () => {
     expect(textOf(unknown)).toContain('"result":"error"');
     expect(textOf(unknown)).toMatch(/Unknown target f99:1/);
     expect(inputRequests()).toEqual([]);
-    expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+    expect(actionReports()).toEqual([]);
   });
 
   it('a relay refusal of Input is an error and stops the batch', async () => {
@@ -127,7 +129,7 @@ describe('act tool', () => {
     expect(results).toEqual([{ op: 'click', target: id, result: 'error', reason: REFUSED }]);
     expect(stopped).toBe('Stopped at an error. 1 more action not run.');
     expect(inputRequests()).toHaveLength(1);
-    expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+    expect(actionReports()).toEqual([]);
   });
 
   it('clicks at the absolute center on the page session and reports the action to the relay', async () => {
@@ -137,7 +139,7 @@ describe('act tool', () => {
     const presses = relay.requests.filter((r) => r.method === 'Input.dispatchMouseEvent');
     expect(presses.map((r) => r.params.type)).toEqual(['mouseMoved', 'mousePressed', 'mouseReleased']);
     expect(presses.every((r) => r.sessionId === 's1' && r.params.x === 50 && r.params.y === 35)).toBe(true);
-    expect(relay.callsTo('AionRelay.reportAction')).toEqual([
+    expect(actionReports()).toEqual([
       { webContentsId: 7, op: 'click', label: `[${id}] Save`, rect: { x: 10, y: 20, width: 80, height: 30 } },
     ]);
   });
@@ -369,7 +371,7 @@ describe('confirm gate', () => {
     expect(reply.stopped).toMatch(/denied/);
     expect(reply.stopped).toMatch(/1 more action not run/);
     expect(inputRequests()).toEqual([]);
-    expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+    expect(actionReports()).toEqual([]);
   });
 
   it('fails closed when the relay cannot ask', async () => {
@@ -622,7 +624,7 @@ describe('confirm gate', () => {
       expect(await clickAt()).toMatchObject({ result: 'denied' });
       expect(asked()).toEqual([{ webContentsId: 7, label: 'Delete account', ...FRAME }]);
       expect(inputRequests()).toEqual([]);
-      expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+      expect(actionReports()).toEqual([]);
 
       answerWith(true);
       expect(await clickAt()).toEqual({ result: 'done' });
@@ -753,6 +755,6 @@ describe('fallback tools', () => {
     expect(textOf(outside)).toMatch(/viewport/);
     expect(inputRequests()).toEqual([]);
     expect(JSON.parse(textOf(await call('click_point', { x: 5, y: 6 })))).toEqual({ result: 'done' });
-    expect(relay.callsTo('AionRelay.reportAction')[0]).toMatchObject({ webContentsId: 7, op: 'click_point' });
+    expect(actionReports()[0]).toMatchObject({ webContentsId: 7, op: 'click_point' });
   });
 });
