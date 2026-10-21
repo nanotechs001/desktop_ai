@@ -44,8 +44,10 @@ export const applyZoomToWindow = (win: BrowserWindow): void => {
 };
 
 // 将缩放同步到所有窗口，保持多窗口一致 / Sync zoom factor across all BrowserWindows
+// Robot windows lock their zoom (`disabled`): their bounds are fixed in DIPs, so a zoomed page would be clipped.
 const updateAllWindowsZoom = (factor: number): void => {
   for (const win of BrowserWindow.getAllWindows()) {
+    if (win.webContents.getZoomMode() === 'disabled') continue;
     win.webContents.setZoomFactor(factor);
   }
 };

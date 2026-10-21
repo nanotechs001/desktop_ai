@@ -13,7 +13,7 @@
 
 import { getPlatformServices } from '@/common/platform';
 import { ipcBridge } from '@/common';
-import { electronNotification } from '@/common/electronSafe';
+import { electronBrowserWindow, electronNotification } from '@/common/electronSafe';
 import { ProcessConfig } from '@process/utils/initStorage';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
@@ -48,8 +48,8 @@ const getNotificationIcon = (): string | undefined => {
  * Show a system notification.
  * Can be called directly from main process or via IPC from renderer.
  *
- * Skips when `system.notificationEnabled` is off, or when the main window is
- * already focused (no nagging). When a real Electron notification is available,
+ * Skips when `system.notificationEnabled` is off, or when any app window (the main
+ * window or a robot's chat) is already focused (no nagging). When a real Electron notification is available,
  * clicking it focuses the main window and emits `notification.clicked` so the
  * renderer can navigate to the originating conversation.
  *
@@ -74,6 +74,11 @@ export async function showNotification({
   // Do not notify while the user is already looking at the app.
   if (mainWindowRef && !mainWindowRef.isDestroyed() && mainWindowRef.isFocused()) {
     console.log('[Notification] Skipped: main window is focused');
+    return;
+  }
+  // A robot window the user is chatting in counts too: clicking the notification would only leave that chat.
+  if (electronBrowserWindow?.getFocusedWindow()) {
+    console.log('[Notification] Skipped: an app window is focused');
     return;
   }
 

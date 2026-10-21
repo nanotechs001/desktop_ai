@@ -48,8 +48,11 @@ vi.mock('@process/utils/initStorage', () => ({
   ProcessConfig: { get: vi.fn(async () => notificationEnabled) },
 }));
 
+// The app window with keyboard focus (a robot window, say), or null when the user is in another app.
+let focusedAppWindow: unknown = null;
 vi.mock('@/common/electronSafe', () => ({
   electronNotification: FakeElectronNotification,
+  electronBrowserWindow: { getFocusedWindow: () => focusedAppWindow },
 }));
 
 vi.mock('fs', () => ({ default: { existsSync: () => false }, existsSync: () => false }));
@@ -69,6 +72,7 @@ let logSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   notificationEnabled = true;
+  focusedAppWindow = null;
   clickedEmit.mockClear();
   platformSend.mockClear();
   FakeElectronNotification.instances.length = 0;
@@ -91,6 +95,14 @@ describe('showNotification', () => {
     setNotificationMainWindow(makeWindow(true) as never);
     await showNotification({ title: 'AionUi', body: 'done', conversation_id: 'c1' });
     expect(FakeElectronNotification.instances).toHaveLength(0);
+  });
+
+  it('does not notify while another app window, such as a robot chat, has focus', async () => {
+    setNotificationMainWindow(makeWindow(false) as never);
+    focusedAppWindow = makeWindow(true);
+    await showNotification({ title: 'AionUi', body: 'done', conversation_id: 'c1' });
+    expect(FakeElectronNotification.instances).toHaveLength(0);
+    expect(logSpy).toHaveBeenCalledWith('[Notification] Skipped: an app window is focused');
   });
 
   it('does not notify when the setting is disabled', async () => {
