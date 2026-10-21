@@ -35,7 +35,10 @@ vi.mock('@/common', () => ({
   },
 }));
 
-import { useConversationListSync } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
+import {
+  reconcileGeneratingFromRuntime,
+  useConversationListSync,
+} from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 
 const KEY = 'conversation-manual-unread-ids';
 const stored = () => JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[];
@@ -88,5 +91,18 @@ describe('the conversation list in a robot window', () => {
     expect(h.subscriptions.size).toBe(5);
     expect(h.fetch).toHaveBeenCalledTimes(1);
     third.unmount();
+  });
+
+  it('never shows a finished chat as generating after its list was closed', () => {
+    const first = renderHook(() => useConversationListSync());
+    act(() => reconcileGeneratingFromRuntime('c-busy', true));
+    expect(first.result.current.isConversationGenerating('c-busy')).toBe(true);
+    first.unmount(); // History closed: its turn ends while nothing listens
+
+    act(() => reconcileGeneratingFromRuntime('c-popup', true)); // the popup's chat hydrates meanwhile
+    const again = renderHook(() => useConversationListSync());
+    expect(again.result.current.isConversationGenerating('c-busy')).toBe(false);
+    expect(again.result.current.isConversationGenerating('c-popup')).toBe(false);
+    again.unmount();
   });
 });

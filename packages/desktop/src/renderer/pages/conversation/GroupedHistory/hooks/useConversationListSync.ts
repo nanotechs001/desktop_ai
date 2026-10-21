@@ -439,7 +439,8 @@ const logGeneratingTransition = (conversation_id: string, next: boolean, source:
 };
 
 const markGenerating = (conversation_id: string, source: GeneratingTransitionSource = 'stream') => {
-  if (generatingConversationIdsState.has(conversation_id)) {
+  // A robot window's stopped store (no list open) could never clear the mark.
+  if ((!isStoreInitialized && getWidgetConversationId()) || generatingConversationIdsState.has(conversation_id)) {
     return;
   }
 
@@ -635,6 +636,11 @@ let storeUsers = 0;
 const stopConversationListSyncStore = () => {
   for (const stop of stopStore.splice(0)) stop();
   isStoreInitialized = false;
+  // Nothing hears a turn finish while stopped, so a kept spinner would never clear: the next start relearns them.
+  if (generatingConversationIdsState.size > 0) {
+    generatingConversationIdsState = new Set();
+    emitStoreChange();
+  }
 };
 
 const initializeConversationListSyncStore = () => {
