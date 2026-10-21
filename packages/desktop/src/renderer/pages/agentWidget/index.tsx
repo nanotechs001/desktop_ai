@@ -256,6 +256,7 @@ const AgentWidgetPage: React.FC = () => {
         {
           '--bot-size': `${layout.bot_size}px`,
           '--top-band': `${layout.top_band}px`,
+          '--hop-headroom': `${layout.hop_headroom}px`,
           '--hop-height': `${HOP_HEIGHT_PHYSICAL_PX / (window.devicePixelRatio || 1)}px`,
         } as React.CSSProperties
       }

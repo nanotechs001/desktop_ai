@@ -108,9 +108,10 @@
   bottom: 0;
 }
 
-/* The expanded window: the robot stands in the top band (overlapping the panel's top edge), the panel fills the rest. */
+/* The expanded window: the robot stands in the top band (overlapping the panel's top edge), the panel fills the rest.
+   It is inset by its hop headroom so the hop never clips at the window's top edge (the band includes the headroom). */
 .root[data-window='expanded'] .bot {
-  top: 0;
+  top: var(--hop-headroom, 0px);
   bottom: auto;
 }
 
@@ -247,4 +248,159 @@
 .historyBody {
   flex: 1;
   min-height: 0;
+}
+
+/* Header and body share this row; in the expanded window the sidebar joins it. */
+.frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Expanded window: a large desktop chat window with a sidebar ---- */
+
+.popup[data-layout='expanded'] {
+  background: var(--bg-base);
+}
+
+.popup[data-layout='expanded'] .header {
+  padding: 14px 12px 14px 20px;
+}
+
+.popup[data-layout='expanded'] .name {
+  font-size: 18px;
+}
+
+.popup[data-layout='expanded'] .status {
+  font-size: 11px;
+}
+
+.sidebar {
+  width: 272px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px 10px;
+  border-right: 1px solid var(--bg-3);
+  border-bottom-left-radius: 16px;
+  background: var(--bg-1);
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 220px;
+  }
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Nav items and recent rows: left-aligned text buttons with a soft primary tint when current. */
+.navItem:global(.arco-btn) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: auto;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.navItem:global(.arco-btn):focus-visible {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.navItem.selected:global(.arco-btn) {
+  background: var(--color-primary-light-1);
+  color: var(--primary);
+}
+
+.recent {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.caption {
+  padding: 4px 10px 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.recentList {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.recentRow:global(.arco-btn) {
+  align-items: flex-start;
+}
+
+.recentRow:global(.arco-btn) > :global(.i-icon) {
+  margin-top: 2px;
+}
+
+/* The label span Arco wraps around the row's text: lets the title ellipsize. */
+.recentRow:global(.arco-btn) > span:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rowTitle {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowTime {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* The chat gets room to breathe and a readable width; the shared chat components are untouched. */
+.popup[data-layout='expanded'] .body {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 8px 16px 0;
+  border-radius: 0 0 16px 0;
+}
+
+/* Recent and Settings fill the main area in place of the chat. */
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom-right-radius: 16px;
 }

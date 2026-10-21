@@ -9,6 +9,8 @@
     "closePopup": "チャットを閉じる",
     "expandWindow": "ウィンドウを拡大",
     "restoreWindow": "ウィンドウを元に戻す",
+    "navChat": "チャット",
+    "recentConversations": "最近の会話",
     "returnToMain": "メインウィンドウで開く",
     "botSettings": "VA Bot の設定",
     "hideWidget": "ウィジェットを非表示",

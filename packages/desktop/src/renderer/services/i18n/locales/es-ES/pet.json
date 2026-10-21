@@ -9,6 +9,8 @@
     "closePopup": "Cerrar chat",
     "expandWindow": "Ampliar ventana",
     "restoreWindow": "Restaurar ventana",
+    "navChat": "Chat",
+    "recentConversations": "Conversaciones recientes",
     "returnToMain": "Abrir en la ventana principal",
     "botSettings": "Ajustes del VA Bot",
     "hideWidget": "Ocultar widget",

@@ -9,6 +9,8 @@
     "closePopup": "关闭对话",
     "expandWindow": "展开窗口",
     "restoreWindow": "还原窗口",
+    "navChat": "聊天",
+    "recentConversations": "最近对话",
     "returnToMain": "在主窗口中打开",
     "botSettings": "VA Bot 设置",
     "hideWidget": "隐藏小助手",
