@@ -230,3 +230,10 @@ export function landingY(fromY: number, toY: number, elapsedMs: number, impactMs
   const t = Math.max(0, elapsedMs) / impactMs;
   return Math.round(fromY + (toY - fromY) * t * t);
 }
+
+/** The rect `t` (0..1) of the way from `from` to `to` along an ease-out curve (fast start, gentle stop). */
+export function easeOutRect(from: Rect, to: Rect, t: number): Rect {
+  const k = 1 - (1 - clamp(t, 0, 1)) ** 3;
+  const at = (a: number, b: number) => Math.round(a + (b - a) * k);
+  return { x: at(from.x, to.x), y: at(from.y, to.y), width: at(from.width, to.width), height: at(from.height, to.height) };
+}

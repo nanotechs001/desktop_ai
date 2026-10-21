@@ -101,6 +101,18 @@
   background: var(--bg-1);
   box-shadow: 0 8px 28px color-mix(in srgb, var(--text-primary) 18%, transparent);
   user-select: text;
+  /* Fades back in once the window has eased into its new shape. */
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+/* Switching between the compact popup and the expanded window: the content fades out quickly while the window eases,
+   so no squashed in-between layout shows. */
+.root[data-transitioning='true'] .popup {
+  opacity: 0;
+  transform: scale(0.98);
+  transition-duration: 60ms;
 }
 
 .root[data-vertical='below'] .popup {
@@ -225,6 +237,7 @@
 @media (prefers-reduced-motion: reduce) {
   .popup {
     animation-duration: 1ms;
+    transition: none;
   }
 }
 

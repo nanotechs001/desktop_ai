@@ -110,6 +110,8 @@ export type AgentWidgetLayout = {
   window_mode: AgentWidgetWindowMode;
   /** Height of the band above the panel the robot walks in, in CSS px (0 unless the expanded window is showing). */
   top_band: number;
+  /** The window is easing between the compact popup and the expanded window: the popup content fades meanwhile. */
+  window_transitioning: boolean;
 };
 
 export type AgentWidgetDragPhase = 'none' | 'dragging' | 'landing';

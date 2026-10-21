@@ -30,6 +30,7 @@ import {
   carriedPosition,
   cascadeBounds,
   computePlacement,
+  easeOutRect,
   expandedBandHeight,
   expandedWindowBounds,
   HOP_HEADROOM_PX,
@@ -82,6 +83,9 @@ const READY_FALLBACK_MS = 8000;
 // Extra time a lifecycle animation gets before the main process stops waiting for the renderer to report it.
 const LIFECYCLE_SLACK_MS = 1000;
 const LAND_TICK_MS = 16;
+// Switching between the compact popup and the expanded window eases the window bounds this long, at ~60 fps.
+const WINDOW_TRANSITION_MS = 220;
+const WINDOW_TRANSITION_TICK_MS = 16;
 const WANDER_DELAY_MS: Record<AgentWidgetSettings['movementFrequency'], [number, number]> = {
   low: [6_000, 15_000],
   medium: [3_000, 8_000],
@@ -111,6 +115,8 @@ type WidgetEntry = {
   bandX: number | null;
   /** The expanded window's bounds, fixed when it opens (null: not showing). */
   bandBounds: Rect | null;
+  /** The window easing between the compact popup and the expanded window; `to` follows every re-place meanwhile. */
+  windowTransition: { from: Rect; to: Rect; startedAt: number; timer: ReturnType<typeof setInterval> } | null;
   dragging: boolean;
   /** Pointer position inside the robot box when the drag started. */
   grab: { x: number; y: number };
@@ -332,6 +338,7 @@ export class AgentWidgetManager {
     entry.openedAt = Date.now();
     // A stroll (on the taskbar or along the expanded window's band) never outlives the popup opening or closing.
     this.stopGlide(entry);
+    this.stopWindowTransition(entry);
     if (expanded) {
       this.finishLanding(entry);
       this.setChatLocation(conversationId, 'widget');
@@ -352,6 +359,8 @@ export class AgentWidgetManager {
     const entry = this.entries.get(conversationId);
     if (entry) {
       this.stopGlide(entry);
+      // An open popup eases into its new shape (a switch mid-way turns back from where the window is).
+      if (entry.record.expanded && !this.state.settings.reduceMotion) this.startWindowTransition(entry);
       this.place(entry);
     }
     void this.persist();
@@ -705,6 +714,7 @@ export class AgentWidgetManager {
       botX,
       bandX: null,
       bandBounds: null,
+      windowTransition: null,
       dragging: false,
       grab: { x: 0, y: 0 },
       airY: null,
@@ -759,6 +769,7 @@ export class AgentWidgetManager {
     });
     win.on('closed', () => {
       detachAdapter();
+      this.stopWindowTransition(entry);
       this.clearDrag(entry);
       this.stopGlide(entry);
       this.stopLanding(entry);
@@ -774,6 +785,7 @@ export class AgentWidgetManager {
   private closeWindow(conversationId: string): void {
     const entry = this.entries.get(conversationId);
     if (!entry) return;
+    this.stopWindowTransition(entry);
     this.clearDrag(entry);
     this.stopGlide(entry);
     this.stopLanding(entry);
@@ -825,6 +837,7 @@ export class AgentWidgetManager {
       return;
     }
     this.clearLifecycleTimer(entry);
+    this.stopWindowTransition(entry);
     this.clearDrag(entry);
     this.stopGlide(entry);
     this.stopLanding(entry);
@@ -887,7 +900,8 @@ export class AgentWidgetManager {
       entry.bandBounds = null;
       entry.botX = placement.bounds.x + placement.botOffsetX;
     }
-    this.setBounds(entry, placement.bounds);
+    if (entry.windowTransition) entry.windowTransition.to = placement.bounds;
+    else this.setBounds(entry, placement.bounds);
 
     const layout = this.layoutFor(entry, placement);
     const key = JSON.stringify(layout);
@@ -895,6 +909,34 @@ export class AgentWidgetManager {
       entry.lastLayoutKey = key;
       ipcBridge.agentWidget.layoutChanged.emit(layout);
     }
+  }
+
+  /** Ease the window from where it is now to wherever `place` puts it next (and keeps putting it meanwhile). */
+  private startWindowTransition(entry: WidgetEntry): void {
+    this.stopWindowTransition(entry);
+    const from = entry.win.getBounds();
+    const timer = setInterval(() => this.stepWindowTransition(entry), WINDOW_TRANSITION_TICK_MS);
+    entry.windowTransition = { from, to: from, startedAt: Date.now(), timer };
+  }
+
+  private stepWindowTransition(entry: WidgetEntry): void {
+    const transition = entry.windowTransition;
+    if (!transition) return;
+    if (entry.win.isDestroyed()) return this.stopWindowTransition(entry);
+    const t = (Date.now() - transition.startedAt) / WINDOW_TRANSITION_MS;
+    const bounds = t >= 1 ? transition.to : easeOutRect(transition.from, transition.to, t);
+    // Every frame resizes in place: no hide/show (the win32 workaround in setBounds would flash every frame).
+    entry.win.setBounds(bounds, false);
+    entry.lastSize = { width: bounds.width, height: bounds.height };
+    if (t < 1) return;
+    this.restoreAfterDpiChange(entry.win, bounds);
+    this.stopWindowTransition(entry);
+    this.place(entry); // the final placement, and the layout without the fade
+  }
+
+  private stopWindowTransition(entry: WidgetEntry): void {
+    if (entry.windowTransition) clearInterval(entry.windowTransition.timer);
+    entry.windowTransition = null;
   }
 
   private setBounds(entry: WidgetEntry, bounds: Rect): void {
@@ -957,6 +999,7 @@ export class AgentWidgetManager {
       drag_phase: entry.dragPhase,
       window_mode: entry.record.window_mode ?? 'compact',
       top_band: this.inBand(entry) ? expandedBandHeight(this.botSize()) : 0,
+      window_transitioning: entry.windowTransition !== null,
     };
   }
 

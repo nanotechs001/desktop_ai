@@ -1519,11 +1519,93 @@ describe('expanded window mode', () => {
     expect(layoutOf(A)).toMatchObject({ window_mode: 'compact', top_band: 0 });
 
     manager.setWindowMode(A, 'expanded');
+    vi.advanceTimersByTime(300);
     expect(win.bounds).toEqual(EXPANDED);
 
     manager.setWindowMode(A, 'compact');
+    vi.advanceTimersByTime(300);
     expect(win.bounds).toEqual(compact);
-    expect(layoutOf(A)).toMatchObject({ expanded: true, window_mode: 'compact', top_band: 0 });
+    expect(layoutOf(A)).toMatchObject({ expanded: true, window_mode: 'compact', top_band: 0, drag_phase: 'none' });
+  });
+
+  describe('switching modes smoothly', () => {
+    async function openCompact(settings: Record<string, unknown> = {}) {
+      const { manager } = await makeManager({ settings: { enabled: true, ...settings } });
+      manager.ensure(A);
+      const win = liveWindows()[0];
+      appear(manager, A);
+      manager.setExpanded(A, true);
+      return { manager, win, compact: { ...win.bounds } };
+    }
+    const between = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
+    const transitioning = () => (layoutOf(A) as { window_transitioning?: boolean } | undefined)?.window_transitioning;
+
+    it('eases the window to the expanded bounds over about 220 ms and ends exactly on them', async () => {
+      const { manager, win, compact } = await openCompact();
+      manager.setWindowMode(A, 'expanded');
+      expect(win.bounds).toEqual(compact); // nothing snaps
+      expect(transitioning()).toBe(true);
+      const widths: number[] = [];
+      for (let t = 0; t < 200; t += 16) {
+        vi.advanceTimersByTime(16);
+        widths.push(win.bounds.width);
+      }
+      expect(between(widths[3], compact.width, EXPANDED.width)).toBe(true);
+      expect(widths.slice(1).every((w, i) => w >= widths[i])).toBe(true);
+      // Ease-out: most of the way is covered in the first half.
+      expect(widths[6] - compact.width).toBeGreaterThan((EXPANDED.width - compact.width) / 2);
+      vi.advanceTimersByTime(40);
+      expect(win.bounds).toEqual(EXPANDED);
+      expect(transitioning()).toBe(false);
+      vi.advanceTimersByTime(1_000);
+      expect(win.bounds).toEqual(EXPANDED);
+    });
+
+    it('restoring eases back to the compact popup, and the robot does not drop', async () => {
+      const { manager, win, compact } = await openCompact();
+      manager.setWindowMode(A, 'expanded');
+      vi.advanceTimersByTime(300);
+      manager.setWindowMode(A, 'compact');
+      expect(win.bounds).toEqual(EXPANDED);
+      vi.advanceTimersByTime(100);
+      expect(between(win.bounds.width, compact.width, EXPANDED.width)).toBe(true);
+      vi.advanceTimersByTime(200);
+      expect(win.bounds).toEqual(compact);
+      expect(lastDragPhase(A)).toBe('none');
+    });
+
+    it('snaps at once with reduce motion', async () => {
+      const { manager, win } = await openCompact({ reduceMotion: true });
+      manager.setWindowMode(A, 'expanded');
+      expect(win.bounds).toEqual(EXPANDED);
+      expect(transitioning()).toBe(false);
+    });
+
+    it('a second switch mid-way turns back from where the window is, with no jump and no leftover timer', async () => {
+      const { manager, win, compact } = await openCompact();
+      manager.setWindowMode(A, 'expanded');
+      vi.advanceTimersByTime(96);
+      const mid = { ...win.bounds };
+      manager.setWindowMode(A, 'compact');
+      expect(win.bounds).toEqual(mid);
+      vi.advanceTimersByTime(32);
+      expect(between(win.bounds.width, compact.width, mid.width)).toBe(true);
+      vi.advanceTimersByTime(250);
+      expect(win.bounds).toEqual(compact);
+      vi.advanceTimersByTime(1_000);
+      expect(win.bounds).toEqual(compact);
+    });
+
+    it('closing mid-way stops the transition: the window is the robot box and stays so', async () => {
+      const { manager, win } = await openCompact();
+      manager.setWindowMode(A, 'expanded');
+      vi.advanceTimersByTime(48);
+      manager.setExpanded(A, false);
+      vi.advanceTimersByTime(1_000);
+      expect(win.bounds.width).toBe(BOT);
+      expect(win.bounds.y + win.bounds.height).toBe(1040);
+      expect(transitioning()).toBe(false);
+    });
   });
 
   it('keeps the mode across a restart and a retarget', async () => {

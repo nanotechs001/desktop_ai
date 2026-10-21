@@ -252,6 +252,7 @@ const AgentWidgetPage: React.FC = () => {
       className={styles.root}
       data-vertical={layout.popup_vertical}
       data-window={windowExpanded ? 'expanded' : 'compact'}
+      data-transitioning={layout.window_transitioning}
       style={
         {
           '--bot-size': `${layout.bot_size}px`,
