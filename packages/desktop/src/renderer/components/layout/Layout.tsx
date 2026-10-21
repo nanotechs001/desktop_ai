@@ -34,7 +34,12 @@ import OrphanChatsPrompt from '@renderer/components/OrphanChatsPrompt';
 import { useBotColorSeed } from '@renderer/hooks/agent/useBotColor';
 import { useDefaultAgentSync, useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
-import { followRobotChat, useAgentWidgetSync } from '@renderer/pages/agentWidget/useAgentWidgetSync';
+import {
+  followRobotChat,
+  onAgentTabActivity,
+  useAgentWidgetSync,
+} from '@renderer/pages/agentWidget/useAgentWidgetSync';
+import { isChatInWidget } from '@renderer/pages/agentWidget/chatLocation';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
 import { useBrowserNotification } from '@renderer/hooks/system/notification/useBrowserNotification';
 import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/useDesktopTurnNotification';
@@ -433,6 +438,19 @@ const Layout: React.FC<{
       window.removeEventListener('tray:check-update', handleCheckUpdate as EventListener);
     };
   }, [navigate, revealBrowserFor]);
+
+  // An agent whose chat is in a robot popup opened or switched a page: the main window's pane follows that chat.
+  useEffect(
+    () =>
+      onAgentTabActivity((conversationId) => {
+        if (!isChatInWidget(conversationId)) return;
+        followRobotChat(pathnameRef.current, conversationId, {
+          revealBrowserFor,
+          navigate: (path) => void navigate(path),
+        }).catch((error: unknown) => console.warn('[Layout] could not follow the robot chat:', error));
+      }),
+    [navigate, revealBrowserFor]
+  );
 
   const siderWidth = isMobile
     ? Math.max(

@@ -11,13 +11,13 @@ import { Close, History, Left, Minus, Plus, PreviewCloseOne, SettingTwo, Tv } fr
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
-import type { TabOwnership } from '@/common/types/browser';
 import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
 import ConversationChatBody from '@/renderer/pages/conversation/components/ConversationChatBody';
 import { HistoryPanelBody } from '@/renderer/components/layout/Titlebar/HistoryPanel';
 import { ConversationHistoryProvider } from '@/renderer/hooks/context/ConversationHistoryContext';
 import { useStartNewChat } from '@/renderer/pages/conversation/components/NewChatButton';
 import styles from './AgentWidget.module.css';
+import { onAgentTabActivity } from './useAgentWidgetSync';
 
 type WidgetChatPopupProps = {
   conversation: TChatConversation | null | undefined;
@@ -37,8 +37,6 @@ type WidgetChatPopupProps = {
   onOpenBotSettings: (agentId: string) => void;
 };
 
-/** Agent actions on a tab that put another page in front of the user. */
-const NOTICE_OPS = new Set(['open', 'switch', 'navigate']);
 const MAX_SITE_LENGTH = 80;
 
 /** A page's host, or the (untrusted, shown as text) label itself when it is not a URL. */
@@ -51,45 +49,17 @@ const siteOf = (url: string): string => {
 };
 
 /**
- * The site this conversation's agent last opened, switched to or navigated in the browser (main's open request and
- * action report, a tab's chat from relay ownership), until dismissed. The robot window keeps no tab state of its own.
+ * The site this conversation's agent last opened, switched to or navigated in the browser, until dismissed. The robot
+ * window keeps no tab state of its own.
  */
 const useAgentTabNotice = (conversationId: string | undefined): [string | null, () => void] => {
   const [site, setSite] = useState<string | null>(null);
   useEffect(() => {
     setSite(null);
     if (!conversationId) return;
-    let alive = true;
-    let chatOfTab = new Map<number, string | undefined>();
-    let gotOwnership = false;
-    const setOwnership = (list: TabOwnership[]) => {
-      chatOfTab = new Map(
-        list.map((entry) => [entry.webContentsId, entry.owner === 'user' ? undefined : entry.owner.conversationId])
-      );
-    };
-    const offOwnership = ipcBridge.agentBrowser.ownershipChanged.on((list) => {
-      gotOwnership = true;
-      setOwnership(list);
+    return onAgentTabActivity((chat, url) => {
+      if (chat === conversationId) setSite(siteOf(url));
     });
-    void ipcBridge.agentBrowser.getOwnership
-      .invoke()
-      .then((res) => {
-        if (alive && !gotOwnership && res.success && res.data) setOwnership(res.data);
-      })
-      .catch((error: unknown) => console.warn('[WidgetChatPopup] could not read tab ownership:', error));
-    const offAction = ipcBridge.agentBrowser.agentAction.on((event) => {
-      if (NOTICE_OPS.has(event.op) && chatOfTab.get(event.webContentsId) === conversationId)
-        setSite(siteOf(event.label));
-    });
-    const offOpen = ipcBridge.browser.openTabRequested.on((request) => {
-      if (request.conversationId === conversationId && !request.background) setSite(siteOf(request.url));
-    });
-    return () => {
-      alive = false;
-      offOwnership();
-      offAction();
-      offOpen();
-    };
   }, [conversationId]);
   return [site, useCallback(() => setSite(null), [])];
 };

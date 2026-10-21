@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
 import type { AgentWidgetRobot, AgentWidgetSettings } from '@/common/types/agent/agentWidget';
+import type { TabOwnership } from '@/common/types/browser';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
@@ -153,4 +154,45 @@ export async function followRobotChat(pathname: string, to: string, deps: Follow
   deps.revealBrowserFor(to);
   deps.navigate(`/conversation/${to}`);
   return true;
+}
+
+/** Agent actions on a tab that put another page in front of the user. */
+const ACTIVITY_OPS = new Set(['open', 'switch', 'navigate']);
+
+/**
+ * Calls `listener` with the chat and page each time an agent opens, switches to or navigates a browser tab (main's open
+ * request and action report; a tab's chat comes from relay ownership). Returns the unsubscribe.
+ */
+export function onAgentTabActivity(listener: (conversationId: string, url: string) => void): () => void {
+  let alive = true;
+  let chatOfTab = new Map<number, string | undefined>();
+  let gotOwnership = false;
+  const setOwnership = (list: TabOwnership[]) => {
+    chatOfTab = new Map(
+      list.map((entry) => [entry.webContentsId, entry.owner === 'user' ? undefined : entry.owner.conversationId])
+    );
+  };
+  const offOwnership = ipcBridge.agentBrowser.ownershipChanged.on((list) => {
+    gotOwnership = true;
+    setOwnership(list);
+  });
+  void ipcBridge.agentBrowser.getOwnership
+    .invoke()
+    .then((res) => {
+      if (alive && !gotOwnership && res.success && res.data) setOwnership(res.data);
+    })
+    .catch((error: unknown) => console.warn('[agentWidget] could not read tab ownership:', error));
+  const offAction = ipcBridge.agentBrowser.agentAction.on((event) => {
+    const chat = chatOfTab.get(event.webContentsId);
+    if (chat && ACTIVITY_OPS.has(event.op)) listener(chat, event.label);
+  });
+  const offOpen = ipcBridge.browser.openTabRequested.on((request) => {
+    if (request.conversationId && !request.background) listener(request.conversationId, request.url);
+  });
+  return () => {
+    alive = false;
+    offOwnership();
+    offAction();
+    offOpen();
+  };
 }

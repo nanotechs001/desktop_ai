@@ -88,3 +88,9 @@ const subscribe = (listener: () => void) => {
 export function useChatLocation(conversationId: string | undefined): AgentChatLocation {
   return useSyncExternalStore(subscribe, () => (conversationId ? getLocation(conversationId) : 'main'));
 }
+
+/** Whether the conversation's chat is in its robot's popup right now (main window: any conversation). */
+export function isChatInWidget(conversationId: string): boolean {
+  start();
+  return getLocation(conversationId) === 'widget';
+}
