@@ -19,7 +19,8 @@ export const isViewable = (o: TabOwnership): boolean => o.owner !== 'user' || o.
 /**
  * The viewable tabs of `conversationId`: those its agent claimed, and shared user tabs its agent used last
  * (`lastChatOf`, webContentsId → the chat of the last agent that used it), so the phone can watch the page it is
- * asked about. A tab claimed by an MCP that sent no conversation id stays out (fails closed). `actedAt`
+ * asked about. A chat of a VA Bot (`botAgentId`) also lists every viewable tab of that bot's browser, which all of the
+ * bot's chats share. A tab claimed by an MCP that sent no conversation id stays out (fails closed). `actedAt`
  * (webContentsId → when an agent last acted there, higher is later) picks the `active` tab; none before the agent acts
  * on a listed tab.
  */
@@ -28,12 +29,15 @@ export const viewableTabs = (
   targets: RelayTargetInfo[],
   conversationId: string,
   actedAt: ReadonlyMap<number, number> = new Map(),
-  lastChatOf: (webContentsId: number) => string | undefined = () => undefined
+  lastChatOf: (webContentsId: number) => string | undefined = () => undefined,
+  botAgentId?: string
 ): ViewTab[] => {
   const chatOf = (o: TabOwnership): string | undefined =>
     o.owner === 'user' ? lastChatOf(o.webContentsId) : o.owner.conversationId;
+  const ofBot = (o: TabOwnership): boolean =>
+    botAgentId !== undefined && o.profile.kind === 'agent' && o.profile.agentId === botAgentId;
   const listed = all.flatMap((o) => {
-    if (!isViewable(o) || chatOf(o) !== conversationId) return [];
+    if (!isViewable(o) || (chatOf(o) !== conversationId && !ofBot(o))) return [];
     const target = targets.find((t) => t.targetId === targetIdFor(o.webContentsId));
     return target ? [{ webContentsId: o.webContentsId, target }] : [];
   });

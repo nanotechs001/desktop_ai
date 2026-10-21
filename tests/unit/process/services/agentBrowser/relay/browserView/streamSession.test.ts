@@ -95,9 +95,9 @@ afterEach(() => {
 });
 
 describe('browser view: listing and opening', () => {
-  it('lists the viewable tabs of a conversation', () => {
-    expect(service.listTabs('conv-1')).toEqual([{ id: 'wc-7', title: 'Example', url: 'https://example.com/' }]);
-    expect(service.listTabs('other')).toEqual([]);
+  it('lists the viewable tabs of a conversation', async () => {
+    expect(await service.listTabs('conv-1')).toEqual([{ id: 'wc-7', title: 'Example', url: 'https://example.com/' }]);
+    expect(await service.listTabs('other')).toEqual([]);
   });
 
   it('refuses a user tab and an unknown tab', async () => {

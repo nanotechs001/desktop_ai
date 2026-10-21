@@ -323,6 +323,9 @@ const leaveAgainUntil = new Map<number, number>();
 /** Tabs with a desktop-and-chat ask open: a repeat attempt meanwhile stays without a second ask. */
 const asking = new Set<number>();
 
+/** True while a "Leave site?" ask on the tab waits for an answer (tab cleanup spares it). */
+export const isAskingToLeave = (webContentsId: number): boolean => asking.has(webContentsId);
+
 const leaveOptions = (t: MenuTranslate) => ({
   type: 'question' as const,
   message: t(`${LEAVE_KEY}.title`),

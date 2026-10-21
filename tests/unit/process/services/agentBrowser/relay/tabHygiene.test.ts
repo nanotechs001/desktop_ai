@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AGENT_TAB_IDLE_MS,
   MAX_AGENT_TABS_PER_CHAT,
+  MAX_BOT_TABS,
   startTabHygiene,
   type TabHygiene,
 } from '@process/services/agentBrowser/relay/tabHygiene';
@@ -21,6 +22,9 @@ let hygiene: TabHygiene;
 let shown: number | null;
 let streamed: Set<number>;
 let confirming: Set<number>;
+let leaving: Set<number>;
+let popups: Set<number>;
+let runningChats: Set<string>;
 const closeTab = vi.fn();
 
 /** A tab an agent of `chat` opened at the current (fake) time. */
@@ -38,12 +42,18 @@ beforeEach(() => {
   shown = null;
   streamed = new Set();
   confirming = new Set();
+  leaving = new Set();
+  popups = new Set();
+  runningChats = new Set();
   hygiene = startTabHygiene({
     registry,
     closeTab,
     shownTab: () => shown,
     isStreamed: (id) => streamed.has(id),
     isConfirming: (id) => confirming.has(id),
+    isLeaving: (id) => leaving.has(id),
+    isPaneTab: (id) => !popups.has(id),
+    isTurnRunning: async (chat) => runningChats.has(chat),
   });
 });
 
@@ -190,5 +200,101 @@ describe('tabs the user may still need', () => {
     vi.advanceTimersByTime(MINUTE);
 
     expect(closeTab.mock.calls).toEqual([[1], [1]]);
+  });
+});
+
+/**
+ * A VA Bot's one browser (its profile) keeps at most 5 open tabs, user and agent tabs together: the sweep closes the
+ * least recently used ones that nobody used or looked at for 15 minutes, oldest first.
+ */
+describe(`a bot's shared browser keeps ${MAX_BOT_TABS} tabs`, () => {
+  const BOT = { kind: 'agent', agentId: 'bot-b' } as const;
+  /** A tab of the bot's profile the user opened (agent tabs have their own idle rule), one second after the last. */
+  const botTabs = (ids: number[], profile: Parameters<TargetRegistry['track']>[1] = BOT): FakeContents[] =>
+    ids.map((id) => {
+      const contents = new FakeContents(id);
+      registry.track(contents, profile);
+      vi.advanceTimersByTime(1000);
+      return contents;
+    });
+  /** The pane closes what it is asked to, as the real one does. */
+  const paneCloses = (tabs: FakeContents[]) =>
+    closeTab.mockImplementation((id: number) => tabs.find((tab) => tab.id === id)?.destroy());
+
+  it('closes the oldest of 6 tabs idle for 16 minutes, and 5 remain', async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6]);
+    paneCloses(tabs);
+
+    await vi.advanceTimersByTimeAsync(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[1]]);
+    expect(registry.all()).toHaveLength(5);
+  });
+
+  it('closes the oldest idle tab when only 4 of 6 are idle', async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6]);
+    paneCloses(tabs);
+    vi.advanceTimersByTime(10 * MINUTE);
+    registry.touch(1); // the user clicked in tabs 1 and 2: the oldest two are not idle
+    registry.touch(2);
+
+    await vi.advanceTimersByTimeAsync(6 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[3]]);
+  });
+
+  it(`closes nothing at ${MAX_BOT_TABS} tabs, all idle`, async () => {
+    botTabs([1, 2, 3, 4, 5]);
+
+    await vi.advanceTimersByTimeAsync(30 * MINUTE);
+
+    expect(closeTab).not.toHaveBeenCalled();
+  });
+
+  it('never closes the tab on screen or a tab with a pending ask', async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6, 7]);
+    paneCloses(tabs);
+    shown = 1;
+    confirming.add(2);
+
+    await vi.advanceTimersByTimeAsync(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[3], [4]]);
+  });
+
+  it('never closes a tab waiting on "Leave site?", nor one whose agent turn is running', async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6]);
+    paneCloses(tabs);
+    leaving.add(1);
+    registry.claim(2, { clientId: 'client-a', label: 'claude', conversationId: 'conv-a' });
+    runningChats.add('conv-a');
+    registry.share(2, true); // spared by the agent idle rule, so only the bot cap decides
+
+    await vi.advanceTimersByTimeAsync(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[3]]);
+  });
+
+  it('counts time on screen as use', async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6]);
+    paneCloses(tabs);
+    shown = 1;
+    vi.advanceTimersByTime(15 * MINUTE);
+    shown = 2; // tab 1 was on screen until the sweep before this
+
+    await vi.advanceTimersByTimeAsync(MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[3]]);
+  });
+
+  it('leaves regular chats, the default Agent and popups alone', async () => {
+    botTabs([1, 2, 3, 4, 5, 6], { kind: 'temporary', conversationId: 'conv-r' });
+    botTabs([11, 12, 13, 14, 15, 16], { kind: 'agent', agentId: 'aion-default-agent' });
+    botTabs([21, 22, 23, 24, 25, 26]);
+    [21, 22].forEach((id) => popups.add(id));
+
+    await vi.advanceTimersByTimeAsync(30 * MINUTE);
+
+    expect(closeTab).not.toHaveBeenCalled();
   });
 });

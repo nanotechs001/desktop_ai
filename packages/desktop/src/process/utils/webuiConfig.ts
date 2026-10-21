@@ -300,7 +300,7 @@ export async function revokeOtherWebUISessions(now: number = Date.now()): Promis
 
 /** The live browser view, looked up at each call: it is null while agent browser control is off. */
 const browserView: BrowserViewRoutes = {
-  listTabs: (conversationId) => getBrowserViewService()?.listTabs(conversationId) ?? [],
+  listTabs: async (conversationId) => (await getBrowserViewService()?.listTabs(conversationId)) ?? [],
   openStream: async (tabId, peer) =>
     (await getBrowserViewService()?.openStream(tabId, peer)) ?? { error: 'not-allowed' },
 };

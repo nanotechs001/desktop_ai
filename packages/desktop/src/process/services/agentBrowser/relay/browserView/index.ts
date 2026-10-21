@@ -21,7 +21,7 @@ export type { StreamHandle, StreamPeer, StreamRefusal } from './streamSession';
 
 /** The WebUI's live view of the agent's browser tabs. */
 export type BrowserViewService = {
-  listTabs(conversationId: string): ViewTab[];
+  listTabs(conversationId: string): Promise<ViewTab[]>;
   openStream(tabId: string, peer: StreamPeer): Promise<StreamHandle | { error: StreamRefusal }>;
   /** Ends every open stream, e.g. when agent browser control turns off. */
   closeAll(reason: StreamRefusal): void;
@@ -31,9 +31,14 @@ export type BrowserViewService = {
   noteAgentAction(webContentsId: number): void;
 };
 
-export type BrowserViewDeps = { registry: TargetRegistry; sessions: DebuggerSessions };
+export type BrowserViewDeps = {
+  registry: TargetRegistry;
+  sessions: DebuggerSessions;
+  /** The VA Bot a chat runs as (its shared browser is listed for every one of its chats); undefined for any other. */
+  botOf?(conversationId: string): Promise<string | undefined>;
+};
 
-export function createBrowserViewService({ registry, sessions }: BrowserViewDeps): BrowserViewService {
+export function createBrowserViewService({ registry, sessions, botOf }: BrowserViewDeps): BrowserViewService {
   /** One cast (one debugger session) per tab, while any stream watches it. */
   const casts = new Map<number, TabCast>();
   const streams = new Set<Stream>();
@@ -60,14 +65,21 @@ export function createBrowserViewService({ registry, sessions }: BrowserViewDeps
   };
 
   return {
-    listTabs: (conversationId) =>
-      viewableTabs(
+    async listTabs(conversationId) {
+      // A failed lookup lists only the chat's own tabs, as for a chat of no bot.
+      const bot = await botOf?.(conversationId).catch((error: unknown): undefined => {
+        console.warn("[BrowserView] could not look up a chat's bot:", error);
+        return undefined;
+      });
+      return viewableTabs(
         registry.all(),
         registry.listTargets(),
         conversationId,
         actedAt,
-        (webContentsId) => registry.lastUse(webContentsId)?.conversationId
-      ),
+        (webContentsId) => registry.lastUse(webContentsId)?.conversationId,
+        bot
+      );
+    },
     async openStream(tabId, peer) {
       const webContentsId = webContentsIdFromTargetId(tabId);
       if (webContentsId === null) return { error: 'tab-closed' };

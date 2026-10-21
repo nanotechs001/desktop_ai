@@ -225,6 +225,16 @@ export const shownBrowserTab = (): number | null => shownTabId;
 export function selectBrowserTab(webContentsId: number): void {
   const contents = webContents.fromId(webContentsId);
   if (!contents || contents.isDestroyed()) return;
+  const previous = shownTabId;
   shownTabId = webContentsId;
   extensionsOf(contents)?.selectTab(contents);
+  for (const listener of shownListeners) listener(webContentsId, previous);
+}
+
+const shownListeners = new Set<(shown: number, previous: number | null) => void>();
+
+/** Called when the pane reports another tab on screen, with the one it replaces. Returns the unsubscribe. */
+export function onBrowserTabShown(listener: (shown: number, previous: number | null) => void): () => void {
+  shownListeners.add(listener);
+  return () => shownListeners.delete(listener);
 }

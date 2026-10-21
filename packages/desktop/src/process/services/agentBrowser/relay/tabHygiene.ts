@@ -4,12 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { TargetRegistry } from './targetRegistry';
 
 /** A chat keeps at most this many agent tabs the cap may close; the least recently used one goes first. */
 export const MAX_AGENT_TABS_PER_CHAT = 3;
 /** An agent tab nobody (agent or user) used for this long is closed. */
 export const AGENT_TAB_IDLE_MS = 15 * 60_000;
+/** A VA Bot's one browser (its profile) keeps at most this many tabs, user and agent tabs together. */
+export const MAX_BOT_TABS = 5;
+/** A bot tab with no user input, agent action or time on screen for this long may go once the bot is over its cap. */
+export const BOT_TAB_IDLE_MS = 15 * 60_000;
 const SWEEP_INTERVAL_MS = 60_000;
 /** A close the pane never carried out is forgotten after this, so a later cap or sweep may ask again. */
 const CLOSE_PENDING_MS = 10_000;
@@ -24,6 +29,12 @@ export type TabHygieneDeps = {
   isStreamed?(webContentsId: number): boolean;
   /** True while a risky-action ask is open on the tab; it is never closed. */
   isConfirming?(webContentsId: number): boolean;
+  /** True while a "Leave site?" ask is open on the tab; it is never closed. */
+  isLeaving?(webContentsId: number): boolean;
+  /** True for a tab of the pane (not a popup window): only those count toward, and are closed by, the bot cap. */
+  isPaneTab?(webContentsId: number): boolean;
+  /** Whether the chat's agent turn is running now; its tabs are never closed by the bot cap. Rejecting keeps them. */
+  isTurnRunning?(conversationId: string): Promise<boolean>;
 };
 
 export type TabHygiene = {
@@ -37,7 +48,8 @@ export type TabHygiene = {
 };
 
 /**
- * Keeps agents from piling up tabs: a per-chat cap and an idle sweep every minute. Only a closable tab is ever
+ * Keeps agents from piling up tabs: a per-chat cap and an idle sweep every minute, plus a cap of {@link MAX_BOT_TABS}
+ * on each VA Bot's whole browser (see `trimBotTabs`). Only a closable tab is ever
  * closed: agent-owned, not shared, not on screen, not typed in since its page loaded, not watched by a phone, no
  * risky ask open. "Used" is the registry's last use (an agent command or user input on the tab).
  */
@@ -47,6 +59,9 @@ export function startTabHygiene({
   shownTab,
   isStreamed,
   isConfirming,
+  isLeaving,
+  isPaneTab,
+  isTurnRunning,
 }: TabHygieneDeps): TabHygiene {
   const agentTabs = new Set<number>();
   /** Asked to close and not gone yet: neither counted nor asked again. */
@@ -76,11 +91,67 @@ export function startTabHygiene({
     closing.delete(webContentsId);
   });
 
+  /** The bot cap may close any tab of the bot's browser, the user's too, but never one still in use or worth keeping. */
+  const botCapClosable = (webContentsId: number, now: number): boolean =>
+    !closing.has(webContentsId) &&
+    webContentsId !== shownTab() &&
+    !registry.typedSinceLoad(webContentsId) &&
+    !isStreamed?.(webContentsId) &&
+    !isConfirming?.(webContentsId) &&
+    !isLeaving?.(webContentsId) &&
+    now - lastUsedAt(webContentsId) >= BOT_TAB_IDLE_MS;
+  /** The chat whose agent drives the tab: its owner's, else (a user tab) the last agent's that used it. */
+  const drivingChat = (webContentsId: number): string | undefined =>
+    chatOf(webContentsId) ?? registry.lastUse(webContentsId)?.conversationId;
+  const turnRunning = async (webContentsId: number): Promise<boolean> => {
+    const chat = drivingChat(webContentsId);
+    if (!chat || !isTurnRunning) return false;
+    return isTurnRunning(chat).catch((error: unknown) => {
+      console.warn('[TabHygiene] could not tell whether a chat is working; its tab stays:', error);
+      return true;
+    });
+  };
+
+  /** Each VA Bot's open pane tabs (not the default Agent's shared fallback profile, nor any temporary one). */
+  const botTabSets = (): number[][] => {
+    const byBot = new Map<string, number[]>();
+    for (const { webContentsId, profile } of registry.all()) {
+      if (profile.kind !== 'agent' || profile.agentId === DEFAULT_AGENT_ID) continue;
+      if (closing.has(webContentsId) || isPaneTab?.(webContentsId) === false) continue;
+      byBot.set(profile.agentId, [...(byBot.get(profile.agentId) ?? []), webContentsId]);
+    }
+    return [...byBot.values()];
+  };
+  const trimBotTabs = async (now: number): Promise<void> => {
+    for (const tabs of botTabSets()) {
+      let excess = tabs.length - MAX_BOT_TABS;
+      const idle = tabs.filter((id) => botCapClosable(id, now)).toSorted((a, b) => lastUsedAt(a) - lastUsedAt(b));
+      for (const webContentsId of idle) {
+        if (excess <= 0) break;
+        // oxlint-disable-next-line no-await-in-loop -- one at a time: each answer decides whether another must go
+        if ((await turnRunning(webContentsId)) || !botCapClosable(webContentsId, Date.now())) continue;
+        closeNow(webContentsId);
+        excess -= 1;
+      }
+    }
+  };
+
+  let trimming = false;
   const sweep = (): void => {
     const now = Date.now();
+    // Time on screen is use: the tab shown now was looked at until this sweep at least.
+    const shown = shownTab();
+    if (shown !== null) registry.touch(shown);
     for (const webContentsId of agentTabs) {
       if (closable(webContentsId) && now - lastUsedAt(webContentsId) >= AGENT_TAB_IDLE_MS) closeNow(webContentsId);
     }
+    if (trimming) return;
+    trimming = true;
+    trimBotTabs(now)
+      .catch((error: unknown) => console.warn("[TabHygiene] could not trim a bot's tabs:", error))
+      .finally(() => {
+        trimming = false;
+      });
   };
   const timer = setInterval(sweep, SWEEP_INTERVAL_MS);
   timer.unref?.();

@@ -45,7 +45,7 @@ function fakeRoutes(): FakeRoutes {
         for (const go of queue.splice(0)) go();
       };
     },
-    listTabs: vi.fn((conversationId: string) => (conversationId === 'conv-1' ? TABS : [])),
+    listTabs: vi.fn<BrowserViewRoutes['listTabs']>((conversationId) => (conversationId === 'conv-1' ? TABS : [])),
     openStream: vi.fn(async (tabId: string, peer: BrowserViewPeer) => {
       if (held) await new Promise<void>((r) => held?.push(r));
       if (tabId === 'wc-99') return { error: 'not-allowed' as const };
@@ -221,6 +221,20 @@ describe('browser-view routes', () => {
       expect(JSON.parse(r.body)).toEqual({ tabs: TABS });
       expect(routes.listTabs).toHaveBeenCalledWith('conv-1');
       expect(backend.seen).toHaveLength(0);
+    });
+
+    it('GET /api/browser-view/tabs waits for a list the desktop looks up, and fails closed when the lookup fails', async () => {
+      routes.listTabs.mockImplementationOnce(async () => TABS);
+      const listed = await request(handle.port, 'GET', '/api/browser-view/tabs?conversation=conv-1', session);
+      expect(listed.status).toBe(200);
+      expect(JSON.parse(listed.body)).toEqual({ tabs: TABS });
+
+      routes.listTabs.mockImplementationOnce(async () => {
+        throw new Error('lookup failed');
+      });
+      const failed = await request(handle.port, 'GET', '/api/browser-view/tabs?conversation=conv-1', session);
+      expect(failed.status).toBe(500);
+      expect(JSON.parse(failed.body)).toEqual({ error: 'LIST_FAILED' });
     });
 
     it.each([

@@ -41,7 +41,7 @@ export type BrowserViewStreamHandle = { onMessage(raw: string): void; close(): v
 
 /** The desktop's live browser-view service, used structurally so web-host never imports desktop code. */
 export type BrowserViewRoutes = {
-  listTabs(conversationId: string): BrowserViewTab[];
+  listTabs(conversationId: string): BrowserViewTab[] | Promise<BrowserViewTab[]>;
   openStream(
     tabId: string,
     peer: BrowserViewPeer

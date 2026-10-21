@@ -55,6 +55,22 @@ describe('viewableTabs', () => {
     ]);
   });
 
+  it("lists every watchable tab of a bot chat's bot browser, whichever chat drives it, and no other browser", () => {
+    const BOT = { kind: 'agent', agentId: 'bot-b' } as const;
+    const all = [
+      tab(1, { profile: BOT, owner: { clientId: 'c1', label: 'claude', conversationId: 'conv-older' } }),
+      tab(2, { profile: BOT, sharedWith: 'all' }),
+      tab(3, { profile: BOT }), // the user's own: never watchable
+      tab(4, { profile: { kind: 'agent', agentId: 'bot-x' }, owner: { clientId: 'c4', label: 'claude' } }),
+      agentTab(5, 'conv'),
+    ];
+    expect(viewableTabs(all, [1, 2, 3, 4, 5].map(target), 'conv', new Map(), () => undefined, 'bot-b')).toEqual([
+      { id: 'wc-1', title: 'Title 1', url: 'https://example.com/1' },
+      { id: 'wc-2', title: 'Title 2', url: 'https://example.com/2' },
+      { id: 'wc-5', title: 'Title 5', url: 'https://example.com/5' },
+    ]);
+  });
+
   it('drops a tab with no matching target', () => {
     expect(viewableTabs([agentTab(2, 'conv')], [], 'conv')).toEqual([]);
   });

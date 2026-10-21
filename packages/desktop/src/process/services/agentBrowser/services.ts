@@ -9,8 +9,12 @@ import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import type { AgentResolution } from '@process/artifacts/notes';
-import { onBrowserContentsCreated, shownBrowserTab } from '@process/services/browserSession/browserSession';
-import { setWindowOpenHooks, type UnloadPlan } from '@process/services/browserSession/windowOpen';
+import {
+  onBrowserContentsCreated,
+  onBrowserTabShown,
+  shownBrowserTab,
+} from '@process/services/browserSession/browserSession';
+import { isAskingToLeave, setWindowOpenHooks, type UnloadPlan } from '@process/services/browserSession/windowOpen';
 import {
   isDeletedAgentProfile,
   parseBrowserTabProfile,
@@ -53,9 +57,10 @@ export const chatIsYolo = createYoloLookup({
 });
 
 /**
- * When a chat was created and whether it is a scheduled run's own chat (`scheduled_run`, set by the cron executor; a
- * user's chat a task is bound to only carries `cron_job_id`), for the bot tab takeover; null for a chat aioncore does
- * not know. Other failures reject: the relay then treats the chat's age as unknown.
+ * When a chat was created, whether it is a scheduled run's own chat (`scheduled_run`, set by the cron executor; a
+ * user's chat a task is bound to only carries `cron_job_id`), and whether its agent turn is running (the detail read
+ * carries the runtime summary), for the bot tab takeover and tab cleanup; null for a chat aioncore does not know.
+ * Other failures reject: the relay then treats the chat as unknown.
  */
 export const chatInfoOf = async (conversationId: string): Promise<ChatInfo | null> => {
   const chat = await ipcBridge.conversation.get.invoke({ id: conversationId }).catch((error: unknown): null => {
@@ -64,7 +69,11 @@ export const chatInfoOf = async (conversationId: string): Promise<ChatInfo | nul
   });
   if (!chat) return null;
   const extra = (chat.extra ?? {}) as { scheduled_run?: unknown };
-  return { createdAt: chat.created_at, scheduled: extra.scheduled_run === true };
+  return {
+    createdAt: chat.created_at,
+    scheduled: extra.scheduled_run === true,
+    running: chat.runtime?.is_processing === true,
+  };
 };
 
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
@@ -339,6 +348,8 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
 
   const registry = createTargetRegistry();
   const waiter = new CreateTabWaiter<Electron.WebContents>();
+  /** The pane's tabs (webviews), not popup windows. */
+  const paneTabs = new Set<number>();
   // One listener, so a new tab is tracked before the relay's createTarget waiter receives it.
   onBrowserContentsCreated((contents) => {
     const profile = profileOfSession(contents.session);
@@ -346,7 +357,15 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     if (!profile) return;
     registry.track(contents, profile);
     watchUserInput(contents, registry);
-    if (contents.getType() === 'webview') offerNewTab(waiter, contents, partitionOfProfile(profile));
+    if (contents.getType() !== 'webview') return;
+    paneTabs.add(contents.id);
+    offerNewTab(waiter, contents, partitionOfProfile(profile));
+  });
+  registry.onDestroyed(({ webContentsId }) => paneTabs.delete(webContentsId));
+  // A tab on screen is in use until the pane shows another: both count as used now, for tab cleanup.
+  onBrowserTabShown((shown, previous) => {
+    registry.touch(shown);
+    if (previous !== null) registry.touch(previous);
   });
   /** Open risky-action asks per tab: tab cleanup spares those tabs. */
   const confirming = new Map<number, number>();
@@ -371,6 +390,9 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     shownTab: shownBrowserTab,
     isStreamed: (webContentsId) => browserView?.isStreamed(webContentsId) ?? false,
     isConfirming: (webContentsId) => confirming.has(webContentsId),
+    isLeaving: isAskingToLeave,
+    isPaneTab: (webContentsId) => paneTabs.has(webContentsId),
+    isTurnRunning: async (conversationId) => (await chatInfoOf(conversationId))?.running ?? false,
   });
   followOpeners(registry, waiter, confirms, hygiene);
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
@@ -404,7 +426,15 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   });
   active = registry;
   activeWaiter = waiter;
-  browserView = createBrowserViewService({ registry, sessions });
+  browserView = createBrowserViewService({
+    registry,
+    sessions,
+    // Only a VA Bot's own profile is shared by its chats; a regular chat's temporary one and the fallback are not.
+    botOf: async (conversationId) => {
+      const { profile } = await agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent);
+      return profile.kind === 'agent' && profile.agentId !== DEFAULT_AGENT_ID ? profile.agentId : undefined;
+    },
+  });
   return {
     url: relay.url,
     token: relay.token,

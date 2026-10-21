@@ -86,8 +86,11 @@ export type RelayServerDeps = {
   limits?: Partial<RelayLimits>;
 };
 
-/** What the takeover needs to know of a chat: its creation time (ms) and whether it is a scheduled run's own chat. */
-export type ChatInfo = { createdAt: number; scheduled: boolean };
+/**
+ * What the takeover needs to know of a chat: its creation time (ms), whether it is a scheduled run's own chat, and
+ * whether its agent turn is running now.
+ */
+export type ChatInfo = { createdAt: number; scheduled: boolean; running: boolean };
 
 /** A client's Agent profile; not `final` when it is a fallback after a failed lookup, which the relay retries. */
 export type ProfileLookup = { profile: BrowserTabProfile; final: boolean };
@@ -205,26 +208,40 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   /**
-   * The chats among `owners` created before `mine`, the connecting chat. A chat whose age cannot be read is never
-   * older: its tabs stay with it.
+   * The chats among `owners` whose tabs `mine`, the connecting chat, may take: those created before it, and those
+   * whose agent turn is not running. A chat that cannot be looked up keeps its tabs.
    */
-  const olderChats = async (mine: ChatInfo, owners: ReadonlySet<string>): Promise<Set<string>> => {
+  const yieldingChats = async (mine: ChatInfo, owners: ReadonlySet<string>): Promise<Set<string>> => {
     const infos = await Promise.all(
       [...owners].map(async (id) => [id, await deps.chatInfo?.(id).catch((): null => null)] as const)
     );
-    return new Set(infos.filter(([, info]) => info && info.createdAt < mine.createdAt).map(([id]) => id));
+    return new Set(
+      infos.filter(([, info]) => info && (info.createdAt < mine.createdAt || !info.running)).map(([id]) => id)
+    );
   };
 
   /**
-   * A VA Bot's tabs belong to the bot, not one chat: a chat's client takes over the tabs of the bot's gone clients and
-   * of its chats created before this one (a newer chat that is working keeps its tabs), and the old client's sessions
-   * on them end (the onChange prune). Hygiene then trims them to the chat's cap, keeping the most recently used. A
-   * scheduled run's own chat takes nothing, nor do regular chats (temporary profiles) and chat-less clients.
+   * A VA Bot's tabs belong to the bot, not one chat, and all of its chats show them: a chat's client takes over the
+   * tabs of the bot's gone clients, of its chats created before this one, and of its chats whose turn is not running
+   * (a newer chat that is working keeps its tabs). It runs when the client connects and each time its agent lists the
+   * tabs, so an older chat the user continues gets them once the newer chat is idle. The old client's sessions on them
+   * end (the onChange prune), and hygiene trims them to the chat's cap, keeping the most recently used. A scheduled
+   * run's own chat takes nothing, nor do regular chats (temporary profiles) and chat-less clients.
    */
   const takeOverBotTabs = async (conn: Connection): Promise<void> => {
     const { profile } = conn.client;
     const { conversationId } = conn;
     if (!conversationId || profile?.kind !== 'agent' || profile.agentId === DEFAULT_AGENT_ID) return;
+    const othersOwn = registry
+      .all()
+      .some(
+        (tab) =>
+          tab.owner !== 'user' &&
+          tab.owner.clientId !== conn.client.clientId &&
+          tab.profile.kind === 'agent' &&
+          tab.profile.agentId === profile.agentId
+      );
+    if (!othersOwn) return;
     const mine = (await deps.chatInfo?.(conversationId).catch((): null => null)) ?? null;
     if (mine?.scheduled) return;
     const liveOwners = new Set(
@@ -237,12 +254,12 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         )
         .filter((id) => id !== conversationId)
     );
-    const older = mine ? await olderChats(mine, liveOwners) : new Set<string>();
+    const yielding = mine ? await yieldingChats(mine, liveOwners) : new Set<string>();
     if (!connections.has(conn.client.clientId)) return;
     const mayTake = (owner: RelayClient): boolean =>
       owner.clientId.startsWith(DISCONNECTED_CLIENT_PREFIX) ||
       owner.conversationId === conversationId ||
-      (owner.conversationId !== undefined && older.has(owner.conversationId));
+      (owner.conversationId !== undefined && yielding.has(owner.conversationId));
     const taken = registry.reclaimAgentTabs(profile.agentId, { ...conn.client, conversationId }, mayTake);
     const lastUsed = (id: number): number => registry.lastUse(id)?.at ?? 0;
     for (const id of taken.toSorted((a, b) => lastUsed(b) - lastUsed(a))) deps.onAgentTab?.(id);
@@ -276,6 +293,14 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       void lookUpProfile(conn);
     }
     await conn.profileLookup;
+  };
+
+  /** Before listing tabs: the profile is known, and the bot's tabs another chat may give up are this client's. */
+  const refreshForListing = async (conn: Connection): Promise<void> => {
+    await refreshProfile(conn);
+    await takeOverBotTabs(conn).catch((error: unknown) =>
+      console.warn("[AgentBrowserRelay] could not take over a bot's tabs:", error)
+    );
   };
 
   const createTarget = async (conn: Connection, params: Params): Promise<Params> => {
@@ -570,7 +595,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
 
   /** Tabs this client may act on with who owns each: `Target.getTargets` cannot tell agent from shared. */
   const listTabs = async (conn: Connection): Promise<Params> => {
-    await refreshProfile(conn);
+    await refreshForListing(conn);
     return listTabsNow(conn);
   };
 
@@ -587,7 +612,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   const browserCommand = async (conn: Connection, method: string, params: Params): Promise<Params> => {
     switch (method) {
       case 'Target.getTargets':
-        await refreshProfile(conn);
+        await refreshForListing(conn);
         return {
           targetInfos: registry
             .listTargets()

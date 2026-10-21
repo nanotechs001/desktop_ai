@@ -55,6 +55,7 @@ vi.mock('@process/services/browserSession/windowOpen', () => ({
   setWindowOpenHooks: (next: WindowOpenHooks) => {
     hooks.current = next;
   },
+  isAskingToLeave: () => false,
 }));
 vi.mock('@process/services/browserSession/browserSession', () => ({
   onBrowserContentsCreated: (listener: (contents: unknown) => void) => {
@@ -62,6 +63,7 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
     return () => {};
   },
   shownBrowserTab: () => null,
+  onBrowserTabShown: () => () => {},
 }));
 
 const {
@@ -186,12 +188,15 @@ describe('chatInfoOf', () => {
   it("reads a chat's creation time, and whether it is a scheduled run's own chat", async () => {
     const get = h.ipcBridge.conversation.get.invoke;
     get.mockResolvedValueOnce({ id: 'c1', created_at: 5, extra: {} });
-    expect(await chatInfoOf('c1')).toEqual({ createdAt: 5, scheduled: false });
+    expect(await chatInfoOf('c1')).toEqual({ createdAt: 5, scheduled: false, running: false });
     get.mockResolvedValueOnce({ id: 'c2', created_at: 6, extra: { cron_job_id: 'cron_1', scheduled_run: true } });
-    expect(await chatInfoOf('c2')).toEqual({ createdAt: 6, scheduled: true });
+    expect(await chatInfoOf('c2')).toEqual({ createdAt: 6, scheduled: true, running: false });
     // The user's own chat a task is bound to is not a scheduled run's chat.
     get.mockResolvedValueOnce({ id: 'c3', created_at: 7, extra: { cron_job_id: 'cron_2' } });
-    expect(await chatInfoOf('c3')).toEqual({ createdAt: 7, scheduled: false });
+    expect(await chatInfoOf('c3')).toEqual({ createdAt: 7, scheduled: false, running: false });
+    // Its agent turn is running while the runtime processes one.
+    get.mockResolvedValueOnce({ id: 'c4', created_at: 8, extra: {}, runtime: { is_processing: true } });
+    expect(await chatInfoOf('c4')).toEqual({ createdAt: 8, scheduled: false, running: true });
     get.mockResolvedValueOnce(null);
     expect(await chatInfoOf('gone')).toBeNull();
   });
@@ -1062,24 +1067,40 @@ describe('agent browser services: the phone on a shared tab', () => {
         ? { frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } } }
         : {};
     await call('share', { webContentsId: 42, on: true });
-    expect(getBrowserViewService()?.listTabs('conv-a')).toEqual([]); // no agent used it yet
+    expect(await getBrowserViewService()?.listTabs('conv-a')).toEqual([]); // no agent used it yet
     const sessionId = String(
       (await send('Target.attachToTarget', { targetId: 'wc-42', flatten: true })).result?.sessionId
     );
     await send('Page.getFrameTree', {}, sessionId);
 
-    expect(getBrowserViewService()?.listTabs('conv-a')).toEqual([
+    expect(await getBrowserViewService()?.listTabs('conv-a')).toEqual([
       expect.objectContaining({ id: 'wc-42', url: 'https://bank.test/' }),
     ]);
-    expect(getBrowserViewService()?.listTabs('conv-b')).toEqual([]);
+    expect(await getBrowserViewService()?.listTabs('conv-b')).toEqual([]);
     const answer = send('AionRelay.requestConfirm', { webContentsId: 42, label: 'Pay', sessionId, frameId: 'TOP' });
     await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-a')).toHaveLength(1));
 
     await call('share', { webContentsId: 42, on: false });
 
-    expect(getBrowserViewService()?.listTabs('conv-a')).toEqual([]);
+    expect(await getBrowserViewService()?.listTabs('conv-a')).toEqual([]);
     expect((await answer).result).toEqual({ allow: false }); // the ask went with the sharing
     expect(webuiConfirms.listConfirms('conv-a')).toEqual([]);
+  });
+});
+
+describe("agent browser services: the phone on a VA Bot's chat", () => {
+  it("lists the bot's shared tabs whichever chat's agent used them, and never another chat's browser", async () => {
+    await start();
+    newTab(43, agentSession, 'https://shop.test/'); // the bot's browser: conv-1 is a chat of Agent bare:agent-1
+    newTab(44, defaultAgentSession, 'https://other.test/');
+    await call('share', { webContentsId: 43, on: true });
+    await call('share', { webContentsId: 44, on: true });
+    newTab(45, agentSession, 'https://mine.test/'); // the user's own, unshared: never watchable
+
+    expect(await getBrowserViewService()?.listTabs('conv-1')).toEqual([
+      expect.objectContaining({ id: 'wc-43', url: 'https://shop.test/' }),
+    ]);
+    expect(await getBrowserViewService()?.listTabs('conv-b')).toEqual([]); // a chat of no bot
   });
 });
 

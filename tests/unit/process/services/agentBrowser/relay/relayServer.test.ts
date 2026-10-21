@@ -4,7 +4,7 @@ import WebSocket from 'ws';
 import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
 import { createDebuggerSessions, type DebuggerSessions } from '@process/services/agentBrowser/relay/debuggerSessions';
 import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
-import { startRelayServer, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
+import { startRelayServer, type ChatInfo, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
 import {
   createTargetRegistry,
   type RelayClient,
@@ -1658,12 +1658,12 @@ describe("relay server: a VA Bot's new chat takes over its tabs", () => {
     conv_O: OTHER_BOT,
     conv_S: BOT,
   };
-  /** When each chat was created, and whether it runs scheduled turns. */
-  const chatOf: Record<string, { createdAt: number; scheduled: boolean }> = {
-    conv_C1: { createdAt: 1, scheduled: false },
-    conv_C2: { createdAt: 2, scheduled: false },
-    conv_O: { createdAt: 1, scheduled: false },
-    conv_S: { createdAt: 3, scheduled: true },
+  /** When each chat was created, whether it runs scheduled turns, and whether its agent turn is running now. */
+  const chatOf: Record<string, ChatInfo> = {
+    conv_C1: { createdAt: 1, scheduled: false, running: true },
+    conv_C2: { createdAt: 2, scheduled: false, running: true },
+    conv_O: { createdAt: 1, scheduled: false, running: false },
+    conv_S: { createdAt: 3, scheduled: true, running: false },
   };
 
   /** A tab in `profile` that the connected client `label` opened. */
@@ -1743,7 +1743,7 @@ describe("relay server: a VA Bot's new chat takes over its tabs", () => {
   });
 
   /** A relay where every chat above runs as its bot, plus one connected client per chat given. */
-  const startBots = async (chatInfo?: (id: string) => Promise<{ createdAt: number; scheduled: boolean } | null>) => {
+  const startBots = async (chatInfo?: (id: string) => Promise<ChatInfo | null>) => {
     resolveProfile.mockImplementation(async (conversationId?: string) => ({
       profile: (conversationId && botOf[conversationId]) || agentProfileOf(conversationId),
       final: true,
@@ -1762,7 +1762,53 @@ describe("relay server: a VA Bot's new chat takes over its tabs", () => {
     return relay;
   };
 
-  it("never takes a live newer chat's tabs for an older chat, only a gone client's (M3)", async () => {
+  it('an older chat the user continues takes the tabs of a newer chat whose turn is not running', async () => {
+    const handle = await startBots(async (id) => (id === 'conv_C2' ? { ...chatOf[id], running: false } : chatOf[id]));
+    const newer = await connect(handle, 'c2', { 'X-Aion-Conversation': 'conv_C2' });
+    await newer.send('AionRelay.listTabs');
+    botTab(150, BOT, 'c2', 'conv_C2');
+
+    const older = await connect(handle, 'c1', { 'X-Aion-Conversation': 'conv_C1' });
+    const listed = (await older.send('AionRelay.listTabs')).result?.tabs as Array<{ targetId: string }>;
+
+    expect(listed.map(({ targetId }) => targetId)).toEqual(['wc-150']);
+    expect(registry.ownership(150)?.owner).toMatchObject({ label: 'c1', conversationId: 'conv_C1' });
+  });
+
+  it("a connected chat takes the bot's tabs when its agent lists them again, once the other chat's turn ends", async () => {
+    const running = new Set(['conv_C2']);
+    const onAgentTab = vi.fn();
+    resolveProfile.mockImplementation(async (conversationId?: string) => ({
+      profile: (conversationId && botOf[conversationId]) || agentProfileOf(conversationId),
+      final: true,
+    }));
+    registry = createTargetRegistry();
+    relay = await startRelayServer({
+      registry,
+      openTab,
+      closeTab,
+      onAgentAction,
+      requestConfirm,
+      waitForTab,
+      resolveProfile,
+      onAgentTab,
+      chatInfo: async (id: string) => (chatOf[id] ? { ...chatOf[id], running: running.has(id) } : null),
+    });
+    const newer = await connect(relay, 'c2', { 'X-Aion-Conversation': 'conv_C2' });
+    const older = await connect(relay, 'c1', { 'X-Aion-Conversation': 'conv_C1' });
+    await Promise.all([newer, older].map((c) => c.send('AionRelay.listTabs')));
+    botTab(160, BOT, 'c2', 'conv_C2');
+    expect((await older.send('AionRelay.listTabs')).result?.tabs).toEqual([]); // the newer chat is working
+
+    running.delete('conv_C2');
+    const targets = (await older.send('Target.getTargets')).result?.targetInfos as Array<{ targetId: string }>;
+
+    expect(targets.map(({ targetId }) => targetId)).toEqual(['wc-160']);
+    expect(registry.ownership(160)?.owner).toMatchObject({ label: 'c1', conversationId: 'conv_C1' });
+    expect(onAgentTab.mock.calls.map(([id]) => id)).toEqual([160]);
+  });
+
+  it("never takes a working newer chat's tabs for an older chat, only a gone client's (M3)", async () => {
     const handle = await startBots();
     const newer = await connect(handle, 'c2', { 'X-Aion-Conversation': 'conv_C2' });
     const gone = await connect(handle, 'gone', { 'X-Aion-Conversation': 'conv_C2' });
@@ -1777,7 +1823,8 @@ describe("relay server: a VA Bot's new chat takes over its tabs", () => {
 
     expect(listed.map(({ targetId }) => targetId)).toEqual(['wc-121']);
     expect(registry.ownership(120)?.owner).toMatchObject({ label: 'c2', conversationId: 'conv_C2' });
-    expect((await newer.send('AionRelay.listTabs')).result?.tabs).toHaveLength(1);
+    // The newer chat lists its tabs again and takes the older chat's back: every chat of the bot takes from older ones.
+    expect((await newer.send('AionRelay.listTabs')).result?.tabs).toHaveLength(2);
   });
 
   it("takes nothing for a scheduled chat, even a gone client's tab", async () => {

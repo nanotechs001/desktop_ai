@@ -79,7 +79,15 @@ export function serveTabs(req: IncomingMessage, res: ServerResponse, url: string
   if (req.method !== 'GET') return reply(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   const id = conversationOf(url);
   if (id === null) return reply(res, 400, { error: 'BAD_CONVERSATION' });
-  reply(res, 200, { tabs: routes.listTabs(id) });
+  Promise.resolve()
+    .then(() => routes.listTabs(id))
+    .then(
+      (tabs) => reply(res, 200, { tabs }),
+      (error: unknown) => {
+        console.warn('[web-host] could not list the browser tabs:', error);
+        reply(res, 500, { error: 'LIST_FAILED' });
+      }
+    );
 }
 
 /** True for the confirm list and anything under it (answers, and paths that are neither: 404 here, never aioncore). */
