@@ -13,7 +13,7 @@
  *   only while auto-follow mode is active.
  * - Use DOM-native scrollIntoView for explicit message jumps.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TMessage } from '@/common/chat/chatLib';
 
 const PROGRAMMATIC_SCROLL_GUARD_MS = 150;
@@ -189,10 +189,14 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     return () => observer.disconnect();
   }, [contentEl, scheduleAutoFollow, scrollerEl, updateBottomState]);
 
-  useEffect(() => {
+  // Before the first paint, so a long chat never flashes its top before jumping to the end; again a frame later, once
+  // late content (images, code blocks) has laid out.
+  useLayoutEffect(() => {
     if (!scrollerEl || initialScrollDoneRef.current || itemCount === 0) return;
 
     initialScrollDoneRef.current = true;
+    scrollToBottom('auto');
+    lastScrollTopRef.current = scrollerEl.scrollTop;
     requestAnimationFrame(() => {
       scrollToBottom('auto');
       lastScrollTopRef.current = scrollerEl.scrollTop;

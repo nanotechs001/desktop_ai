@@ -127,6 +127,22 @@ describe('useAutoScroll', () => {
     vi.useRealTimers();
   });
 
+  // A long chat must not paint its top for a frame before jumping to its end.
+  it('lands on the bottom as soon as the list is attached, before any frame runs', () => {
+    const scroller = createScroller({ scrollTop: 0 });
+    const content = createContent();
+    const { result } = renderHook(() =>
+      useAutoScroll({
+        messages: [createLeftMessage('hello')],
+        itemCount: 1,
+      })
+    );
+
+    attachElements(result, scroller, content);
+
+    expect(scroller.scrollTop).toBe(600);
+  });
+
   it('auto-follows to the bottom when content height changes and the user is still following output', () => {
     const scroller = createScroller();
     const content = createContent();
