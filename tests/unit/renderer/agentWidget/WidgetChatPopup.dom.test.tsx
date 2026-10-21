@@ -124,10 +124,10 @@ describe('WidgetChatPopup new chat', () => {
     vi.restoreAllMocks();
   });
 
-  it('sits next to the history button and has an accessible name', () => {
-    renderPopup({ id: 'bot-1', name: 'Bot' });
-    const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(labels.indexOf(NEW_CHAT)).toBe(labels.indexOf('conversation.history.botChatHistory') + 1);
+  it.each(['compact', 'expanded'])('comes first in the header, then History (%s)', (window_mode) => {
+    renderPopup({ id: 'bot-1', name: 'Bot' }, vi.fn(), vi.fn(), { ...LAYOUT, window_mode });
+    const labels = Array.from(document.querySelectorAll('header button')).map((b) => b.getAttribute('aria-label'));
+    expect(labels.slice(0, 2)).toEqual([NEW_CHAT, 'conversation.history.botChatHistory']);
   });
 
   it('starts a new chat with the same bot and moves the robot to it', async () => {

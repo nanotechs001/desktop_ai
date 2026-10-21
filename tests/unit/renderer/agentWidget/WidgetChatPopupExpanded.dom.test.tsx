@@ -310,13 +310,27 @@ describe('moving and resizing the expanded window', () => {
   });
 });
 
+const widgetCss = () =>
+  readFileSync(
+    path.resolve(__dirname, '../../../../packages/desktop/src/renderer/pages/agentWidget/AgentWidget.module.css'),
+    'utf8'
+  );
+
 describe('robot in the expanded window', () => {
   it('stands inset by its hop headroom, so its hop never clips at the window top', () => {
-    const css = readFileSync(
-      path.resolve(__dirname, '../../../../packages/desktop/src/renderer/pages/agentWidget/AgentWidget.module.css'),
-      'utf8'
-    );
-    const rule = css.match(/\.root\[data-window='expanded'\] \.bot\s*{[^}]*}/)?.[0] ?? '';
+    const rule = widgetCss().match(/\.root\[data-window='expanded'\] \.bot\s*{[^}]*}/)?.[0] ?? '';
     expect(rule).toMatch(/top:\s*var\(--hop-headroom/);
+  });
+});
+
+describe('the expanded chat area', () => {
+  it('has the same room on the right as on the left, inside its width', () => {
+    const rule = widgetCss().match(/\.popup\[data-layout='expanded'\] \.body\s*{[^}]*}/)?.[0] ?? '';
+    // Padding counted inside the 100% width: without it the right padding is pushed past the window's edge.
+    expect(rule).toMatch(/box-sizing:\s*border-box/);
+    const [, right, left] = rule.match(/padding:\s*\S+\s+(\d+)px\s+\S+\s+(\d+)px/) ?? [];
+    expect(Number(right)).toBeGreaterThanOrEqual(24);
+    expect(Number(right)).toBeLessThanOrEqual(32);
+    expect(left).toBe(right);
   });
 });

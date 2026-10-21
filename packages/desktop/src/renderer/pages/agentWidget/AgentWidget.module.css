@@ -399,12 +399,14 @@
   line-height: 16px;
 }
 
-/* The chat gets room to breathe and a readable width; the shared chat components are untouched. */
+/* The chat gets room to breathe and a readable width; the shared chat components are untouched. The padding counts
+   inside the width, so the messages and the composer keep the same gap on the right as on the left. */
 .popup[data-layout='expanded'] .body {
+  box-sizing: border-box;
   width: 100%;
   max-width: 880px;
   margin: 0 auto;
-  padding: 8px 16px 0;
+  padding: 8px 28px 0 28px;
   border-radius: 0 0 16px 0;
 }
 

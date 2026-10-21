@@ -289,14 +289,14 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
           </div>
         </div>
         {agentId &&
-          action(historyLabel, <History theme='outline' size='14' />, () =>
-            expandedWindow ? setExpandedView('recent') : setHistoryOpen(true)
-          )}
-        {agentId &&
           action(
             t('conversation.welcome.newConversation'),
             <Plus theme='outline' size='14' />,
             () => void startNewChat()
+          )}
+        {agentId &&
+          action(historyLabel, <History theme='outline' size='14' />, () =>
+            expandedWindow ? setExpandedView('recent') : setHistoryOpen(true)
           )}
         {action(t('pet.widget.returnToMain'), <Tv theme='outline' size='14' />, props.onReturnToMain)}
         {agentId &&
