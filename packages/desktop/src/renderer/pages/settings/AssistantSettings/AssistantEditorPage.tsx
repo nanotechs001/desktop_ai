@@ -3,21 +3,25 @@ import { Button, Tooltip } from '@arco-design/web-react';
 import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { ArrowLeft } from '@icon-park/react';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import BotColorDot from '@/renderer/components/agent/BotColorDot';
 import AssistantEditorSections from './AssistantEditorSections';
+import { useAssistantEditorViewModel } from './editor/useAssistantEditorViewModel';
+import SkillConfirmModals from './SkillConfirmModals';
 
 type AssistantEditorPageProps = {
   editor: AssistantEditorViewModel;
   activeAssistant: AssistantListItem | null;
   onBack: () => void;
+  /** Where deleting cannot work (a robot window: it would navigate away from the robot), Delete is not offered. */
+  hideDelete?: boolean;
 };
 
-const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activeAssistant, onBack }) => {
+const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activeAssistant, onBack, hideDelete }) => {
   const { t } = useTranslation();
   const { isCreating, actions, profile } = editor;
-  const canDelete = !isCreating && activeAssistant?.source === 'user';
+  const canDelete = !hideDelete && !isCreating && activeAssistant?.source === 'user';
   const canSave = isCreating || Boolean(activeAssistant);
   const [defaultAgentId] = useConfig('agent.builtinDefaultId');
   const isDefaultAgent = Boolean(activeAssistant) && isUndeletableAgent(activeAssistant?.id ?? '', defaultAgentId);
@@ -91,6 +95,56 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activ
         </div>
       </div>
     </div>
+  );
+};
+
+type EmbeddedAssistantEditorProps = {
+  assistantId: string;
+  /** Cancel, back, or a save that closes the editor. */
+  onBack: () => void;
+};
+
+/** One assistant's editor, opened on its own outside the settings page (a robot's expanded window). */
+export const EmbeddedAssistantEditor: React.FC<EmbeddedAssistantEditorProps> = ({ assistantId, onBack }) => {
+  const { assistants, activeAssistant, message, messageContext, editor, editorViewModel } =
+    useAssistantEditorViewModel();
+  const openedRef = useRef(false);
+  const wasVisibleRef = useRef(false);
+
+  useEffect(() => {
+    if (openedRef.current) return;
+    const target = assistants.find((assistant) => assistant.id === assistantId);
+    if (!target) return;
+    openedRef.current = true;
+    void editor.handleEdit(target);
+  }, [assistants, assistantId, editor]);
+
+  // A successful save closes the editor; here that means going back.
+  useEffect(() => {
+    if (wasVisibleRef.current && !editor.editVisible) onBack();
+    wasVisibleRef.current = editor.editVisible;
+  }, [editor.editVisible, onBack]);
+
+  return (
+    <>
+      {messageContext}
+      {editor.editVisible && (
+        <AssistantEditorPage editor={editorViewModel} activeAssistant={activeAssistant} onBack={onBack} hideDelete />
+      )}
+      <SkillConfirmModals
+        deletePendingSkillName={editor.deletePendingSkillName}
+        setDeletePendingSkillName={editor.setDeletePendingSkillName}
+        pendingSkills={editor.pendingSkills}
+        setPendingSkills={editor.setPendingSkills}
+        deleteCustomSkillName={editor.deleteCustomSkillName}
+        setDeleteCustomSkillName={editor.setDeleteCustomSkillName}
+        customSkills={editor.customSkills}
+        setCustomSkills={editor.setCustomSkills}
+        selectedSkills={editor.selectedSkills}
+        setSelectedSkills={editor.setSelectedSkills}
+        message={message}
+      />
+    </>
   );
 };
 

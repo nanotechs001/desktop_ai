@@ -17,20 +17,13 @@
  * overrides. The full-page editor still renders builtin skills and prompts as
  * read-only so users can inspect what's bundled.
  */
-import { Message } from '@arco-design/web-react';
-import { fallbackBotColor } from '@/common/types/agent/botColors';
-import { isVaBotAgent } from '@/common/types/agent/defaultAgent';
-import { useConfig } from '@/renderer/hooks/config/useConfig';
-import { useAssistantEditor, useAssistantList } from '@/renderer/hooks/assistant';
-import { useDefaultEngine } from '@/renderer/hooks/agent/useDefaultEngine';
-import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
-import { buildAssistantEditorBackends, resolveAvatarImageSrc } from './assistantUtils';
 import AssistantEditorPage from './AssistantEditorPage';
+import { useAssistantEditorViewModel } from './editor/useAssistantEditorViewModel';
 import AssistantHomeTabs from './home/AssistantHomeTabs';
 import DeleteAssistantModal from './DeleteAssistantModal';
 import SkillConfirmModals from './SkillConfirmModals';
-import type { AssistantEditorViewModel, AssistantListItem } from './types';
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { AssistantListItem } from './types';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -41,7 +34,6 @@ type AssistantNavigationState = {
 const OPEN_ASSISTANT_EDITOR_INTENT_KEY = 'guid.openAssistantEditorIntent';
 
 const AssistantSettings: React.FC = () => {
-  const [message, messageContext] = Message.useMessage({ maxCount: 10 });
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,147 +51,21 @@ const AssistantSettings: React.FC = () => {
     [navigate]
   );
 
-  // Compose hooks
   const {
+    message,
+    messageContext,
     assistants,
     activeAssistantId,
     setActiveAssistantId,
     activeAssistant,
-    loadAssistants,
     reorderEnabledAssistants,
     assistantOrder,
-    setAssistantOrder,
     localeKey,
-  } = useAssistantList();
-  const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
-  const [defaultAgentId] = useConfig('agent.builtinDefaultId');
-  const defaultEngine = useDefaultEngine();
-  const builtinAvatarOptions = useMemo(
-    () =>
-      assistants
-        .filter((assistant) => assistant.source === 'builtin' && assistant.avatar?.startsWith('/api/assistants/'))
-        .map((assistant) => {
-          const src = resolveAvatarImageSrc(assistant.avatar);
-          if (!src) {
-            return null;
-          }
-
-          return {
-            id: assistant.id,
-            label: assistant.name_i18n?.[localeKey] || assistant.name,
-            src,
-          };
-        })
-        .filter((option): option is NonNullable<typeof option> => option !== null),
-    [assistants, localeKey]
-  );
-  const editor = useAssistantEditor({
-    localeKey,
-    activeAssistant,
-    setActiveAssistantId,
-    loadAssistants,
-    assistants,
-    assistantOrder,
-    setAssistantOrder,
-    message,
-    defaultEngineId: defaultEngine.agentId,
-  });
-  const availableBackends = useMemo(
-    () => buildAssistantEditorBackends(managedAgentRuntimeCatalog, localeKey, editor.editAgent),
-    [editor.editAgent, localeKey, managedAgentRuntimeCatalog]
-  );
-
-  // Only a VA Bot has a color: one being created, or a user-made Agent (not built-in, default or CLI entry).
-  const editColor =
-    editor.isCreating || (activeAssistant?.source === 'user' && isVaBotAgent(activeAssistant, defaultAgentId))
-      ? editor.editColor || (activeAssistant ? fallbackBotColor(activeAssistant.id) : undefined)
-      : undefined;
-  const editAvatarImage = editor.editAvatarPreview || resolveAvatarImageSrc(editor.editAvatar);
+    editor,
+    editorViewModel,
+  } = useAssistantEditorViewModel();
   const hasConsumedNavigationIntentRef = useRef(false);
   const showEditor = editor.editVisible && (editor.isCreating || activeAssistantId !== null);
-  const editorViewModel: AssistantEditorViewModel = {
-    isCreating: editor.isCreating,
-    profile: {
-      name: editor.editName,
-      setName: editor.setEditName,
-      description: editor.editDescription,
-      setDescription: editor.setEditDescription,
-      avatar: editor.editAvatar,
-      setAvatar: editor.setEditAvatar,
-      setAvatarPreview: editor.setEditAvatarPreview,
-      avatarImage: editAvatarImage,
-      builtinAvatarOptions,
-      color: editColor,
-      setColor: editor.setEditColor,
-    },
-    agent: {
-      value: editor.editAgent,
-      setValue: editor.chooseEngine,
-      availableBackends,
-      usesDefault: editor.editUsesDefault,
-      followDefault: editor.followDefaultEngine,
-      defaultEngineName: defaultEngine.agent
-        ? defaultEngine.agent.name_i18n?.[localeKey] || defaultEngine.agent.name
-        : undefined,
-    },
-    prompts: {
-      text: editor.editRecommendedPromptsText,
-      setText: editor.setEditRecommendedPromptsText,
-    },
-    defaults: {
-      model: {
-        mode: editor.defaultModelMode,
-        setMode: editor.setDefaultModelMode,
-        value: editor.defaultModelValue,
-        setValue: editor.setDefaultModelValue,
-      },
-      permission: {
-        mode: editor.defaultPermissionMode,
-        setMode: editor.setDefaultPermissionMode,
-        value: editor.defaultPermissionValue,
-        setValue: editor.setDefaultPermissionValue,
-      },
-      thoughtLevel: {
-        mode: editor.defaultThoughtLevelMode,
-        setMode: editor.setDefaultThoughtLevelMode,
-        value: editor.defaultThoughtLevelValue,
-        setValue: editor.setDefaultThoughtLevelValue,
-      },
-      skills: {
-        mode: editor.defaultSkillsMode,
-        setMode: editor.setDefaultSkillsMode,
-      },
-      mcps: {
-        mode: editor.defaultMcpMode,
-        setMode: editor.setDefaultMcpMode,
-        availableServers: editor.availableMcpServers,
-        selectedIds: editor.selectedMcpIds,
-        setSelectedIds: editor.setSelectedMcpIds,
-      },
-    },
-    rules: {
-      content: editor.editContext,
-      setContent: editor.setEditContext,
-      viewMode: editor.promptViewMode,
-      setViewMode: editor.setPromptViewMode,
-    },
-    skills: {
-      availableSkills: editor.availableSkills,
-      selectedSkills: editor.selectedSkills,
-      setSelectedSkills: editor.setSelectedSkills,
-      pendingSkills: editor.pendingSkills,
-      setDeletePendingSkillName: editor.setDeletePendingSkillName,
-      setDeleteCustomSkillName: editor.setDeleteCustomSkillName,
-      builtinAutoSkills: editor.builtinAutoSkills,
-      disabledBuiltinSkills: editor.disabledBuiltinSkills,
-      setDisabledBuiltinSkills: editor.setDisabledBuiltinSkills,
-    },
-    actions: {
-      save: editor.handleSave,
-      requestDelete: editor.handleDeleteClick,
-      duplicate: (assistant) => void editor.handleDuplicate(assistant),
-    },
-  };
 
   useEffect(() => {
     if (hasConsumedNavigationIntentRef.current) return;
