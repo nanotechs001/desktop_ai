@@ -14,6 +14,10 @@ vi.mock('@/renderer/pages/conversation/explorer/ExplorerContainer', () => ({
 
 import { ProjectPanelMobileOverlay } from '@/renderer/components/layout/ProjectPanelMobileOverlay';
 
+const overlay = (collapsed: boolean) => (
+  <ProjectPanelMobileOverlay projectId='p1' collapsed={collapsed} onCollapse={() => {}} widthPx={360} />
+);
+
 const panel = () => document.querySelector('[data-explorer-mobile-overlay]') as HTMLElement;
 
 afterEach(() => cleanup());
@@ -64,16 +68,13 @@ describe('ProjectPanelMobileOverlay (P3 mobile)', () => {
       'matchMedia',
       vi.fn((query: string) => ({ matches: false, media: query }))
     );
-    const ui = (collapsed: boolean) => (
-      <ProjectPanelMobileOverlay projectId='p1' collapsed={collapsed} onCollapse={() => {}} widthPx={360} />
-    );
-    const { rerender } = render(ui(false));
+    const { rerender } = render(overlay(false));
     // Not on the first frames: a drawer that closes itself on entering the phone layout must not slide on load.
     expect(panel()).not.toHaveClass('motion-sheet');
     act(() => vi.advanceTimersByTime(100));
     expect(panel()).toHaveClass('motion-sheet');
 
-    rerender(ui(true));
+    rerender(overlay(true));
     const backdrop = document.querySelector('.fixed.inset-0') as HTMLElement;
     expect(backdrop.style.opacity).toBe('0');
     expect(backdrop.style.pointerEvents).toBe('none');
