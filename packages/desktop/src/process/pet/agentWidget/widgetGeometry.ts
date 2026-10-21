@@ -166,6 +166,71 @@ export function cascadeBounds(bounds: Rect, steps: number, workArea: Rect): Rect
   };
 }
 
+/** The smallest chat panel (below the band) a resize leaves. */
+export const EXPANDED_MIN_PANEL = { width: 640, height: 440 };
+// The title bar under the band stays on screen, so a moved window can always be grabbed again.
+const HEADER_REACH_PX = 56;
+// At least this much of a moved window's width stays on screen.
+const MIN_VISIBLE_WIDTH_PX = 160;
+
+/** The expanded window at `rect`, kept where its band and title bar are in `workArea` and part of it shows sideways. */
+export function keepWindowReachable(rect: Rect, workArea: Rect, band: number): Rect {
+  return {
+    ...rect,
+    x: clamp(
+      rect.x,
+      workArea.x + MIN_VISIBLE_WIDTH_PX - rect.width,
+      workArea.x + workArea.width - MIN_VISIBLE_WIDTH_PX
+    ),
+    y: clamp(rect.y, workArea.y, workArea.y + workArea.height - band - HEADER_REACH_PX),
+  };
+}
+
+/** The point on the expanded window's title bar that says which display the window is on. */
+export const windowHeaderPoint = (rect: Rect, band: number): { x: number; y: number } => ({
+  x: Math.round(rect.x + rect.width / 2),
+  y: Math.round(rect.y + band + HEADER_REACH_PX / 2),
+});
+
+/**
+ * The expanded window resized from `origin` by dragging `edge` (a side or a corner) by (dx, dy): the opposite sides
+ * stay, the panel keeps at least its minimum size, and the moved sides stay inside the work area.
+ */
+export function resizeWindow(
+  origin: Rect,
+  edge: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw',
+  delta: { dx: number; dy: number },
+  workArea: Rect,
+  band: number
+): Rect {
+  const minWidth = EXPANDED_MIN_PANEL.width;
+  const minHeight = band + EXPANDED_MIN_PANEL.height;
+  const right = origin.x + origin.width;
+  const bottom = origin.y + origin.height;
+  const left = edge.includes('w') ? clamp(origin.x + delta.dx, workArea.x, right - minWidth) : origin.x;
+  const top = edge.includes('n') ? clamp(origin.y + delta.dy, workArea.y, bottom - minHeight) : origin.y;
+  const newRight = edge.includes('e') ? clamp(right + delta.dx, left + minWidth, workArea.x + workArea.width) : right;
+  const newBottom = edge.includes('s')
+    ? clamp(bottom + delta.dy, top + minHeight, workArea.y + workArea.height)
+    : bottom;
+  return { x: left, y: top, width: newRight - left, height: newBottom - top };
+}
+
+/** Remembered expanded bounds still fit when a display's work area holds their centre and their whole size. */
+export function fitsSomeWorkArea(rect: Rect, workAreas: Rect[]): boolean {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  return workAreas.some(
+    (w) =>
+      cx >= w.x &&
+      cx < w.x + w.width &&
+      cy >= w.y &&
+      cy < w.y + w.height &&
+      rect.width <= w.width &&
+      rect.height <= w.height
+  );
+}
+
 /**
  * Nearest x to `desired` that keeps one robot-width-plus-gap away from every
  * other robot on the same track. When the track is full, robots group
@@ -235,5 +300,10 @@ export function landingY(fromY: number, toY: number, elapsedMs: number, impactMs
 export function easeOutRect(from: Rect, to: Rect, t: number): Rect {
   const k = 1 - (1 - clamp(t, 0, 1)) ** 3;
   const at = (a: number, b: number) => Math.round(a + (b - a) * k);
-  return { x: at(from.x, to.x), y: at(from.y, to.y), width: at(from.width, to.width), height: at(from.height, to.height) };
+  return {
+    x: at(from.x, to.x),
+    y: at(from.y, to.y),
+    width: at(from.width, to.width),
+    height: at(from.height, to.height),
+  };
 }

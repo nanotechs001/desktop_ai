@@ -56,6 +56,14 @@ export type AgentWidgetSettings = {
 /** How a robot's open popup is shown: the small popup above the robot, or a large desktop chat window. */
 export type AgentWidgetWindowMode = 'compact' | 'expanded';
 
+/** A gesture on the expanded window: moving it by its title bar, or resizing it by an edge or corner. */
+export const AGENT_WIDGET_WINDOW_GESTURES = ['move', 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
+export type AgentWidgetWindowGesture = (typeof AGENT_WIDGET_WINDOW_GESTURES)[number];
+export type AgentWidgetGesturePhase = 'start' | 'move' | 'end';
+
+/** Screen bounds (DIP). */
+export type AgentWidgetBounds = { x: number; y: number; width: number; height: number };
+
 /** Persisted per-widget record. One record per conversation, never more. */
 export type AgentWidgetRecord = {
   widget_id: string;
@@ -73,6 +81,8 @@ export type AgentWidgetRecord = {
   modified_at?: number;
   /** The robot's chosen popup mode (missing = 'compact'); kept until the user changes it. */
   window_mode?: AgentWidgetWindowMode;
+  /** Where the user last moved or resized the expanded window; reused while it still fits on a display. */
+  expanded_bounds?: AgentWidgetBounds;
 };
 
 /** A robot the user hid ("Hide widget"); the titlebar lists these so they can be shown again. */

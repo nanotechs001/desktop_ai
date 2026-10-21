@@ -421,3 +421,72 @@
 .view.hidden {
   display: none;
 }
+
+/* The expanded window's title bar drags the window: no text selection while it does. */
+.popup[data-layout='expanded'] .header {
+  user-select: none;
+}
+
+/* Invisible resize handles on the expanded panel's sides (6 px) and corners (12 px), above its content. */
+.resizeHandle {
+  position: absolute;
+  z-index: 3;
+}
+
+.resizeHandle[data-resize='n'],
+.resizeHandle[data-resize='s'] {
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.resizeHandle[data-resize='e'],
+.resizeHandle[data-resize='w'] {
+  top: 12px;
+  bottom: 12px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.resizeHandle[data-resize='ne'],
+.resizeHandle[data-resize='nw'],
+.resizeHandle[data-resize='se'],
+.resizeHandle[data-resize='sw'] {
+  width: 12px;
+  height: 12px;
+}
+
+.resizeHandle[data-resize='n'],
+.resizeHandle[data-resize='ne'],
+.resizeHandle[data-resize='nw'] {
+  top: 0;
+}
+
+.resizeHandle[data-resize='s'],
+.resizeHandle[data-resize='se'],
+.resizeHandle[data-resize='sw'] {
+  bottom: 0;
+}
+
+.resizeHandle[data-resize='e'],
+.resizeHandle[data-resize='ne'],
+.resizeHandle[data-resize='se'] {
+  right: 0;
+}
+
+.resizeHandle[data-resize='w'],
+.resizeHandle[data-resize='nw'],
+.resizeHandle[data-resize='sw'] {
+  left: 0;
+}
+
+.resizeHandle[data-resize='ne'],
+.resizeHandle[data-resize='sw'] {
+  cursor: nesw-resize;
+}
+
+.resizeHandle[data-resize='nw'],
+.resizeHandle[data-resize='se'] {
+  cursor: nwse-resize;
+}

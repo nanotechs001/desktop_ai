@@ -12,7 +12,7 @@ import path from 'node:path';
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   chatMounts: 0,
@@ -62,6 +62,7 @@ vi.mock('@/renderer/pages/settings/AssistantSettings/AssistantEditorPage', () =>
 }));
 vi.mock('@/renderer/pages/conversation/utils/startNewChatLike', () => ({ startNewChatLike: vi.fn() }));
 
+import { ipcBridge } from '@/common';
 import WidgetChatPopup from '@/renderer/pages/agentWidget/WidgetChatPopup';
 
 const BOT = { id: 'bot-1', name: 'Research Bot' };
@@ -228,6 +229,84 @@ describe('WidgetChatPopup expanded window', () => {
     expect(screen.queryByRole('navigation')).toBeNull();
     expect(screen.queryByRole('list', { name: 'pet.widget.recentConversations' })).toBeNull();
     expect(screen.getByTestId('chat-body')).toBeTruthy();
+  });
+});
+
+describe('moving and resizing the expanded window', () => {
+  let adjust: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    // jsdom has no pointer capture.
+    Object.defineProperty(Element.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() });
+    adjust = vi.spyOn(ipcBridge.agentWidget.adjustWindow, 'invoke').mockResolvedValue(undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+  const press = (el: Element, x: number, y: number) =>
+    fireEvent.pointerDown(el, { button: 0, pointerId: 1, screenX: x, screenY: y });
+  const move = (el: Element, x: number, y: number) =>
+    fireEvent.pointerMove(el, { pointerId: 1, screenX: x, screenY: y });
+  const release = (el: Element, x: number, y: number) =>
+    fireEvent.pointerUp(el, { pointerId: 1, screenX: x, screenY: y });
+  const calls = () => adjust.mock.calls.map(([payload]) => payload);
+
+  it('dragging the title bar sends the screen travel since the press; main moves the window', () => {
+    h.conversations = [CURRENT];
+    renderPopup('expanded');
+    const header = document.querySelector('header')!;
+    press(header, 100, 100);
+    move(header, 101, 100); // under the threshold: still a click
+    expect(adjust).not.toHaveBeenCalled();
+    move(header, 140, 120);
+    move(header, 150, 130);
+    release(header, 150, 130);
+    expect(calls()).toEqual([
+      { conversation_id: 'c1', gesture: 'move', phase: 'start', dx: 40, dy: 20 },
+      { conversation_id: 'c1', gesture: 'move', phase: 'move', dx: 40, dy: 20 },
+      { conversation_id: 'c1', gesture: 'move', phase: 'move', dx: 50, dy: 30 },
+      { conversation_id: 'c1', gesture: 'move', phase: 'end', dx: 50, dy: 30 },
+    ]);
+  });
+
+  it('a cancelled drag ends where the pointer last was', () => {
+    h.conversations = [CURRENT];
+    renderPopup('expanded');
+    const header = document.querySelector('header')!;
+    press(header, 100, 100);
+    move(header, 140, 120);
+    fireEvent.pointerCancel(header, { pointerId: 1 });
+    expect(calls().at(-1)).toEqual({ conversation_id: 'c1', gesture: 'move', phase: 'end', dx: 40, dy: 20 });
+  });
+
+  it('a press on a title-bar button never starts a window drag', () => {
+    h.conversations = [CURRENT];
+    renderPopup('expanded');
+    const button = screen.getByRole('button', { name: 'pet.widget.closePopup' });
+    press(button, 100, 100);
+    move(button, 160, 140);
+    release(button, 160, 140);
+    expect(adjust).not.toHaveBeenCalled();
+  });
+
+  it('each edge and corner has its resize handle, which sends its own gesture', () => {
+    h.conversations = [CURRENT];
+    renderPopup('expanded');
+    const handles = Array.from(document.querySelectorAll('[data-resize]'));
+    expect(handles.map((el) => el.getAttribute('data-resize'))).toEqual(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']);
+    const corner = document.querySelector('[data-resize="se"]')!;
+    press(corner, 500, 500);
+    move(corner, 480, 520);
+    release(corner, 470, 530);
+    expect(calls().at(-1)).toEqual({ conversation_id: 'c1', gesture: 'se', phase: 'end', dx: -30, dy: 30 });
+  });
+
+  it('the compact popup can be neither dragged nor resized', () => {
+    h.conversations = [CURRENT];
+    renderPopup('compact');
+    expect(document.querySelector('[data-resize]')).toBeNull();
+    const header = document.querySelector('header')!;
+    press(header, 100, 100);
+    move(header, 160, 140);
+    release(header, 160, 140);
+    expect(adjust).not.toHaveBeenCalled();
   });
 });
 

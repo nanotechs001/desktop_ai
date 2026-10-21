@@ -20,6 +20,8 @@ import type {
   AgentWidgetDragPhase,
   AgentWidgetLifecycleAnimation,
   AgentWidgetSnapshot,
+  AgentWidgetGesturePhase,
+  AgentWidgetWindowGesture,
   AgentWidgetWindowMode,
 } from '@/common/types/agent/agentWidget';
 import { DROP_IMPACT_MS, isHttpUrl, robotAnimationMs } from '@/common/types/agent/agentWidget';
@@ -33,7 +35,11 @@ import {
   easeOutRect,
   expandedBandHeight,
   expandedWindowBounds,
+  fitsSomeWorkArea,
   HOP_HEADROOM_PX,
+  keepWindowReachable,
+  resizeWindow,
+  windowHeaderPoint,
   landingY,
   getWalkTrack,
   followTarget,
@@ -86,6 +92,8 @@ const LAND_TICK_MS = 16;
 // Switching between the compact popup and the expanded window eases the window bounds this long, at ~60 fps.
 const WINDOW_TRANSITION_MS = 220;
 const WINDOW_TRANSITION_TICK_MS = 16;
+// A moved or resized expanded window's bounds are written to disk this long after the gesture ends.
+const BOUNDS_SAVE_DELAY_MS = 500;
 const WANDER_DELAY_MS: Record<AgentWidgetSettings['movementFrequency'], [number, number]> = {
   low: [6_000, 15_000],
   medium: [3_000, 8_000],
@@ -115,6 +123,8 @@ type WidgetEntry = {
   bandX: number | null;
   /** The expanded window's bounds, fixed when it opens (null: not showing). */
   bandBounds: Rect | null;
+  /** The expanded window being moved or resized: the gesture, the bounds and band x it started from, its work area. */
+  windowGesture: { gesture: AgentWidgetWindowGesture; origin: Rect; bandX: number; workArea: Rect } | null;
   /** The window easing between the compact popup and the expanded window; `to` follows every re-place meanwhile. */
   windowTransition: { from: Rect; to: Rect; startedAt: number; timer: ReturnType<typeof setInterval> } | null;
   dragging: boolean;
@@ -156,6 +166,7 @@ export class AgentWidgetManager {
   /** Send-box drafts in flight between the main window and a widget. */
   private readonly drafts = new Map<string, string>();
   private wanderTimer: ReturnType<typeof setInterval> | null = null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
   /** Conversations whose chat the user is watching in the main window: their robots step away meanwhile. */
   private readonly suspended = new Set<string>();
   private readonly relayoutAll = () => {
@@ -165,6 +176,8 @@ export class AgentWidgetManager {
       const display = this.displayById(entry.displayId) ?? this.defaultDisplay();
       entry.displayId = display.id;
       entry.botX = xFromRatio(this.track(display), entry.record.x_ratio);
+      // An expanded window left on a display that went away comes back within reach.
+      if (entry.bandBounds) entry.bandBounds = this.reachableBandBounds(entry.bandBounds);
       this.place(entry);
     }
   };
@@ -190,6 +203,11 @@ export class AgentWidgetManager {
     screen.removeListener('display-metrics-changed', this.relayoutAll);
     if (this.wanderTimer) clearInterval(this.wanderTimer);
     this.wanderTimer = null;
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      void this.persist();
+    }
     this.closeAllWindows();
   }
 
@@ -364,6 +382,84 @@ export class AgentWidgetManager {
       this.place(entry);
     }
     void this.persist();
+  }
+
+  /**
+   * The expanded window is moved by its title bar or resized by an edge or corner; (dx, dy) is the pointer's screen
+   * travel since it went down. A move keeps the title bar reachable (it may cross monitors) and the robot rides along
+   * in its band, carried; a resize keeps the panel's minimum size and the work area, and the robot its distance from
+   * the right edge. Walking pauses meanwhile; the bounds are remembered once the gesture ends.
+   */
+  adjustWindow(
+    conversationId: string,
+    gesture: AgentWidgetWindowGesture,
+    phase: AgentWidgetGesturePhase,
+    dx: number,
+    dy: number
+  ): void {
+    const entry = this.entries.get(conversationId);
+    if (!entry || entry.win.isDestroyed() || !this.inBand(entry) || !entry.bandBounds) return;
+    if (phase === 'start') {
+      this.startWindowGesture(entry, gesture, entry.bandBounds);
+      return;
+    }
+    const active = entry.windowGesture;
+    if (!active || active.gesture !== gesture) return;
+    if (active.gesture === 'move') {
+      entry.bandBounds = this.reachableBandBounds({
+        ...active.origin,
+        x: active.origin.x + dx,
+        y: active.origin.y + dy,
+      });
+    } else {
+      entry.bandBounds = resizeWindow(active.origin, active.gesture, { dx, dy }, active.workArea, this.bandHeight());
+      entry.bandX = active.bandX + entry.bandBounds.width - active.origin.width;
+    }
+    this.place(entry);
+    if (phase === 'end') this.endWindowGesture(entry);
+    else this.armGestureWatchdog(entry);
+  }
+
+  private startWindowGesture(entry: WidgetEntry, gesture: AgentWidgetWindowGesture, bounds: Rect): void {
+    this.stopGlide(entry);
+    // A gesture during the ease into the expanded window starts from where it was going.
+    this.stopWindowTransition(entry);
+    const workArea = screen.getDisplayNearestPoint(windowHeaderPoint(bounds, this.bandHeight())).workArea;
+    entry.windowGesture = { gesture, origin: { ...bounds }, bandX: entry.bandX ?? 0, workArea };
+    // Carried along with the window: the robot plays its drag pose and stands still in its band.
+    if (gesture === 'move') entry.dragPhase = 'dragging';
+    this.place(entry);
+    this.armGestureWatchdog(entry);
+  }
+
+  private endWindowGesture(entry: WidgetEntry): void {
+    if (entry.dragWatchdog) clearTimeout(entry.dragWatchdog);
+    entry.dragWatchdog = null;
+    entry.windowGesture = null;
+    entry.dragPhase = 'none';
+    entry.nextWanderAt = Date.now() + this.wanderDelay();
+    if (entry.bandBounds) entry.record.expanded_bounds = { ...entry.bandBounds };
+    this.place(entry);
+    this.persistSoon();
+  }
+
+  /** Like a robot drag, a window gesture whose release never arrives ends after a quiet spell. */
+  private armGestureWatchdog(entry: WidgetEntry): void {
+    if (entry.dragWatchdog) clearTimeout(entry.dragWatchdog);
+    entry.dragWatchdog = setTimeout(() => {
+      entry.dragWatchdog = null;
+      if (entry.windowGesture) this.endWindowGesture(entry);
+    }, DRAG_WATCHDOG_MS);
+  }
+
+  /** The expanded window at `rect`, moved where its title bar is reachable on the display under it. */
+  private reachableBandBounds(rect: Rect): Rect {
+    const band = this.bandHeight();
+    return keepWindowReachable(rect, screen.getDisplayNearestPoint(windowHeaderPoint(rect, band)).workArea, band);
+  }
+
+  private bandHeight(): number {
+    return expandedBandHeight(this.botSize());
   }
 
   setChatLocation(conversationId: string, location: AgentChatLocation): void {
@@ -715,6 +811,7 @@ export class AgentWidgetManager {
       bandX: null,
       bandBounds: null,
       windowTransition: null,
+      windowGesture: null,
       dragging: false,
       grab: { x: 0, y: 0 },
       airY: null,
@@ -898,6 +995,11 @@ export class AgentWidgetManager {
     } else {
       entry.bandX = null;
       entry.bandBounds = null;
+      if (entry.windowGesture) {
+        // The window closed mid-gesture: the robot no longer rides along.
+        entry.windowGesture = null;
+        if (entry.dragPhase === 'dragging' && !entry.dragging) entry.dragPhase = 'none';
+      }
       entry.botX = placement.bounds.x + placement.botOffsetX;
     }
     if (entry.windowTransition) entry.windowTransition.to = placement.bounds;
@@ -998,7 +1100,7 @@ export class AgentWidgetManager {
       hop_headroom: this.inBand(entry) ? HOP_HEADROOM_PX : entry.record.expanded ? 0 : this.headroom(entry),
       drag_phase: entry.dragPhase,
       window_mode: entry.record.window_mode ?? 'compact',
-      top_band: this.inBand(entry) ? expandedBandHeight(this.botSize()) : 0,
+      top_band: this.inBand(entry) ? this.bandHeight() : 0,
       window_transitioning: entry.windowTransition !== null,
     };
   }
@@ -1015,8 +1117,21 @@ export class AgentWidgetManager {
     return { ...placement, bounds: { ...placement.bounds, y: entry.airY - headroom } };
   }
 
-  /** Where an expanded window opens: centred, cascaded past the other robots' expanded windows on its display. */
+  /**
+   * Where an expanded window opens: where the user last left it, while that still fits on a display; otherwise
+   * centred, cascaded past the other robots' expanded windows on its display.
+   */
   private openingBandBounds(entry: WidgetEntry): Rect {
+    const remembered = entry.record.expanded_bounds;
+    if (
+      remembered &&
+      fitsSomeWorkArea(
+        remembered,
+        screen.getAllDisplays().map((d) => d.workArea)
+      )
+    ) {
+      return { ...remembered };
+    }
     const workArea = this.currentTrack(entry).workArea;
     let others = 0;
     for (const other of this.entries.values()) {
@@ -1115,6 +1230,7 @@ export class AgentWidgetManager {
       entry.dragPhase === 'none' &&
       entry.state === 'idle' &&
       (band || !entry.record.expanded) &&
+      !entry.windowGesture &&
       !entry.dragging &&
       !entry.transitioning &&
       !entry.win.isDestroyed() &&
@@ -1262,6 +1378,15 @@ export class AgentWidgetManager {
       return screen.getDisplayNearestPoint({ x: b.x + Math.floor(b.width / 2), y: b.y + Math.floor(b.height / 2) });
     }
     return screen.getPrimaryDisplay();
+  }
+
+  /** Persist shortly, once: for state that settles after a gesture rather than changing on every frame. */
+  private persistSoon(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      void this.persist();
+    }, BOUNDS_SAVE_DELAY_MS);
   }
 
   private persist(): Promise<unknown> {

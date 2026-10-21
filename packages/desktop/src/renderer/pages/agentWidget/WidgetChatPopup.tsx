@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { Alert, Button, Spin, Tooltip } from '@arco-design/web-react';
 import {
@@ -22,7 +22,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
-import type { AgentAnimationState, AgentWidgetLayout, AgentWidgetWindowMode } from '@/common/types/agent/agentWidget';
+import type {
+  AgentAnimationState,
+  AgentWidgetGesturePhase,
+  AgentWidgetLayout,
+  AgentWidgetWindowGesture,
+  AgentWidgetWindowMode,
+} from '@/common/types/agent/agentWidget';
 import ConversationChatBody from '@/renderer/pages/conversation/components/ConversationChatBody';
 import { HistoryPanelBody } from '@/renderer/components/layout/Titlebar/HistoryPanel';
 import { ConversationHistoryProvider } from '@/renderer/hooks/context/ConversationHistoryContext';
@@ -56,6 +62,59 @@ type WidgetChatPopupProps = {
 const MAX_SITE_LENGTH = 80;
 // The expanded window's sidebar lists at most this many of the bot's chats (Recent has the full, searchable list).
 const RECENT_LIMIT = 30;
+
+// Pointer travel (CSS px) before a press on the title bar or an edge moves or resizes the window instead of clicking.
+const GESTURE_THRESHOLD_PX = 3;
+// The expanded window's resize handles: thin invisible strips on the panel's sides, and its corners.
+const RESIZE_EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
+
+/**
+ * Pointer handlers that move (title bar) or resize (an edge) the expanded window. They send the pointer's screen
+ * travel since the press, so a lost message never drifts the window; main applies it. Presses on buttons stay clicks.
+ */
+const useWindowGesture = (conversationId: string) => {
+  type Press = { gesture: AgentWidgetWindowGesture; x: number; y: number; started: boolean; last: Point };
+  type Point = { screenX: number; screenY: number };
+  const pressRef = useRef<Press | null>(null);
+  const send = (press: Press, phase: AgentWidgetGesturePhase, at: Point): void => {
+    press.last = { screenX: at.screenX, screenY: at.screenY };
+    ipcBridge.agentWidget.adjustWindow
+      .invoke({
+        conversation_id: conversationId,
+        gesture: press.gesture,
+        phase,
+        dx: at.screenX - press.x,
+        dy: at.screenY - press.y,
+      })
+      .catch((error: unknown) => console.warn('[WidgetChatPopup] could not move or resize the window:', error));
+  };
+  // A cancelled pointer may report no position: the gesture then ends where it last was.
+  const finish = (at: Point | null) => {
+    const press = pressRef.current;
+    pressRef.current = null;
+    if (press?.started) send(press, 'end', at ?? press.last);
+  };
+  return (gesture: AgentWidgetWindowGesture) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button !== 0 || (e.target as Element).closest('button')) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const at = { screenX: e.screenX, screenY: e.screenY };
+      pressRef.current = { gesture, x: e.screenX, y: e.screenY, started: false, last: at };
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const press = pressRef.current;
+      if (!press) return;
+      if (!press.started) {
+        if (Math.hypot(e.screenX - press.x, e.screenY - press.y) < GESTURE_THRESHOLD_PX) return;
+        press.started = true;
+        send(press, 'start', e);
+      }
+      send(press, 'move', e);
+    },
+    onPointerUp: (e: React.PointerEvent) => finish(e),
+    onPointerCancel: () => finish(null),
+  });
+};
 
 /** What the expanded window's main area shows. */
 type ExpandedView = 'chat' | 'recent' | 'settings';
@@ -176,6 +235,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
   const startNewChat = useStartNewChat(props.conversation, props.onShowConversation);
   const conversationId = props.conversation?.id;
   const [agentSite, dismissAgentSite] = useAgentTabNotice(conversationId);
+  const windowGesture = useWindowGesture(layout.conversation_id);
   const setWindowMode = (mode: AgentWidgetWindowMode) => {
     ipcBridge.agentWidget.setWindowMode
       .invoke({ conversation_id: layout.conversation_id, mode })
@@ -219,7 +279,8 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
         props.onMinimize();
       }}
     >
-      <header className={styles.header}>
+      {/* In the expanded window the title bar moves the whole window (its buttons stay buttons). */}
+      <header className={styles.header} {...(expandedWindow ? windowGesture('move') : {})}>
         <div className={styles.title}>
           <div className={styles.name}>{botName}</div>
           <div className={styles.status} aria-live='polite'>
@@ -336,6 +397,10 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
         </div>
       )}
       <span className={styles.pointer} style={{ left: layout.bot_offset_x + layout.bot_size / 2 - 7 }} aria-hidden />
+      {expandedWindow &&
+        RESIZE_EDGES.map((edge) => (
+          <span key={edge} className={styles.resizeHandle} data-resize={edge} aria-hidden {...windowGesture(edge)} />
+        ))}
     </section>
   );
 };

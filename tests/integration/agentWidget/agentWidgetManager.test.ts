@@ -127,6 +127,7 @@ vi.mock('@/common', () => {
     'getSnapshot',
     'setExpanded',
     'setWindowMode',
+    'adjustWindow',
     'setChatLocation',
     'getChatLocations',
     'handoffDraft',
@@ -1427,6 +1428,8 @@ describe('AgentWidgetManager watchInMain', () => {
   });
 });
 
+const between = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
+
 describe('expanded window mode', () => {
   // 1920x1040 work area, 88 px robot: band 78 (0.75 of the robot plus the hop headroom), panel 960x640, window
   // 960x718 centred.
@@ -1537,7 +1540,6 @@ describe('expanded window mode', () => {
       manager.setExpanded(A, true);
       return { manager, win, compact: { ...win.bounds } };
     }
-    const between = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
     const transitioning = () => (layoutOf(A) as { window_transitioning?: boolean } | undefined)?.window_transitioning;
 
     it('eases the window to the expanded bounds over about 220 ms and ends exactly on them', async () => {
@@ -1768,6 +1770,190 @@ describe('expanded window mode', () => {
     manager.setExpanded(B, true);
     expect(winA.bounds).toEqual(EXPANDED);
     expect(winB.bounds).toEqual({ ...EXPANDED, x: EXPANDED.x + 28, y: EXPANDED.y + 28 });
+  });
+
+  describe('moving and resizing the expanded window', () => {
+    // The band (78) plus the title bar (56) stay on screen; at least 160 px of the window stay in view sideways.
+    const REACH = BAND + 56;
+    async function openExpanded() {
+      const made = await makeManager();
+      made.manager.ensure(A);
+      const win = liveWindows()[0];
+      appear(made.manager, A);
+      made.manager.setWindowMode(A, 'expanded');
+      made.manager.setExpanded(A, true);
+      return { ...made, win };
+    }
+    const gesture =
+      (manager: AgentWidgetManager, kind: string) =>
+      (phase: 'start' | 'move' | 'end', dx = 0, dy = 0) =>
+        manager.adjustWindow(A, kind as never, phase, dx, dy);
+
+    it('dragging the title bar moves the whole window, keeping the title bar reachable', async () => {
+      const { manager, win } = await openExpanded();
+      const move = gesture(manager, 'move');
+      move('start');
+      move('move', 100, 50);
+      expect(win.bounds).toEqual({ ...EXPANDED, x: EXPANDED.x + 100, y: EXPANDED.y + 50 });
+      move('move', -5_000, -5_000);
+      expect(win.bounds).toEqual({ ...EXPANDED, x: 160 - EXPANDED.width, y: 0 });
+      move('move', 5_000, 5_000);
+      expect(win.bounds).toEqual({ ...EXPANDED, x: 1920 - 160, y: 1040 - REACH });
+      move('end', 5_000, 5_000);
+      expect(win.bounds).toEqual({ ...EXPANDED, x: 1920 - 160, y: 1040 - REACH });
+    });
+
+    it('may cross onto another monitor', async () => {
+      h.displays = [
+        structuredClone(BOTTOM_TASKBAR),
+        {
+          id: 2,
+          bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
+          workArea: { x: 1920, y: 0, width: 1920, height: 1040 },
+        },
+      ];
+      const { manager, win } = await openExpanded();
+      const move = gesture(manager, 'move');
+      move('start');
+      move('move', 1_700, 0);
+      expect(win.bounds.x).toBe(EXPANDED.x + 1_700);
+    });
+
+    it('the robot keeps its band spot and plays its carry animation through a window drag, then walks again', async () => {
+      const { manager } = await expandedWalker();
+      const move = gesture(manager, 'move');
+      move('start');
+      expect(layoutOf(A)).toMatchObject({ drag_phase: 'dragging', moving: false, bot_offset_x: START_OFFSET });
+      for (let i = 0; i < 20; i++) {
+        move('move', i * 5, i * 3);
+        vi.advanceTimersByTime(1_000);
+      }
+      expect(offsetsOf(A).every((x) => x === START_OFFSET)).toBe(true);
+      expect(layoutOf(A)).toMatchObject({ drag_phase: 'dragging', moving: false });
+      move('end', 100, 60);
+      expect(layoutOf(A)).toMatchObject({ drag_phase: 'none', bot_offset_x: START_OFFSET });
+      vi.advanceTimersByTime(3_000 + 600);
+      expect(layoutOf(A)?.moving).toBe(true);
+    });
+
+    it('a drag whose release never arrives ends by itself', async () => {
+      const { manager } = await openExpanded();
+      const move = gesture(manager, 'move');
+      move('start');
+      move('move', 10, 10);
+      vi.advanceTimersByTime(8_000 + 100);
+      expect(layoutOf(A)?.drag_phase).toBe('none');
+    });
+
+    it('resizing keeps the panel at least 640x440 and the window inside the work area; the robot keeps its place from the right', async () => {
+      const { manager, win } = await openExpanded();
+      const fromRight = EXPANDED.width - START_OFFSET;
+      const west = gesture(manager, 'w');
+      west('start');
+      west('move', -10_000, 0);
+      expect(win.bounds).toEqual({ ...EXPANDED, x: 0, width: EXPANDED.x + EXPANDED.width });
+      expect(layoutOf(A)?.bot_offset_x).toBe(EXPANDED.x + EXPANDED.width - fromRight);
+      west('end', -10_000, 0);
+
+      const east = gesture(manager, 'e');
+      east('start');
+      east('end', 10_000, 0);
+      expect(win.bounds).toMatchObject({ x: 0, width: 1920 });
+
+      const corner = gesture(manager, 'se');
+      corner('start');
+      corner('move', -10_000, -10_000);
+      expect(win.bounds).toEqual({ x: 0, y: EXPANDED.y, width: 640, height: BAND + 440 });
+      expect(layoutOf(A)?.bot_offset_x).toBe(640 - fromRight);
+      corner('end', -10_000, -10_000);
+
+      const north = gesture(manager, 'n');
+      north('start');
+      north('end', 0, -10_000);
+      expect(win.bounds).toMatchObject({ y: 0, height: EXPANDED.y + BAND + 440 });
+    });
+
+    it('the robot walks within the new width after a resize', async () => {
+      const { manager } = await expandedWalker();
+      const corner = gesture(manager, 'sw');
+      corner('start');
+      corner('end', 320, -10_000); // 640 wide
+      vi.advanceTimersByTime(60_000);
+      for (const x of offsetsOf(A)) expect(x).toBeLessThanOrEqual(960 - BOT - 16);
+      expect(layoutOf(A)!.bot_offset_x).toBeLessThanOrEqual(640 - BOT - 16);
+    });
+
+    it('remembers the bounds per robot once a drag ends, saves them shortly after, and reuses them on the next expand', async () => {
+      const { manager, mem, win } = await openExpanded();
+      const move = gesture(manager, 'move');
+      move('start');
+      move('move', 100, 50);
+      vi.advanceTimersByTime(2_000);
+      expect(mem.get().widgets[A].expanded_bounds).toBeUndefined(); // not on every frame
+      move('end', 100, 50);
+      const moved = { ...EXPANDED, x: EXPANDED.x + 100, y: EXPANDED.y + 50 };
+      vi.advanceTimersByTime(1_000);
+      expect(mem.get().widgets[A].expanded_bounds).toEqual(moved);
+
+      manager.setExpanded(A, false);
+      vi.advanceTimersByTime(1_000);
+      manager.setExpanded(A, true);
+      expect(win.bounds).toEqual(moved);
+
+      manager.setWindowMode(A, 'compact');
+      vi.advanceTimersByTime(300);
+      manager.setWindowMode(A, 'expanded');
+      vi.advanceTimersByTime(300);
+      expect(win.bounds).toEqual(moved);
+
+      manager.retarget(A, B);
+      expect(win.bounds).toEqual(moved);
+      expect(mem.get().widgets[B].expanded_bounds).toEqual(moved);
+    });
+
+    it('opens centred again when the remembered bounds no longer fit on any display', async () => {
+      const first = await makeManager();
+      first.manager.ensure(A);
+      first.manager.setWindowMode(A, 'expanded');
+      first.manager.dispose();
+      const saved = first.mem.get();
+      saved.widgets[A].expanded_bounds = { x: 5_000, y: 100, width: 960, height: 718 };
+
+      const second = await makeManager(saved);
+      const win = liveWindows()[0];
+      appear(second.manager, A);
+      second.manager.setExpanded(A, true);
+      expect(win.bounds).toEqual(EXPANDED);
+    });
+
+    it('rejects a malformed adjustWindow at the IPC boundary', async () => {
+      const { manager, win } = await openExpanded();
+      initAgentWidgetBridge(manager);
+      const ok = { conversation_id: A, gesture: 'move', phase: 'start', dx: 0, dy: 0 };
+      await expect(h.providers.adjustWindow({ ...ok, dx: Number.NaN })).rejects.toThrow();
+      await expect(h.providers.adjustWindow({ ...ok, dy: Number.POSITIVE_INFINITY })).rejects.toThrow();
+      await expect(h.providers.adjustWindow({ ...ok, dx: '10' })).rejects.toThrow();
+      await expect(h.providers.adjustWindow({ ...ok, gesture: 'spin' })).rejects.toThrow();
+      await expect(h.providers.adjustWindow({ ...ok, phase: 'later' })).rejects.toThrow();
+      await expect(h.providers.adjustWindow({ ...ok, extra: 1 })).rejects.toThrow();
+      await expect(h.providers.adjustWindow({ conversation_id: A, gesture: 'move', phase: 'start' })).rejects.toThrow();
+      expect(win.bounds).toEqual(EXPANDED);
+      await expect(h.providers.adjustWindow(ok)).resolves.toBeUndefined();
+      await expect(h.providers.adjustWindow({ ...ok, phase: 'move', dx: 10, dy: 0 })).resolves.toBeUndefined();
+      expect(win.bounds.x).toBe(EXPANDED.x + 10);
+    });
+
+    it('ignores window gestures outside the expanded window', async () => {
+      const { manager } = await makeManager();
+      manager.ensure(A);
+      const win = liveWindows()[0];
+      appear(manager, A);
+      const before = { ...win.bounds };
+      const move = gesture(manager, 'move');
+      move('start');
+      move('move', 100, 100);
+      expect(win.bounds).toEqual(before);
+    });
   });
 
   it('rejects a malformed setWindowMode at the IPC boundary', async () => {

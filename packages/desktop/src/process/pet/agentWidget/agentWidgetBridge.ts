@@ -6,7 +6,12 @@
 
 import { z } from 'zod';
 import { ipcBridge } from '@/common';
-import { AGENT_ANIMATION_STATES, CONVERSATION_ID_PATTERN, isHttpUrl } from '@/common/types/agent/agentWidget';
+import {
+  AGENT_ANIMATION_STATES,
+  AGENT_WIDGET_WINDOW_GESTURES,
+  CONVERSATION_ID_PATTERN,
+  isHttpUrl,
+} from '@/common/types/agent/agentWidget';
 import { isBotColor } from '@/common/types/agent/botColors';
 import type { AgentWidgetManager } from './agentWidgetManager';
 import { settingsPatchSchema } from './agentWidgetStore';
@@ -21,11 +26,21 @@ const conversationId = z.string().regex(CONVERSATION_ID_PATTERN);
 const target = z.object({ conversation_id: conversationId }).strict();
 const agentId = z.string().min(1).max(256);
 const botColors = z.record(agentId, z.string().refine(isBotColor));
+// A pointer delta in DIP: finite, and no larger than any desktop.
+const screenDelta = z.number().finite().min(-100_000).max(100_000);
 const schemas = {
   ensure: target.extend({ force: z.boolean().optional(), agent_id: agentId.optional() }).strict(),
   openPopup: target.extend({ agent_id: agentId.optional() }).strict(),
   setExpanded: target.extend({ expanded: z.boolean() }).strict(),
   setWindowMode: target.extend({ mode: z.enum(['compact', 'expanded']) }).strict(),
+  adjustWindow: target
+    .extend({
+      gesture: z.enum(AGENT_WIDGET_WINDOW_GESTURES),
+      phase: z.enum(['start', 'move', 'end']),
+      dx: screenDelta,
+      dy: screenDelta,
+    })
+    .strict(),
   setChatLocation: target.extend({ location: z.enum(['main', 'widget']) }).strict(),
   handoffDraft: target.extend({ text: z.string().max(100_000) }).strict(),
   reportState: target.extend({ state: z.enum(AGENT_ANIMATION_STATES), transitioning: z.boolean().optional() }).strict(),
@@ -69,6 +84,10 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   w.setWindowMode.provider(async (p) => {
     const { conversation_id, mode } = parse(schemas.setWindowMode, p, 'setWindowMode');
     manager.setWindowMode(conversation_id, mode);
+  });
+  w.adjustWindow.provider(async (p) => {
+    const { conversation_id, gesture, phase, dx, dy } = parse(schemas.adjustWindow, p, 'adjustWindow');
+    manager.adjustWindow(conversation_id, gesture, phase, dx, dy);
   });
   w.setChatLocation.provider(async (p) => {
     const { conversation_id, location } = parse(schemas.setChatLocation, p, 'setChatLocation');

@@ -46,6 +46,15 @@ const recordSchema = z.object({
   agent_id: z.string().min(1).max(256).optional(),
   modified_at: z.number().finite().optional(),
   window_mode: z.enum(['compact', 'expanded']).optional(),
+  expanded_bounds: z
+    .object({
+      x: z.number().finite(),
+      y: z.number().finite(),
+      width: z.number().finite().positive(),
+      height: z.number().finite().positive(),
+    })
+    .strict()
+    .optional(),
 });
 
 export const clampScale = (scale: number): number => Math.min(MAX_WIDGET_SCALE, Math.max(MIN_WIDGET_SCALE, scale));

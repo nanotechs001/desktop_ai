@@ -78,12 +78,14 @@ import type { AttachFolderRequest, ProjectDetailDto, ProjectEntryDto } from '@/c
 import type {
   AgentAnimationState,
   AgentChatLocation,
+  AgentWidgetGesturePhase,
   AgentWidgetHiddenRobot,
   AgentWidgetLayout,
   AgentWidgetLifecycleAnimation,
   AgentWidgetRobot,
   AgentWidgetSettings,
   AgentWidgetSnapshot,
+  AgentWidgetWindowGesture,
   AgentWidgetWindowMode,
 } from '@/common/types/agent/agentWidget';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
@@ -1608,6 +1610,14 @@ export const agentWidget = {
   setWindowMode: bridge.buildProvider<void, AgentWidgetTarget & { mode: AgentWidgetWindowMode }>(
     'agent-widget:set-window-mode'
   ),
+  /**
+   * The expanded window is moved by its title bar or resized by an edge or corner: screen deltas (DIP) since the
+   * pointer went down; main applies them.
+   */
+  adjustWindow: bridge.buildProvider<
+    void,
+    AgentWidgetTarget & { gesture: AgentWidgetWindowGesture; phase: AgentWidgetGesturePhase; dx: number; dy: number }
+  >('agent-widget:adjust-window'),
   setChatLocation: bridge.buildProvider<void, AgentWidgetTarget & { location: AgentChatLocation }>(
     'agent-widget:set-chat-location'
   ),
