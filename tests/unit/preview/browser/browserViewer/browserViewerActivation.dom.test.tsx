@@ -63,7 +63,11 @@ afterEach(() => {
   }
 });
 
-const viewer = (active: boolean, onRequestClose?: (tabId: string) => void, agentOwnedHint?: boolean) => (
+const viewer = (
+  active: boolean,
+  onRequestClose?: (tabId: string, options?: { byUser?: boolean }) => void,
+  agentOwnedHint?: boolean
+) => (
   <BrowserViewer
     agentOwnedHint={agentOwnedHint}
     onRequestClose={onRequestClose}
@@ -103,7 +107,7 @@ describe('BrowserViewer tab activation', () => {
 
     act(() => mocks.closeHandlers.forEach((handler) => handler({ webContentsId: 7 })));
 
-    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1', { byUser: false });
   });
 
   it('honours a close request that arrived before its webview was attached, once it is', () => {
@@ -118,7 +122,7 @@ describe('BrowserViewer tab activation', () => {
     });
 
     expect(onRequestClose).toHaveBeenCalledTimes(1);
-    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1', { byUser: false });
   });
 
   it('keeps a hidden user tab invisible and inert, out of reach of the keyboard', async () => {

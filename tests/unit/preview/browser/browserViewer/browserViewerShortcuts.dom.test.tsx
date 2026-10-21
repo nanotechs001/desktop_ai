@@ -190,7 +190,8 @@ describe('BrowserViewer closeTabRequested', () => {
     expect(onRequestClose).not.toHaveBeenCalled();
 
     act(() => mocks.closeTabRequested?.({ webContentsId: OWN_ID }));
-    expect(onRequestClose).toHaveBeenCalledWith('tab-1');
+    // Main's close (an agent, an extension, the idle sweep) is not the user's.
+    expect(onRequestClose).toHaveBeenCalledWith('tab-1', { byUser: false });
   });
 });
 

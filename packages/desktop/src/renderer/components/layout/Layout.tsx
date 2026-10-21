@@ -13,7 +13,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { setGlobalNavigate } from '@/renderer/utils/navigation';
-import { isHttpUrl } from '@/common/types/agent/agentWidget';
+import { isHttpUrl, type AgentWidgetPreview } from '@/common/types/agent/agentWidget';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import { ProjectPanelHost } from '@renderer/components/layout/ProjectPanelHost';
 import { ProjectPanelMobileOverlay } from '@renderer/components/layout/ProjectPanelMobileOverlay';
@@ -209,6 +209,7 @@ const Layout: React.FC<{
     toggleVaChat,
     revealBrowserFor,
     revealFileFor,
+    revealPreviewFor,
   } = usePreviewContext();
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
@@ -403,6 +404,13 @@ const Layout: React.FC<{
       void navigate(`/conversation/${conversation_id}`);
     };
 
+    // A diagram or a diff opened in a robot's chat: that conversation's preview pane shows it, once it is on screen
+    const handleOpenPreviewInConversation = (event: CustomEvent<{ conversation_id: string } & AgentWidgetPreview>) => {
+      const { conversation_id, ...preview } = event.detail;
+      revealPreviewFor(conversation_id, preview);
+      void navigate(`/conversation/${conversation_id}`);
+    };
+
     // A robot's chat linked to a main-window page (engine settings, a scheduled task); main checked the path
     const handleNavigateToPage = (event: CustomEvent<{ path: string }>) => {
       void navigate(event.detail.path);
@@ -440,6 +448,7 @@ const Layout: React.FC<{
     window.addEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
     window.addEventListener('tray:follow-robot-chat', handleFollowRobotChat as EventListener);
     window.addEventListener('tray:open-file-in-conversation', handleOpenFileInConversation as EventListener);
+    window.addEventListener('tray:open-preview-in-conversation', handleOpenPreviewInConversation as EventListener);
     window.addEventListener('tray:navigate-to-page', handleNavigateToPage as EventListener);
     window.addEventListener('tray:open-about', handleOpenAbout as EventListener);
     window.addEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
@@ -452,12 +461,13 @@ const Layout: React.FC<{
       window.removeEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
       window.removeEventListener('tray:follow-robot-chat', handleFollowRobotChat as EventListener);
       window.removeEventListener('tray:open-file-in-conversation', handleOpenFileInConversation as EventListener);
+      window.removeEventListener('tray:open-preview-in-conversation', handleOpenPreviewInConversation as EventListener);
       window.removeEventListener('tray:navigate-to-page', handleNavigateToPage as EventListener);
       window.removeEventListener('tray:open-about', handleOpenAbout as EventListener);
       window.removeEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
       window.removeEventListener('tray:check-update', handleCheckUpdate as EventListener);
     };
-  }, [navigate, revealBrowserFor, revealFileFor]);
+  }, [navigate, revealBrowserFor, revealFileFor, revealPreviewFor]);
 
   // An agent whose chat is in a robot popup opened or switched a page: main has the main window's pane follow that
   // chat (tray:follow-robot-chat) only for the robot the user works with, while its popup is open.

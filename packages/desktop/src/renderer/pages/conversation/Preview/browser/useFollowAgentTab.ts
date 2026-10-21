@@ -12,6 +12,17 @@ export const USER_INPUT_GRACE_MS = 3000;
 /** Where input counts as the user's work in the pane: the preview panel (tab strip, nav bar, slot) and the browser layer. */
 const PANE_SELECTOR = '.preview-panel, [data-browser-tab]';
 
+/** When the user last clicked or typed in the pane, from any pane; read by agent paths outside this hook. */
+let paneInputAt = Number.NEGATIVE_INFINITY;
+
+/** Records user input in the pane (its controls or one of its pages). */
+export const notePaneInput = (): void => {
+  paneInputAt = Date.now();
+};
+
+/** True within {@link USER_INPUT_GRACE_MS} of the user's last input in the pane: an agent must not switch tabs then. */
+export const isUserBusyInPane = (): boolean => Date.now() - paneInputAt < USER_INPUT_GRACE_MS;
+
 const hasTab = (tabs: ReadonlyArray<{ id: string }>, tabId: string): boolean => tabs.some((tab) => tab.id === tabId);
 
 type FollowAgentTabParams = {
@@ -41,7 +52,9 @@ export const useFollowAgentTab = ({ tabs, activeTabId, switchTab }: FollowAgentT
 
   useEffect(() => {
     const note = (event: Event) => {
-      if (event.target instanceof Element && event.target.closest(PANE_SELECTOR)) lastInputAt.current = Date.now();
+      if (!(event.target instanceof Element) || !event.target.closest(PANE_SELECTOR)) return;
+      lastInputAt.current = Date.now();
+      notePaneInput();
     };
     document.addEventListener('pointerdown', note, true);
     document.addEventListener('keydown', note, true);
@@ -59,7 +72,9 @@ export const useFollowAgentTab = ({ tabs, activeTabId, switchTab }: FollowAgentT
   }, []);
 
   const onUserInput = useCallback((tabId: string) => {
-    if (hasTab(latest.current.tabs, tabId)) lastInputAt.current = Date.now();
+    if (!hasTab(latest.current.tabs, tabId)) return;
+    lastInputAt.current = Date.now();
+    notePaneInput();
   }, []);
 
   return useMemo(() => ({ onAgentAction, onUserInput }), [onAgentAction, onUserInput]);

@@ -35,6 +35,9 @@ const ownWebContentsId = (webview: Electron.WebviewTag): number | null => {
 /** Close requests remembered while a tab does not know its webContents id yet; only a burst can come that fast. */
 const MAX_EARLY_CLOSES = 20;
 
+/** A close main asked for (an agent, an extension, the idle sweep): not the user's, so the pane may reopen later. */
+const AGENT_CLOSE = { byUser: false } as const;
+
 /** Shortcuts typed into the tab's own controls (address bar, find bar); keys the page gets are handled in main. */
 const CONTROL_SHORTCUTS: Record<string, BrowserShortcutAction> = {
   r: 'reload',
@@ -67,8 +70,11 @@ export interface BrowserViewerProps {
   onTitleChange: (tabId: string, title: string) => void;
   /** 站点图标变化时回写 tab / Persist the site favicon back onto the tab */
   onFaviconChange: (tabId: string, favicon: string) => void;
-  /** 页面内按 Cmd/Ctrl+W 时请求关闭该 tab / The page asked to close this tab (Cmd/Ctrl+W) */
-  onRequestClose?: (tabId: string) => void;
+  /**
+   * 请求关闭该 tab / Close this tab: the user's Cmd/Ctrl+W (`byUser` left out), or an agent, an extension or the
+   * idle sweep through main (`byUser: false`).
+   */
+  onRequestClose?: (tabId: string, options?: { byUser?: boolean }) => void;
   /** 是否为当前显示的浏览器 tab / Whether this is the browser tab on screen */
   active?: boolean;
   /** Ownership changed: whether an agent owns the tab, and the chat whose agent it is (relay ownership). */
@@ -290,12 +296,12 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     if (own !== null) {
       const requested = earlyCloseIds.current.includes(own);
       earlyCloseIds.current = [];
-      if (requested) onRequestClose?.(tabId);
+      if (requested) onRequestClose?.(tabId, AGENT_CLOSE);
     }
     return ipcBridge.browser.closeTabRequested.on(({ webContentsId }) => {
       const current = closable ? ownWebContentsId(closable) : null;
       if (current === null) earlyCloseIds.current = [...earlyCloseIds.current, webContentsId].slice(-MAX_EARLY_CLOSES);
-      else if (webContentsId === current) onRequestClose?.(tabId);
+      else if (webContentsId === current) onRequestClose?.(tabId, AGENT_CLOSE);
     });
   }, [closable, tabId, onRequestClose]);
 

@@ -203,7 +203,7 @@ const ChatConversation: React.FC<{
   useActiveLease({ type: 'conversation', id: conversation?.id });
   // VA Bot conversations switch the page to the browser-on-top / chat-underneath layout.
   const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
-  const { setVaBotMode, isVaChatCollapsed } = usePreviewContext();
+  const { setVaBotMode, isVaChatCollapsed, isOpen: isPreviewOpen } = usePreviewContext();
   const isVaBot = isVaBotAgent(conversation?.assistant, storedDefaultAgentId);
   useEffect(() => {
     setVaBotMode(isVaBot);
@@ -226,8 +226,10 @@ const ChatConversation: React.FC<{
   const resolvedConversationBackend = resolveConversationBackend(conversation, presetAssistantInfo?.backend);
 
   const chatLocation = useChatLocation(conversation?.id);
-  // Watching this VA Bot's chat here: its taskbar robot steps away until the chat closes or the user moves on.
-  useSuspendAgentWidget(isVaBot ? conversation?.id : undefined, !isVaChatCollapsed && chatLocation === 'main');
+  // Watching this VA Bot's chat here: its taskbar robot steps away until the chat closes or the user moves on. The chat
+  // is hidden only while collapsed under an open pane; with no pane it fills the page.
+  const chatVisible = !(isPreviewOpen && isVaChatCollapsed);
+  useSuspendAgentWidget(isVaBot ? conversation?.id : undefined, chatVisible && chatLocation === 'main');
   // Chatting with a VA Bot brings back its robot if it was hidden (not for read-only legacy chats).
   useRestoreHiddenAgentWidget(
     isVaBot && !isLegacyReadOnlyConversation ? conversation?.id : undefined,
