@@ -347,10 +347,18 @@ export class AgentWidgetManager {
     return { record: { ...entry.record }, settings: this.state.settings, layout: this.layoutFor(entry) };
   }
 
+  /** Open or close the popup. Closing the expanded window drops the robot from its band onto the taskbar below. */
   setExpanded(conversationId: string, expanded: boolean): void {
+    this.changeExpanded(conversationId, expanded, 'drop');
+  }
+
+  /** `fromBand`: whether a robot leaving the expanded window's band drops onto the taskbar or is being carried off. */
+  private changeExpanded(conversationId: string, expanded: boolean, fromBand: 'drop' | 'carry'): void {
     const entry = this.entries.get(conversationId);
     // The popup only opens on a robot that has fully appeared (not while it materializes or vanishes).
     if (!entry || entry.record.expanded === expanded || (expanded && entry.phase !== 'live')) return;
+    const leavingBand = !expanded && this.inBand(entry);
+    if (leavingBand) this.seatFromBand(entry);
     entry.record.expanded = expanded;
     entry.focusedSinceOpen = false;
     entry.openedAt = Date.now();
@@ -362,6 +370,7 @@ export class AgentWidgetManager {
       this.setChatLocation(conversationId, 'widget');
     }
     this.place(entry);
+    if (leavingBand && fromBand === 'drop') this.drop(entry);
     if (expanded && !entry.win.isDestroyed()) entry.win.focus();
     if (expanded) this.followInMain(conversationId);
   }
@@ -523,8 +532,7 @@ export class AgentWidgetManager {
     this.stopGlide(entry);
     this.finishLanding(entry);
     // Picked up from the expanded window's band: it is carried on from where it stands there.
-    if (this.inBand(entry)) this.seatFromBand(entry);
-    if (entry.record.expanded) this.setExpanded(conversationId, false);
+    if (entry.record.expanded) this.changeExpanded(conversationId, false, 'carry');
     const cursor = screen.getCursorScreenPoint();
     const top = entry.airY ?? this.currentTrack(entry).y;
     entry.grab = { x: cursor.x - entry.botX, y: cursor.y - top };
@@ -577,9 +585,17 @@ export class AgentWidgetManager {
     const entry = this.entries.get(conversationId);
     if (!entry || !entry.dragging) return;
     this.clearDrag(entry);
+    this.drop(entry);
+  }
+
+  /**
+   * Fall from where the robot is in the air onto the taskbar below, at its x resolved to a free slot (saved), in step
+   * with drop-landing; reduce motion lands at once. After a released drag, and when the expanded window closes.
+   */
+  private drop(entry: WidgetEntry): void {
     const display = this.displayById(entry.displayId) ?? this.defaultDisplay();
     const track = this.track(display);
-    entry.botX = resolveSlot(entry.botX, this.otherXs(display.id, conversationId), track, this.botSize());
+    entry.botX = resolveSlot(entry.botX, this.otherXs(display.id, entry.record.conversation_id), track, this.botSize());
     this.savePosition(entry, track);
     const fromY = entry.airY ?? track.y;
     if (this.state.settings.reduceMotion) {

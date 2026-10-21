@@ -1471,7 +1471,8 @@ describe('expanded window mode', () => {
     });
 
     manager.setExpanded(A, false);
-    expect(win.bounds).toEqual(collapsed); // the taskbar robot as always
+    vi.advanceTimersByTime(1_000); // dropped from the band onto the taskbar below it
+    expect(win.bounds).toEqual({ ...collapsed, x: EXPANDED.x + START_OFFSET });
     expect(layoutOf(A)).toMatchObject({ top_band: 0, window_mode: 'expanded' });
   });
 
@@ -1682,18 +1683,106 @@ describe('expanded window mode', () => {
     expect(layoutOf(A)).toMatchObject({ moving: false, bot_offset_x: START_OFFSET });
   });
 
-  it('collapsing mid-walk stops it and puts the robot back on the taskbar where it stood', async () => {
+  it('collapsing mid-walk stops it, and the robot drops from where it stood in the band', async () => {
     const { manager, win } = await expandedWalker();
-    manager.setExpanded(A, false);
-    const collapsed = { ...win.bounds };
-    manager.setExpanded(A, true);
     vi.advanceTimersByTime(3_000 + 600);
     expect(layoutOf(A)?.moving).toBe(true);
+    const x = EXPANDED.x + layoutOf(A)!.bot_offset_x;
     manager.setExpanded(A, false);
     expect(layoutOf(A)?.moving).toBe(false);
-    expect(win.bounds).toEqual(collapsed);
+    expect(win.bounds.x).toBe(x);
     vi.advanceTimersByTime(1_000);
-    expect(win.bounds.x).toBe(collapsed.x);
+    expect(win.bounds.x).toBe(x);
+    expect(win.bounds.y + win.bounds.height).toBe(1040);
+  });
+
+  describe('closing drops the robot where it stands', () => {
+    const BAND_LEFT = EXPANDED.x + START_OFFSET;
+    const BAND_TOP = EXPANDED.y + HOP_HEADROOM;
+    async function openExpanded(initial: unknown = { settings: { enabled: true } }) {
+      const made = await makeManager(initial);
+      made.manager.ensure(A);
+      const win = liveWindows().at(-1)!; // after any restored robot
+      appear(made.manager, A);
+      made.manager.setWindowMode(A, 'expanded');
+      made.manager.setExpanded(A, true);
+      return { ...made, win };
+    }
+
+    it('× drops it straight down from its band spot onto the taskbar, landing like a released drag', async () => {
+      const { manager, mem, win } = await openExpanded();
+      manager.setChatLocation(A, 'main');
+      expect(win.bounds.x).toBe(BAND_LEFT);
+      expect(robotTop(win)).toBe(BAND_TOP);
+      expect(lastDragPhase(A)).toBe('landing');
+      expect(mem.get().widgets[A].x_ratio).toBeCloseTo(BAND_LEFT / (1920 - BOT), 3);
+
+      const tops: number[] = [];
+      for (let t = 0; t < 700; t += 16) {
+        vi.advanceTimersByTime(16);
+        tops.push(robotTop(win));
+        expect(win.bounds.x).toBe(BAND_LEFT); // straight down
+      }
+      expect(tops.slice(1).every((top, i) => top >= tops[i])).toBe(true);
+      expect(tops[Math.ceil(360 / 16)]).toBe(TRACK_Y);
+      vi.advanceTimersByTime(100);
+      expect(lastDragPhase(A)).toBe('none');
+      expect(win.bounds.y + win.bounds.height).toBe(1040);
+    });
+
+    it('Escape drops it too, from wherever the window was moved', async () => {
+      const { manager, win } = await openExpanded();
+      manager.adjustWindow(A, 'move', 'start', 0, 0);
+      manager.adjustWindow(A, 'move', 'end', -300, -100);
+      manager.setExpanded(A, false);
+      expect(win.bounds.x).toBe(BAND_LEFT - 300);
+      expect(robotTop(win)).toBe(BAND_TOP - 100);
+      vi.advanceTimersByTime(1_000);
+      expect(win.bounds.x).toBe(BAND_LEFT - 300);
+      expect(robotTop(win)).toBe(TRACK_Y);
+    });
+
+    it('lands beside a robot already standing there, like a drag drop', async () => {
+      const ratio = BAND_LEFT / (1920 - BOT);
+      const { manager, win } = await openExpanded({
+        settings: { enabled: true },
+        widgets: {
+          [B]: {
+            widget_id: 'w-b',
+            conversation_id: B,
+            expanded: false,
+            hidden: false,
+            chat_location: 'main',
+            x_ratio: ratio,
+          },
+        },
+      });
+      const winB = liveWindows().find((w) => w !== win)!;
+      expect(winB.bounds.x).toBe(BAND_LEFT);
+      manager.setExpanded(A, false);
+      vi.advanceTimersByTime(1_000);
+      expect(Math.abs(win.bounds.x - winB.bounds.x)).toBeGreaterThanOrEqual(Math.round(BOT * 1.25));
+    });
+
+    it('with reduce motion it lands at once at that x', async () => {
+      const { manager, win } = await openExpanded({ settings: { enabled: true, reduceMotion: true } });
+      manager.setChatLocation(A, 'main');
+      expect(lastDragPhase(A)).toBe('none');
+      expect(win.bounds.x).toBe(BAND_LEFT);
+      expect(robotTop(win)).toBe(TRACK_Y);
+    });
+
+    it('closing the compact popup leaves the robot where it stands on the taskbar', async () => {
+      const { manager } = await makeManager();
+      manager.ensure(A);
+      const win = liveWindows()[0];
+      appear(manager, A);
+      const before = { ...win.bounds };
+      manager.setExpanded(A, true);
+      manager.setChatLocation(A, 'main');
+      expect(win.bounds).toEqual(before);
+      expect(lastDragPhase(A) ?? 'none').toBe('none');
+    });
   });
 
   it('snaps the robot back into the band after a re-place', async () => {
