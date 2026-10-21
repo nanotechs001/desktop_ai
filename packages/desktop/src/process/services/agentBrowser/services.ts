@@ -20,7 +20,7 @@ import {
 import { PendingConfirms, createYoloLookup, webOriginOf } from './confirmGate';
 import { createBrowserViewService, type BrowserViewService } from './relay/browserView';
 import { createDebuggerSessions } from './relay/debuggerSessions';
-import { startRelayServer, type ProfileLookup } from './relay/relayServer';
+import { startRelayServer, type ChatInfo, type ProfileLookup } from './relay/relayServer';
 import { startTabHygiene, type TabHygiene } from './relay/tabHygiene';
 import { AGENT_MOUSE_DOWN, createTargetRegistry, type KeyInput, type TargetRegistry } from './relay/targetRegistry';
 import { parseConversationId } from './relay/relayTransport';
@@ -51,6 +51,21 @@ export const chatIsYolo = createYoloLookup({
       throw error;
     }),
 });
+
+/**
+ * When a chat was created and whether it is a scheduled run's own chat (`scheduled_run`, set by the cron executor; a
+ * user's chat a task is bound to only carries `cron_job_id`), for the bot tab takeover; null for a chat aioncore does
+ * not know. Other failures reject: the relay then treats the chat's age as unknown.
+ */
+export const chatInfoOf = async (conversationId: string): Promise<ChatInfo | null> => {
+  const chat = await ipcBridge.conversation.get.invoke({ id: conversationId }).catch((error: unknown): null => {
+    if (isBackendHttpError(error) && error.status === 404) return null;
+    throw error;
+  });
+  if (!chat) return null;
+  const extra = (chat.extra ?? {}) as { scheduled_run?: unknown };
+  return { createdAt: chat.created_at, scheduled: extra.scheduled_run === true };
+};
 
 export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
 
@@ -377,6 +392,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     waitForTab: (url, conversationId, profile) =>
       waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(liveAgentProfile(profile))),
     resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent),
+    chatInfo: chatInfoOf,
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentTab: (webContentsId) => hygiene.adopt(webContentsId),
     onAgentAction: (event) => {

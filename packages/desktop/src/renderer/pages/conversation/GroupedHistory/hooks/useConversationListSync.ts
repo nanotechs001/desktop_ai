@@ -348,9 +348,14 @@ export const getSnapshotConversationName = (conversation_id: string): string | u
   return name ? name : undefined;
 };
 
+/** A scheduled run's own chat (the cron executor marks it), not a user's chat a task is bound to. */
+const isScheduledRunChat = (conversation: TChatConversation): boolean =>
+  (conversation.extra as { scheduled_run?: unknown } | undefined)?.scheduled_run === true;
+
 /**
  * Whether the list snapshot holds a conversation of `assistantId` created after `createdAt` (other than this one). A
- * brand-new chat may not be listed yet, so the question is asked of the others, never "is this one the latest".
+ * brand-new chat may not be listed yet, so the question is asked of the others, never "is this one the latest". A
+ * scheduled run's own chat never counts: each run would otherwise take the bot's tabs from the user's latest chat.
  */
 export const hasNewerSnapshotConversationOfAssistant = (
   assistantId: string,
@@ -358,7 +363,11 @@ export const hasNewerSnapshotConversationOfAssistant = (
   createdAt: number
 ): boolean =>
   conversationsState.some(
-    (item) => item.id !== conversationId && item.assistant?.id === assistantId && item.created_at > createdAt
+    (item) =>
+      item.id !== conversationId &&
+      item.assistant?.id === assistantId &&
+      item.created_at > createdAt &&
+      !isScheduledRunChat(item)
   );
 
 /** Whether the conversation list has loaded once; re-renders when it does. */

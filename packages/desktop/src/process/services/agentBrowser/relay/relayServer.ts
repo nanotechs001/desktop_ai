@@ -44,6 +44,7 @@ import {
   type RelayContents,
   type TargetRegistry,
   AGENT_MOUSE_DOWN,
+  DISCONNECTED_CLIENT_PREFIX,
 } from './targetRegistry';
 
 export type RelayServerDeps = {
@@ -74,10 +75,18 @@ export type RelayServerDeps = {
     webContentsId: number,
     yoloChat?: string
   ): Promise<boolean>;
+  /**
+   * When a chat was created and whether it is a scheduled run's own chat; null when unknown. Without it a bot's chat
+   * takes only the tabs of gone clients.
+   */
+  chatInfo?(conversationId: string): Promise<ChatInfo | null>;
   /** Loopback ports agents must not navigate to besides the relay's own (e.g. the backend's). */
   blockedPorts?: () => readonly number[];
   limits?: Partial<RelayLimits>;
 };
+
+/** What the takeover needs to know of a chat: its creation time (ms) and whether it is a scheduled run's own chat. */
+export type ChatInfo = { createdAt: number; scheduled: boolean };
 
 /** A client's Agent profile; not `final` when it is a fallback after a failed lookup, which the relay retries. */
 export type ProfileLookup = { profile: BrowserTabProfile; final: boolean };
@@ -195,15 +204,45 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   /**
-   * A VA Bot's tabs belong to the bot, not one chat: its newest chat's client takes over the tabs its earlier chats'
-   * agents opened, and the old client's sessions on them end (the onChange prune). Hygiene then trims them to the
-   * chat's cap, keeping the most recently used. Regular chats (temporary profiles) and chat-less clients take nothing.
+   * The chats among `owners` created before `mine`, the connecting chat. A chat whose age cannot be read is never
+   * older: its tabs stay with it.
    */
-  const takeOverBotTabs = (conn: Connection): void => {
+  const olderChats = async (mine: ChatInfo, owners: ReadonlySet<string>): Promise<Set<string>> => {
+    const infos = await Promise.all(
+      [...owners].map(async (id) => [id, await deps.chatInfo?.(id).catch((): null => null)] as const)
+    );
+    return new Set(infos.filter(([, info]) => info && info.createdAt < mine.createdAt).map(([id]) => id));
+  };
+
+  /**
+   * A VA Bot's tabs belong to the bot, not one chat: a chat's client takes over the tabs of the bot's gone clients and
+   * of its chats created before this one (a newer chat that is working keeps its tabs), and the old client's sessions
+   * on them end (the onChange prune). Hygiene then trims them to the chat's cap, keeping the most recently used. A
+   * scheduled run's own chat takes nothing, nor do regular chats (temporary profiles) and chat-less clients.
+   */
+  const takeOverBotTabs = async (conn: Connection): Promise<void> => {
     const { profile } = conn.client;
-    if (!conn.conversationId || profile?.kind !== 'agent' || profile.agentId === DEFAULT_AGENT_ID) return;
+    const { conversationId } = conn;
+    if (!conversationId || profile?.kind !== 'agent' || profile.agentId === DEFAULT_AGENT_ID) return;
+    const mine = (await deps.chatInfo?.(conversationId).catch((): null => null)) ?? null;
+    if (mine?.scheduled) return;
+    const liveOwners = new Set(
+      registry
+        .all()
+        .flatMap(({ owner }) =>
+          owner !== 'user' && !owner.clientId.startsWith(DISCONNECTED_CLIENT_PREFIX) && owner.conversationId
+            ? [owner.conversationId]
+            : []
+        )
+        .filter((id) => id !== conversationId)
+    );
+    const older = mine ? await olderChats(mine, liveOwners) : new Set<string>();
     if (!connections.has(conn.client.clientId)) return;
-    const taken = registry.reclaimAgentTabs(profile.agentId, { ...conn.client, conversationId: conn.conversationId });
+    const mayTake = (owner: RelayClient): boolean =>
+      owner.clientId.startsWith(DISCONNECTED_CLIENT_PREFIX) ||
+      owner.conversationId === conversationId ||
+      (owner.conversationId !== undefined && older.has(owner.conversationId));
+    const taken = registry.reclaimAgentTabs(profile.agentId, { ...conn.client, conversationId }, mayTake);
     const lastUsed = (id: number): number => registry.lastUse(id)?.at ?? 0;
     for (const id of taken.toSorted((a, b) => lastUsed(b) - lastUsed(a))) deps.onAgentTab?.(id);
   };
@@ -217,7 +256,9 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         ({ profile, final }) => {
           conn.client = { ...conn.client, profile };
           conn.profileFinal = final;
-          takeOverBotTabs(conn);
+          return takeOverBotTabs(conn).catch((error: unknown) =>
+            console.warn("[AgentBrowserRelay] could not take over a bot's tabs:", error)
+          );
         },
         (error: unknown) => console.warn("[AgentBrowserRelay] could not look up a client's browser profile:", error)
       )

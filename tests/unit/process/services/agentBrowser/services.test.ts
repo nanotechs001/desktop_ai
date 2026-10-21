@@ -31,7 +31,7 @@ const h = vi.hoisted(() => {
         defaultAgentReady: emitter(),
       },
       browser: { openTabRequested: emitter(), closeTabRequested: emitter() },
-      conversation: { runtimeMode: { invoke: vi.fn() } },
+      conversation: { runtimeMode: { invoke: vi.fn() }, get: { invoke: vi.fn() } },
     },
   };
 });
@@ -64,8 +64,14 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
   shownBrowserTab: () => null,
 }));
 
-const { agentTabProfile, getBrowserViewService, liveAgentProfile, startAgentBrowserServices, webuiConfirms } =
-  await import('@process/services/agentBrowser/services');
+const {
+  agentTabProfile,
+  chatInfoOf,
+  getBrowserViewService,
+  liveAgentProfile,
+  startAgentBrowserServices,
+  webuiConfirms,
+} = await import('@process/services/agentBrowser/services');
 const { agentPartition, deleteAgentBrowserData, rememberBrowserSession, temporaryPartition } =
   await import('@process/services/browserSession/profiles/browserProfiles');
 
@@ -173,6 +179,21 @@ describe('agent browser services: IPC', () => {
     });
     expect(await call('share', { webContentsId: 5, on: true })).toEqual({ success: true });
     expect((await ownership(5))?.sharedWith).toBe('all');
+  });
+});
+
+describe('chatInfoOf', () => {
+  it("reads a chat's creation time, and whether it is a scheduled run's own chat", async () => {
+    const get = h.ipcBridge.conversation.get.invoke;
+    get.mockResolvedValueOnce({ id: 'c1', created_at: 5, extra: {} });
+    expect(await chatInfoOf('c1')).toEqual({ createdAt: 5, scheduled: false });
+    get.mockResolvedValueOnce({ id: 'c2', created_at: 6, extra: { cron_job_id: 'cron_1', scheduled_run: true } });
+    expect(await chatInfoOf('c2')).toEqual({ createdAt: 6, scheduled: true });
+    // The user's own chat a task is bound to is not a scheduled run's chat.
+    get.mockResolvedValueOnce({ id: 'c3', created_at: 7, extra: { cron_job_id: 'cron_2' } });
+    expect(await chatInfoOf('c3')).toEqual({ createdAt: 7, scheduled: false });
+    get.mockResolvedValueOnce(null);
+    expect(await chatInfoOf('gone')).toBeNull();
   });
 });
 

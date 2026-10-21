@@ -74,10 +74,10 @@ export type TargetRegistry = {
   inherit(openerId: number, childId: number): void;
   share(webContentsId: number, on: boolean): void;
   /**
-   * A VA Bot's new chat connected: every tab an agent opened in the bot's profile (a gone client's, or another chat's)
-   * is now `client`'s, in one change. User tabs and sharing stay as they are. Returns the ids taken.
+   * A VA Bot's chat connected: every tab an agent opened in the bot's profile whose owner `mayTake` accepts (all
+   * when omitted) is now `client`'s, in one change. User tabs and sharing stay as they are. Returns the ids taken.
    */
-  reclaimAgentTabs(agentId: string, client: RelayClient): number[];
+  reclaimAgentTabs(agentId: string, client: RelayClient, mayTake?: (owner: RelayClient) => boolean): number[];
   /** The client disconnected: its tabs stay open under a label only its bot's next chat can reclaim. */
   releaseClient(clientId: string): void;
   /** Marks a tab used now: by an agent command (with that agent's chat, when known) or by user input. */
@@ -132,6 +132,8 @@ const callEach = <A>(listeners: Iterable<(arg: A) => void>, arg: A): void => {
   }
 };
 const DISCONNECTED_LABEL = 'agent (disconnected)';
+/** The client id prefix of a tab whose agent client has gone (`releaseClient`). */
+export const DISCONNECTED_CLIENT_PREFIX = 'disconnected:';
 const PERSONAL_PROFILE: BrowserTabProfile = { kind: 'personal' };
 
 /** The CDP target id of a browser tab. */
@@ -206,7 +208,7 @@ export function createTargetRegistry(): TargetRegistry {
       update(childId, { owner: { ...owner } });
     },
     share: (webContentsId, on) => update(webContentsId, { sharedWith: on ? 'all' : null }),
-    reclaimAgentTabs(agentId, { clientId, label, conversationId }) {
+    reclaimAgentTabs(agentId, { clientId, label, conversationId }, mayTake = () => true) {
       const owner = { clientId, label, ...(conversationId ? { conversationId } : {}) };
       const taken = all()
         .filter(
@@ -214,7 +216,8 @@ export function createTargetRegistry(): TargetRegistry {
             current !== 'user' &&
             current.clientId !== clientId &&
             profile.kind === 'agent' &&
-            profile.agentId === agentId
+            profile.agentId === agentId &&
+            mayTake(current)
         )
         .map(({ webContentsId }) => webContentsId);
       for (const webContentsId of taken) {
@@ -230,7 +233,7 @@ export function createTargetRegistry(): TargetRegistry {
           const { conversationId } = ownership.owner;
           update(ownership.webContentsId, {
             owner: {
-              clientId: `disconnected:${clientId}`,
+              clientId: `${DISCONNECTED_CLIENT_PREFIX}${clientId}`,
               label: DISCONNECTED_LABEL,
               ...(conversationId ? { conversationId } : {}),
             },
