@@ -14,6 +14,7 @@ import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conve
 import {
   getSnapshotConversationProjectId,
   hasNewerSnapshotConversationOfAssistant,
+  useConversationListLoaded,
 } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { resolveAssistantConfigId } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
@@ -29,6 +30,7 @@ const ChatConversationIndex: React.FC = () => {
   const { syncTitleFromHistory } = useAutoTitle();
   const notFoundHandledIdRef = useRef<string | undefined>(undefined);
   const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
+  const listLoaded = useConversationListLoaded();
   const defaultConversationTitle = t('conversation.welcome.newConversation');
 
   const { data, isLoading, mutate } = useSWR(id ? `conversation/${id}` : null, () => {
@@ -49,8 +51,10 @@ const ChatConversationIndex: React.FC = () => {
   // A VA Bot's agent tabs come into the chat that owns them in the relay, or into the bot's newest chat, which the
   // relay hands them to on its first browser command (ruling R18): a new chat never starts on a blank tab. An older
   // chat starts with no browser until its agent uses it again. The default Agent and presets are no bots: each of their
-  // chats keeps its own temporary browser.
-  const agentId = isVaBotAgent(data?.assistant, storedDefaultAgentId) ? data?.assistant?.id : undefined;
+  // chats keeps its own temporary browser. Until the default id is known an adopted default Agent looks like a bot,
+  // so no chat counts as one before then.
+  const agentId =
+    storedDefaultAgentId && isVaBotAgent(data?.assistant, storedDefaultAgentId) ? data?.assistant?.id : undefined;
   const createdAt = data?.created_at;
   useEffect(() => {
     if (!conversationId) return;
@@ -65,11 +69,13 @@ const ChatConversationIndex: React.FC = () => {
       ...(agentId
         ? {
             agentId,
-            newestOfBot: !hasNewerSnapshotConversationOfAssistant(agentId, conversationId, createdAt ?? 0),
+            // Until the list loads, a newer chat may exist: hold back, and decide again once it arrives.
+            newestOfBot:
+              listLoaded && !hasNewerSnapshotConversationOfAssistant(agentId, conversationId, createdAt ?? 0),
           }
         : {}),
     });
-  }, [conversationId, scope, agentId, createdAt]);
+  }, [conversationId, scope, agentId, createdAt, listLoaded]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async

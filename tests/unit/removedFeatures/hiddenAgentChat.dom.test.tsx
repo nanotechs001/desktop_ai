@@ -40,6 +40,7 @@ vi.mock('@/renderer/pages/conversation/explorer/currentConversationStore', () =>
 vi.mock('@/renderer/hooks/chat/useAutoTitle', () => ({ useAutoTitle: () => ({ syncTitleFromHistory: vi.fn() }) }));
 vi.mock('@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync', () => ({
   getSnapshotConversationProjectId: () => null,
+  useConversationListLoaded: () => true,
 }));
 vi.mock('@/renderer/pages/conversation/components/ChatConversation', () => ({
   default: () => <div data-testid='chat' />,

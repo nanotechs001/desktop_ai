@@ -68,7 +68,7 @@ export type BotChat = { conversationId: string; newest?: boolean };
  * may show: the relay says it owns the tab, or it is the bot's newest chat, which the relay hands every one of the
  * bot's tabs to on its first browser command.
  */
-const isBotAgentTab = (tab: PreviewTab, agentId: string, chat: BotChat): boolean =>
+export const isBotAgentTab = (tab: PreviewTab, agentId: string, chat: BotChat): boolean =>
   isBrowserTab(tab) &&
   tab.metadata?.agentOwned === true &&
   (chat.newest === true || tab.metadata.agentConversationId === chat.conversationId) &&

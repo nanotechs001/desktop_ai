@@ -253,6 +253,8 @@ const listeners = new Set<() => void>();
 
 let isStoreInitialized = false;
 let conversationsState: TChatConversation[] = [];
+// Whether the list has loaded once: until then an empty list means "not known yet", not "no conversations".
+let conversationsLoadedState = false;
 let generatingConversationIdsState = new Set<string>();
 // Per-conversation set of pending confirmation ids (permission / acp_permission
 // / ask). A conversation with a non-empty set is "waiting on the user" and gets
@@ -345,9 +347,15 @@ export const hasNewerSnapshotConversationOfAssistant = (
     (item) => item.id !== conversationId && item.assistant?.id === assistantId && item.created_at > createdAt
   );
 
-/** Test hook: seed the conversation list the snapshot lookups read. */
-export const setConversationListForTest = (conversations: TChatConversation[]): void => {
+/** Whether the conversation list has loaded once; re-renders when it does. */
+export const useConversationListLoaded = (): boolean =>
+  useSyncExternalStore(subscribeConversationListSync, () => conversationsLoadedState);
+
+/** Test hook: seed the conversation list the snapshot lookups read (as loaded, unless `loaded` is false). */
+export const setConversationListForTest = (conversations: TChatConversation[], loaded = true): void => {
   conversationsState = conversations;
+  conversationsLoadedState = loaded;
+  emitStoreChange();
 };
 
 const refreshConversations = () => {
@@ -365,6 +373,7 @@ const refreshConversations = () => {
           return extra?.is_health_check !== true && !extra?.team_id && !extra?.teamId;
         });
         conversationsState = filteredData;
+        conversationsLoadedState = true;
         // Use ALL conversation IDs (including hidden rows) so the
         // responseStream listener recognises them as known and doesn't
         // trigger an infinite refreshConversations loop.
@@ -375,6 +384,7 @@ const refreshConversations = () => {
       }
 
       conversationsState = [];
+      conversationsLoadedState = true;
       conversation_idsState = new Set();
       projectIdByIdState = new Map();
       emitStoreChange();

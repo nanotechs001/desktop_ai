@@ -63,6 +63,7 @@ import {
 } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { previewScopeStorageKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { setConversationListForTest } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
+import { configService } from '@/common/config/configService';
 import {
   resetCurrentConversationForTest,
   setCurrentConversation,
@@ -747,6 +748,56 @@ describe("an older chat of a VA Bot gets the bot's browser back only when it con
     expect(ctx.isOpen).toBe(false);
   });
 
+  it("does not take this chat's tabs when another chat's agent acts on its own tab", () => {
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    const mine = openBotTab('https://example.com/mine', 'c1');
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true }); // c2's agent never used it
+    const theirs = openBotTab('https://example.com/theirs', 'c2');
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+
+    act(() => ctx.takeAgentTab(theirs));
+
+    expect(ctx.tabs).toEqual([]);
+    expect(ctx.isOpen).toBe(false);
+    act(() => ctx.takeAgentTab(mine));
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([mine]);
+  });
+
+  it('keeps the browser tabs it holds back in its stored state, live or not', () => {
+    const storedIds = (scope: string) => storedScope(scope).tabs.map((tab: { id: string }) => tab.id);
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    const blank = ctx.tabs[0].id;
+    act(() => ctx.openBrowserTab('https://example.com/mine', BOT)); // the user's own tab in the bot's profile
+    const userTab = String(ctx.activeTabId);
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true });
+
+    // Live, parked: the stored copies stay.
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+    act(() => ctx.openPreview('# doc', 'markdown', { title: 'Doc' }));
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedIds('/ws/c1')).toEqual(expect.arrayContaining([blank, userTab]));
+    expect(storedIds('/ws/c1')).toHaveLength(3);
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true });
+    expect(storedIds('/ws/c1')).toEqual(expect.arrayContaining([blank, userTab]));
+
+    // Not live (after a restart): still stored, and restored once the chat is the bot's newest again.
+    cleanup();
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+    expect(ctx.tabs.map((tab) => tab.content_type)).toEqual(['markdown']);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedIds('/ws/c1')).toHaveLength(3);
+    enterScope('/ws/x', { conversationId: 'x' });
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(expect.arrayContaining([blank, userTab]));
+  });
+
   it("the bot's newest chat still takes all of the bot's tabs at once", () => {
     mount();
     enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
@@ -787,6 +838,50 @@ describe('conversation route preview scope entry', () => {
     vi.useRealTimers(); // SWR and waitFor need real timers
     scopeEntered.mockReset();
     getConversationOrNull.mockReset();
+    configService.setLocal('agent.builtinDefaultId', 'aion-default-agent');
+    setConversationListForTest([]);
+  });
+  const renderRoute = () =>
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <ChatConversationIndex />
+      </SWRConfig>
+    );
+
+  it('never holds back the default Agent while its id loads: no chat is a bot before the id is known', async () => {
+    configService.reset();
+    getConversationOrNull.mockResolvedValue({
+      ...conv('p1'),
+      assistant: { id: 'adopted-agent', source: 'user', name: 'Agent', avatar: '', backend: 'claude' },
+    } as TChatConversation);
+    renderRoute();
+
+    await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
+    expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
+      openBrowserIfEmpty: true,
+      carryFromScope: undefined,
+      conversationId: 'c1',
+    });
+    act(() => configService.setLocal('agent.builtinDefaultId', 'adopted-agent'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(scopeEntered).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a chat as older until the conversation list loads, then lets the newest one take its tabs', async () => {
+    const bot = { id: 'bot-b', source: 'user', name: 'B', avatar: '', backend: 'claude' };
+    setConversationListForTest([], false);
+    getConversationOrNull.mockResolvedValue({ ...conv('p1'), assistant: bot, created_at: 100 } as TChatConversation);
+    renderRoute();
+
+    await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
+    expect(scopeEntered).toHaveBeenLastCalledWith('p1', expect.objectContaining({ newestOfBot: false }));
+
+    act(() =>
+      setConversationListForTest([{ id: 'c0', assistant: bot, created_at: 50 }] as unknown as TChatConversation[])
+    );
+
+    await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(2));
+    expect(scopeEntered).toHaveBeenLastCalledWith('p1', expect.objectContaining({ newestOfBot: true }));
   });
 
   it('enters the scope with the browser default and carries the live tabs once project_id arrives', async () => {

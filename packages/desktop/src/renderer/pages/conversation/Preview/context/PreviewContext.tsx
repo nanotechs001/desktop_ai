@@ -27,6 +27,7 @@ import { dropOpenBurstDuplicates } from './openBurstDuplicates';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import {
   enterScope,
+  isBotAgentTab,
   isBrowserTab,
   leaveScope,
   liveBrowserTabs,
@@ -297,6 +298,13 @@ type ScopeChangeOptions = {
    */
   newestOfBot?: boolean;
 };
+
+/** The stored browser tabs an older VA Bot chat holds back in its scope (not on screen, still its own). */
+type HeldBackTabs = { scope: string; tabs: readonly PreviewTab[] };
+
+/** `tabs` to store for `scope`: with the browser tabs held back there that are not on screen, so none is lost. */
+const withHeldBack = (held: HeldBackTabs | null, scope: string, tabs: readonly PreviewTab[]): PreviewTab[] =>
+  held?.scope === scope ? [...tabs, ...held.tabs.filter((tab) => !tabs.some((t) => t.id === tab.id))] : [...tabs];
 
 /** Drops tabs that moved to another scope from the stored state of the scopes they left. */
 const forgetMovedTabs = (moved: readonly BackgroundTab[]): void => {
@@ -710,6 +718,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   // twice), so decisions with observable side effects are made up front.
   const tabsRef = useRef<PreviewTab[]>([]);
   tabsRef.current = tabs;
+  // The browser tabs the older bot chat on screen holds back: they stay in the scope's stored state.
+  const heldBackRef = useRef<HeldBackTabs | null>(null);
   // The conversation on screen and its VA Bot: a bot tab the relay hands to this chat comes on screen (R18).
   const onScreenChatRef = useRef<{ conversationId: string; agentId?: string } | null>(null);
 
@@ -738,13 +748,15 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   );
   /**
    * `tabId` is parked and the agent of the bot chat on screen drives it (the relay handed it over, or that agent acted
-   * there): that chat's tabs come on screen, the pane opens on this one. No-op otherwise.
+   * there): that chat's tabs come on screen, the pane opens on this one. No-op otherwise, as for another chat's tab.
    */
   const takeAgentTab = useCallback(
     (tabId: string) => {
       const chat = onScreenChatRef.current;
       const scopeKey = currentScopeRef.current;
-      if (!chat?.agentId || scopeKey == null || !backgroundRef.current.some((entry) => entry.tab.id === tabId)) return;
+      const parked = backgroundRef.current.find((entry) => entry.tab.id === tabId);
+      if (!chat?.agentId || scopeKey == null || !parked) return;
+      if (!isBotAgentTab(parked.tab, chat.agentId, { conversationId: chat.conversationId })) return;
       if (!pullBotTabs(chat.agentId, { conversationId: chat.conversationId }, scopeKey)) return;
       if (tabsRef.current.some((tab) => tab.id === tabId)) {
         setActiveTabId(tabId);
@@ -833,8 +845,12 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     activeTabIdRef.current = activeTabId;
     const scope = currentScopeRef.current;
     if (scope == null) return undefined;
+    // A held-back tab that came on screen is stored from `tabs` from now on (and dropped if it is closed there).
+    const held = heldBackRef.current;
+    if (held) heldBackRef.current = { ...held, tabs: held.tabs.filter((tab) => !tabs.some((t) => t.id === tab.id)) };
     const timer = setTimeout(() => {
-      persistScopeState(scope, { isOpen, tabs, activeTabId, userClosed: userClosedRef.current });
+      const stored = withHeldBack(heldBackRef.current, scope, tabs);
+      persistScopeState(scope, { isOpen, tabs: stored, activeTabId, userClosed: userClosedRef.current });
     }, 150);
     return () => clearTimeout(timer);
   }, [tabs, activeTabId, isOpen]);
@@ -1303,6 +1319,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     setDomSnippets([]);
     // Other chats' live tabs go too: the only caller is logout, and they belong to the same account.
     setBackground([]);
+    heldBackRef.current = null;
     accountSessionRef.current += 1;
   }, [setBackground]);
 
@@ -1380,17 +1397,26 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
           : (saved.activeTabId ?? merged[0]?.id ?? null);
         // A user close in either scope holds; the project's saved state only ever stores `true`.
         const userClosed = saved.userClosed === true || userClosedRef.current;
+        heldBackRef.current = holdsBrowser ? { scope: scopeKey, tabs: saved.tabs.filter(isBrowserTab) } : null;
         setBackground(rest);
         setTabs(merged);
         setActiveTabId(nextActive);
         activeTabIdRef.current = nextActive;
         tabsRef.current = merged;
         userClosedRef.current = userClosed;
-        persistScopeState(scopeKey, { isOpen, tabs: merged, activeTabId: nextActive, userClosed });
+        persistScopeState(scopeKey, {
+          isOpen,
+          tabs: withHeldBack(heldBackRef.current, scopeKey, merged),
+          activeTabId: nextActive,
+          userClosed,
+        });
         reopenUnlessUserClosed();
         return;
       }
-      if (prev != null) persistScopeState(prev, { isOpen, tabs, activeTabId, userClosed: userClosedRef.current });
+      if (prev != null) {
+        const stored = withHeldBack(heldBackRef.current, prev, tabs);
+        persistScopeState(prev, { isOpen, tabs: stored, activeTabId, userClosed: userClosedRef.current });
+      }
       // Release the leaving scope's directory subscriptions.
       //
       // Placed before the state updates as a matter of habit, not because the position
@@ -1405,6 +1431,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       resetPreviewWatch();
       currentScopeRef.current = scopeKey;
       const loaded = scopeKey != null ? loadScopeState(scopeKey) : EMPTY_SCOPE_STATE;
+      heldBackRef.current =
+        holdsBrowser && scopeKey != null ? { scope: scopeKey, tabs: loaded.tabs.filter(isBrowserTab) } : null;
       // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return.
       const left = prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
       const bot =
@@ -1456,6 +1484,10 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       const parked = backgroundRef.current.find((entry) => entry.tab.id === tabId);
       if (parked) {
         setBackground(backgroundRef.current.filter((entry) => entry !== parked));
+        const held = heldBackRef.current;
+        if (held?.scope === parked.scope) {
+          heldBackRef.current = { ...held, tabs: held.tabs.filter((tab) => tab.id !== tabId) };
+        }
         const stored = loadScopeState(parked.scope);
         persistScopeState(parked.scope, { ...stored, tabs: stored.tabs.filter((tab) => tab.id !== tabId) });
         return;
