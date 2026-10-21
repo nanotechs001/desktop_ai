@@ -6,7 +6,7 @@
 
 import React, { useCallback, useId, useState } from 'react';
 import { Button } from '@arco-design/web-react';
-import { AlarmClock, History, Plus, SettingTwo } from '@icon-park/react';
+import { History, Message, Plus, Schedule, SettingTwo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { TChatConversation } from '@/common/config/storage';
@@ -47,17 +47,49 @@ const HaloOrbIcon: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
+/** icon-park's default stroke, in its 48-unit viewBox. */
+const ICON_PARK_STROKE = 4;
+
+/**
+ * New chat: a speech bubble with a small plus at its top right (icon-park has no message-with-plus icon). Both parts
+ * are drawn smaller than `size`, so their strokes are scaled up to keep the toolbar's line weight.
+ */
+const NewChatIcon: React.FC<{ size: number; strokeWidth?: number }> = ({ size, strokeWidth = ICON_PARK_STROKE }) => {
+  const bubble = Math.round(size * 0.82);
+  const plus = Math.round(size * 0.5);
+  return (
+    <span className='relative block' style={{ width: size, height: size }} aria-hidden='true'>
+      <Message
+        theme='outline'
+        size={bubble}
+        fill='currentColor'
+        strokeWidth={(strokeWidth * size) / bubble}
+        className='absolute start-0 bottom-0 block leading-none'
+      />
+      <Plus
+        theme='outline'
+        size={plus}
+        fill='currentColor'
+        strokeWidth={(strokeWidth * size) / plus}
+        className='absolute top-0 end-0 block leading-none'
+      />
+    </span>
+  );
+};
+
 type TitlebarNavProps = {
   buttonClassName: string;
   iconSize: number;
   strokeWidth?: number;
+  /** Controls shown right after New chat (search, back and forward). */
+  leading?: React.ReactNode;
 };
 
 /**
- * The app's navigation, in the titlebar's top-right corner (desktop): new chat, the regular chats' history, VA Bots,
- * scheduled tasks and settings. Replaces the left icon bar.
+ * The app's navigation, in the titlebar's top-right corner (desktop): new chat, then `leading`, VA Bots, the regular
+ * chats' history, scheduled tasks and settings. Replaces the left icon bar.
  */
-const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, strokeWidth }) => {
+const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, strokeWidth, leading }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -104,14 +136,8 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
     {
       key: 'new-chat',
       label: t('conversation.welcome.newConversation'),
-      icon: icon(Plus),
+      icon: <NewChatIcon size={iconSize} strokeWidth={strokeWidth} />,
       onClick: () => go('/guid', { resetAssistant: true }),
-    },
-    {
-      key: 'history',
-      label: t('conversation.history.chatHistory'),
-      icon: icon(History),
-      onClick: () => setHistoryOpen(true),
     },
     {
       key: 'assistants',
@@ -119,7 +145,13 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
       icon: <HaloOrbIcon size={iconSize} />,
       onClick: () => go('/assistants'),
     },
-    { key: 'scheduled', label: t('cron.scheduledTasks'), icon: icon(AlarmClock), onClick: () => go('/scheduled') },
+    {
+      key: 'history',
+      label: t('conversation.history.chatHistory'),
+      icon: icon(History),
+      onClick: () => setHistoryOpen(true),
+    },
+    { key: 'scheduled', label: t('cron.scheduledTasks'), icon: icon(Schedule), onClick: () => go('/scheduled') },
     {
       key: 'settings',
       label: isSettings ? t('common.back') : t('common.settings'),
@@ -128,31 +160,35 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
     },
   ];
 
+  const renderItem = (item: (typeof items)[number]) =>
+    // VA Bots also lists the bots' robots on hover.
+    item.key === 'assistants' ? (
+      <RobotListButton
+        key={item.key}
+        buttonClassName={buttonClassName}
+        label={item.label}
+        icon={item.icon}
+        onClick={item.onClick}
+      />
+    ) : (
+      <Button
+        key={item.key}
+        type='text'
+        size='mini'
+        className={buttonClassName}
+        icon={item.icon}
+        onClick={item.onClick}
+        aria-label={item.label}
+        title={item.label}
+      />
+    );
+
+  const [newChat, ...rest] = items;
   return (
     <>
-      {items.map((item) =>
-        // VA Bots also lists the bots' robots on hover.
-        item.key === 'assistants' ? (
-          <RobotListButton
-            key={item.key}
-            buttonClassName={buttonClassName}
-            label={item.label}
-            icon={item.icon}
-            onClick={item.onClick}
-          />
-        ) : (
-          <Button
-            key={item.key}
-            type='text'
-            size='mini'
-            className={buttonClassName}
-            icon={item.icon}
-            onClick={item.onClick}
-            aria-label={item.label}
-            title={item.label}
-          />
-        )
-      )}
+      {renderItem(newChat)}
+      {leading}
+      {rest.map(renderItem)}
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

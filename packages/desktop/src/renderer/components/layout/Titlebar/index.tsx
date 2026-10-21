@@ -231,7 +231,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
     : undefined;
 
   // Back to chat, sidebar toggle, search and history arrows. Phones keep them on the left; on desktop they sit in the
-  // right-hand toolbar with the rest of the navigation, leaving the top-left corner free (macOS traffic lights).
+  // right-hand toolbar after New chat, leaving the top-left corner free (macOS traffic lights).
   const menuButtons = (
     <>
       {showBackToChatButton && (
@@ -337,10 +337,12 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {layout?.isMobile && <div id='app-titlebar-actions-slot' className='app-titlebar__actions-slot' />}
         {!layout?.isMobile && (
-          <>
-            {menuButtons}
-            <TitlebarNav buttonClassName={titlebarButtonClass} iconSize={iconSize} strokeWidth={desktopIconStroke} />
-          </>
+          <TitlebarNav
+            buttonClassName={titlebarButtonClass}
+            iconSize={iconSize}
+            strokeWidth={desktopIconStroke}
+            leading={menuButtons}
+          />
         )}
         {showWorkspaceButton && (
           <button

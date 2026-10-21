@@ -28,7 +28,9 @@ vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({
   useChatNavHistory: () => ({ canBack: false, canForward: false, back: vi.fn(), forward: vi.fn() }),
 }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
-vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({
+  default: ({ leading }: { leading?: React.ReactNode }) => <>{leading}</>,
+}));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }),

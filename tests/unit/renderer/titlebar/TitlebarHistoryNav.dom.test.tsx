@@ -40,7 +40,9 @@ vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover',
 }));
 vi.mock('@/renderer/components/layout/Titlebar/useChatNavHistory', () => ({ useChatNavHistory: () => nav }));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
-vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({
+  default: ({ leading }: { leading?: React.ReactNode }) => <>{leading}</>,
+}));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ ...layoutState, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
