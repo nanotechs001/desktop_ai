@@ -231,8 +231,12 @@ const Layout: React.FC<{
   // VA Bot conversations: browser on top, [chat | files] underneath (vertical split).
   // Regular chats keep the side-by-side [chat | preview | files] row.
   const vaLayout = previewRegionActive && isVaBotMode;
-  // "Maximized" hides the chat: the VA Bot chat toggle, or the regular maximize button.
-  const previewMaximized = previewRegionActive && (isVaBotMode ? isVaChatCollapsed : isPreviewMaximized);
+  // VA Bot: the files pane shares the chat's bottom row, so an open files pane keeps that row up (filling it) while
+  // the chat is collapsed.
+  const vaChatHidden = vaLayout && isVaChatCollapsed;
+  // "Maximized" hides the bottom row: the VA Bot chat toggle (with the files pane closed), or the regular maximize button.
+  const previewMaximized =
+    previewRegionActive && (isVaBotMode ? isVaChatCollapsed && explorerCollapsed : isPreviewMaximized);
   const { widthPx: previewWidthPx, createDragHandle: createPreviewRegionDragHandle } = useProjectPreviewRegionWidth(
     mainRowWidth,
     explorerCollapsed ? 0 : explorerWidthPx,
@@ -566,7 +570,7 @@ const Layout: React.FC<{
                   onClick={() => {
                     if (isMobile && !collapsed) setCollapsed(true);
                   }}
-                  style={isMobile ? { width: '100%' } : undefined}
+                  style={isMobile ? { width: '100%' } : vaChatHidden ? { display: 'none' } : undefined}
                 >
                   <Outlet />
                   <PwaPullToRefresh />
@@ -579,6 +583,7 @@ const Layout: React.FC<{
                   <ProjectPanelHost
                     widthPx={explorerWidthPx}
                     collapsed={explorerCollapsed}
+                    fill={vaChatHidden}
                     dragHandle={createExplorerDragHandle({
                       className: 'absolute start-0 top-0 bottom-0 z-20',
                       reverse: true,

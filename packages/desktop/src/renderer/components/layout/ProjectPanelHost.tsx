@@ -38,9 +38,11 @@ export type ProjectPanelHostProps = {
   collapsed: boolean;
   /** Left-edge resize handle from Layout's `useResizableSplit`. */
   dragHandle?: React.ReactNode;
+  /** Takes its row's whole width (the VA Bot bottom row while the chat is collapsed): no fixed width, border or handle. */
+  fill?: boolean;
 };
 
-export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, collapsed, dragHandle }) => {
+export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, collapsed, dragHandle, fill = false }) => {
   const projectId = useCurrentProject();
   const mountIdRef = useRef<string>('');
   if (mountIdRef.current === '') mountIdRef.current = `pec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -56,11 +58,12 @@ export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, col
       data-collapsed={collapsed ? 'true' : 'false'}
       className='!bg-1 h-full flex-shrink-0 overflow-hidden relative'
       style={{
-        width: collapsed ? '0px' : `${widthPx}px`,
-        borderLeft: collapsed ? 'none' : '1px solid var(--bg-3)',
+        width: collapsed ? '0px' : fill ? undefined : `${widthPx}px`,
+        flexGrow: fill && !collapsed ? 1 : undefined,
+        borderLeft: collapsed || fill ? 'none' : '1px solid var(--bg-3)',
       }}
     >
-      {!collapsed && dragHandle}
+      {!collapsed && !fill && dragHandle}
       {/* Hosted project component (this round: Explorer). Seam = projectId only. */}
       <ExplorerContainer projectId={projectId} />
     </div>

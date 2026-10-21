@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,11 +49,30 @@ vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
 vi.mock('@renderer/components/OrphanChatsPrompt', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
-vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
-  usePreviewContext: () => ({ closePreview: () => {} }),
+const preview = vi.hoisted(() => ({
+  closePreview: () => {},
+  isOpen: false,
+  isMaximized: false,
+  isVaBotMode: false,
+  isVaChatCollapsed: true,
+  toggleVaChat: () => {},
+}));
+const project = vi.hoisted(() => ({ id: null as string | null }));
+vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({ usePreviewContext: () => preview }));
+vi.mock('@renderer/pages/conversation/Preview', () => ({
+  usePreviewContext: () => preview,
+  PreviewPanel: () => <div data-testid='preview-panel' />,
+}));
+vi.mock('@renderer/pages/conversation/explorer/currentProjectStore', () => ({
+  useCurrentProject: () => project.id,
+  setCurrentProject: () => {},
+}));
+vi.mock('@renderer/components/layout/ProjectPanelHost', () => ({
+  ProjectPanelHost: ({ collapsed }: { collapsed: boolean }) => (collapsed ? null : <div>files pane</div>),
 }));
 
 import Layout from '@renderer/components/layout/Layout';
+import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 
 const STORAGE_KEY = 'sider-collapsed';
 const ICON_ONLY_WIDTH = '56px';
@@ -140,5 +159,39 @@ describe('Layout sider icon-only mode', () => {
     getItem.mockRestore();
 
     expect(sider.style.width).toBe(ICON_ONLY_WIDTH);
+  });
+});
+
+// A VA Bot project chat showing its browser: the chat under it starts collapsed, and the files pane shares the chat's
+// bottom row, so the titlebar's files toggle opened a pane nobody could see.
+describe('Layout VA Bot files pane', () => {
+  beforeEach(() => {
+    setViewportWidth(1280);
+    route.pathname = '/conversation/c1';
+    project.id = 'p1';
+    Object.assign(preview, { isOpen: true, isVaBotMode: true, isVaChatCollapsed: true });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    route.pathname = '/settings/about';
+    project.id = null;
+    Object.assign(preview, { isOpen: false, isVaBotMode: false, isVaChatCollapsed: true });
+  });
+
+  it('opens and closes the files pane from the toggle while the chat is collapsed', () => {
+    render(<Layout sider={<div>sider</div>} />);
+    expect(screen.queryByText('files pane')).toBeNull();
+
+    act(() => {
+      dispatchWorkspaceToggleEvent();
+    });
+    expect(screen.getByText('files pane')).toBeVisible();
+    expect(screen.getByTestId('preview-panel')).toBeVisible();
+
+    act(() => {
+      dispatchWorkspaceToggleEvent();
+    });
+    expect(screen.queryByText('files pane')).toBeNull();
   });
 });

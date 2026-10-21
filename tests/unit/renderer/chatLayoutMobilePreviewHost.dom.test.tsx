@@ -15,13 +15,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // non-project conversations already render.
 
 let mockIsMobile = false;
+const mockPreview = { isOpen: true, isVaBotMode: false, isVaChatCollapsed: true, toggleVaChat: vi.fn() };
+let mockFilesCollapsed = true;
 
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ isMobile: mockIsMobile }),
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview', () => ({
-  usePreviewContext: () => ({ isOpen: true }),
+  usePreviewContext: () => mockPreview,
   PreviewPanel: () => <div data-testid='preview-panel'>preview</div>,
 }));
 
@@ -74,7 +76,7 @@ vi.mock('@/renderer/pages/conversation/hooks/useTitleRename', () => ({
 }));
 
 vi.mock('@/renderer/pages/conversation/hooks/useWorkspaceCollapse', () => ({
-  useWorkspaceCollapse: () => ({ rightSiderCollapsed: true, setRightSiderCollapsed: vi.fn() }),
+  useWorkspaceCollapse: () => ({ rightSiderCollapsed: mockFilesCollapsed, setRightSiderCollapsed: vi.fn() }),
 }));
 
 import ChatLayout from '@/renderer/pages/conversation/components/ChatLayout';
@@ -110,5 +112,50 @@ describe('ChatLayout mobile preview host fallback', () => {
     mockIsMobile = false;
     renderChatLayout(false);
     expect(screen.getByTestId('preview-panel')).toBeInTheDocument();
+  });
+});
+
+// VA Bot browser mode: the browser fills the pane while the chat under it is collapsed (the default). The files pane
+// sat in the chat's bottom row, so it stayed hidden with the chat and the files toggle seemed to do nothing.
+describe('ChatLayout VA Bot files pane', () => {
+  const renderVa = () =>
+    render(
+      <ChatLayout sider={<div>files tree</div>} workspaceEnabled>
+        <div>chat body</div>
+      </ChatLayout>
+    );
+
+  afterEach(() => {
+    mockPreview.isVaBotMode = false;
+    mockPreview.isVaChatCollapsed = true;
+    mockFilesCollapsed = true;
+  });
+
+  it('shows the opened files pane under the browser while the chat is collapsed', () => {
+    mockPreview.isVaBotMode = true;
+    mockFilesCollapsed = false;
+    renderVa();
+
+    expect(screen.getByText('files tree')).toBeVisible();
+    expect(screen.getByText('chat body')).not.toBeVisible();
+    expect(screen.getByTestId('preview-panel')).toBeVisible();
+  });
+
+  it('hides the bottom row when both the chat and the files pane are closed', () => {
+    mockPreview.isVaBotMode = true;
+    renderVa();
+
+    expect(screen.getByText('chat body')).not.toBeVisible();
+    expect(screen.getByText('files tree')).not.toBeVisible();
+  });
+
+  it('shows the chat beside the files pane once the chat is open', () => {
+    mockPreview.isVaBotMode = true;
+    mockPreview.isVaChatCollapsed = false;
+    mockFilesCollapsed = false;
+    renderVa();
+
+    expect(screen.getByText('chat body')).toBeVisible();
+    expect(screen.getByText('files tree')).toBeVisible();
   });
 });

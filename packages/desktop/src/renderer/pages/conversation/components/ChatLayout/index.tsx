@@ -94,7 +94,6 @@ const ChatLayout: React.FC<{
   // VA Bot conversations: browser on top, [chat | files] underneath. Regular chats keep
   // the side-by-side [chat | preview] split with the files sider on the right.
   const vaLayout = isDesktop && isPreviewOpen && isVaBotMode;
-  const previewMaximized = isDesktop && isPreviewOpen && (isVaBotMode ? isVaChatCollapsed : isMaximized);
 
   // --- Hook A: workspace collapse ---
   const { rightSiderCollapsed, setRightSiderCollapsed } = useWorkspaceCollapse({
@@ -103,6 +102,12 @@ const ChatLayout: React.FC<{
     conversation_id,
     preferenceKey: workspacePreferenceKey ?? conversation_id,
   });
+  // VA Bot: the files pane shares the chat's bottom row. With the chat collapsed, an open files pane keeps that row up
+  // and fills it; only with both closed does the browser take the whole height.
+  const vaChatHidden = vaLayout && isVaChatCollapsed;
+  const vaFilesOpen = workspaceEnabled && !rightSiderCollapsed;
+  const previewMaximized =
+    isDesktop && isPreviewOpen && (isVaBotMode ? isVaChatCollapsed && !vaFilesOpen : isMaximized);
 
   // --- Hook B: container width ---
   const { containerRef, containerWidth } = useContainerWidth();
@@ -179,7 +184,8 @@ const ChatLayout: React.FC<{
     containerWidth,
     workspaceEnabled,
     isDesktop,
-    isPreviewOpen,
+    // VA Bot stacks the browser above [chat | files]; the side-by-side three-panel limits would collapse the files pane.
+    isPreviewOpen: isPreviewOpen && !vaLayout,
     rightSiderCollapsed,
     setRightSiderCollapsed,
     workspaceWidthPx: workspaceWidthPxPref,
@@ -248,22 +254,25 @@ const ChatLayout: React.FC<{
     </>
   );
 
+  const siderWidth = rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`;
   const workspaceSider =
     workspaceEnabled && !layout?.isMobile ? (
       <div
         className={classNames('!bg-1 relative chat-layout-right-sider layout-sider')}
         style={{
-          flexGrow: 0,
+          // Alone in the VA Bot bottom row (chat collapsed), the files pane takes the row's whole width.
+          flexGrow: vaChatHidden ? 1 : 0,
           flexShrink: 0,
-          flexBasis: rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`,
-          width: rightSiderCollapsed ? '0px' : `${Math.round(workspaceWidthPx)}px`,
+          flexBasis: vaChatHidden ? 0 : siderWidth,
+          width: vaChatHidden ? undefined : siderWidth,
           minWidth: rightSiderCollapsed ? '0px' : `${MIN_WORKSPACE_PANEL_PX}px`,
           overflow: 'hidden',
-          borderLeft: rightSiderCollapsed ? 'none' : '1px solid var(--bg-3)',
+          borderLeft: rightSiderCollapsed || vaChatHidden ? 'none' : '1px solid var(--bg-3)',
         }}
       >
         {isDesktop &&
           !rightSiderCollapsed &&
+          !vaChatHidden &&
           createWorkspaceDragHandle({
             className: 'absolute start-0 top-0 bottom-0',
             style: {},
@@ -326,7 +335,11 @@ const ChatLayout: React.FC<{
                 if (window.innerWidth < 768 && !rightSiderCollapsed) setRightSiderCollapsed(true);
               }}
             >
-              <ArcoLayout.Content className='flex flex-col flex-1 min-w-0 bg-1 overflow-hidden' data-chat-pane>
+              <ArcoLayout.Content
+                className='flex flex-col flex-1 min-w-0 bg-1 overflow-hidden'
+                style={vaChatHidden ? { display: 'none' } : undefined}
+                data-chat-pane
+              >
                 {props.children}
               </ArcoLayout.Content>
               {/* VA Bot: the files/workspace pane sits beside the chat in the bottom row. */}
