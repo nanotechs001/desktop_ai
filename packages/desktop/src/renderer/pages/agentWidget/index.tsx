@@ -9,7 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
-import type { AgentWidgetLayout, AgentWidgetSettings } from '@/common/types/agent/agentWidget';
+import type { AgentChatLocation, AgentWidgetLayout, AgentWidgetSettings } from '@/common/types/agent/agentWidget';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
 import { configService } from '@/common/config/configService';
@@ -44,6 +44,20 @@ const WIDGET_HIT_SELECTOR = '[data-widget-hit], .arco-trigger, .arco-modal-wrapp
  * always-on-top window at #/widget/:id). The robot reflects live agent state;
  * clicking it opens the chat popup, dragging slides it along the taskbar.
  */
+/**
+ * Whether the popup's chat is mounted. History loads lazily on the first open, and the chat unmounts when it goes back
+ * to the main window. It mounts again whenever it is back in an open popup: a chat switch (history pick, New chat) keeps
+ * the popup open, so waiting for `expanded` to change would leave the old chat's spinner up for good.
+ */
+export function useChatMounted(expanded: boolean, chatLocation: AgentChatLocation): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (chatLocation === 'main') setMounted(false);
+    else if (expanded) setMounted(true);
+  }, [expanded, chatLocation]);
+  return mounted;
+}
+
 const AgentWidgetPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
   const { t } = useTranslation();
@@ -56,7 +70,7 @@ const AgentWidgetPage: React.FC = () => {
   useBotColorsSync();
   const botColor = useVaBotColor(conversation?.assistant);
   const expanded = layout?.expanded ?? false;
-  const [chatMounted, setChatMounted] = useState(false);
+  const chatMounted = useChatMounted(expanded, chatLocation);
   const { state, awaitingUser, wake } = useAgentAnimationState(id, expanded && chatLocation === 'widget');
   const reduceMotion = Boolean(settings?.reduceMotion);
   useMotionPreference(reduceMotion);
@@ -211,14 +225,6 @@ const AgentWidgetPage: React.FC = () => {
       offDeleted();
     };
   }, [id]);
-
-  // History loads lazily on the first open, and the chat unmounts when it goes back to the main window.
-  useEffect(() => {
-    if (expanded) setChatMounted(true);
-  }, [expanded]);
-  useEffect(() => {
-    if (chatLocation === 'main') setChatMounted(false);
-  }, [chatLocation]);
 
   // Collapsed, the window is just the robot's box, so it is always clickable. With the popup
   // open, only the transparent strip beside the robot passes clicks through to the desktop.
