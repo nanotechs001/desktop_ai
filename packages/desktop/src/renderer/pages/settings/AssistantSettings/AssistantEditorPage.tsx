@@ -1,5 +1,5 @@
 import type { AssistantEditorViewModel, AssistantListItem } from './types';
-import { Button, Tooltip } from '@arco-design/web-react';
+import { Button, Empty, Tooltip } from '@arco-design/web-react';
 import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { ArrowLeft } from '@icon-park/react';
@@ -16,9 +16,17 @@ type AssistantEditorPageProps = {
   onBack: () => void;
   /** Where deleting cannot work (a robot window: it would navigate away from the robot), Delete is not offered. */
   hideDelete?: boolean;
+  /** The back button's label where back does not lead to the agent list. */
+  backLabel?: string;
 };
 
-const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activeAssistant, onBack, hideDelete }) => {
+const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({
+  editor,
+  activeAssistant,
+  onBack,
+  hideDelete,
+  backLabel,
+}) => {
   const { t } = useTranslation();
   const { isCreating, actions, profile } = editor;
   const canDelete = !hideDelete && !isCreating && activeAssistant?.source === 'user';
@@ -40,7 +48,7 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({ editor, activ
             data-testid='btn-back-assistant-editor'
             className='!flex !items-center !gap-4px !rounded-8px !px-6px !text-t-primary'
           >
-            {t('settings.assistantBackToList', { defaultValue: 'All Agents' })}
+            {backLabel ?? t('settings.assistantBackToList', { defaultValue: 'All Agents' })}
           </Button>
           <BotColorDot color={profile.color} />
           <div className='truncate text-14px font-600 text-t-primary'>
@@ -106,8 +114,12 @@ type EmbeddedAssistantEditorProps = {
 
 /** One assistant's editor, opened on its own outside the settings page (a robot's expanded window). */
 export const EmbeddedAssistantEditor: React.FC<EmbeddedAssistantEditorProps> = ({ assistantId, onBack }) => {
+  const { t } = useTranslation();
   const { assistants, activeAssistant, message, messageContext, editor, editorViewModel } =
     useAssistantEditorViewModel();
+  // shortcut: an empty list means it is still loading (a loaded list always has the built-in bots); add a loading
+  // flag to useAssistantList if that ever stops holding.
+  const missing = assistants.length > 0 && !assistants.some((assistant) => assistant.id === assistantId);
   const openedRef = useRef(false);
   const wasVisibleRef = useRef(false);
 
@@ -128,8 +140,15 @@ export const EmbeddedAssistantEditor: React.FC<EmbeddedAssistantEditorProps> = (
   return (
     <>
       {messageContext}
+      {missing && <Empty className='m-auto' description={t('pet.widget.botMissing')} />}
       {editor.editVisible && (
-        <AssistantEditorPage editor={editorViewModel} activeAssistant={activeAssistant} onBack={onBack} hideDelete />
+        <AssistantEditorPage
+          editor={editorViewModel}
+          activeAssistant={activeAssistant}
+          onBack={onBack}
+          hideDelete
+          backLabel={t('common.back')}
+        />
       )}
       <SkillConfirmModals
         deletePendingSkillName={editor.deletePendingSkillName}

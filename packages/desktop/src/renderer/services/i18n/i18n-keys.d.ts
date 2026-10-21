@@ -1249,6 +1249,7 @@ export type I18nKey =
   | 'messages.slash.title'
   | 'messages.unknownMessageType'
   | 'pet.widget.agentOpenedSite'
+  | 'pet.widget.botMissing'
   | 'pet.widget.botSettings'
   | 'pet.widget.chatInWidget'
   | 'pet.widget.chatWithRobot'

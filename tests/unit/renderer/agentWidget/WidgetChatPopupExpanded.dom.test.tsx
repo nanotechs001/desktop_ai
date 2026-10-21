@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +23,7 @@ const h = vi.hoisted(() => ({
     onClose: () => void;
   },
   editorProps: null as null | { assistantId: string; onBack: () => void },
+  editorMounts: 0,
   conversations: [] as unknown[],
 }));
 
@@ -51,7 +53,11 @@ vi.mock('@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListS
 vi.mock('@/renderer/pages/settings/AssistantSettings/AssistantEditorPage', () => ({
   EmbeddedAssistantEditor: (props: NonNullable<typeof h.editorProps>) => {
     h.editorProps = props;
-    return <div data-testid='embedded-editor' />;
+    useEffect(() => {
+      h.editorMounts += 1;
+    }, []);
+    // Arco menus and pickers render into <body>; their key events still bubble through the React tree.
+    return <div data-testid='embedded-editor'>{createPortal(<div data-testid='editor-menu' />, document.body)}</div>;
   },
 }));
 vi.mock('@/renderer/pages/conversation/utils/startNewChatLike', () => ({ startNewChatLike: vi.fn() }));
@@ -81,7 +87,7 @@ const renderPopup = (windowMode: 'compact' | 'expanded', onShowConversation = vi
   const view = render(<WidgetChatPopup {...props} layout={{ ...LAYOUT, window_mode: windowMode } as never} />);
   const rerender = (mode: 'compact' | 'expanded') =>
     view.rerender(<WidgetChatPopup {...props} layout={{ ...LAYOUT, window_mode: mode } as never} />);
-  return { onShowConversation, rerender };
+  return { onShowConversation, rerender, onMinimize: props.onMinimize };
 };
 
 const nav = () => screen.getByRole('navigation');
@@ -94,6 +100,7 @@ afterEach(() => {
   h.chatMounts = 0;
   h.historyProps = null;
   h.editorProps = null;
+  h.editorMounts = 0;
   h.conversations = [];
 });
 
@@ -184,6 +191,35 @@ describe('WidgetChatPopup expanded window', () => {
     React.act(() => h.editorProps!.onBack());
     expect(screen.queryByTestId('embedded-editor')).toBeNull();
     expect(navItem('pet.widget.navChat')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('Escape inside Settings, or from a menu it opened, leaves the window open; elsewhere it closes it', () => {
+    h.conversations = [CURRENT];
+    const { onMinimize } = renderPopup('expanded');
+    fireEvent.click(navItem('common.settings'));
+    fireEvent.keyDown(screen.getByTestId('embedded-editor'), { key: 'Escape' });
+    fireEvent.keyDown(screen.getByTestId('editor-menu'), { key: 'Escape' });
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.querySelector('header')!.dispatchEvent(handled);
+    expect(onMinimize).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document.querySelector('header')!, { key: 'Escape' });
+    expect(onMinimize).toHaveBeenCalledTimes(1);
+  });
+
+  it('Restore keeps the Settings editor (and its unsaved edits) mounted; expanding again shows it as it was', () => {
+    h.conversations = [CURRENT];
+    const { rerender } = renderPopup('expanded');
+    fireEvent.click(navItem('common.settings'));
+    const editor = screen.getByTestId('embedded-editor');
+    rerender('compact');
+    expect(editor.isConnected).toBe(true);
+    expect(screen.getByTestId('chat-body').parentElement?.className).not.toMatch(/hidden/);
+    rerender('expanded');
+    expect(screen.getByTestId('embedded-editor')).toBe(editor);
+    expect(navItem('common.settings')).toHaveAttribute('aria-current', 'page');
+    expect(h.editorMounts).toBe(1);
   });
 
   it('renders no sidebar in compact mode', () => {

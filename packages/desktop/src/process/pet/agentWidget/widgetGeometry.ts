@@ -130,26 +130,39 @@ export function bandWalkRange(windowWidth: number, botSize: number): { min: numb
   return { min: BAND_WALK_INSET_PX, max: Math.max(BAND_WALK_INSET_PX, windowWidth - botSize - BAND_WALK_INSET_PX) };
 }
 
-/**
- * The expanded window: a top band holding the robot plus the chat panel below it, centred in the work area.
- * `botOffsetX` is the robot's x inside the window (null: the panel's top-right), kept within the walk range.
- */
-export function expandedPlacement(workArea: Rect, botSize: number, botOffsetX: number | null): WidgetPlacement {
+/** The expanded window (a top band holding the robot plus the chat panel below it), centred in the work area. */
+export function expandedWindowBounds(workArea: Rect, botSize: number): Rect {
   const band = expandedBandHeight(botSize);
   const width = Math.min(EXPANDED_PANEL.width, workArea.width - EXPANDED_MARGIN_PX);
   const height = band + Math.min(EXPANDED_PANEL.height, workArea.height - EXPANDED_MARGIN_PX - band);
-  const range = bandWalkRange(width, botSize);
-  const offset = clamp(botOffsetX ?? width - botSize - EXPANDED_START_INSET_PX, range.min, range.max);
   return {
-    bounds: {
-      x: workArea.x + Math.round((workArea.width - width) / 2),
-      y: workArea.y + Math.round((workArea.height - height) / 2),
-      width,
-      height,
-    },
-    popupSide: 'right',
-    popupVertical: 'below',
-    botOffsetX: offset,
+    x: workArea.x + Math.round((workArea.width - width) / 2),
+    y: workArea.y + Math.round((workArea.height - height) / 2),
+    width,
+    height,
+  };
+}
+
+/**
+ * The robot inside the expanded window at `bounds`: `botOffsetX` is its x inside the window (null: the panel's
+ * top-right), kept within the walk range.
+ */
+export function bandPlacement(bounds: Rect, botSize: number, botOffsetX: number | null): WidgetPlacement {
+  const range = bandWalkRange(bounds.width, botSize);
+  const offset = clamp(botOffsetX ?? bounds.width - botSize - EXPANDED_START_INSET_PX, range.min, range.max);
+  return { bounds, popupSide: 'right', popupVertical: 'below', botOffsetX: offset };
+}
+
+// Each further expanded window on a display opens this much lower and to the right, so none hides another.
+const CASCADE_STEP_PX = 28;
+
+/** `bounds` moved `steps` cascade steps down and right, kept inside the work area. */
+export function cascadeBounds(bounds: Rect, steps: number, workArea: Rect): Rect {
+  const shift = steps * CASCADE_STEP_PX;
+  return {
+    ...bounds,
+    x: clamp(bounds.x + shift, workArea.x, workArea.x + workArea.width - bounds.width),
+    y: clamp(bounds.y + shift, workArea.y, workArea.y + workArea.height - bounds.height),
   };
 }
 

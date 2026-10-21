@@ -1618,6 +1618,76 @@ describe('expanded window mode', () => {
     expect(layoutOf(A)?.bot_offset_x).toBe(960 - 132 - 16);
   });
 
+  it('a band walk stops when the chat goes back to the main window (×)', async () => {
+    const { manager, win } = await expandedWalker();
+    vi.advanceTimersByTime(3_000 + 600);
+    expect(layoutOf(A)?.moving).toBe(true);
+    manager.setChatLocation(A, 'main');
+    expect(layoutOf(A)).toMatchObject({ expanded: false, moving: false, top_band: 0 });
+    vi.advanceTimersByTime(1_000); // any landing is over
+    const x = win.bounds.x;
+    h.cursor = { x: x + BOT / 2, y: 500 }; // the mouse is over the robot: it has no reason to follow it
+    vi.advanceTimersByTime(10_000);
+    expect(win.bounds.x).toBe(x);
+    expect(win.bounds.y + win.bounds.height).toBe(1040);
+  });
+
+  it('a re-place (display or scale change) ends a walk instead of leaving it running', async () => {
+    await expandedWalker();
+    vi.advanceTimersByTime(3_000 + 600);
+    expect(layoutOf(A)?.moving).toBe(true);
+    for (const fn of h.screenListeners['display-metrics-changed'] ?? []) fn();
+    expect(layoutOf(A)?.moving).toBe(false);
+  });
+
+  it('a Recent pick keeps the expanded window open, unresized, with the robot where it stood', async () => {
+    const { manager, win } = await expandedWalker();
+    vi.advanceTimersByTime(3_000 + 600 + 500); // walked a bit
+    const offset = layoutOf(A)!.bot_offset_x;
+    const setBounds = vi.spyOn(win as unknown as { setBounds: (b: Rect) => void }, 'setBounds');
+    manager.retarget(A, B);
+    expect(setBounds).not.toHaveBeenCalled();
+    expect(win.bounds).toEqual(EXPANDED);
+    expect(layoutOf(B)).toMatchObject({ expanded: true, top_band: BAND, bot_offset_x: offset });
+    expect(manager.getChatLocations()).toEqual({ [B]: 'widget' });
+    expect(emittedOf('chatLocationChanged')).toContainEqual({ conversation_id: A, location: 'main' });
+  });
+
+  it('dragging the robot out of the band picks it up where it stands, keeping the grab offset', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    const win = liveWindows()[0];
+    appear(manager, A);
+    manager.setWindowMode(A, 'expanded');
+    manager.setExpanded(A, true);
+    vi.advanceTimersByTime(300);
+    const botLeft = EXPANDED.x + START_OFFSET;
+    const botTop = EXPANDED.y + HOP_HEADROOM;
+    h.cursor = { x: botLeft + 40, y: botTop + 30 };
+    manager.dragStart(A);
+    expect(win.bounds.x).toBe(botLeft);
+    expect(robotTop(win)).toBe(botTop);
+    h.cursor = { x: botLeft + 140, y: botTop + 80 };
+    manager.dragMove(A);
+    expect(win.bounds.x).toBe(botLeft + 100);
+    expect(robotTop(win)).toBe(botTop + 50);
+  });
+
+  it('a second expanded window on the same display opens cascaded, not on top of the first', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.ensure(B);
+    appear(manager, A);
+    appear(manager, B);
+    const [winA, winB] = liveWindows();
+    manager.setWindowMode(A, 'expanded');
+    manager.setWindowMode(B, 'expanded');
+    manager.setExpanded(A, true);
+    manager.setExpanded(B, true);
+    expect(winA.bounds).toEqual(EXPANDED);
+    expect(winB.bounds).toEqual({ ...EXPANDED, x: EXPANDED.x + 28, y: EXPANDED.y + 28 });
+  });
+
   it('rejects a malformed setWindowMode at the IPC boundary', async () => {
     const { manager } = await makeManager();
     initAgentWidgetBridge(manager);

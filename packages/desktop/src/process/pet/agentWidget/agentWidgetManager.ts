@@ -25,12 +25,14 @@ import type {
 import { DROP_IMPACT_MS, isHttpUrl, robotAnimationMs } from '@/common/types/agent/agentWidget';
 import { mergeSettings, normalizeWidgetState, processConfigIO, type WidgetStateIO } from './agentWidgetStore';
 import {
+  bandPlacement,
   bandWalkRange,
   carriedPosition,
+  cascadeBounds,
   computePlacement,
   expandedBandHeight,
+  expandedWindowBounds,
   HOP_HEADROOM_PX,
-  expandedPlacement,
   landingY,
   getWalkTrack,
   followTarget,
@@ -107,6 +109,8 @@ type WidgetEntry = {
   botX: number;
   /** The robot's x inside the expanded window's top band (null: not showing; it starts at the top-right). */
   bandX: number | null;
+  /** The expanded window's bounds, fixed when it opens (null: not showing). */
+  bandBounds: Rect | null;
   dragging: boolean;
   /** Pointer position inside the robot box when the drag started. */
   grab: { x: number; y: number };
@@ -150,6 +154,8 @@ export class AgentWidgetManager {
   private readonly suspended = new Set<string>();
   private readonly relayoutAll = () => {
     for (const entry of this.entries.values()) {
+      // A walk toward a spot the re-place moved out of reach would never arrive.
+      this.stopGlide(entry);
       const display = this.displayById(entry.displayId) ?? this.defaultDisplay();
       entry.displayId = display.id;
       entry.botX = xFromRatio(this.track(display), entry.record.x_ratio);
@@ -358,10 +364,8 @@ export class AgentWidgetManager {
     if (location === 'main' && entry) entry.expandWhenLive = false;
     if (!record || record.chat_location === location) return;
     record.chat_location = location;
-    if (location === 'main' && entry?.record.expanded) {
-      entry.record.expanded = false;
-      this.place(entry);
-    }
+    // Collapse the usual way, so a walk in the expanded window's band stops too.
+    if (location === 'main' && entry?.record.expanded) this.setExpanded(conversationId, false);
     ipcBridge.agentWidget.chatLocationChanged.emit({ conversation_id: conversationId, location });
     void this.persist();
   }
@@ -413,6 +417,8 @@ export class AgentWidgetManager {
     if (entry.dragging) this.dragEnd(conversationId);
     this.stopGlide(entry);
     this.finishLanding(entry);
+    // Picked up from the expanded window's band: it is carried on from where it stands there.
+    if (this.inBand(entry)) this.seatFromBand(entry);
     if (entry.record.expanded) this.setExpanded(conversationId, false);
     const cursor = screen.getCursorScreenPoint();
     const top = entry.airY ?? this.currentTrack(entry).y;
@@ -572,23 +578,31 @@ export class AgentWidgetManager {
       this.closeWindow(to);
       delete this.state.widgets[to];
     }
-    // An open popup stays open on the new conversation (picked from the bot's history).
-    const wasExpanded = record.expanded;
-    if (record.chat_location === 'widget') this.setChatLocation(from, 'main');
+    const entry = this.entries.get(from);
+    // An open popup stays open on the new conversation (picked from the bot's history), as it is: no resize, and the
+    // robot keeps its spot in the expanded window's band.
+    const keepOpen = record.expanded && entry !== undefined;
+    if (keepOpen && record.chat_location === 'widget') {
+      ipcBridge.agentWidget.chatLocationChanged.emit({ conversation_id: from, location: 'main' });
+    } else if (record.chat_location === 'widget') {
+      this.setChatLocation(from, 'main');
+    }
     delete this.state.widgets[from];
     this.drafts.delete(from);
     record.conversation_id = to;
-    record.chat_location = 'main';
+    record.chat_location = keepOpen ? 'widget' : 'main';
     record.modified_at = Date.now();
     this.state.widgets[to] = record;
-    const entry = this.entries.get(from);
     if (entry) {
       this.entries.delete(from);
       this.entries.set(to, entry);
       ipcBridge.agentWidget.retargeted.emit({ conversation_id: from, to });
       entry.lastLayoutKey = '';
       this.place(entry);
-      if (wasExpanded) this.setExpanded(to, true);
+    }
+    if (keepOpen) {
+      ipcBridge.agentWidget.chatLocationChanged.emit({ conversation_id: to, location: 'widget' });
+      this.followInMain(to);
     }
     void this.persist();
     this.emitRobotsChanged();
@@ -690,6 +704,7 @@ export class AgentWidgetManager {
       displayId: display.id,
       botX,
       bandX: null,
+      bandBounds: null,
       dragging: false,
       grab: { x: 0, y: 0 },
       airY: null,
@@ -861,6 +876,7 @@ export class AgentWidgetManager {
   /** Apply the current placement to the window and tell its renderer when the layout shape changed. */
   private place(entry: WidgetEntry): void {
     if (entry.win.isDestroyed()) return;
+    if (this.inBand(entry)) entry.bandBounds ??= this.openingBandBounds(entry);
     const placement = this.currentPlacement(entry);
     if (this.inBand(entry)) {
       // Just opened: the first stroll along the band waits one stroll delay, like on the taskbar.
@@ -868,6 +884,7 @@ export class AgentWidgetManager {
       entry.bandX = placement.botOffsetX;
     } else {
       entry.bandX = null;
+      entry.bandBounds = null;
       entry.botX = placement.bounds.x + placement.botOffsetX;
     }
     this.setBounds(entry, placement.bounds);
@@ -945,12 +962,39 @@ export class AgentWidgetManager {
 
   private currentPlacement(entry: WidgetEntry): WidgetPlacement {
     const track = this.currentTrack(entry);
-    if (this.inBand(entry)) return expandedPlacement(track.workArea, this.botSize(), entry.bandX);
+    if (this.inBand(entry)) {
+      return bandPlacement(entry.bandBounds ?? this.openingBandBounds(entry), this.botSize(), entry.bandX);
+    }
     const headroom = this.headroom(entry);
     const placement = computePlacement(track, entry.botX, this.botSize(), entry.record.expanded, POPUP_SIZE, headroom);
     // Carried or falling: same box, lifted off the track.
     if (entry.airY === null || entry.record.expanded) return placement;
     return { ...placement, bounds: { ...placement.bounds, y: entry.airY - headroom } };
+  }
+
+  /** Where an expanded window opens: centred, cascaded past the other robots' expanded windows on its display. */
+  private openingBandBounds(entry: WidgetEntry): Rect {
+    const workArea = this.currentTrack(entry).workArea;
+    let others = 0;
+    for (const other of this.entries.values()) {
+      if (other !== entry && other.bandBounds && other.displayId === entry.displayId) others++;
+    }
+    return cascadeBounds(expandedWindowBounds(workArea, this.botSize()), others, workArea);
+  }
+
+  /**
+   * The robot leaves the expanded window's band: where it stands there, in screen coordinates, becomes its taskbar
+   * x and its height in the air, on the display under it.
+   */
+  private seatFromBand(entry: WidgetEntry): void {
+    const size = this.botSize();
+    const window = entry.win.getBounds();
+    const spot = { x: window.x + this.currentPlacement(entry).botOffsetX, y: window.y + HOP_HEADROOM_PX };
+    const display = screen.getDisplayNearestPoint({ x: spot.x + size / 2, y: spot.y + size / 2 });
+    const seat = carriedPosition(spot, { x: 0, y: 0 }, display.workArea, size);
+    entry.displayId = display.id;
+    entry.botX = seat.x;
+    entry.airY = seat.y;
   }
 
   /** The expanded window is showing: the robot walks its top band instead of the taskbar. */

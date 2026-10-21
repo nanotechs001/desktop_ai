@@ -404,3 +404,7 @@
   overflow: hidden;
   border-bottom-right-radius: 16px;
 }
+
+.view.hidden {
+  display: none;
+}

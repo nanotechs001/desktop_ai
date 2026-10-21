@@ -75,6 +75,20 @@ describe('EmbeddedAssistantEditor', () => {
     expect(h.handleEdit).toHaveBeenCalledTimes(1);
   });
 
+  it('labels its back button as going back to the chat', () => {
+    h.assistants = [BOT];
+    h.editVisible = true;
+    render(<EmbeddedAssistantEditor assistantId='bot-1' onBack={vi.fn()} />);
+    expect(screen.getByTestId('btn-back-assistant-editor').textContent).toBe('common.back');
+  });
+
+  it('says the bot is gone when the loaded list does not have it', () => {
+    h.assistants = [{ id: 'bot-0', name: 'Other', source: 'user' }];
+    render(<EmbeddedAssistantEditor assistantId='bot-1' onBack={vi.fn()} />);
+    expect(screen.getByText('pet.widget.botMissing')).toBeTruthy();
+    expect(h.handleEdit).not.toHaveBeenCalled();
+  });
+
   it('goes back when cancelled, and when a save closes the editor', () => {
     h.assistants = [BOT];
     h.editVisible = true;

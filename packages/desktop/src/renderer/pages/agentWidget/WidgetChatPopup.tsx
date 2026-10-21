@@ -211,7 +211,12 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
       aria-label={botName}
       data-widget-hit
       onKeyDown={(e) => {
-        if (e.key === 'Escape') props.onMinimize();
+        // Escape that something inside already handled, from a portal (an Arco menu), or inside Recent/Settings (an
+        // editor with unsaved edits) is not a request to close the window.
+        if (e.key !== 'Escape' || e.defaultPrevented) return;
+        const target = e.target as Element;
+        if (!e.currentTarget.contains(target) || target.closest('[data-view]')) return;
+        props.onMinimize();
       }}
     >
       <header className={styles.header}>
@@ -291,7 +296,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
             )}
           </div>
           {view === 'recent' && (
-            <div className={styles.view}>
+            <div className={styles.view} data-view>
               <ConversationHistoryProvider>
                 <HistoryPanelBody
                   embedded
@@ -303,8 +308,9 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
               </ConversationHistoryProvider>
             </div>
           )}
-          {view === 'settings' && agentId && (
-            <div className={styles.view}>
+          {/* Kept mounted (hidden) across Restore, so a half-edited bot survives a trip to the compact popup. */}
+          {expandedView === 'settings' && agentId && (
+            <div className={classNames(styles.view, view !== 'settings' && styles.hidden)} data-view>
               <EmbeddedAssistantEditor assistantId={agentId} onBack={showChat} />
             </div>
           )}
