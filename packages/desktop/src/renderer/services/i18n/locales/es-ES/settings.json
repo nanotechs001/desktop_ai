@@ -810,6 +810,7 @@
   "mcpOAuthLoginFailed": "Error en el inicio de sesión OAuth",
   "mcpOAuthLoginFailedWithReason": "Error al iniciar sesión: {{error}}",
   "mcpLogin": "Iniciar sesión",
+  "mcpLoginDesktopOnly": "Inicia sesión en la aplicación de escritorio",
   "mcpNeedsLogin": "Se requiere inicio de sesión",
   "noConfiguredModels": "No hay modelos configurados",
   "needHelpConfigGuide": "¿Necesitas ayuda? Consulta la",

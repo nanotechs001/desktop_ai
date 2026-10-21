@@ -7,14 +7,17 @@
  * and a successful one must refresh the status from the backend.
  */
 
-import { act, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpService } from '@/common/adapter/ipcBridge';
 import type { IMcpServer } from '@/common/config/storage';
 import { useMcpOAuth } from '@/renderer/hooks/mcp/useMcpOAuth';
 import McpServerHeader from '@/renderer/pages/settings/ToolsSettings/McpServerHeader';
+
+const platform = vi.hoisted(() => ({ desktop: true }));
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => platform.desktop }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -127,5 +130,57 @@ describe('McpServerHeader OAuth failure', () => {
     );
 
     expect(screen.queryByText(/mcpOAuthLoginFailedWithReason/)).toBeNull();
+  });
+});
+
+describe('MCP OAuth from the WebUI (M12)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    platform.desktop = false;
+  });
+  afterEach(() => {
+    cleanup();
+    platform.desktop = true;
+  });
+
+  const renderHeader = () =>
+    render(
+      <McpServerHeader
+        server={server}
+        isTestingConnection={false}
+        oauthStatus={{ isAuthenticated: false, needsLogin: true, isChecking: false }}
+        onTestConnection={vi.fn()}
+        onEditServer={vi.fn()}
+        onDeleteServer={vi.fn()}
+        onOAuthLogin={vi.fn()}
+      />
+    );
+
+  it('disables Login and says to sign in on the desktop app', () => {
+    renderHeader();
+
+    const login = screen.getByRole('button', { name: /settings\.mcpLogin/ });
+    expect(login.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('settings.mcpLoginDesktopOnly')).toBeTruthy();
+  });
+
+  it('keeps Login enabled on the desktop app', () => {
+    platform.desktop = true;
+    renderHeader();
+
+    expect(screen.getByRole('button', { name: /settings\.mcpLogin/ }).hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByText('settings.mcpLoginDesktopOnly')).toBeNull();
+  });
+
+  it('never starts a sign-in, which would open a browser on the desktop', async () => {
+    const { result } = renderHook(() => useMcpOAuth());
+
+    let outcome: { success: boolean; error?: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.login(server);
+    });
+
+    expect(mcpService.loginMcpOAuth.invoke).not.toHaveBeenCalled();
+    expect(outcome?.success).toBe(false);
   });
 });

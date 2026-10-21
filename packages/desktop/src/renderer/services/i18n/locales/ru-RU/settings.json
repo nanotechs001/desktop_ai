@@ -814,6 +814,7 @@
   "mcpOAuthLoginFailed": "Ошибка OAuth-входа",
   "mcpOAuthLoginFailedWithReason": "Не удалось войти: {{error}}",
   "mcpLogin": "Войти",
+  "mcpLoginDesktopOnly": "Войдите в настольном приложении",
   "mcpNeedsLogin": "Требуется вход",
   "noConfiguredModels": "Модели не настроены",
   "needHelpConfigGuide": "Нужна помощь? Ознакомьтесь с",

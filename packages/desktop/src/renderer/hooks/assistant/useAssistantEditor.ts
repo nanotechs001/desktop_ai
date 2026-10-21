@@ -1,7 +1,7 @@
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import { newBotColor, rememberBotColor } from '@/renderer/hooks/agent/useBotColor';
-import { enginePinOrigin, persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
+import { enginePinOrigin, persistEnginePin, reloadEnginePins } from '@/renderer/hooks/agent/useDefaultEngine';
 import type { IMcpServer } from '@/common/config/storage';
 import type { Assistant, CreateAssistantRequest, UpdateAssistantRequest } from '@/common/types/agent/assistantTypes';
 import type { Message } from '@arco-design/web-react';
@@ -15,8 +15,9 @@ import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { getSkillImportErrorMessage } from '@/renderer/pages/settings/SkillsSettings/skillImportMessages';
 import { isBotColor } from '@/common/types/agent/botColors';
 import { isUndeletableAgent, isVaBotAgent } from '@/common/types/agent/defaultAgent';
-import { stripBrowserRule } from '@/common/types/agent/managedRuleBlock';
+import { keepManagedBlocks, stripBrowserRule } from '@/common/types/agent/managedRuleBlock';
 import { emitter } from '@/renderer/utils/emitter';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { assistantOrderAfterToggle, selectableAssistants } from '@/renderer/utils/model/assistantSelection';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -77,10 +78,30 @@ const deriveBuiltinAutoSkills = (skills: SkillInfo[]): BuiltinAutoSkill[] =>
  * also confirms a usage-limit pin on that same engine as the user's own, so a default change no longer releases it.
  */
 const syncEnginePin = async (assistantId: string, usesDefault: boolean, engineId: string): Promise<void> => {
+  await reloadEnginePins();
   const current = configService.get('agent.enginePins')?.[assistantId];
   if (usesDefault && current) return persistEnginePin(assistantId, null);
   if (!usesDefault && engineId && (current !== engineId || enginePinOrigin(assistantId) === 'limit')) {
     return persistEnginePin(assistantId, engineId);
+  }
+};
+
+/**
+ * The WebUI's rule save: main, which composes the AionUi blocks, is out of reach, so the text goes over HTTP to the
+ * default rule and the editor's locale (as main writes them), keeping the blocks stored now. The desktop refreshes
+ * them at its next start or note change. A failed read throws, so the blocks are never dropped by a save.
+ */
+const writeRulesOverHttp = async (assistantId: string, locale: string, rules: string): Promise<void> => {
+  for (const target of new Set(['', locale])) {
+    const localeField = target ? { locale: target } : {};
+    // eslint-disable-next-line no-await-in-loop -- one rule after another, as main writes them
+    const current = await ipcBridge.fs.readAssistantRule.invoke({ assistant_id: assistantId, ...localeField });
+    // eslint-disable-next-line no-await-in-loop -- one rule after another, as main writes them
+    await ipcBridge.fs.writeAssistantRule.invoke({
+      assistant_id: assistantId,
+      content: keepManagedBlocks(rules, current ?? ''),
+      ...localeField,
+    });
   }
 };
 
@@ -422,6 +443,10 @@ export const useAssistantEditor = ({
    */
   const persistAssistantRules = useCallback(
     async (assistantId: string, rules: string): Promise<boolean> => {
+      if (!isElectronDesktop()) {
+        await writeRulesOverHttp(assistantId, localeKey, rules.trim() ? rules : '');
+        return true;
+      }
       const reply = await ipcBridge.agentBrowser.ensureAgentRule.invoke({
         assistantId,
         locale: localeKey,

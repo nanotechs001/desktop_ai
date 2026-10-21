@@ -820,6 +820,7 @@
   "mcpOAuthLoginFailed": "Помилка OAuth-входу",
   "mcpOAuthLoginFailedWithReason": "Не вдалося увійти: {{error}}",
   "mcpLogin": "Увійти",
+  "mcpLoginDesktopOnly": "Увійдіть у настільному застосунку",
   "mcpNeedsLogin": "Потрібен вхід",
   "noConfiguredModels": "Моделі не налаштовано",
   "needHelpConfigGuide": "Потрібна допомога? Ознайомтеся з",

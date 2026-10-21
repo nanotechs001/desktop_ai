@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { mcpService } from '@/common/adapter/ipcBridge';
 import type { IMcpServer } from '@/common/config/storage';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 export interface McpOAuthStatus {
   isAuthenticated: boolean;
@@ -82,6 +83,11 @@ export const useMcpOAuth = () => {
           success: false,
           error: 'OAuth is only supported for URL-based MCP transports',
         };
+      }
+
+      // The backend opens the sign-in page on the desktop itself: never start one from the WebUI.
+      if (!isElectronDesktop()) {
+        return { success: false, error: 'Sign in on the desktop app' };
       }
 
       setLoggingIn((prev) => ({ ...prev, [server.id]: true }));

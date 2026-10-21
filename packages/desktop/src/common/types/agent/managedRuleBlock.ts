@@ -41,6 +41,16 @@ export function stripBrowserRule(text: string): string {
     .join('\n\n');
 }
 
+/**
+ * `text` (the user's own) followed by the managed blocks stored in `current`, unchanged, for a save that cannot
+ * compose them (the WebUI, where main is out of reach).
+ */
+export function keepManagedBlocks(text: string, current: string): string {
+  const blocks = [...current.matchAll(/<!-- (aion-[a-z0-9-]+):start -->[\s\S]*?<!-- \1:end -->/g)].map((m) => m[0]);
+  if (blocks.length === 0) return text;
+  return `${[text.trim(), ...blocks].filter(Boolean).join('\n\n')}\n`;
+}
+
 export type UpsertManagedBlockResult = { ok: true; content: string } | { ok: false; reason: 'unbalanced-markers' };
 
 const countOf = (text: string, needle: string): number => text.split(needle).length - 1;

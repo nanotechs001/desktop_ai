@@ -822,6 +822,7 @@
   "mcpOAuthLoginFailed": "OAuth login failed",
   "mcpOAuthLoginFailedWithReason": "Sign-in failed: {{error}}",
   "mcpLogin": "Login",
+  "mcpLoginDesktopOnly": "Sign in on the desktop app",
   "mcpNeedsLogin": "Login required",
   "noConfiguredModels": "No configured models",
   "needHelpConfigGuide": "Need help? Check out the detailed",

@@ -822,6 +822,7 @@
   "mcpOAuthLoginFailed": "Falha no login OAuth",
   "mcpOAuthLoginFailedWithReason": "Falha no login: {{error}}",
   "mcpLogin": "Login",
+  "mcpLoginDesktopOnly": "Entre pelo aplicativo para desktop",
   "mcpNeedsLogin": "desconectado · Enter para logar",
   "noConfiguredModels": "Nenhum modelo configurado",
   "needHelpConfigGuide": "Precisa de ajuda? Confira o",

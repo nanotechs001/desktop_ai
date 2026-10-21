@@ -7,7 +7,7 @@
  * Tests useAssistantEditor hook: core form state management and save/create/delete flows.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 // Mock @/common
@@ -51,6 +51,9 @@ vi.mock('@/common', () => ({
     },
   },
 }));
+
+const platform = vi.hoisted(() => ({ desktop: true }));
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => platform.desktop }));
 
 const engineConfig = vi.hoisted(() => {
   const store = new Map<string, unknown>();
@@ -99,6 +102,7 @@ import type { AssistantListItem } from '@/renderer/pages/settings/AssistantSetti
 import { mutate as swrMutate } from 'swr';
 import { BOT_COLOR_PALETTE } from '@/common/types/agent/botColors';
 import { releaseLimitPins } from '@/renderer/hooks/agent/useDefaultEngine';
+import { previewVaBotDelete } from '@/renderer/hooks/assistant/deleteVaBot';
 
 describe('useAssistantEditor', () => {
   const mockAssistantDetail = {
@@ -255,6 +259,17 @@ describe('useAssistantEditor', () => {
       expect(ipcBridge.agentNotes.removeAgent.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
       expect(engineConfig.store.get('agent.enginePins')).toEqual({ other: 'engine-y' });
       expect(mockMessage.success).toHaveBeenCalled();
+    });
+
+    it('drops a pin another window wrote after this window read the pins (M4)', async () => {
+      engineConfig.configService.reload.mockImplementationOnce(async () => {
+        engineConfig.store.set('agent.enginePins', { 'bare:gone': 'engine-x' });
+      });
+      (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
+
+      await deleteAgent();
+
+      expect(engineConfig.store.get('agent.enginePins')).toEqual({});
     });
 
     it('writes no engine pins when the Agent had none (first-run seeding stays possible)', async () => {
@@ -1336,6 +1351,83 @@ describe('useAssistantEditor', () => {
         expect.not.objectContaining({ agent_id: expect.anything() })
       );
       expect(enginePinWrites()).toEqual([]);
+    });
+  });
+
+  describe('on the WebUI, where main is out of reach (H3)', () => {
+    const never = () => new Promise<never>(() => {});
+    const bot: AssistantListItem = { id: 'a1', name: 'Existing', sort_order: 1, source: 'user', enabled: true };
+    const desktopOnly = () => [
+      ipcBridge.agentBrowser.ensureAgentRule.invoke,
+      ipcBridge.browser.deleteProfileData.invoke,
+      ipcBridge.agentWidget.listRobots.invoke,
+      ipcBridge.agentWidget.remove.invoke,
+      ipcBridge.agentNotes.removeAgent.invoke,
+    ];
+
+    beforeEach(() => {
+      platform.desktop = false;
+      // A desktop-only call on the WebUI is never answered.
+      for (const invoke of desktopOnly()) (invoke as any).mockImplementation(never);
+    });
+    afterEach(() => {
+      platform.desktop = true;
+      for (const invoke of desktopOnly()) (invoke as any).mockReset();
+      (ipcBridge.agentBrowser.ensureAgentRule.invoke as any).mockResolvedValue({ success: true });
+      (ipcBridge.browser.deleteProfileData.invoke as any).mockResolvedValue({ success: true });
+      (ipcBridge.agentWidget.listRobots.invoke as any).mockResolvedValue([]);
+      (ipcBridge.agentWidget.remove.invoke as any).mockResolvedValue(undefined);
+      (ipcBridge.agentNotes.removeAgent.invoke as any).mockResolvedValue({ success: true });
+    });
+
+    it('saves a bot, writing its text over HTTP and keeping the AionUi blocks already stored', async () => {
+      const block = '<!-- aion-browser-rule:start -->\nI am Existing.\n<!-- aion-browser-rule:end -->';
+      (ipcBridge.fs.readAssistantRule.invoke as any).mockResolvedValue(`old text\n\n${block}\n`);
+      (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'a1' });
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: bot }));
+      await act(async () => {
+        await result.current.handleEdit(bot);
+      });
+      act(() => result.current.setEditContext('new text'));
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(mockMessage.success).toHaveBeenCalled();
+      expect(ipcBridge.agentBrowser.ensureAgentRule.invoke).not.toHaveBeenCalled();
+      for (const locale of [{}, { locale: 'en' }]) {
+        expect(ipcBridge.fs.writeAssistantRule.invoke).toHaveBeenCalledWith({
+          assistant_id: 'a1',
+          content: `new text\n\n${block}\n`,
+          ...locale,
+        });
+      }
+    });
+
+    it('deletes a bot without waiting on the desktop-only steps', async () => {
+      const agent: AssistantListItem = { id: 'bare:gone', name: 'Gone', sort_order: 1, source: 'user', enabled: true };
+      (ipcBridge.database.getUserConversations.invoke as any).mockResolvedValueOnce({
+        items: [{ id: 'c1', name: 'c1', assistant: { id: 'bare:gone' } }],
+        total: 1,
+        has_more: false,
+      });
+      (ipcBridge.assistants.delete.invoke as any).mockResolvedValueOnce(undefined);
+      const { result } = renderHook(() => useAssistantEditor({ ...defaultParams, activeAssistant: agent }));
+
+      await act(async () => {
+        await result.current.handleDeleteConfirm();
+      });
+
+      expect(ipcBridge.conversation.remove.invoke).toHaveBeenCalledWith({ id: 'c1' });
+      expect(ipcBridge.assistants.delete.invoke).toHaveBeenCalledWith({ id: 'bare:gone' });
+      expect(mockMessage.success).toHaveBeenCalled();
+      for (const invoke of desktopOnly()) expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it("previews a delete without the desktop's robots", async () => {
+      await expect(previewVaBotDelete('bare:gone')).resolves.toMatchObject({ hasRobot: false });
+      expect(ipcBridge.agentWidget.listRobots.invoke).not.toHaveBeenCalled();
     });
   });
 });

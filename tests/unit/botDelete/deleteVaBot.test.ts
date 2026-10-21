@@ -57,7 +57,10 @@ vi.mock('@/renderer/hooks/assistant/botChats', () => ({
 vi.mock('@/renderer/hooks/agent/useBotColor', () => ({ forgetBotColor: (...a: unknown[]) => m.forgetBotColor(...a) }));
 vi.mock('@/renderer/hooks/agent/useDefaultEngine', () => ({
   persistEnginePin: (...a: unknown[]) => m.persistEnginePin(...a),
+  reloadEnginePins: async () => {},
 }));
+// The desktop app; the WebUI path is covered in useAssistantEditor.dom.test.ts.
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 vi.mock('@/common/config/configService', () => ({
   configService: {
     get: (key: string) => m.config.get(key),

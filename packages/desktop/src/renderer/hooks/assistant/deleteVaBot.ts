@@ -14,7 +14,8 @@ import type { ICronJob } from '@/common/adapter/ipcBridge';
 import type { IChannelAssistantBindingRead } from '@/common/types/channel/channel';
 import type { AgentWidgetRobot } from '@/common/types/agent/agentWidget';
 import { forgetBotColor } from '@/renderer/hooks/agent/useBotColor';
-import { persistEnginePin } from '@/renderer/hooks/agent/useDefaultEngine';
+import { persistEnginePin, reloadEnginePins } from '@/renderer/hooks/agent/useDefaultEngine';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { collectBotChats, removeChats, type RemoveChatsOptions } from './botChats';
 
 /** The platforms the backend can bind a bot to, with the names shown to the user. */
@@ -76,10 +77,13 @@ export async function previewVaBotDelete(agentId: string): Promise<DeletePreview
   const chatIds = new Set(chats.map((chat) => chat.id));
   const [jobs, robots, platforms] = await Promise.all([
     botJobs(agentId, chatIds),
-    ipcBridge.agentWidget.listRobots.invoke().catch((error: unknown): AgentWidgetRobot[] => {
-      console.warn('[deleteVaBot] could not list the robots:', error);
-      return [];
-    }),
+    // Robots live in the desktop app; the WebUI cannot reach them (a desktop-only call is never answered there).
+    isElectronDesktop()
+      ? ipcBridge.agentWidget.listRobots.invoke().catch((error: unknown): AgentWidgetRobot[] => {
+          console.warn('[deleteVaBot] could not list the robots:', error);
+          return [];
+        })
+      : Promise.resolve<AgentWidgetRobot[]>([]),
     boundPlatforms(agentId),
   ]);
   return {
@@ -92,6 +96,7 @@ export async function previewVaBotDelete(agentId: string): Promise<DeletePreview
 
 /** Removes the robots whose `agent_id` is this bot. Failures are only logged. */
 const removeBotRobots = async (agentId: string): Promise<void> => {
+  if (!isElectronDesktop()) return;
   try {
     const robots = await ipcBridge.agentWidget.listRobots.invoke();
     await Promise.all(
@@ -120,11 +125,15 @@ const clearBinding = async (platform: string): Promise<void> => {
  * the "last picked" memory. Failures are logged only: the bot is already gone, and these are never read again.
  */
 const forgetDeletedAgent = async (agentId: string): Promise<void> => {
-  const reply = await ipcBridge.agentNotes.removeAgent
-    .invoke({ agentId })
-    .catch((error: unknown) => ({ success: false, msg: errorMessage(error) }));
+  // shortcut: on the WebUI the notebook stays on the desktop's disk, upgrade with an HTTP path or a desktop sweep.
+  const reply = isElectronDesktop()
+    ? await ipcBridge.agentNotes.removeAgent
+        .invoke({ agentId })
+        .catch((error: unknown) => ({ success: false, msg: errorMessage(error) }))
+    : { success: true };
   if (!reply.success) console.warn('[deleteVaBot] could not remove the deleted Agent notebook:', reply.msg);
   // Only when pinned: writing an empty record would skip the first-run pin seeding.
+  await reloadEnginePins();
   if (configService.get('agent.enginePins')?.[agentId]) {
     await persistEnginePin(agentId, null).catch((error: unknown) =>
       console.warn('[deleteVaBot] could not drop the deleted Agent engine pin:', error)
@@ -155,10 +164,13 @@ export async function deleteVaBot(
   agentId: string,
   { onProgress, onChatRemoved }: { onProgress?: RemoveChatsOptions['onProgress']; onChatRemoved?: (id: string) => void }
 ): Promise<DeleteVaBotOutcome> {
-  // 1. Browser profile
-  const profile = await ipcBridge.browser.deleteProfileData
-    .invoke({ agentId })
-    .catch((error: unknown) => ({ success: false, msg: errorMessage(error) }));
+  // 1. Browser profile, kept by the desktop app.
+  // shortcut: on the WebUI the profile stays on the desktop's disk, upgrade with an HTTP path or a desktop sweep.
+  const profile = isElectronDesktop()
+    ? await ipcBridge.browser.deleteProfileData
+        .invoke({ agentId })
+        .catch((error: unknown) => ({ success: false, msg: errorMessage(error) }))
+    : { success: true };
   if (!profile.success) {
     console.warn('[deleteVaBot] could not delete the Agent browser data:', profile.msg);
     return { ok: false, stage: 'profile' };

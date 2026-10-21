@@ -822,6 +822,7 @@
   "mcpOAuthLoginFailed": "Échec de la connexion OAuth",
   "mcpOAuthLoginFailedWithReason": "Échec de la connexion : {{error}}",
   "mcpLogin": "Se connecter",
+  "mcpLoginDesktopOnly": "Connectez-vous dans l'application de bureau",
   "mcpNeedsLogin": "déconnecté · Entrée pour se connecter",
   "noConfiguredModels": "Aucun modèle configuré",
   "needHelpConfigGuide": "Besoin d'aide ? Consultez le",

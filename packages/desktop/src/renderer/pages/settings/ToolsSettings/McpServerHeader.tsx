@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { McpOAuthStatus } from '@/renderer/hooks/mcp/useMcpOAuth';
 import { iconColors } from '@/renderer/styles/colors';
 import { formatDateTime } from '@/renderer/services/i18n/format';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 interface McpServerHeaderProps {
   server: IMcpServer;
@@ -161,6 +162,8 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
   const statusText = getStatusText(server, server.last_test_status, oauthStatus, isTestingConnection, t);
   const statusIcon = getStatusIcon(server.last_test_status, oauthStatus, isTestingConnection);
   const statusPopoverContent = getStatusPopoverContent(server, i18n.language, t);
+  // The sign-in opens a browser and listens for its redirect on the desktop, so a phone cannot complete it.
+  const signInHere = isElectronDesktop();
 
   return (
     <div className='flex items-center justify-between group'>
@@ -182,10 +185,14 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
             icon={<Login size={'14'} />}
             title={t('settings.mcpLogin') || 'Login'}
             loading={isLoggingIn}
+            disabled={!signInHere}
             onClick={() => onOAuthLogin(server)}
           >
             {t('settings.mcpLogin') || 'Login'}
           </Button>
+        )}
+        {!isReadOnly && needsLogin && onOAuthLogin && !signInHere && (
+          <span className='text-12px text-t-secondary'>{t('settings.mcpLoginDesktopOnly')}</span>
         )}
         {needsLogin && oauthStatus?.error && (
           <span className='text-12px text-danger max-w-320px truncate' title={oauthStatus.error}>

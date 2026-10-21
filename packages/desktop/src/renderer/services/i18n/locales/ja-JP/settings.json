@@ -810,6 +810,7 @@
   "mcpOAuthLoginFailed": "OAuth ログイン失敗",
   "mcpOAuthLoginFailedWithReason": "サインインに失敗しました: {{error}}",
   "mcpLogin": "ログイン",
+  "mcpLoginDesktopOnly": "デスクトップアプリでサインインしてください",
   "mcpNeedsLogin": "ログインが必要です",
   "noConfiguredModels": "設定されたモデルがありません",
   "needHelpConfigGuide": "ヘルプが必要ですか？詳細な",

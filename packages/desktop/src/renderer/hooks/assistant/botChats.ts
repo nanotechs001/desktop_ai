@@ -15,6 +15,7 @@ import type { TChatConversation } from '@/common/config/storage';
 import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
 import { isUndeletableAgent } from '@/common/types/agent/defaultAgent';
 import { emitter } from '@/renderer/utils/emitter';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 const LIVE_PAGE_SIZE = 500;
 const ARCHIVED_PAGE_SIZE = 100; // the sidebar API's maximum window
@@ -159,6 +160,8 @@ const removeOne = async (conversationId: string): Promise<void> => {
   const removed = await ipcBridge.conversation.remove.invoke({ id: conversationId });
   if (!removed) throw new Error(`Could not delete conversation ${conversationId}`);
   emitter.emit('conversation.deleted', conversationId);
+  // Robots live in the desktop app, which drops a deleted chat's robot itself; the WebUI cannot reach them.
+  if (!isElectronDesktop()) return;
   // Main also drops the robot when the list changes, but not on a timing we can rely on; this is idempotent.
   await ipcBridge.agentWidget.remove.invoke({ conversation_id: conversationId }).catch((error: unknown) => {
     console.warn('[botChats] could not remove the robot of a deleted chat:', error);

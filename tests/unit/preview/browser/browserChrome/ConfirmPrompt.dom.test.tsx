@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
 }));
 
+const platform = vi.hoisted(() => ({ desktop: true }));
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => platform.desktop }));
+
 vi.mock('@/common', () => ({
   ipcBridge: {
     agentBrowser: {
@@ -63,6 +66,24 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+});
+
+describe('ConfirmPrompt on the WebUI (L1)', () => {
+  afterEach(() => {
+    platform.desktop = true;
+  });
+
+  it("asks main for nothing: the phone's chat shows its own asks, and main never answers there", async () => {
+    platform.desktop = false;
+    mocks.getConfirmRequests.mockClear();
+    mocks.handler = null;
+
+    render(<ConfirmPrompt />);
+    await act(async () => {});
+
+    expect(mocks.getConfirmRequests).not.toHaveBeenCalled();
+    expect(mocks.handler).toBeNull();
+  });
 });
 
 describe('ConfirmPrompt', () => {

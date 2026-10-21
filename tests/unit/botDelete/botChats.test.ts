@@ -31,6 +31,8 @@ vi.mock('@/common/adapter/httpBridge', () => ({
   isBackendHttpError: (error: unknown) => typeof (error as { status?: unknown })?.status === 'number',
 }));
 vi.mock('@/renderer/utils/emitter', () => ({ emitter: { emit: ipc.emit } }));
+// The desktop app, where robots live; the WebUI path is covered in useAssistantEditor.dom.test.ts.
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 
 import { collectBotChats, removeChats } from '@/renderer/hooks/assistant/botChats';
 import type { TChatConversation } from '@/common/config/storage';

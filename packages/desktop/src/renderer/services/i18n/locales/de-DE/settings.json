@@ -812,6 +812,7 @@
   "mcpOAuthLoginFailed": "OAuth-Anmeldung fehlgeschlagen",
   "mcpOAuthLoginFailedWithReason": "Anmeldung fehlgeschlagen: {{error}}",
   "mcpLogin": "Anmelden",
+  "mcpLoginDesktopOnly": "In der Desktop-App anmelden",
   "mcpNeedsLogin": "getrennt · Enter zum Anmelden",
   "noConfiguredModels": "Keine konfigurierten Modelle",
   "needHelpConfigGuide": "Hilfe benötigt? Schauen Sie sich die detaillierte",

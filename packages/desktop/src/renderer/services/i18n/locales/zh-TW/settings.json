@@ -822,6 +822,7 @@
   "mcpOAuthLoginFailed": "OAuth 登入失敗",
   "mcpOAuthLoginFailedWithReason": "登入失敗：{{error}}",
   "mcpLogin": "登入",
+  "mcpLoginDesktopOnly": "請在桌面應用程式中登入",
   "mcpNeedsLogin": "需要登入",
   "noConfiguredModels": "暫無已配置的模型",
   "needHelpConfigGuide": "需要幫助？查看詳細的",

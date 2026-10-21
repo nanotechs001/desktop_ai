@@ -810,6 +810,7 @@
   "mcpOAuthLoginFailed": "OAuth girişi başarısız",
   "mcpOAuthLoginFailedWithReason": "Giriş başarısız: {{error}}",
   "mcpLogin": "Giriş Yap",
+  "mcpLoginDesktopOnly": "Masaüstü uygulamasında oturum açın",
   "mcpNeedsLogin": "Giriş gerekli",
   "noConfiguredModels": "Yapılandırılmış model yok",
   "needHelpConfigGuide": "Yardım mı lazım? Detaylı",

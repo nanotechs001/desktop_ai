@@ -12,6 +12,7 @@ import {
   replyOverIpc,
   useIpcConfirms,
 } from '@/renderer/pages/conversation/components/AgentConfirmCards/useAgentConfirms';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 /**
  * Asks the user, one at a time (oldest first), to allow or deny a risky agent click or Enter press. The owning chat
@@ -19,8 +20,9 @@ import {
  */
 const ConfirmPrompt: React.FC = () => {
   const { t } = useTranslation();
-  // A page's "Leave site?" already has main's native box on the desktop; only the chat repeats it.
-  const current = useIpcConfirms().find((ask) => ask.kind !== 'leave');
+  // A page's "Leave site?" already has main's native box on the desktop; only the chat repeats it. Main's asks reach
+  // only the desktop app: on the WebUI the IPC read would never be answered.
+  const current = useIpcConfirms(isElectronDesktop()).find((ask) => ask.kind !== 'leave');
   if (!current) return null;
 
   return (

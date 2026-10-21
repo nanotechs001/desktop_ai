@@ -822,6 +822,7 @@
   "mcpOAuthLoginFailed": "ورود OAuth ناموفق بود",
   "mcpOAuthLoginFailedWithReason": "ورود ناموفق بود: {{error}}",
   "mcpLogin": "ورود",
+  "mcpLoginDesktopOnly": "در برنامهٔ دسکتاپ وارد شوید",
   "mcpNeedsLogin": "ورود لازم است",
   "noConfiguredModels": "مدل پیکربندی‌شده‌ای وجود ندارد",
   "needHelpConfigGuide": "نیاز به راهنمایی؟",
