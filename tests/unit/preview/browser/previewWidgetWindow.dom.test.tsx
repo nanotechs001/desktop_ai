@@ -91,7 +91,7 @@ const Windows: React.FC = () => (
 const enterScope = (scope: string) => act(() => main.closePreviewIfScopeChanged(scope));
 const requestTab = async (url: string, conversationId: string) => {
   await act(async () => {
-    for (const handler of [...h.openTab]) handler({ url, background: false, conversationId });
+    for (const handler of h.openTab) handler({ url, background: false, conversationId });
   });
 };
 const storedUrls = (scope: string): string[] =>
