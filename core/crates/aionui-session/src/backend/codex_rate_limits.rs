@@ -43,9 +43,42 @@ pub(super) fn read_request() -> Value {
     })
 }
 
+/// The snapshot after an `account/rateLimits/updated` notification, or None
+/// when the update is for another limit than the snapshot's (the read's
+/// `rateLimits` is the main one). Its nulls never clear a value, so a reached
+/// limit is cleared here once an update without a reached type brings every
+/// window back under 100%.
+pub(super) fn apply_update(last: &Value, update: &Value) -> Option<Value> {
+    let limit_id = |v: &Value| v.get("limitId").and_then(Value::as_str).map(str::to_owned);
+    if let (Some(ours), Some(theirs)) = (limit_id(last), limit_id(update))
+        && ours != theirs
+    {
+        return None;
+    }
+    let mut merged = merge(last, update);
+    let window_keys = ["primary", "secondary"];
+    let update_has_window = window_keys.iter().any(|k| update.get(k).is_some_and(Value::is_object));
+    let update_reached = update.get("rateLimitReachedType").is_some_and(|t| !t.is_null());
+    let all_below_full = window_keys.iter().all(|k| {
+        merged
+            .get(k)
+            .and_then(|w| w.get("usedPercent"))
+            .and_then(Value::as_f64)
+            .is_none_or(|p| p < 100.0)
+    });
+    if update_has_window
+        && !update_reached
+        && all_below_full
+        && let Some(obj) = merged.as_object_mut()
+    {
+        obj.remove("rateLimitReachedType");
+    }
+    Some(merged)
+}
+
 /// Merge a sparse update into the last snapshot: objects merge key by key, and
 /// a null or absent value keeps the old one.
-pub(super) fn merge(last: &Value, update: &Value) -> Value {
+fn merge(last: &Value, update: &Value) -> Value {
     match (last, update) {
         (Value::Object(old), Value::Object(new)) => {
             let mut out = old.clone();
@@ -210,6 +243,48 @@ mod tests {
                 window(RateLimitWindowKind::SevenDay, 0.91, 1786000000),
             ]
         );
+    }
+
+    #[test]
+    fn an_update_for_another_limit_is_ignored() {
+        let last = full_read()["rateLimits"].clone();
+        let other = json!({ "limitId": "codex_other", "primary": { "usedPercent": 99 } });
+        assert!(apply_update(&last, &other).is_none());
+        let same = json!({ "limitId": "codex", "primary": { "usedPercent": 50 } });
+        let merged = apply_update(&last, &same).expect("same limit merges");
+        assert_eq!(merged["primary"]["usedPercent"], 50);
+        let unnamed = json!({ "limitId": null, "primary": { "usedPercent": 60 } });
+        assert_eq!(
+            apply_update(&last, &unnamed).expect("unnamed merges")["primary"]["usedPercent"],
+            60
+        );
+    }
+
+    #[test]
+    fn an_update_below_the_limit_without_a_reached_type_clears_rejected() {
+        let mut last = full_read()["rateLimits"].clone();
+        last["rateLimitReachedType"] = json!("rate_limit_reached");
+        last["primary"]["usedPercent"] = json!(100);
+        let still_full = json!({ "secondary": { "usedPercent": 95 }, "rateLimitReachedType": null });
+        let kept = apply_update(&last, &still_full).expect("merges");
+        assert_eq!(
+            windows_of(to_event(&kept)).0,
+            Some(RateLimitStatus::Rejected),
+            "primary is still at 100%"
+        );
+        let mut spend_capped = last.clone();
+        spend_capped["primary"]["usedPercent"] = json!(50);
+        let no_windows = json!({ "credits": { "hasCredits": true }, "rateLimitReachedType": null });
+        let kept = apply_update(&spend_capped, &no_windows).expect("merges");
+        assert_eq!(
+            windows_of(to_event(&kept)).0,
+            Some(RateLimitStatus::Rejected),
+            "no window in the update"
+        );
+        let recovered =
+            json!({ "primary": { "usedPercent": 3, "resetsAt": 1785772200 }, "rateLimitReachedType": null });
+        let cleared = apply_update(&last, &recovered).expect("merges");
+        assert_eq!(windows_of(to_event(&cleared)).0, Some(RateLimitStatus::AllowedWarning));
     }
 
     #[test]

@@ -1891,12 +1891,12 @@ async fn reader_task(
                             continue;
                         }
                         if m == "account/rateLimits/updated" {
-                            rate_limits = super::codex_rate_limits::merge(
-                                &rate_limits,
-                                params.get("rateLimits").unwrap_or(&Value::Null),
-                            );
-                            if let Some(ev) = super::codex_rate_limits::to_event(&rate_limits) {
-                                emit(&event_tx, &session_id, cur, ev);
+                            let update = params.get("rateLimits").unwrap_or(&Value::Null);
+                            if let Some(next) = super::codex_rate_limits::apply_update(&rate_limits, update) {
+                                rate_limits = next;
+                                if let Some(ev) = super::codex_rate_limits::to_event(&rate_limits) {
+                                    emit(&event_tx, &session_id, cur, ev);
+                                }
                             }
                             continue;
                         }
@@ -5843,6 +5843,18 @@ mod tests {
             Some(1785754200),
             "a null reset keeps the old one"
         );
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_update_for_another_limit_id_is_ignored() {
+        let events = drive_codex(&[
+            r#"{"jsonrpc":"2.0","id":"aionui-rate-limits-read","result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":40,"windowDurationMins":300,"resetsAt":1785754200},"secondary":null,"planType":"plus","rateLimitReachedType":null}}}"#,
+            r#"{"jsonrpc":"2.0","method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex_other","primary":{"usedPercent":99,"windowDurationMins":300,"resetsAt":null},"secondary":null,"planType":null,"rateLimitReachedType":null}}}"#,
+        ])
+        .await;
+        let readings = rate_limit_windows(&events);
+        assert_eq!(readings.len(), 1, "only the read emits, got {events:?}");
+        assert_eq!(readings[0][0].utilization, Some(0.4));
     }
 
     #[tokio::test]
