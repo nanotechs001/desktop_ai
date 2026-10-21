@@ -177,8 +177,6 @@ export default defineConfig(({ mode }) => {
           '@renderer': resolve('packages/desktop/src/renderer'),
           '@process': resolve('packages/desktop/src/process'),
           '@worker': resolve('packages/desktop/src/process/worker'),
-          // Force ESM version of streamdown
-          streamdown: resolve('node_modules/streamdown/dist/index.js'),
         },
         extensions: ['.ts', '.tsx', '.js', '.jsx', '.css'],
         // CodeMirror relies on module-level singletons (highlighterFacet, tag
