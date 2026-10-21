@@ -77,6 +77,8 @@ export interface BrowserViewerProps {
   agentOwnedHint?: boolean;
   /** An agent acted on this tab (each action the relay reports, a tab switch or load included) */
   onAgentAction?: (tabId: string) => void;
+  /** The user pressed a key or the mouse in this tab's page (main reports it, at most once a second) */
+  onUserInput?: (tabId: string) => void;
   /** The browser profile the tab lives in; Personal when absent. Fixed for the tab's life (a new profile is a new tab) */
   profile?: BrowserTabProfile;
 }
@@ -105,6 +107,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   onAgentOwnedChange,
   agentOwnedHint = false,
   onAgentAction,
+  onUserInput,
   profile,
 }) => {
   const preview = useOptionalPreviewContext();
@@ -319,6 +322,14 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   useEffect(() => {
     if (latestAction) onAgentAction?.(tabId);
   }, [latestAction, tabId, onAgentAction]);
+
+  // `?.` only tolerates test mocks without the event; production always defines it.
+  useEffect(() => {
+    if (tabWebContentsId === null || !onUserInput) return;
+    return ipcBridge.agentBrowser.userInput?.on((event) => {
+      if (event.webContentsId === tabWebContentsId) onUserInput(tabId);
+    });
+  }, [tabWebContentsId, tabId, onUserInput]);
 
   return (
     <div

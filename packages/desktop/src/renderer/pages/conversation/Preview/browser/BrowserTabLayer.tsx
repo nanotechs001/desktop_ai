@@ -293,7 +293,8 @@ const BrowserTabLayer: React.FC = () => {
               onRequestClose={closeTab}
               onAgentOwnedChange={handleAgentOwnedChange}
               agentOwnedHint={Boolean(tab.metadata?.agentOwned)}
-              onAgentAction={followAgent}
+              onAgentAction={followAgent.onAgentAction}
+              onUserInput={followAgent.onUserInput}
               active={shown}
             />
           </div>

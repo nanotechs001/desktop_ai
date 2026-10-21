@@ -19,6 +19,7 @@ const h = vi.hoisted(() => {
       agentBrowser: {
         ownershipChanged: emitter(),
         agentAction: emitter(),
+        userInput: emitter(),
         share: provider('share'),
         getOwnership: provider('getOwnership'),
         confirmRequested: emitter(),
@@ -832,6 +833,74 @@ describe('agent browser services: YOLO chats and "Always allow"', () => {
 });
 
 describe('agent browser services: user input', () => {
+  /** Tab `id` shared with a connected agent, with that agent's session on it. */
+  const sharedTab = async (id: number) => {
+    const relay = await start();
+    const send = await connect(relay, 'claude');
+    const tab = newTab(id);
+    await call('share', { webContentsId: id, on: true });
+    const session = String(
+      (await send('Target.attachToTarget', { targetId: `wc-${id}`, flatten: true })).result?.sessionId
+    );
+    return { send, tab, session };
+  };
+  const userInputs = () => h.ipcBridge.agentBrowser.userInput.emit.mock.calls.map(([event]) => event);
+
+  it("tells the pane about the user's keys and clicks in a tab, at most once a second per tab", async () => {
+    const { tab } = await sharedTab(12);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    try {
+      tab.emit('before-input-event', {}, { type: 'keyDown', key: 'a', code: 'KeyA' });
+      tab.emit('before-input-event', {}, { type: 'keyDown', key: 'b', code: 'KeyB' });
+      now.mockReturnValue(10_999);
+      tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 1, y: 1 });
+      expect(userInputs()).toEqual([{ webContentsId: 12, at: 10_000 }]);
+
+      now.mockReturnValue(11_000);
+      tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 1, y: 1 });
+      expect(userInputs()).toEqual([
+        { webContentsId: 12, at: 10_000 },
+        { webContentsId: 12, at: 11_000 },
+      ]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('ignores modifier keys, key-ups and mouse moves', async () => {
+    const { tab } = await sharedTab(13);
+    tab.emit('before-input-event', {}, { type: 'keyDown', key: 'Shift', code: 'ShiftLeft' });
+    tab.emit('before-input-event', {}, { type: 'keyUp', key: 'a', code: 'KeyA' });
+    tab.emit('before-mouse-event', {}, { type: 'mouseMove', x: 1, y: 1 });
+    expect(userInputs()).toEqual([]);
+  });
+
+  it("never reports the agent's own keys and clicks, which Electron also reports while its command is in flight", async () => {
+    const { send, tab, session } = await sharedTab(14);
+    tab.debugger.handler = (method, params) => {
+      const { type, key, code, x, y } = params as { type: string; key?: string; code?: string; x?: number; y?: number };
+      if (method === 'Input.dispatchKeyEvent' && type === 'keyDown') {
+        tab.emit('before-input-event', {}, { type: 'keyDown', key, code });
+      }
+      if (method === 'Input.dispatchMouseEvent' && type === 'mousePressed') {
+        tab.emit('before-mouse-event', {}, { type: 'mouseDown', x, y });
+      }
+      return {};
+    };
+
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', text: 'a' }, session);
+    await send(
+      'Input.dispatchMouseEvent',
+      { type: 'mousePressed', x: 5, y: 5, button: 'left', clickCount: 1 },
+      session
+    );
+    expect(userInputs()).toEqual([]);
+
+    // The user's own click once the agent's command settled still counts.
+    tab.emit('before-mouse-event', {}, { type: 'mouseDown', x: 5, y: 5 });
+    expect(userInputs()).toEqual([{ webContentsId: 14, at: expect.any(Number) }]);
+  });
+
   it("a user click or key on an agent's tab does not block the agent's next Input.dispatchMouseEvent", async () => {
     const relay = await start();
     const send = await connect(relay, 'claude');

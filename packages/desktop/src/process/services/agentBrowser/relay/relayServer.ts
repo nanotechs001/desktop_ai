@@ -43,6 +43,7 @@ import {
   type RelayClient,
   type RelayContents,
   type TargetRegistry,
+  AGENT_MOUSE_DOWN,
 } from './targetRegistry';
 
 export type RelayServerDeps = {
@@ -137,9 +138,13 @@ const parseRect = (value: unknown): AgentActionEvent['rect'] | undefined => {
 /** Inserted text has no key of its own; Chromium reports such input as key "Unidentified". */
 const INSERTED_TEXT: KeyInput = { key: 'Unidentified', code: '' };
 
-/** An agent key Electron also reports as a keyDown: a keyDown/rawKeyDown's key and code, or inserted text. */
+/**
+ * Agent input Electron also reports as the page's own: a keyDown/rawKeyDown's key and code, inserted text, or a mouse
+ * press (as {@link AGENT_MOUSE_DOWN}).
+ */
 const agentKeyOf = (method: string, params: Params): KeyInput | null => {
   if (method === 'Input.insertText') return INSERTED_TEXT;
+  if (method === 'Input.dispatchMouseEvent' && params.type === 'mousePressed') return AGENT_MOUSE_DOWN;
   const keyDown = method === 'Input.dispatchKeyEvent' && (params.type === 'keyDown' || params.type === 'rawKeyDown');
   if (!keyDown || typeof params.key !== 'string') return null;
   return { key: params.key, code: typeof params.code === 'string' ? params.code : '' };

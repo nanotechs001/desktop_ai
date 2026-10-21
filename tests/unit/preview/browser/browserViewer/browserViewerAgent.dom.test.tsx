@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   getOwnership: vi.fn(),
   ownership: null as ((list: TabOwnership[]) => void) | null,
   action: null as ((event: AgentActionEvent) => void) | null,
+  userInput: null as ((event: { webContentsId: number; at: number }) => void) | null,
 }));
 
 // Arco's imperative Message needs a legacy ReactDOM.render, which React 19 lacks in jsdom.
@@ -46,6 +47,12 @@ vi.mock('@/common', () => ({
       agentAction: {
         on: (handler: (event: AgentActionEvent) => void) => {
           mocks.action = handler;
+          return () => {};
+        },
+      },
+      userInput: {
+        on: (handler: (event: { webContentsId: number; at: number }) => void) => {
+          mocks.userInput = handler;
           return () => {};
         },
       },
@@ -96,6 +103,7 @@ const mount = async (initial: TabOwnership[]) => {
   mocks.getOwnership.mockResolvedValue({ success: true, data: initial });
   const onAgentOwnedChange = vi.fn();
   const onAgentAction = vi.fn();
+  const onUserInput = vi.fn();
   const view = render(
     <BrowserViewer
       url='https://example.com'
@@ -105,12 +113,13 @@ const mount = async (initial: TabOwnership[]) => {
       onFaviconChange={vi.fn()}
       onAgentOwnedChange={onAgentOwnedChange}
       onAgentAction={onAgentAction}
+      onUserInput={onUserInput}
     />
   );
   await act(async () => {
     view.container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
   });
-  return { ...view, onAgentOwnedChange, onAgentAction };
+  return { ...view, onAgentOwnedChange, onAgentAction, onUserInput };
 };
 
 beforeEach(() => {
@@ -122,6 +131,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.ownership = null;
   mocks.action = null;
+  mocks.userInput = null;
   for (const name of Object.keys(stubs)) {
     delete (HTMLUnknownElement.prototype as unknown as Record<string, unknown>)[name];
   }
@@ -188,6 +198,15 @@ describe('BrowserViewer agent chrome', () => {
     act(() => mocks.action?.(event({ op: 'navigate', label: 'https://example.com/next', rect: null })));
     act(() => mocks.action?.(event({ op: 'switch', label: '', rect: null })));
     expect(onAgentAction.mock.calls).toEqual([['tab-1'], ['tab-1']]);
+  });
+
+  it("passes on the user's input in this tab's page only", async () => {
+    const { onUserInput } = await mount([tab({ sharedWith: 'all' })]);
+    act(() => mocks.userInput?.({ webContentsId: 99, at: 1 }));
+    expect(onUserInput).not.toHaveBeenCalled();
+
+    act(() => mocks.userInput?.({ webContentsId: WEB_CONTENTS_ID, at: 2 }));
+    expect(onUserInput).toHaveBeenCalledWith('tab-1');
   });
 
   it("lists this tab's actions in the feed, with the neutral Agent name", async () => {

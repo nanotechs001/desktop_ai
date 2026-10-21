@@ -1450,6 +1450,8 @@ export const agentBrowser = {
   ownershipChanged: bridge.buildEmitter<TabOwnership[]>('agent-browser.ownership-changed'),
   // main → renderer: one agent action, for the highlight overlay and the action feed
   agentAction: bridge.buildEmitter<AgentActionEvent>('agent-browser.agent-action'),
+  // main → renderer: the user (not an agent) pressed a key or the mouse in this tab's page; at most once a second per tab
+  userInput: bridge.buildEmitter<{ webContentsId: number; at: number }>('agent-browser.user-input'),
   // "Share with agent" toggle: on lets every agent client drive this user tab
   share: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; on: boolean }>('agent-browser.share'),
   getOwnership: bridge.buildProvider<IBridgeResponse<TabOwnership[]>, void>('agent-browser.get-ownership'),

@@ -19,7 +19,7 @@ const TABS = [{ id: 'a' }, { id: 'b' }];
 const setUp = (activeTabId = 'a') => {
   const switchTab = vi.fn();
   const { result } = renderHook(() => useFollowAgentTab({ tabs: TABS, activeTabId, switchTab }));
-  return { follow: result.current, switchTab };
+  return { follow: result.current.onAgentAction, userInput: result.current.onUserInput, switchTab };
 };
 
 /** A click inside the preview panel, the way the user's input reaches the host page. */
@@ -71,6 +71,26 @@ describe('useFollowAgentTab', () => {
   it('does not count typing outside the pane (the chat)', () => {
     const { follow, switchTab } = setUp('a');
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+    act(() => follow('b'));
+    expect(switchTab).toHaveBeenCalledWith('b');
+  });
+
+  it('does not switch to tab B within 3 s of the user typing in the page of tab A', () => {
+    const { follow, userInput, switchTab } = setUp('a');
+    act(() => userInput('a'));
+
+    vi.advanceTimersByTime(USER_INPUT_GRACE_MS - 1);
+    act(() => follow('b'));
+    expect(switchTab).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    act(() => follow('b'));
+    expect(switchTab).toHaveBeenCalledWith('b');
+  });
+
+  it("does not count input in another chat's tab", () => {
+    const { follow, userInput, switchTab } = setUp('a');
+    act(() => userInput('other-chat-tab'));
     act(() => follow('b'));
     expect(switchTab).toHaveBeenCalledWith('b');
   });

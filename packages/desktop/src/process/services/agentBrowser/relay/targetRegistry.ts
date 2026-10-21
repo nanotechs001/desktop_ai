@@ -107,6 +107,12 @@ export type TabUse = { at: number; conversationId?: string };
 /** A key as Electron reports it and CDP sends it. */
 export type KeyInput = { key: string; code: string };
 
+/**
+ * An agent's mouse press, tracked like an agent key (beginAgentKey / isAgentKey) because Electron reports it as a
+ * mouseDown too. No real key is named this.
+ */
+export const AGENT_MOUSE_DOWN: KeyInput = { key: 'AgentMouseDown', code: '' };
+
 const TARGET_PREFIX = 'wc-';
 /** An in-flight agent key is forgotten after this even if its command never settles. */
 const AGENT_KEY_TTL_MS = 5000;

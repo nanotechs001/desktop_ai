@@ -22,7 +22,7 @@ import { createBrowserViewService, type BrowserViewService } from './relay/brows
 import { createDebuggerSessions } from './relay/debuggerSessions';
 import { startRelayServer, type ProfileLookup } from './relay/relayServer';
 import { startTabHygiene, type TabHygiene } from './relay/tabHygiene';
-import { createTargetRegistry, type TargetRegistry } from './relay/targetRegistry';
+import { AGENT_MOUSE_DOWN, createTargetRegistry, type KeyInput, type TargetRegistry } from './relay/targetRegistry';
 import { parseConversationId } from './relay/relayTransport';
 import { handleEnsureAgentRule } from './assistantRules';
 import { setUpDefaultAgent } from './defaultAgent';
@@ -57,6 +57,8 @@ export type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
 const TAB_CREATE_TIMEOUT_MS = 15_000;
 /** A keyDown of one of these alone does not mark a tab used (e.g. Cmd held for a shortcut). */
 const MODIFIER_KEYS = new Set(['Meta', 'Shift', 'Alt', 'Control']);
+/** The pane hears about the user's input in a tab at most this often. */
+const USER_INPUT_REPORT_MS = 1000;
 const OFF: Reply = { success: false, msg: 'Agent browser control is off' };
 const UNKNOWN_TAB: Reply = { success: false, msg: 'No such browser tab' };
 const INVALID: Reply = { success: false, msg: 'Invalid arguments' };
@@ -105,17 +107,28 @@ export const webuiConfirms = {
  * A key or click marks the tab used, for the idle sweep; a user key (not the agent's own CDP key) also marks the page
  * typed in, until a new document commits. Only a cross-document load clears it: a same-document navigation (a
  * history-API or fragment change) keeps the DOM, so whatever the user typed is still there to lose. The agent keeps
- * working: it sees the change on its next observe.
+ * working: it sees the change on its next observe. The user's own keys and clicks (not the agent's in-flight input) are
+ * also told to the pane, at most once per {@link USER_INPUT_REPORT_MS}, so it does not switch tabs under the user.
  */
 const watchUserInput = (contents: Electron.WebContents, registry: TargetRegistry): void => {
+  let reportedAt = Number.NEGATIVE_INFINITY;
+  const reportUserInput = (input: KeyInput): void => {
+    const at = Date.now();
+    if (registry.isAgentKey(contents.id, input) || at - reportedAt < USER_INPUT_REPORT_MS) return;
+    reportedAt = at;
+    ipcBridge.agentBrowser.userInput.emit({ webContentsId: contents.id, at });
+  };
   contents.on('before-input-event', (_event, input) => {
     if (input.type === 'keyDown' && !MODIFIER_KEYS.has(input.key)) {
       registry.touch(contents.id);
       registry.noteUserKey(contents.id, { key: input.key, code: input.code });
+      reportUserInput({ key: input.key, code: input.code });
     }
   });
   contents.on('before-mouse-event', (_event, mouse) => {
-    if (mouse.type === 'mouseDown') registry.touch(contents.id);
+    if (mouse.type !== 'mouseDown') return;
+    registry.touch(contents.id);
+    reportUserInput(AGENT_MOUSE_DOWN);
   });
   contents.on('did-navigate', () => registry.clearTyped(contents.id));
 };
