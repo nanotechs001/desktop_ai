@@ -57,7 +57,7 @@ export const chatIsYolo = createYoloLookup({
 });
 
 /**
- * When a chat was created, whether it is a scheduled run's own chat (`scheduled_run`, set by the cron executor; a
+ * Whether a chat is a scheduled run's own chat (`scheduled_run`, set by the cron executor; a
  * user's chat a task is bound to only carries `cron_job_id`), and whether its agent turn is running (the detail read
  * carries the runtime summary), for the bot tab takeover and tab cleanup; null for a chat aioncore does not know.
  * Other failures reject: the relay then treats the chat as unknown.
@@ -70,9 +70,28 @@ export const chatInfoOf = async (conversationId: string): Promise<ChatInfo | nul
   if (!chat) return null;
   const extra = (chat.extra ?? {}) as { scheduled_run?: unknown };
   return {
-    createdAt: chat.created_at,
     scheduled: extra.scheduled_run === true,
     running: chat.runtime?.is_processing === true,
+  };
+};
+
+/** How long a chat lookup (its turn, its bot) is reused: the takeover and the phone ask again on every tab listing. */
+const CHAT_LOOKUP_TTL_MS = 5000;
+
+/** `lookup` with each key's answer reused for `ttlMs`. A failed lookup is dropped, so the next call asks again. */
+export const cachedFor = <T>(ttlMs: number, lookup: (key: string) => Promise<T>): ((key: string) => Promise<T>) => {
+  const cache = new Map<string, { at: number; value: Promise<T> }>();
+  return (key) => {
+    const now = Date.now();
+    const hit = cache.get(key);
+    if (hit && now - hit.at < ttlMs) return hit.value;
+    for (const [other, entry] of cache) if (now - entry.at >= ttlMs) cache.delete(other);
+    const value = lookup(key);
+    cache.set(key, { at: now, value });
+    value.catch(() => {
+      if (cache.get(key)?.value === value) cache.delete(key);
+    });
+    return value;
   };
 };
 
@@ -350,6 +369,12 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   const waiter = new CreateTabWaiter<Electron.WebContents>();
   /** The pane's tabs (webviews), not popup windows. */
   const paneTabs = new Set<number>();
+  const chatInfo = cachedFor(CHAT_LOOKUP_TTL_MS, chatInfoOf);
+  // Only a VA Bot's own profile is shared by its chats; a regular chat's temporary one and the fallback are not.
+  const botOf = cachedFor(CHAT_LOOKUP_TTL_MS, async (conversationId) => {
+    const { profile } = await agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent);
+    return profile.kind === 'agent' && profile.agentId !== DEFAULT_AGENT_ID ? profile.agentId : undefined;
+  });
   // One listener, so a new tab is tracked before the relay's createTarget waiter receives it.
   onBrowserContentsCreated((contents) => {
     const profile = profileOfSession(contents.session);
@@ -392,7 +417,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     isConfirming: (webContentsId) => confirming.has(webContentsId),
     isLeaving: isAskingToLeave,
     isPaneTab: (webContentsId) => paneTabs.has(webContentsId),
-    isTurnRunning: async (conversationId) => (await chatInfoOf(conversationId))?.running ?? false,
+    isTurnRunning: async (conversationId) => (await chatInfo(conversationId))?.running ?? false,
   });
   followOpeners(registry, waiter, confirms, hygiene);
   registry.onChange((all) => ipcBridge.agentBrowser.ownershipChanged.emit(all));
@@ -414,7 +439,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     waitForTab: (url, conversationId, profile) =>
       waiter.wait(url, TAB_CREATE_TIMEOUT_MS, conversationId, partitionOfProfile(liveAgentProfile(profile))),
     resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent),
-    chatInfo: chatInfoOf,
+    chatInfo,
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
     onAgentTab: (webContentsId) => hygiene.adopt(webContentsId),
     onAgentAction: (event) => {
@@ -426,15 +451,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
   });
   active = registry;
   activeWaiter = waiter;
-  browserView = createBrowserViewService({
-    registry,
-    sessions,
-    // Only a VA Bot's own profile is shared by its chats; a regular chat's temporary one and the fallback are not.
-    botOf: async (conversationId) => {
-      const { profile } = await agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent);
-      return profile.kind === 'agent' && profile.agentId !== DEFAULT_AGENT_ID ? profile.agentId : undefined;
-    },
-  });
+  browserView = createBrowserViewService({ registry, sessions, botOf });
   return {
     url: relay.url,
     token: relay.token,

@@ -68,6 +68,7 @@ vi.mock('@process/services/browserSession/browserSession', () => ({
 
 const {
   agentTabProfile,
+  cachedFor,
   chatInfoOf,
   getBrowserViewService,
   liveAgentProfile,
@@ -185,20 +186,42 @@ describe('agent browser services: IPC', () => {
 });
 
 describe('chatInfoOf', () => {
-  it("reads a chat's creation time, and whether it is a scheduled run's own chat", async () => {
+  it("reads whether a chat is a scheduled run's own chat and whether its turn is running", async () => {
     const get = h.ipcBridge.conversation.get.invoke;
     get.mockResolvedValueOnce({ id: 'c1', created_at: 5, extra: {} });
-    expect(await chatInfoOf('c1')).toEqual({ createdAt: 5, scheduled: false, running: false });
+    expect(await chatInfoOf('c1')).toEqual({ scheduled: false, running: false });
     get.mockResolvedValueOnce({ id: 'c2', created_at: 6, extra: { cron_job_id: 'cron_1', scheduled_run: true } });
-    expect(await chatInfoOf('c2')).toEqual({ createdAt: 6, scheduled: true, running: false });
+    expect(await chatInfoOf('c2')).toEqual({ scheduled: true, running: false });
     // The user's own chat a task is bound to is not a scheduled run's chat.
     get.mockResolvedValueOnce({ id: 'c3', created_at: 7, extra: { cron_job_id: 'cron_2' } });
-    expect(await chatInfoOf('c3')).toEqual({ createdAt: 7, scheduled: false, running: false });
+    expect(await chatInfoOf('c3')).toEqual({ scheduled: false, running: false });
     // Its agent turn is running while the runtime processes one.
     get.mockResolvedValueOnce({ id: 'c4', created_at: 8, extra: {}, runtime: { is_processing: true } });
-    expect(await chatInfoOf('c4')).toEqual({ createdAt: 8, scheduled: false, running: true });
+    expect(await chatInfoOf('c4')).toEqual({ scheduled: false, running: true });
     get.mockResolvedValueOnce(null);
     expect(await chatInfoOf('gone')).toBeNull();
+  });
+});
+
+describe('cachedFor', () => {
+  it('reuses a chat lookup for a few seconds, then asks again, and never keeps a failure', async () => {
+    vi.useFakeTimers();
+    try {
+      const lookup = vi.fn(async (id: string) => `${id}-${lookup.mock.calls.length}`);
+      const cached = cachedFor(5000, lookup);
+      expect(await cached('c1')).toBe('c1-1');
+      expect(await cached('c1')).toBe('c1-1');
+      expect(await cached('c2')).toBe('c2-2');
+      vi.advanceTimersByTime(5000);
+      expect(await cached('c1')).toBe('c1-3');
+
+      lookup.mockRejectedValueOnce(new Error('down'));
+      vi.advanceTimersByTime(5000);
+      await expect(cached('c1')).rejects.toThrow('down');
+      expect(await cached('c1')).toBe('c1-5');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -618,13 +641,13 @@ describe('agent browser services: leave site', () => {
 });
 
 describe('agent browser services: tab hygiene', () => {
-  it("closes a chat's least recently used agent tab when its agent opens a 4th, through the pane's close", async () => {
+  it("closes a regular chat's least recently used agent tab when its agent opens a 4th, through the pane's close", async () => {
     const relay = await start();
-    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-1' });
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-a' });
     for (const id of [80, 81, 82, 83]) {
       const created = send('Target.createTarget', { url: `https://site${id}.test/` });
       await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(id - 79));
-      newTab(id, agentSession).navigate(`https://site${id}.test/`);
+      newTab(id, temporarySessionA).navigate(`https://site${id}.test/`);
       expect((await created).result).toEqual({ targetId: `wc-${id}` });
     }
 
@@ -1101,6 +1124,16 @@ describe("agent browser services: the phone on a VA Bot's chat", () => {
       expect.objectContaining({ id: 'wc-43', url: 'https://shop.test/' }),
     ]);
     expect(await getBrowserViewService()?.listTabs('conv-b')).toEqual([]); // a chat of no bot
+  });
+
+  it("looks a chat's bot up once for the phone's polls a few seconds apart", async () => {
+    await start();
+    resolveAgent.mockClear();
+
+    await getBrowserViewService()?.listTabs('conv-1');
+    await getBrowserViewService()?.listTabs('conv-1');
+
+    expect(resolveAgent.mock.calls.filter(([id]) => id === 'conv-1')).toHaveLength(1);
   });
 });
 

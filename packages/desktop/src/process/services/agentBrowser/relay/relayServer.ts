@@ -77,8 +77,8 @@ export type RelayServerDeps = {
     yoloChat?: () => string | undefined
   ): Promise<boolean>;
   /**
-   * When a chat was created and whether it is a scheduled run's own chat; null when unknown. Without it a bot's chat
-   * takes only the tabs of gone clients.
+   * Whether a chat is a scheduled run's own chat and whether its agent turn is running; null when unknown. Without it
+   * a bot's chat takes only the tabs of gone clients.
    */
   chatInfo?(conversationId: string): Promise<ChatInfo | null>;
   /** Loopback ports agents must not navigate to besides the relay's own (e.g. the backend's). */
@@ -86,11 +86,8 @@ export type RelayServerDeps = {
   limits?: Partial<RelayLimits>;
 };
 
-/**
- * What the takeover needs to know of a chat: its creation time (ms), whether it is a scheduled run's own chat, and
- * whether its agent turn is running now.
- */
-export type ChatInfo = { createdAt: number; scheduled: boolean; running: boolean };
+/** What the takeover needs to know of a chat: whether it is a scheduled run's own chat, and whether its turn runs now. */
+export type ChatInfo = { scheduled: boolean; running: boolean };
 
 /** A client's Agent profile; not `final` when it is a fallback after a failed lookup, which the relay retries. */
 export type ProfileLookup = { profile: BrowserTabProfile; final: boolean };
@@ -208,25 +205,23 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   };
 
   /**
-   * The chats among `owners` whose tabs `mine`, the connecting chat, may take: those created before it, and those
-   * whose agent turn is not running. A chat that cannot be looked up keeps its tabs.
+   * The chats among `owners` that give their tabs up: those whose agent turn is not running. A working chat, older or
+   * newer, keeps them, and so does a chat that cannot be looked up.
    */
-  const yieldingChats = async (mine: ChatInfo, owners: ReadonlySet<string>): Promise<Set<string>> => {
+  const yieldingChats = async (owners: ReadonlySet<string>): Promise<Set<string>> => {
     const infos = await Promise.all(
       [...owners].map(async (id) => [id, await deps.chatInfo?.(id).catch((): null => null)] as const)
     );
-    return new Set(
-      infos.filter(([, info]) => info && (info.createdAt < mine.createdAt || !info.running)).map(([id]) => id)
-    );
+    return new Set(infos.filter(([, info]) => info && !info.running).map(([id]) => id));
   };
 
   /**
    * A VA Bot's tabs belong to the bot, not one chat, and all of its chats show them: a chat's client takes over the
-   * tabs of the bot's gone clients, of its chats created before this one, and of its chats whose turn is not running
-   * (a newer chat that is working keeps its tabs). It runs when the client connects and each time its agent lists the
-   * tabs, so an older chat the user continues gets them once the newer chat is idle. The old client's sessions on them
-   * end (the onChange prune), and hygiene trims them to the chat's cap, keeping the most recently used. A scheduled
-   * run's own chat takes nothing, nor do regular chats (temporary profiles) and chat-less clients.
+   * tabs of the bot's gone clients and of its chats whose agent turn is not running. A working chat, older or newer,
+   * never loses its tabs. It runs when the client connects and each time its agent lists the tabs, so the chat the user
+   * continues gets them once the other chat is idle. The old client's sessions on them end (the onChange prune). A
+   * scheduled run's own chat takes nothing, nor do regular chats (temporary profiles) and chat-less clients, and a chat
+   * that cannot be looked up takes only gone clients' tabs.
    */
   const takeOverBotTabs = async (conn: Connection): Promise<void> => {
     const { profile } = conn.client;
@@ -254,7 +249,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         )
         .filter((id) => id !== conversationId)
     );
-    const yielding = mine ? await yieldingChats(mine, liveOwners) : new Set<string>();
+    const yielding = mine ? await yieldingChats(liveOwners) : new Set<string>();
     if (!connections.has(conn.client.clientId)) return;
     const mayTake = (owner: RelayClient): boolean =>
       owner.clientId.startsWith(DISCONNECTED_CLIENT_PREFIX) ||

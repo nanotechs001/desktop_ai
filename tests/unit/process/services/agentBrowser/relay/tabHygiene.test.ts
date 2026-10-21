@@ -95,6 +95,16 @@ describe('per-chat agent tab cap', () => {
     expect(closeTab.mock.calls).toEqual([[1]]);
   });
 
+  it("never caps a bot's shared tabs per chat: a takeover of 4 closes none at once, the bot cap decides later", () => {
+    [1, 2, 3, 4].forEach((id) => {
+      registry.track(new FakeContents(id), { kind: 'agent', agentId: 'bot-b' });
+      registry.claim(id, { clientId: 'client-new', label: 'claude', conversationId: 'conv-new' });
+      hygiene.adopt(id);
+    });
+
+    expect(closeTab).not.toHaveBeenCalled();
+  });
+
   it('counts each chat on its own', () => {
     agentTab(1, 'conv-a');
     agentTab(2, 'conv-a');

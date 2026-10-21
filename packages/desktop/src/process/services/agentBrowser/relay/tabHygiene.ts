@@ -7,7 +7,10 @@
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { TargetRegistry } from './targetRegistry';
 
-/** A chat keeps at most this many agent tabs the cap may close; the least recently used one goes first. */
+/**
+ * A chat keeps at most this many agent tabs the cap may close; the least recently used one goes first. A VA Bot's tabs
+ * are shared by its chats instead, and only the bot cap ({@link MAX_BOT_TABS}) trims them.
+ */
 export const MAX_AGENT_TABS_PER_CHAT = 3;
 /** An agent tab nobody (agent or user) used for this long is closed. */
 export const AGENT_TAB_IDLE_MS = 15 * 60_000;
@@ -112,6 +115,12 @@ export function startTabHygiene({
     });
   };
 
+  /** A tab of a VA Bot's own browser (not the default Agent's shared fallback profile, nor a temporary one). */
+  const isBotTab = (webContentsId: number): boolean => {
+    const profile = registry.ownership(webContentsId)?.profile;
+    return profile?.kind === 'agent' && profile.agentId !== DEFAULT_AGENT_ID;
+  };
+
   /** Each VA Bot's open pane tabs (not the default Agent's shared fallback profile, nor any temporary one). */
   const botTabSets = (): number[][] => {
     const byBot = new Map<string, number[]>();
@@ -164,7 +173,7 @@ export function startTabHygiene({
       // Already being closed (an earlier adopt of the same takeover chose it): it must not count the others again.
       if (closing.has(webContentsId)) return;
       const chat = owner.conversationId;
-      if (!chat) return;
+      if (!chat || isBotTab(webContentsId)) return;
       // A fresh array from filter, so sorting it in place touches nothing else.
       const others = [...agentTabs]
         .filter((id) => id !== webContentsId && chatOf(id) === chat && closable(id))
