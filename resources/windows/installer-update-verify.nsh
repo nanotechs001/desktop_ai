@@ -172,8 +172,7 @@ Var /GLOBAL AionUiActiveMarkerResult
   !insertmacro AIONUI_LOG_EVENT "verify-install start instDir=$INSTDIR"
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\${AIONUI_APP_EXECUTABLE_FILENAME}" "${AIONUI_APP_EXECUTABLE_FILENAME}"
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\ffmpeg.dll" "ffmpeg.dll"
-  !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\libEGL.dll" "libEGL.dll"
-  !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\libGLESv2.dll" "libGLESv2.dll"
+  ; No libEGL.dll / libGLESv2.dll: since Electron 44, ANGLE is linked statically into the executable.
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\d3dcompiler_47.dll" "d3dcompiler_47.dll"
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\dxcompiler.dll" "dxcompiler.dll"
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\dxil.dll" "dxil.dll"
