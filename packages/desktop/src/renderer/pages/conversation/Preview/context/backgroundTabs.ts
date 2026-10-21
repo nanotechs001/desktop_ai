@@ -20,7 +20,7 @@ export type BackgroundTab = {
 /** Live webviews across all scopes; beyond this the least recently used user tabs are unmounted. */
 export const MAX_LIVE_BROWSER_TABS = 20;
 
-const isBrowserTab = (tab: PreviewTab): boolean => tab.content_type === 'browser';
+export const isBrowserTab = (tab: PreviewTab): boolean => tab.content_type === 'browser';
 
 /**
  * The background with the leaving scope's browser tabs added. Their activity badge is cleared: it is
@@ -76,10 +76,10 @@ const isBotAgentTab = (tab: PreviewTab, agentId: string, chat: BotChat): boolean
   tab.metadata.profile.agentId === agentId;
 
 /**
- * A VA Bot's agent tabs follow the chat that drives them (ruling R18): those parked under other scopes that `chat`
- * may show move to `scope`, where that chat is on screen. An older chat gets only the tabs it still owns: it cannot
- * drive the others. Their webviews stay as they are (same tab ids). `moved` keeps the scopes they left, whose stored
- * copies must go.
+ * A VA Bot's agent tabs follow the chat that drives them (ruling R18): those parked in the background that `chat`
+ * may show move to `scope`, where that chat is on screen (parked under `scope` itself too: an older chat holds its
+ * browser back on entry). An older chat gets only the tabs it owns: it cannot drive the others. Their webviews stay as
+ * they are (same tab ids). `moved` keeps the scopes they left, whose stored copies must go.
  */
 export const moveBotTabs = (
   background: readonly BackgroundTab[],
@@ -87,7 +87,7 @@ export const moveBotTabs = (
   scope: string,
   chat: BotChat
 ): { background: BackgroundTab[]; moved: BackgroundTab[] } => {
-  const moved = background.filter((entry) => entry.scope !== scope && isBotAgentTab(entry.tab, agentId, chat));
+  const moved = background.filter((entry) => isBotAgentTab(entry.tab, agentId, chat));
   return {
     background: background.map((entry) => (moved.includes(entry) ? { ...entry, scope } : entry)),
     moved,

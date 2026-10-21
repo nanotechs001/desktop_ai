@@ -18,6 +18,8 @@ import {
 import { resolveAssistantConfigId } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { isHiddenAgentId } from '@/common/types/agent/hiddenAgents';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 
 const ChatConversationIndex: React.FC = () => {
   const { id } = useParams();
@@ -26,6 +28,7 @@ const ChatConversationIndex: React.FC = () => {
   const { closePreviewIfScopeChanged } = usePreviewContext();
   const { syncTitleFromHistory } = useAutoTitle();
   const notFoundHandledIdRef = useRef<string | undefined>(undefined);
+  const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
   const defaultConversationTitle = t('conversation.welcome.newConversation');
 
   const { data, isLoading, mutate } = useSWR(id ? `conversation/${id}` : null, () => {
@@ -44,8 +47,10 @@ const ChatConversationIndex: React.FC = () => {
   const conversationId = data?.id;
   const scope = data ? previewScopeOfConversation(data) : null;
   // A VA Bot's agent tabs come into the chat that owns them in the relay, or into the bot's newest chat, which the
-  // relay hands them to on its first browser command (ruling R18): a new chat never starts on a blank tab.
-  const agentId = data?.assistant?.id;
+  // relay hands them to on its first browser command (ruling R18): a new chat never starts on a blank tab. An older
+  // chat starts with no browser until its agent uses it again. The default Agent and presets are no bots: each of their
+  // chats keeps its own temporary browser.
+  const agentId = isVaBotAgent(data?.assistant, storedDefaultAgentId) ? data?.assistant?.id : undefined;
   const createdAt = data?.created_at;
   useEffect(() => {
     if (!conversationId) return;

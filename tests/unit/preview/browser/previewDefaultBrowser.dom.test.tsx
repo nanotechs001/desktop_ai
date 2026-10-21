@@ -578,7 +578,8 @@ describe("a VA Bot's new chat shows the bot's browser tabs", () => {
     handOver(botTab, 'c2');
 
     enterScope('/ws/c1', { ...OPEN_BROWSER, conversationId: 'c1', agentId: 'bot-b', newestOfBot: false });
-    expect(ctx.tabs.map((tab) => tab.id)).toEqual([blank]);
+    expect(ctx.tabs).toEqual([]); // an older chat starts with no browser at all
+    expect(ctx.liveBrowserTabs.map((tab) => tab.id).toSorted()).toEqual([blank, botTab].toSorted());
   });
 
   it("returning to an old chat does not pull the tabs the bot's new chat owns (R18)", () => {
@@ -633,6 +634,143 @@ describe("a VA Bot's new chat shows the bot's browser tabs", () => {
     expect(ctx.tabs).toHaveLength(1);
     expect(ctx.tabs[0]).toMatchObject({ content: BROWSER_BLANK_URL });
     expect(ctx.liveBrowserTabs.map((tab) => tab.id)).toContain(botTab);
+  });
+});
+
+/**
+ * An older chat of a VA Bot is like a past chat in a desktop browser pane: it opens with no browser. The bot's browser
+ * (its one profile) comes back into it only once the user continues there and its agent uses the browser again.
+ */
+describe("an older chat of a VA Bot gets the bot's browser back only when it continues", () => {
+  const BOT = { kind: 'agent', agentId: 'bot-b' } as const;
+  const BOT_CHAT = { ...OPEN_BROWSER, agentId: 'bot-b' } as const;
+  const openBotTab = (url: string, ownerChat: string): string => {
+    act(() => ctx.openBrowserTab(url, BOT));
+    const id = String(ctx.activeTabId);
+    act(() => ctx.updateTab(id, { metadata: { agentOwned: true, agentConversationId: ownerChat } }));
+    return id;
+  };
+  const handOver = (id: string, chat: string) =>
+    act(() => ctx.updateTab(id, { metadata: { agentOwned: true, agentConversationId: chat } }));
+  /** c1 opened a bot tab; the newer chat c2 took it and the relay handed it to c2. */
+  const botTabInNewerChat = (): { botTab: string; blank: string } => {
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    const blank = ctx.tabs[0].id;
+    const botTab = openBotTab('https://example.com/cart', 'c1');
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true });
+    handOver(botTab, 'c2');
+    return { botTab, blank };
+  };
+
+  it('opens with no browser tab, restores none and moves none of the bot tabs', () => {
+    mount();
+    const { botTab, blank } = botTabInNewerChat();
+
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+
+    expect(ctx.tabs).toEqual([]);
+    expect(ctx.isOpen).toBe(false);
+    // Nothing closed or remounted: both webviews stay live, the bot's tab still in c2's scope.
+    expect(ctx.liveBrowserTabs.map((tab) => tab.id).toSorted()).toEqual([blank, botTab].toSorted());
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedScope('/ws/c2').tabs.map((tab: { id: string }) => tab.id)).toEqual([botTab]);
+  });
+
+  it("restores the chat's other preview tabs as today", () => {
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    act(() => ctx.openPreview('# doc', 'markdown', { title: 'Doc' }));
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true });
+
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+
+    expect(ctx.tabs.map((tab) => tab.content_type)).toEqual(['markdown']);
+    expect(ctx.activeTabId).toBe(ctx.tabs[0].id);
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it("brings the bot's tabs in, opens the pane and shows the agent's tab once the relay hands them over", () => {
+    mount();
+    const { botTab } = botTabInNewerChat();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+    expect(ctx.isOpen).toBe(false);
+
+    handOver(botTab, 'c1');
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([botTab]);
+    expect(ctx.activeTabId).toBe(botTab);
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.liveBrowserTabs.filter((tab) => tab.id === botTab)).toHaveLength(1);
+  });
+
+  it("makes the agent's tab active over the chat's other tabs, even after the user closed the pane", () => {
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    const botTab = openBotTab('https://example.com/cart', 'c1');
+    act(() => ctx.openPreview('# doc', 'markdown', { title: 'Doc' }));
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true });
+    handOver(botTab, 'c2');
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+    act(() => ctx.collapsePreview());
+
+    handOver(botTab, 'c1');
+
+    expect(ctx.activeTabId).toBe(botTab);
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('brings a tab this chat still owns once its agent acts on it', () => {
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    const botTab = openBotTab('https://example.com/cart', 'c1');
+    enterScope('/ws/c2', { ...BOT_CHAT, conversationId: 'c2', newestOfBot: true }); // c2's agent never used it
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+    expect(ctx.tabs).toEqual([]);
+
+    act(() => ctx.takeAgentTab(botTab));
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([botTab]);
+    expect(ctx.activeTabId).toBe(botTab);
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it("does not take a tab another chat's agent acts on", () => {
+    mount();
+    const { botTab } = botTabInNewerChat();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: false });
+
+    act(() => ctx.takeAgentTab(botTab));
+
+    expect(ctx.tabs).toEqual([]);
+    expect(ctx.isOpen).toBe(false);
+  });
+
+  it("the bot's newest chat still takes all of the bot's tabs at once", () => {
+    mount();
+    enterScope('/ws/c1', { ...BOT_CHAT, conversationId: 'c1', newestOfBot: true });
+    const first = openBotTab('https://example.com/a', 'c1');
+    enterScope('/ws/c0', { ...BOT_CHAT, conversationId: 'c0', newestOfBot: false });
+    const second = openBotTab('https://example.com/b', 'c0');
+
+    enterScope('/ws/c3', { ...BOT_CHAT, conversationId: 'c3', newestOfBot: true });
+
+    expect(ctx.tabs.map((tab) => tab.id).toSorted()).toEqual([first, second].toSorted());
+    expect(ctx.isOpen).toBe(true);
+  });
+
+  it('leaves a regular chat as today: its browser tabs come back, and a new one opens blank', () => {
+    mount();
+    enterScope('/ws/r1', { ...OPEN_BROWSER, conversationId: 'r1' });
+    const blank = ctx.tabs[0].id;
+    enterScope('/ws/r2', { ...OPEN_BROWSER, conversationId: 'r2' });
+    expect(ctx.tabs.map((tab) => tab.content)).toEqual([BROWSER_BLANK_URL]);
+
+    enterScope('/ws/r1', { ...OPEN_BROWSER, conversationId: 'r1' });
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual([blank]);
+    expect(ctx.isOpen).toBe(true);
   });
 });
 
@@ -695,6 +833,33 @@ describe('conversation route preview scope entry', () => {
       agentId: 'bot-b',
       newestOfBot: true,
     });
+  });
+
+  it('does not name the default Agent or a built-in preset as a bot: their chats keep a temporary browser each', async () => {
+    for (const assistant of [
+      { id: 'aion-default-agent', source: 'user' },
+      { id: 'preset-x', source: 'builtin' },
+    ]) {
+      scopeEntered.mockReset();
+      getConversationOrNull.mockResolvedValue({
+        ...conv('p1'),
+        assistant: { ...assistant, name: 'A', avatar: '', backend: 'claude' },
+      } as TChatConversation);
+      const { unmount } = render(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <ChatConversationIndex />
+        </SWRConfig>
+      );
+
+      // eslint-disable-next-line no-await-in-loop -- one render at a time
+      await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
+      expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
+        openBrowserIfEmpty: true,
+        carryFromScope: undefined,
+        conversationId: 'c1',
+      });
+      unmount();
+    }
   });
 
   it('tells the pane when a newer chat of the same bot exists, so this one shows only the tabs it owns', async () => {

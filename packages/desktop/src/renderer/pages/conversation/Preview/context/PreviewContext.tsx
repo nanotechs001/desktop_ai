@@ -27,6 +27,7 @@ import { dropOpenBurstDuplicates } from './openBurstDuplicates';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import {
   enterScope,
+  isBrowserTab,
   leaveScope,
   liveBrowserTabs,
   moveBotTabs,
@@ -233,6 +234,8 @@ export interface PreviewContextValue {
   findPreviewTab: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => PreviewTab | null; // 查找匹配的 tab
   closePreviewByIdentity: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => void; // 根据内容关闭指定 tab
   closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey, options?: ScopeChangeOptions) => void; // 切换隔离 scope(project;见 previewScope.ts):持久化旧 scope、恢复新 scope 的 tabs+可见性(per-project)
+  /** An agent acted on browser tab `tabId`: a parked tab of the bot chat on screen's agent comes on screen. */
+  takeAgentTab: (tabId: string) => void;
 
   // 发送框集成 / Sendbox integration
   addToSendBox: (text: string) => void;
@@ -288,7 +291,10 @@ type ScopeChangeOptions = {
   conversationId?: string;
   /** The VA Bot of that conversation: its live agent tabs this chat drives (relay ownership) come along. */
   agentId?: string;
-  /** This is the bot's newest chat: all of the bot's live agent tabs come along, since the relay hands them over. */
+  /**
+   * This is the bot's newest chat: all of the bot's live agent tabs come along, since the relay hands them over.
+   * `false`, an older chat: it starts with no browser tab; the bot's tabs come once its agent uses them again.
+   */
   newestOfBot?: boolean;
 };
 
@@ -713,12 +719,13 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
    */
   const pullBotTabs = useCallback(
     (agentId: string, chat: BotChat, scopeKey: string): boolean => {
-      const { background, moved } = moveBotTabs(backgroundRef.current, agentId, scopeKey, chat);
+      const { moved } = moveBotTabs(backgroundRef.current, agentId, scopeKey, chat);
       if (moved.length === 0) return false;
       forgetMovedTabs(moved);
-      const { tabs: botTabs, rest } = enterScope(background, scopeKey, []);
+      // Only the bot's tabs: browser tabs an older chat held back in this scope stay parked.
+      const botTabs = moved.map((entry) => entry.tab);
       const isNew = (list: readonly PreviewTab[]) => botTabs.filter((tab) => !list.some((t) => t.id === tab.id));
-      setBackground(rest);
+      setBackground(backgroundRef.current.filter((entry) => !moved.includes(entry)));
       setTabs((prev) => [...prev, ...isNew(prev)]);
       tabsRef.current = [...tabsRef.current, ...isNew(tabsRef.current)];
       if (!activeTabIdRef.current) {
@@ -728,6 +735,25 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       return true;
     },
     [setBackground]
+  );
+  /**
+   * `tabId` is parked and the agent of the bot chat on screen drives it (the relay handed it over, or that agent acted
+   * there): that chat's tabs come on screen, the pane opens on this one. No-op otherwise.
+   */
+  const takeAgentTab = useCallback(
+    (tabId: string) => {
+      const chat = onScreenChatRef.current;
+      const scopeKey = currentScopeRef.current;
+      if (!chat?.agentId || scopeKey == null || !backgroundRef.current.some((entry) => entry.tab.id === tabId)) return;
+      if (!pullBotTabs(chat.agentId, { conversationId: chat.conversationId }, scopeKey)) return;
+      if (tabsRef.current.some((tab) => tab.id === tabId)) {
+        setActiveTabId(tabId);
+        activeTabIdRef.current = tabId;
+      }
+      userClosedRef.current = false;
+      setIsOpen(true);
+    },
+    [pullBotTabs]
   );
   // Set when a browser-tab open was folded into an existing tab because the cap
   // was reached, so the UI can tell the user instead of silently reusing a tab.
@@ -1296,6 +1322,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       // An expired request for this conversation is dropped too, so a chat that never loaded cannot open a tab later.
       if (revealing || (request && request.conversationId === options?.conversationId)) revealRequestRef.current = null;
       const revealUrl = revealing ? request?.url : undefined;
+      // An older chat of a VA Bot holds its browser back (no restored, pulled or blank tab) until its agent uses it.
+      const holdsBrowser = Boolean(options?.agentId) && options?.newestOfBot === false;
       // A link from that conversation's robot chat: a new tab, in place of the blank one a fresh scope would open.
       const openRevealUrl = (): boolean => {
         if (!revealUrl) return false;
@@ -1310,13 +1338,13 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         if (openRevealUrl()) return;
         if (!options?.openBrowserIfEmpty || scopeKey == null || isOpen || userClosedRef.current) return;
         if (tabsRef.current.length > 0) setIsOpen(true);
-        else autoOpenedTabIdRef.current = openBrowserTab();
+        else if (!holdsBrowser) autoOpenedTabIdRef.current = openBrowserTab();
       };
       onScreenChatRef.current = options?.conversationId
         ? { conversationId: options.conversationId, agentId: options.agentId }
         : null;
       if (prev === scopeKey) {
-        if (options?.agentId && options.conversationId && scopeKey != null) {
+        if (!holdsBrowser && options?.agentId && options.conversationId && scopeKey != null) {
           pullBotTabs(
             options.agentId,
             { conversationId: options.conversationId, newest: options.newestOfBot },
@@ -1330,7 +1358,9 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         // Same conversation, new scope key: merge the live tabs into the project's saved ones, never over them.
         currentScopeRef.current = scopeKey;
         const saved = loadScopeState(scopeKey);
-        const { tabs: savedTabs, rest } = enterScope(backgroundRef.current, scopeKey, saved.tabs);
+        const { tabs: savedTabs, rest } = holdsBrowser
+          ? { tabs: saved.tabs.filter((tab) => !isBrowserTab(tab)), rest: backgroundRef.current }
+          : enterScope(backgroundRef.current, scopeKey, saved.tabs);
         // The untouched blank tab the route opened only because the workspace scope was empty; never a
         // blank tab the user or an agent opened.
         const isFiller = (tab: PreviewTab) =>
@@ -1378,7 +1408,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return.
       const left = prev != null ? leaveScope(backgroundRef.current, prev, tabs, Date.now()) : backgroundRef.current;
       const bot =
-        options?.agentId && options.conversationId && scopeKey != null
+        !holdsBrowser && options?.agentId && options.conversationId && scopeKey != null
           ? moveBotTabs(left, options.agentId, scopeKey, {
               conversationId: options.conversationId,
               newest: options.newestOfBot,
@@ -1386,15 +1416,23 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
           : null;
       if (bot) forgetMovedTabs(bot.moved);
       const background = bot?.background ?? left;
-      const entered = scopeKey != null ? enterScope(background, scopeKey, loaded.tabs) : { tabs: [], rest: background };
-      const activeId = loaded.activeTabId ?? entered.tabs[0]?.id ?? null;
+      // A held-back scope's own browser tabs stay parked (mounted, hidden); its stored copies are not shown.
+      const entered =
+        scopeKey == null
+          ? { tabs: [], rest: background }
+          : holdsBrowser
+            ? { tabs: loaded.tabs.filter((tab) => !isBrowserTab(tab)), rest: background }
+            : enterScope(background, scopeKey, loaded.tabs);
+      const activeId = entered.tabs.some((tab) => tab.id === loaded.activeTabId)
+        ? loaded.activeTabId
+        : (entered.tabs[0]?.id ?? null);
       setBackground(entered.rest);
       // Subscriptions for these tabs come from the tabs effect, which this setTabs
       // triggers — restored tabs are subscribed exactly like freshly opened ones.
       setTabs(entered.tabs);
       setActiveTabId(activeId);
       activeTabIdRef.current = activeId;
-      setIsOpen(loaded.isOpen);
+      setIsOpen(loaded.isOpen && entered.tabs.length > 0);
       setIsMaximized(false);
       setDomSnippets([]);
       userClosedRef.current = loaded.userClosed === true && !revealing;
@@ -1404,7 +1442,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       if (options?.openBrowserIfEmpty && scopeKey != null && !userClosedRef.current) {
         if (entered.tabs.length > 0) {
           setIsOpen(true);
-        } else {
+        } else if (!holdsBrowser) {
           autoOpenedTabIdRef.current = openBrowserTab();
         }
       }
@@ -1501,14 +1539,11 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         setBackground(backgroundRef.current.with(parked, { ...entry, tab: patchTab(entry.tab, patch) }));
         // The relay handed a parked bot tab to the chat on screen (its agent connected): it comes on screen now.
         const chat = onScreenChatRef.current;
-        const scopeKey = currentScopeRef.current;
-        if (chat?.agentId && scopeKey != null && patch.metadata?.agentConversationId === chat.conversationId) {
-          pullBotTabs(chat.agentId, { conversationId: chat.conversationId }, scopeKey);
-        }
+        if (chat && patch.metadata?.agentConversationId === chat.conversationId) takeAgentTab(tabId);
       }
       setTabs((prevTabs) => prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab)));
     },
-    [setBackground, pullBotTabs]
+    [setBackground, takeAgentTab]
   );
 
   /**
@@ -1853,6 +1888,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       findPreviewTab,
       closePreviewByIdentity,
       closePreviewIfScopeChanged,
+      takeAgentTab,
       addToSendBox,
       setSendBoxHandler,
       domSnippets,
@@ -1891,6 +1927,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     findPreviewTab,
     closePreviewByIdentity,
     closePreviewIfScopeChanged,
+    takeAgentTab,
     addToSendBox,
     setSendBoxHandler,
     domSnippets,

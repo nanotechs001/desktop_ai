@@ -162,6 +162,17 @@ const BrowserTabLayer: React.FC = () => {
     switchTab: preview?.switchTab ?? noop,
   });
 
+  const takeAgentTab = preview?.takeAgentTab;
+  const { onAgentAction: followAgentAction } = followAgent;
+  // A parked tab the agent of the bot chat on screen acts on comes on screen first (an older chat continuing).
+  const handleAgentAction = useCallback(
+    (tabId: string) => {
+      takeAgentTab?.(tabId);
+      followAgentAction(tabId);
+    },
+    [takeAgentTab, followAgentAction]
+  );
+
   const handleUrlChange = useCallback(
     // 地址存在 content 里，与其他 tab 类型保持一致 / Address lives in content, like other tab types
     (tabId: string, url: string) => updateTab?.(tabId, { content: url }),
@@ -293,7 +304,7 @@ const BrowserTabLayer: React.FC = () => {
               onRequestClose={closeTab}
               onAgentOwnedChange={handleAgentOwnedChange}
               agentOwnedHint={Boolean(tab.metadata?.agentOwned)}
-              onAgentAction={followAgent.onAgentAction}
+              onAgentAction={handleAgentAction}
               onUserInput={followAgent.onUserInput}
               active={shown}
             />
