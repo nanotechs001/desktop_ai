@@ -30,6 +30,13 @@ describe('followRobotChat', () => {
     expect(d.navigate).toHaveBeenCalledWith('/conversation/bot-b');
   });
 
+  it('switches from the home page too', async () => {
+    const d = deps();
+    await expect(followRobotChat('/guid', 'bot-b', d)).resolves.toBe(true);
+    expect(d.navigate).toHaveBeenCalledWith('/conversation/bot-b');
+    expect(d.revealBrowserFor).toHaveBeenCalledWith('bot-b');
+  });
+
   it('stays put on a plain chat, off a chat route, or when already on that chat', async () => {
     const d = deps();
     await expect(followRobotChat('/conversation/plain', 'bot-b', d)).resolves.toBe(false);

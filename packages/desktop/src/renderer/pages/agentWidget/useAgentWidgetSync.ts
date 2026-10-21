@@ -144,13 +144,16 @@ type FollowRobotChatDeps = {
 
 /**
  * A robot's popup moved to chat `to` (opened, a new chat, one from its history). The main window follows with that
- * chat's browser pane, but only while it shows a VA Bot chat: elsewhere (a plain chat, settings) it stays put.
+ * chat's browser pane while it shows the home page or a VA Bot chat: elsewhere (a plain chat, settings) it stays put.
  */
 export async function followRobotChat(pathname: string, to: string, deps: FollowRobotChatDeps): Promise<boolean> {
   const onScreen = /^\/conversation\/([^/?#]+)/.exec(pathname)?.[1];
-  if (!onScreen || onScreen === to) return false;
-  const current = await getConversationOrNull(onScreen);
-  if (!current || !isVaBotAgent(current.assistant, configService.get(DEFAULT_AGENT_SETTING_KEY))) return false;
+  const onHome = pathname === '/' || pathname === '/guid';
+  if (onScreen === to || (!onScreen && !onHome)) return false;
+  if (onScreen) {
+    const current = await getConversationOrNull(onScreen);
+    if (!current || !isVaBotAgent(current.assistant, configService.get(DEFAULT_AGENT_SETTING_KEY))) return false;
+  }
   deps.revealBrowserFor(to);
   deps.navigate(`/conversation/${to}`);
   return true;
