@@ -46,6 +46,7 @@ import { useBrowserNotification } from '@renderer/hooks/system/notification/useB
 import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/useDesktopTurnNotification';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
+import { MOTION_MS, useAnimating, useMotionPreference } from '@renderer/hooks/ui/useMotion';
 import { isElectronDesktop } from '@renderer/utils/platform';
 import brandLogo from '@renderer/assets/logos/brand/app.png';
 import '@renderer/styles/layout.css';
@@ -153,6 +154,7 @@ const Layout: React.FC<{
   useEngineDriftSync();
   useDefaultAgentSync();
   useBotColorSeed();
+  useMotionPreference();
   const navigate = useNavigate();
   const location = useLocation();
   // Read by window event handlers that are not re-bound on every route change.
@@ -259,6 +261,7 @@ const Layout: React.FC<{
     height: chatPaneHeightPx,
     containerRef: previewSplitRef,
     renderHandle: renderPreviewSplitHandle,
+    dragging: chatPaneDragging,
   } = useVerticalSplit({
     storageKey: 'chat-pane-height-px',
     defaultHeight: 360,
@@ -267,6 +270,20 @@ const Layout: React.FC<{
       if (!isVaChatCollapsed) toggleVaChat();
     },
   });
+  // Motion (preview.css): the side-by-side region slides in and out, maximizing eases, and the VA Bot chat row folds
+  // away under the browser. Each runs only while its change does, so dragging a divider stays immediate. Only a
+  // closed pane slides out: leaving the project hands the pane to the next chat at once.
+  const sideBySideRegion = !isMobile && !isVaBotMode && Boolean(currentProject);
+  const previewOpenChanging = useAnimating(isPreviewOpen, MOTION_MS.base);
+  const previewRegionClosing = sideBySideRegion && !isPreviewOpen && previewOpenChanging;
+  const previewRegionMounted = previewRegionActive || previewRegionClosing;
+  const maximizeChanging = useAnimating(previewMaximized, MOTION_MS.slow) && !chatPaneDragging;
+  // Folded away once the change has run. The VA Bot row stays laid out at height 0 (hidden, inert) so it can ease
+  // open again: a display:none node has no start value to transition from.
+  const chatRowFolded = previewMaximized && !maximizeChanging;
+  // The chat's width beside the region, held while maximizing so its messages do not reflow every frame.
+  const chatWidthPx = mainRowWidth - (explorerCollapsed ? 0 : explorerWidthPx) - previewWidthPx;
+  const previewRegionSize = previewMaximized ? '100%' : `${Math.round(previewWidthPx)}px`;
   const routeLayoutMountedRef = useRef(false);
   useEffect(() => {
     if (!routeLayoutMountedRef.current) {
@@ -610,20 +627,33 @@ const Layout: React.FC<{
             {/* Chat-first DOM order in both layouts, so the chat never remounts when the
                   preview toggles or the layout switches. VA Bot: column-reverse puts the
                   browser on top. Regular: a row, chat left of the preview. */}
+            {/* Clips the region while it slides in or out; the webview layer clips to it too (data-browser-clip). */}
             <div
               ref={previewSplitRef}
-              className={vaLayout ? 'flex flex-col-reverse flex-1 min-w-0 min-h-0' : 'flex flex-1 min-w-0 min-h-0'}
+              data-browser-clip=''
+              className={classNames(
+                'flex flex-1 min-w-0 min-h-0 overflow-hidden',
+                vaLayout ? 'flex-col-reverse' : undefined
+              )}
             >
               {/* Bottom row (VA Bot: chat + files side by side). Hidden, but kept mounted
                     so showing it again is instant, while the chat is collapsed/maximized away. */}
               <div
                 className='flex min-w-0 min-h-0'
+                inert={(chatRowFolded && vaLayout) || undefined}
                 style={
-                  previewMaximized
+                  chatRowFolded && !vaLayout
                     ? { display: 'none' }
                     : vaLayout
-                      ? { flex: `0 0 ${chatPaneHeightPx}px` }
-                      : { flex: '1 1 0' }
+                      ? {
+                          flex: `0 0 ${previewMaximized ? 0 : chatPaneHeightPx}px`,
+                          ...(maximizeChanging || chatRowFolded ? { overflow: 'hidden' } : {}),
+                          ...(maximizeChanging
+                            ? { transition: 'flex-basis var(--motion-slow) var(--motion-ease-in-out)' }
+                            : {}),
+                          ...(chatRowFolded ? { visibility: 'hidden' as const } : {}),
+                        }
+                      : { flex: '1 1 0', ...(maximizeChanging ? { minWidth: 0, overflow: 'hidden' } : {}) }
                 }
               >
                 <ArcoLayout.Content
@@ -632,7 +662,18 @@ const Layout: React.FC<{
                   onClick={() => {
                     if (isMobile && !collapsed) setCollapsed(true);
                   }}
-                  style={isMobile ? { width: '100%' } : vaChatHidden ? { display: 'none' } : undefined}
+                  style={
+                    isMobile
+                      ? { width: '100%' }
+                      : vaChatHidden
+                        ? { display: 'none' }
+                        : maximizeChanging
+                          ? // Keeps its size while its row folds or opens, so the messages do not reflow every frame.
+                            vaLayout
+                            ? { flex: 'none', height: `${chatPaneHeightPx}px` }
+                            : { flex: 'none', width: `${Math.max(0, Math.round(chatWidthPx))}px` }
+                          : undefined
+                  }
                 >
                   <Outlet />
                   <PwaPullToRefresh />
@@ -653,16 +694,22 @@ const Layout: React.FC<{
                   />
                 )}
               </div>
-              {vaLayout && !previewMaximized && renderPreviewSplitHandle()}
+              {vaLayout && (!previewMaximized || maximizeChanging) && renderPreviewSplitHandle()}
               {/* Hoisted preview region (project conversations only). Structurally
                   persistent: lives above the per-conversation subtree, so a
                   same-project conversation switch does not remount it. */}
-              {previewRegionActive && (
+              {previewRegionMounted && (
                 <div
                   data-project-preview-region
-                  className='preview-panel flex flex-col relative overflow-visible'
+                  data-browser-fade=''
+                  data-closing={previewRegionClosing || undefined}
+                  data-resizing={(sideBySideRegion && maximizeChanging) || undefined}
+                  className={classNames(
+                    'preview-panel flex flex-col relative overflow-visible',
+                    sideBySideRegion && 'preview-reveal'
+                  )}
                   style={
-                    vaLayout || previewMaximized
+                    vaLayout || (previewMaximized && !sideBySideRegion)
                       ? {
                           // Fills the space the chat leaves (all of it when the chat is hidden).
                           flexGrow: 1,
@@ -675,10 +722,11 @@ const Layout: React.FC<{
                           boxSizing: 'border-box',
                         }
                       : {
-                          // Regular chats: the dragged fixed width beside the chat. Left border
-                          // only, as the divider; no outer margins (the window background would
+                          // Regular chats: the dragged fixed width beside the chat (the whole row maximized).
+                          // Left border only, as the divider; no outer margins (the window background would
                           // show through, jarring in dark mode).
-                          width: `${Math.round(previewWidthPx)}px`,
+                          width: previewRegionSize,
+                          ['--preview-reveal-size' as string]: previewRegionSize,
                           flexGrow: 0,
                           flexShrink: 0,
                           borderLeft: '1px solid var(--bg-3)',
@@ -690,6 +738,7 @@ const Layout: React.FC<{
                   {/* While the chat is hidden the width handle has nothing to drag against. */}
                   {!vaLayout &&
                     !previewMaximized &&
+                    !previewRegionClosing &&
                     createPreviewRegionDragHandle({
                       className: 'absolute top-0 bottom-0 z-30',
                       style: { width: '20px', left: '-20px' },
@@ -699,7 +748,7 @@ const Layout: React.FC<{
                       lineStyle: { width: '2px' },
                     })}
                   <div className='h-full w-full overflow-hidden'>
-                    <PreviewPanel />
+                    <PreviewPanel closing={previewRegionClosing} />
                   </div>
                 </div>
               )}

@@ -1462,10 +1462,11 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   const toggleVaChat = useCallback(() => {
     const collapsed = !vaChatCollapsedRef.current;
     setIsVaChatCollapsed(collapsed);
-    // Showing the chat puts the cursor straight into its message box (after the pane lays out).
+    // Showing the chat puts the cursor straight into its message box (after the pane lays out). No scroll: the row is
+    // still easing open, and focusing would scroll its clipped content into view.
     if (!collapsed) {
       window.requestAnimationFrame(() => {
-        document.querySelector<HTMLTextAreaElement>('[data-chat-pane] textarea')?.focus();
+        document.querySelector<HTMLTextAreaElement>('[data-chat-pane] textarea')?.focus({ preventScroll: true });
       });
     }
   }, []);

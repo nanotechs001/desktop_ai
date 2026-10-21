@@ -89,7 +89,12 @@ class SaveRefusedError extends Error {
   }
 }
 
-const PreviewPanel: React.FC = () => {
+type PreviewPanelProps = {
+  /** The pane is sliding out: keep showing the last tab until it is gone, though the preview is already closed. */
+  closing?: boolean;
+};
+
+const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
   const { t, i18n } = useTranslation();
   const {
     isOpen,
@@ -840,7 +845,7 @@ const PreviewPanel: React.FC = () => {
   }, [metadata?.fileRef, metadata?.file_path, messageApi, t]);
 
   // Every hook has now run, so bailing out here keeps the hook count stable.
-  if (!isOpen || !activeTab) return null;
+  if ((!isOpen && !closing) || !activeTab) return null;
 
   const renderMissingFile = () => {
     const filePath = metadata?.file_path;

@@ -1,4 +1,5 @@
-/* Preview panel animation */
+/* Preview panel motion. Durations come from the motion tokens (styles/themes/base.css), which the
+   reduced-motion gate zeroes; the media rule below also stops the keyframes outright. */
 
 @media (prefers-reduced-motion: reduce) {
   .preview-panel {
@@ -7,18 +8,44 @@
   }
 }
 
+/* Layouts that cannot slide in (VA Bot stack, maximized, the mobile overlay) fade in. The panel carries
+   data-browser-fade, so the webview laid over its slot fades with it. */
 .preview-panel {
-  animation: preview-panel-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  will-change: opacity, transform;
+  animation: preview-panel-enter var(--motion-base) var(--motion-ease-out);
 }
 
 @keyframes preview-panel-enter {
   from {
     opacity: 0;
-    transform: translateX(20px);
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
+}
+
+/* Side by side: the panel keeps its final width and slides in from the inline end while the chat
+   narrows (a negative end margin as wide as the panel puts it just past the clipping row). It leaves
+   the same way (data-closing). The guest page never resizes: the webview only moves, clipped to the
+   row (data-browser-clip). */
+.preview-panel.preview-reveal {
+  animation: preview-reveal var(--motion-slow) var(--motion-ease-out);
+  transition: margin-inline-end var(--motion-base) var(--motion-ease-out);
+}
+
+.preview-panel.preview-reveal[data-closing] {
+  margin-inline-end: calc(-1 * var(--preview-reveal-size, 100%));
+  transition-timing-function: var(--motion-ease-in);
+  pointer-events: none;
+}
+
+@keyframes preview-reveal {
+  from {
+    margin-inline-end: calc(-1 * var(--preview-reveal-size, 100%));
   }
+}
+
+/* Maximize / restore: the panel's width eases between its share and the whole row, only while the
+   change runs (data-resizing), so dragging the divider stays immediate. */
+.preview-panel[data-resizing] {
+  transition:
+    flex-basis var(--motion-slow) var(--motion-ease-in-out),
+    width var(--motion-slow) var(--motion-ease-in-out),
+    margin-inline-end var(--motion-base) var(--motion-ease-in);
 }

@@ -4,6 +4,7 @@ import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssist
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
+import { MOTION_MS, useAnimating } from '@/renderer/hooks/ui/useMotion';
 import { useVerticalSplit } from '@/renderer/pages/conversation/hooks/useVerticalSplit';
 import ChatTitleEditor from '@/renderer/pages/conversation/components/ChatTitleEditor';
 import MobileWorkspaceOverlay from './MobileWorkspaceOverlay';
@@ -179,6 +180,22 @@ const ChatLayout: React.FC<{
     isMobile,
   });
 
+  // --- Motion (preview.css): the side-by-side panel slides in and out and maximizing eases, while the VA Bot chat
+  // row folds away under the browser. Each runs only while its change does, so dragging a divider stays immediate. ---
+  const sideBySide = isDesktop && !isVaBotMode;
+  const openChanging = useAnimating(isPreviewOpen, MOTION_MS.base);
+  const previewClosing = sideBySide && !isPreviewOpen && openChanging;
+  const previewMounted = isPreviewOpen || previewClosing;
+  const maximizeChanging = useAnimating(previewMaximized, MOTION_MS.slow) && !verticalSplit.dragging;
+  // Folded away once the maximize has run. The VA Bot row stays laid out at height 0 (hidden, inert) so it can
+  // ease open again: a display:none node has no start value to transition from.
+  const chatFolded = previewMaximized && !maximizeChanging;
+  const chatHidden = (isPreviewOpen && isMobile) || (chatFolded && !vaLayout);
+  const previewSharePct = `${100 - chatSplitRatio}%`;
+  // The chat's width beside the preview, held while maximizing so its messages do not reflow every frame.
+  const chatWidthPx =
+    ((containerWidth - (workspaceEnabled && !rightSiderCollapsed ? workspaceWidthPx : 0)) * chatFlex) / 100;
+
   // --- Hook E: layout constraints ---
   useLayoutConstraints({
     containerWidth,
@@ -313,31 +330,52 @@ const ChatLayout: React.FC<{
           <div className='shrink-0 !bg-1'>{headerBlock}</div>
           {/* Desktop with preview open: column-reverse puts the preview on top and the
               chat (first in the DOM, so it never remounts) underneath. */}
+          {/* Clips the preview while it slides in or out; the webview layer clips to it too (data-browser-clip). */}
           <div
             ref={verticalSplit.containerRef}
-            className={classNames('flex flex-1 min-h-0 relative', vaLayout && 'flex-col-reverse')}
+            data-browser-clip=''
+            className={classNames('flex flex-1 min-h-0 relative overflow-hidden', vaLayout && 'flex-col-reverse')}
           >
             {/* Chat area - always mounted, never unmounted on preview toggle */}
             <div
               className='flex flex-row relative'
               style={{
-                flexGrow: isPreviewOpen && isDesktop ? 0 : 1,
-                flexShrink: 0,
-                flexBasis: vaLayout ? `${verticalSplit.height}px` : isPreviewOpen && isDesktop ? `${chatFlex}%` : 0,
+                // VA Bot: the chat row keeps its height under the browser (0 while folded away). Otherwise the chat
+                // takes what the preview's share leaves.
+                flexGrow: vaLayout ? 0 : 1,
+                flexShrink: vaLayout ? 0 : 1,
+                flexBasis: vaLayout ? (previewMaximized ? '0px' : `${verticalSplit.height}px`) : 0,
                 minHeight: 0,
                 // 最大化时（桌面）隐藏聊天区，预览铺满；移动端预览打开即覆盖聊天区。
-                // Hidden when maximized (desktop) so the preview fills; on mobile an
+                // Hidden when maximized (desktop) so the preview fills, once the change has run; on mobile an
                 // open preview already covers the chat.
-                display: (isPreviewOpen && isMobile) || previewMaximized ? 'none' : 'flex',
-                minWidth: '240px',
+                display: chatHidden ? 'none' : 'flex',
+                visibility: chatFolded && vaLayout ? 'hidden' : undefined,
+                minWidth: maximizeChanging || previewMaximized ? 0 : '240px',
+                ...(maximizeChanging || chatFolded
+                  ? {
+                      overflow: 'hidden',
+                      transition: vaLayout ? 'flex-basis var(--motion-slow) var(--motion-ease-in-out)' : undefined,
+                    }
+                  : {}),
               }}
+              inert={(chatFolded && vaLayout) || undefined}
               onClick={() => {
                 if (window.innerWidth < 768 && !rightSiderCollapsed) setRightSiderCollapsed(true);
               }}
             >
               <ArcoLayout.Content
                 className='flex flex-col flex-1 min-w-0 bg-1 overflow-hidden'
-                style={vaChatHidden ? { display: 'none' } : undefined}
+                style={
+                  vaChatHidden
+                    ? { display: 'none' }
+                    : maximizeChanging
+                      ? // Keeps its size while its row folds or opens, so the messages do not reflow every frame.
+                        vaLayout
+                        ? { flex: 'none', height: `${verticalSplit.height}px` }
+                        : { flex: 'none', width: `${Math.round(chatWidthPx)}px` }
+                      : undefined
+                }
                 data-chat-pane
               >
                 {props.children}
@@ -345,12 +383,16 @@ const ChatLayout: React.FC<{
               {/* VA Bot: the files/workspace pane sits beside the chat in the bottom row. */}
               {vaLayout && workspaceSider}
             </div>
-            {vaLayout && !previewMaximized && verticalSplit.renderHandle()}
-            {/* Preview panel - conditionally rendered */}
-            {isPreviewOpen && (
+            {vaLayout && (!previewMaximized || maximizeChanging) && verticalSplit.renderHandle()}
+            {/* Preview panel - conditionally rendered (kept for its slide out on desktop) */}
+            {previewMounted && (
               <div
+                data-browser-fade=''
+                data-closing={previewClosing || undefined}
+                data-resizing={(sideBySide && maximizeChanging) || undefined}
                 className={classNames(
                   'preview-panel flex flex-col relative overflow-visible',
+                  sideBySide && 'preview-reveal',
                   // 移动端预览是覆盖层，保留内缩和圆角；桌面端不留边距，
                   // 否则窗口底色会从缝隙透出（深色模式下尤其突兀）。
                   // On mobile the preview is an overlay, so it keeps its inset and
@@ -359,9 +401,15 @@ const ChatLayout: React.FC<{
                   isDesktop ? '' : 'm-[8px] rounded-[15px]'
                 )}
                 style={{
-                  flexGrow: 1,
-                  flexShrink: 1,
-                  flexBasis: 0,
+                  // Side by side: the preview's own share (all of it maximized); it never resizes while sliding.
+                  ...(sideBySide
+                    ? {
+                        flexGrow: 0,
+                        flexShrink: 0,
+                        flexBasis: previewMaximized ? '100%' : previewSharePct,
+                        ['--preview-reveal-size' as string]: previewMaximized ? '100%' : previewSharePct,
+                      }
+                    : { flexGrow: 1, flexShrink: 1, flexBasis: 0 }),
                   // VA Bot: bottom divider above the chat. Regular desktop: left divider beside
                   // the chat. Mobile overlay keeps a full border.
                   ...(vaLayout
@@ -382,6 +430,7 @@ const ChatLayout: React.FC<{
                 {isDesktop &&
                   !vaLayout &&
                   !previewMaximized &&
+                  !previewClosing &&
                   createPreviewDragHandle({
                     className: 'absolute top-0 bottom-0 z-30',
                     style: { width: '20px', left: '-20px' },
@@ -390,7 +439,7 @@ const ChatLayout: React.FC<{
                     lineStyle: { width: '2px' },
                   })}
                 <div className={classNames('h-full w-full overflow-hidden', isDesktop ? '' : 'rounded-[15px]')}>
-                  <PreviewPanel />
+                  <PreviewPanel closing={previewClosing} />
                 </div>
               </div>
             )}

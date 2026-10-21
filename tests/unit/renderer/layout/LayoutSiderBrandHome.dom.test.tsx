@@ -64,6 +64,7 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktopMock }));
 vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({
   useAgentWidgetSync: () => {},
+  useAgentWidgetSettings: () => null,
   followRobotChat: async () => false,
   onAgentTabActivity: () => () => {},
 }));

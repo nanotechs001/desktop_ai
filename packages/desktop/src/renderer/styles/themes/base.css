@@ -3,6 +3,31 @@
 :root {
   --app-min-width: 360px;
   --titlebar-height: 36px;
+
+  /* Motion tokens. Durations mirror MOTION_MS in hooks/ui/useMotion.ts; keep both in step. */
+  --motion-fast: 150ms;
+  --motion-base: 240ms;
+  --motion-slow: 320ms;
+  --motion-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Sheets and drawers (same curve as MobileActionSheet). */
+  --motion-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* One gate for all app motion: the OS preference, or the app's "Reduce motion" setting (data-reduce-motion). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0.01ms;
+    --motion-base: 0.01ms;
+    --motion-slow: 0.01ms;
+  }
+}
+
+:root[data-reduce-motion='true'] {
+  --motion-fast: 0.01ms;
+  --motion-base: 0.01ms;
+  --motion-slow: 0.01ms;
 }
 
 .app-shell {

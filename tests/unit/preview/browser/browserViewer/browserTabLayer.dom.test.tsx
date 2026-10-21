@@ -333,4 +333,52 @@ describe('BrowserTabLayer', () => {
     rerender(layout(TABS, 'tab-1'));
     expect(remove.mock.calls.filter(([type]) => type === 'resize').length).toBeGreaterThanOrEqual(1);
   });
+
+  // A pane sliding in sits partly outside the row that clips it: the shown page is cut to the row, and fades with a
+  // fading pane, so it never shows over the chat or pops in at full opacity.
+  it('clips the shown tab to the clipping row and fades it with a fading pane, but never a hidden tab', () => {
+    slotBox = { left: 600, top: 0, width: 400, height: 600 };
+    const clipBox = { left: 0, top: 0, width: 800, height: 600 };
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = this.hasAttribute('data-browser-clip') ? clipBox : slotBox;
+      return {
+        ...box,
+        x: box.left,
+        y: box.top,
+        right: box.left + box.width,
+        bottom: box.top + box.height,
+      } as DOMRect;
+    });
+    mocks.context = { liveBrowserTabs: TABS, activeTabId: 'tab-1' };
+    render(
+      <>
+        <div data-browser-clip=''>
+          <div data-browser-fade='' style={{ opacity: 0.4 }}>
+            <BrowserSlot />
+          </div>
+        </div>
+        <BrowserTabLayer />
+      </>
+    );
+    const layer = wrapperOf('tab-1')?.parentElement as HTMLElement;
+
+    expect(layer.style.getPropertyValue('--browser-clip')).toBe('inset(0px 200px 0px 0px)');
+    expect(layer.style.getPropertyValue('--browser-opacity')).toBe('0.4');
+    expect(wrapperOf('tab-1')?.style.clipPath).toBe('var(--browser-clip, none)');
+    expect(wrapperOf('tab-1')?.style.opacity).toBe('var(--browser-opacity, 1)');
+    expect(wrapperOf('tab-2')?.style.clipPath).toBe('');
+    expect(wrapperOf('tab-2')?.style.opacity).toBe('');
+  });
+
+  it('moves the layer with the slot on every frame of a transition without re-rendering the viewers', () => {
+    const { container } = render(layout(TABS, 'tab-1'));
+    const layer = wrapperOf('tab-1')?.parentElement as HTMLElement;
+    const renders = mocks.viewerProps.length;
+
+    slotBox = { left: 120, top: 0, width: 800, height: 600 };
+    act(() => container.dispatchEvent(new Event('transitionstart', { bubbles: true })));
+
+    expect(layer.style.left).toBe('120px');
+    expect(mocks.viewerProps.length).toBe(renders);
+  });
 });

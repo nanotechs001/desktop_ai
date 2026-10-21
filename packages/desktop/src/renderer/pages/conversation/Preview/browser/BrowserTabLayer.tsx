@@ -18,8 +18,8 @@ type Box = { left: number; top: number; width: number; height: number };
 /** Hidden tabs keep the last slot's size; before any slot they get a common window size, never zero. */
 const DEFAULT_BOX: Box = { left: 0, top: 0, width: 1024, height: 768 };
 
-/** How long to keep measuring each frame after a layout event: covers the panel and sider transitions. */
-const SETTLE_MS = 300;
+/** How long to keep measuring each frame after a layout event: covers the longest pane motion token (320 ms) and more. */
+const SETTLE_MS = 400;
 
 /** The mounted {@link BrowserSlot}, if any; at most one preview panel is on screen. */
 let slotElement: HTMLElement | null = null;
@@ -62,13 +62,35 @@ const clampToWindow = (box: Box, viewport: { width: number; height: number }): B
 
 const windowSize = () => ({ width: window.innerWidth, height: window.innerHeight });
 
+/** How far the slot sticks out of its clipping ancestor, as a `clip-path` (a pane mid reveal), or `none`. */
+const clipOf = (rect: DOMRect, clip: Element | null): string => {
+  if (!clip) return 'none';
+  const area = clip.getBoundingClientRect();
+  const top = Math.max(0, area.top - rect.top);
+  const right = Math.max(0, rect.right - area.right);
+  const bottom = Math.max(0, rect.bottom - area.bottom);
+  const left = Math.max(0, area.left - rect.left);
+  return top || right || bottom || left ? `inset(${top}px ${right}px ${bottom}px ${left}px)` : 'none';
+};
+
+/** The opacity of the fading ancestor (a pane fading in), so the webview fades with it instead of popping. */
+const opacityOf = (fade: Element | null): string => (fade ? getComputedStyle(fade).opacity || '1' : '1');
+
 /**
  * The slot's box, measured only while a slot is mounted: once, then on its (and the app shell's)
  * ResizeObserver, window resize and CSS transitions/animations, each followed by a short burst of
  * per-frame measuring, since a panel can move without resizing (sider collapse, maximize). With no slot,
  * the last box is kept, clamped to the window as it resizes.
+ *
+ * During a burst each frame writes the box straight onto the layer (`layer`), with the slot's clip
+ * (`[data-browser-clip]`) and fade (`[data-browser-fade]`) as `--browser-clip` / `--browser-opacity`, and
+ * React state is committed once the burst settles, so an animating pane does not re-render every viewer
+ * each frame.
  */
-const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } => {
+const useSlotBox = (
+  slot: HTMLElement | null,
+  layer: React.RefObject<HTMLDivElement | null>
+): { box: Box; visible: boolean } => {
   const [state, setState] = useState<{ box: Box; visible: boolean }>({ box: DEFAULT_BOX, visible: false });
   const [viewport, setViewport] = useState(windowSize);
   useEffect(() => {
@@ -83,36 +105,62 @@ const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } =>
       window.addEventListener('resize', follow);
       return () => window.removeEventListener('resize', follow);
     }
-    const measure = () => {
+    const clipArea = slot.closest('[data-browser-clip]');
+    const fade = slot.closest('[data-browser-fade]');
+    let latest: { box: Box; visible: boolean } | null = null;
+    const commit = (next: { box: Box; visible: boolean }) =>
+      setState((prev) => {
+        const same =
+          prev.visible === next.visible &&
+          prev.box.left === next.box.left &&
+          prev.box.top === next.box.top &&
+          prev.box.width === next.box.width &&
+          prev.box.height === next.box.height;
+        return same ? prev : next;
+      });
+    /** Measures the slot; the layer follows at once, React state only when `settle` (or visibility changed). */
+    const measure = (settle: boolean) => {
       const rect = slot.getBoundingClientRect();
       const visible = rect.width > 0 && rect.height > 0;
-      setState((prev) => {
-        const box = visible ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : prev.box;
-        const same =
-          prev.visible === visible &&
-          prev.box.left === box.left &&
-          prev.box.top === box.top &&
-          prev.box.width === box.width &&
-          prev.box.height === box.height;
-        return same ? prev : { box, visible };
-      });
+      const box = visible ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null;
+      const element = layer.current;
+      if (element && box) {
+        element.style.left = `${box.left}px`;
+        element.style.top = `${box.top}px`;
+        element.style.width = `${box.width}px`;
+        element.style.height = `${box.height}px`;
+        element.style.setProperty('--browser-clip', clipOf(rect, clipArea));
+        element.style.setProperty('--browser-opacity', opacityOf(fade));
+      }
+      const visibilityChanged = latest !== null && latest.visible !== visible;
+      latest = { box: box ?? latest?.box ?? DEFAULT_BOX, visible };
+      if (settle || visibilityChanged || !element) commit(latest);
     };
     let frame = 0;
     let settleUntil = 0;
     const tick = () => {
-      measure();
-      frame = performance.now() < settleUntil ? requestAnimationFrame(tick) : 0;
+      const settled = performance.now() >= settleUntil;
+      measure(settled);
+      frame = settled ? 0 : requestAnimationFrame(tick);
     };
     const burst = () => {
-      measure();
+      measure(false);
       settleUntil = performance.now() + SETTLE_MS;
       if (!frame) frame = requestAnimationFrame(tick);
     };
-    measure();
+    measure(true);
     const observer = new ResizeObserver(burst);
     observer.observe(slot);
     observer.observe(slot.closest('.app-shell') ?? document.body);
-    const layoutEvents = ['transitionrun', 'transitionend', 'animationend'] as const;
+    const layoutEvents = [
+      'transitionrun',
+      'transitionstart',
+      'transitionend',
+      'transitioncancel',
+      'animationstart',
+      'animationend',
+      'animationcancel',
+    ] as const;
     window.addEventListener('resize', burst);
     layoutEvents.forEach((type) => document.addEventListener(type, burst, true));
     return () => {
@@ -120,8 +168,10 @@ const useSlotBox = (slot: HTMLElement | null): { box: Box; visible: boolean } =>
       observer.disconnect();
       window.removeEventListener('resize', burst);
       layoutEvents.forEach((type) => document.removeEventListener(type, burst, true));
+      // The last measured box, so a re-measure (or no slot) starts from where the layer really is.
+      if (latest) commit(latest);
     };
-  }, [slot]);
+  }, [slot, layer]);
   return slot ? state : { box: clampToWindow(state.box, viewport), visible: state.visible };
 };
 
@@ -148,8 +198,8 @@ const BrowserTabLayer: React.FC = () => {
   const preview = useOptionalPreviewContext();
   const tabs = preview?.liveBrowserTabs ?? [];
   const slot = useSyncExternalStore(subscribeSlot, () => slotElement);
-  const { box, visible } = useSlotBox(tabs.length > 0 ? slot : null);
   const layerRef = useRef<HTMLDivElement>(null);
+  const { box, visible } = useSlotBox(tabs.length > 0 ? slot : null, layerRef);
   const shownTab = visible ? tabs.find((tab) => tab.id === preview?.activeTabId) : undefined;
   const shownId = shownTab?.id ?? null;
   const shownByAgent = Boolean(shownTab?.metadata?.agentOwned);
@@ -290,6 +340,9 @@ const BrowserTabLayer: React.FC = () => {
               visibility: shown ? 'visible' : undefined,
               pointerEvents: shown ? 'auto' : 'none',
               zIndex: shown ? 1 : 0,
+              // Only the shown tab follows a pane's reveal and fade: hidden agent tabs keep their whole box.
+              clipPath: shown ? 'var(--browser-clip, none)' : undefined,
+              opacity: shown ? 'var(--browser-opacity, 1)' : undefined,
             }}
           >
             {/* Keyed by profile: a webview cannot change partition, so another profile is a fresh viewer. */}
