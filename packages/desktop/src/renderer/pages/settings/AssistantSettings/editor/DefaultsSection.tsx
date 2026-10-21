@@ -6,6 +6,7 @@ import { Brain, Lightning, LinkCloud, Shield, Toolkit } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import { ConfigRow, ReadonlySelectionField, SectionCard } from './editorSectionPrimitives';
 import styles from './DefaultsSection.module.css';
 
@@ -107,6 +108,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const inRobotWindow = getWidgetConversationId() !== null;
   const canEditDefaultModelAndPermission = !isReadOnlyAssistant || isBuiltin;
   const canEditDefaultSkillsAndMcps = !isReadOnlyAssistant;
   const hasFixedThoughtLevelValue =
@@ -266,15 +268,18 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
             icon={<Lightning theme='outline' size='14' />}
             label={t('settings.assistantDefaultSkillsLabel', { defaultValue: 'Skills' })}
             hint={
-              <Button
-                type='text'
-                size='mini'
-                onClick={() => navigate('/settings/skills')}
-                data-testid='btn-open-skills-settings'
-                className='!h-auto !px-0 !text-primary-6'
-              >
-                {t('settings.skillsHub.manageInHub', { defaultValue: 'Manage in Skills Hub' })}
-              </Button>
+              // A robot window shows this editor too; leaving its /widget route would break it.
+              inRobotWindow ? undefined : (
+                <Button
+                  type='text'
+                  size='mini'
+                  onClick={() => navigate('/settings/skills')}
+                  data-testid='btn-open-skills-settings'
+                  className='!h-auto !px-0 !text-primary-6'
+                >
+                  {t('settings.skillsHub.manageInHub', { defaultValue: 'Manage in Skills Hub' })}
+                </Button>
+              )
             }
           >
             {canEditDefaultSkillsAndMcps ? (
@@ -383,15 +388,17 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
           icon={<Toolkit theme='outline' size='14' />}
           label={t('settings.assistantDefaultMcpLabel', { defaultValue: 'MCP' })}
           hint={
-            <Button
-              type='text'
-              size='mini'
-              onClick={() => navigate('/settings/tools')}
-              data-testid='btn-open-mcp-settings'
-              className='!h-auto !px-0 !text-primary-6'
-            >
-              {t('settings.assistantOpenMcpSettings', { defaultValue: 'Open MCP settings' })}
-            </Button>
+            inRobotWindow ? undefined : (
+              <Button
+                type='text'
+                size='mini'
+                onClick={() => navigate('/settings/tools')}
+                data-testid='btn-open-mcp-settings'
+                className='!h-auto !px-0 !text-primary-6'
+              >
+                {t('settings.assistantOpenMcpSettings', { defaultValue: 'Open MCP settings' })}
+              </Button>
+            )
           }
         >
           {canEditDefaultSkillsAndMcps ? (

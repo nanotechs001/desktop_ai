@@ -161,6 +161,10 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
   const expandedWindow = layout.window_mode === 'expanded' && props.visible;
   const view: ExpandedView = expandedWindow ? expandedView : 'chat';
   const showChat = useCallback(() => setExpandedView('chat'), []);
+  // A closed window reopens on the chat, not on a half-edited Settings view.
+  useEffect(() => {
+    if (!props.visible) setExpandedView('chat');
+  }, [props.visible]);
   const agentId = props.conversation?.assistant?.id;
   const thisBotOnly = useCallback((c: TChatConversation) => Boolean(agentId) && c.assistant?.id === agentId, [agentId]);
   // The robot stands for a bot, so the header names the bot; the chat's own title is in its history.
