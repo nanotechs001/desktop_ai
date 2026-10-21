@@ -12,6 +12,8 @@
     "hideWidget": "위젯 숨기기",
     "hiddenTag": "숨김",
     "watchRobot": "메인 창에서 보기",
+    "agentOpenedSite": "{{site}} 열림",
+    "watchTab": "보기",
     "chatWithRobot": "데스크톱에서 채팅",
     "showAllRobots": "모두 표시",
     "state": {

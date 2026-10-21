@@ -12,6 +12,8 @@
     "hideWidget": "隐藏小助手",
     "hiddenTag": "已隐藏",
     "watchRobot": "在主窗口中查看",
+    "agentOpenedSite": "已打开 {{site}}",
+    "watchTab": "查看",
     "chatWithRobot": "在桌面上聊天",
     "showAllRobots": "全部显示",
     "state": {

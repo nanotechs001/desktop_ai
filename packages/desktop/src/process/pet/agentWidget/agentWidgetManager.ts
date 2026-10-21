@@ -603,6 +603,13 @@ export class AgentWidgetManager {
     this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId, url });
   }
 
+  /** Show the main window on a robot's conversation with its browser pane open; the chat stays in its popup. */
+  watchInMain(conversationId: string): void {
+    if (!this.entries.has(conversationId)) return;
+    // The link channel without a link: Layout.tsx reveals the pane as it is.
+    this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId });
+  }
+
   // ---------------------------------------------------------------------------
   // Windows
   // ---------------------------------------------------------------------------

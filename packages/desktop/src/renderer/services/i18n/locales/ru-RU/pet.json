@@ -12,6 +12,8 @@
     "hideWidget": "Скрыть виджет",
     "hiddenTag": "Скрыт",
     "watchRobot": "Смотреть в главном окне",
+    "agentOpenedSite": "Открыт {{site}}",
+    "watchTab": "Смотреть",
     "chatWithRobot": "Чат на рабочем столе",
     "showAllRobots": "Показать всех",
     "state": {

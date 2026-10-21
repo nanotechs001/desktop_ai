@@ -12,6 +12,8 @@
     "hideWidget": "Hide widget",
     "hiddenTag": "Hidden",
     "watchRobot": "Watch in the main window",
+    "agentOpenedSite": "Opened {{site}}",
+    "watchTab": "Watch",
     "chatWithRobot": "Chat on the desktop",
     "showAllRobots": "Show all",
     "state": {

@@ -12,6 +12,8 @@
     "hideWidget": "Сховати віджет",
     "hiddenTag": "Приховано",
     "watchRobot": "Дивитися в головному вікні",
+    "agentOpenedSite": "Відкрито {{site}}",
+    "watchTab": "Дивитися",
     "chatWithRobot": "Чат на робочому столі",
     "showAllRobots": "Показати всіх",
     "state": {

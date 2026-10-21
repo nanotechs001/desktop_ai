@@ -239,6 +239,17 @@ describe("Layout tray bridge: a link clicked in a robot's chat", () => {
     expect(navigate).toHaveBeenCalledWith('/conversation/c1');
   });
 
+  it("a robot's Watch (no link) reveals that conversation's browser pane as it is", () => {
+    renderLayout();
+    navigate.mockClear();
+    revealBrowserFor.mockClear();
+
+    window.dispatchEvent(new CustomEvent('tray:open-link-in-conversation', { detail: { conversation_id: 'c1' } }));
+
+    expect(revealBrowserFor).toHaveBeenCalledWith('c1', undefined);
+    expect(navigate).toHaveBeenCalledWith('/conversation/c1');
+  });
+
   it('ignores a link that is not http(s)', () => {
     renderLayout();
     navigate.mockClear();

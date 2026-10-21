@@ -367,10 +367,11 @@ const Layout: React.FC<{
       void navigate(`/conversation/${event.detail.conversation_id}`);
     };
 
-    // A link clicked in a robot's chat: that conversation's browser pane opens it, once the conversation is on screen
-    const handleOpenLinkInConversation = (event: CustomEvent<{ conversation_id: string; url: string }>) => {
+    // A link clicked in a robot's chat (or its Watch, without a link): that conversation's browser pane opens it,
+    // once the conversation is on screen
+    const handleOpenLinkInConversation = (event: CustomEvent<{ conversation_id: string; url?: string }>) => {
       const { conversation_id, url } = event.detail;
-      if (!isHttpUrl(url)) return;
+      if (url !== undefined && !isHttpUrl(url)) return;
       revealBrowserFor(conversation_id, url);
       void navigate(`/conversation/${conversation_id}`);
     };

@@ -12,6 +12,8 @@
     "hideWidget": "ウィジェットを非表示",
     "hiddenTag": "非表示",
     "watchRobot": "メインウィンドウで見る",
+    "agentOpenedSite": "{{site}} を開きました",
+    "watchTab": "見る",
     "chatWithRobot": "デスクトップでチャット",
     "showAllRobots": "すべて表示",
     "state": {

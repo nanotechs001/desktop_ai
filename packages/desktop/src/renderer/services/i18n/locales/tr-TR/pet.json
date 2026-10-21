@@ -12,6 +12,8 @@
     "hideWidget": "Widget’ı gizle",
     "hiddenTag": "Gizli",
     "watchRobot": "Ana pencerede izle",
+    "agentOpenedSite": "{{site}} açıldı",
+    "watchTab": "İzle",
     "chatWithRobot": "Masaüstünde sohbet et",
     "showAllRobots": "Tümünü göster",
     "state": {

@@ -12,6 +12,8 @@
     "hideWidget": "پنهان کردن ویجت",
     "hiddenTag": "پنهان",
     "watchRobot": "تماشا در پنجره اصلی",
+    "agentOpenedSite": "{{site}} باز شد",
+    "watchTab": "تماشا",
     "chatWithRobot": "گفتگو روی دسکتاپ",
     "showAllRobots": "نمایش همه",
     "state": {

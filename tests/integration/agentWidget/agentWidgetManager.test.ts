@@ -139,6 +139,7 @@ vi.mock('@/common', () => {
     'openInMain',
     'openAgentSettings',
     'openLinkInMain',
+    'watchInMain',
     'rendererReady',
     'animationDone',
     'setSuspended',
@@ -1332,5 +1333,45 @@ describe('persisted state normalization', () => {
     expect(Object.keys(state.widgets)).toEqual(['good']);
     expect(state.widgets.good.expanded).toBe(false);
     expect(normalizeWidgetState(undefined).settings.enabled).toBe(true);
+  });
+});
+
+describe('AgentWidgetManager watchInMain', () => {
+  const makeMain = () => ({
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
+    webContents: { send: vi.fn() },
+  });
+
+  it("brings the main window forward on the robot's conversation, with no link, and keeps the chat in its popup", async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.setChatLocation(A, 'widget');
+    initAgentWidgetBridge(manager);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    await h.providers.watchInMain({ conversation_id: A });
+
+    expect(main.focus).toHaveBeenCalled();
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:open-link-in-conversation', { conversation_id: A });
+    expect(manager.getChatLocations()[A]).toBe('widget');
+  });
+
+  it('ignores a conversation without a live robot and rejects a malformed payload', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    manager.watchInMain('unknown-conv');
+    await expect(h.providers.watchInMain({ conversation_id: '../x' })).rejects.toThrow();
+    await expect(h.providers.watchInMain({ conversation_id: A, url: 'https://x.test/' })).rejects.toThrow();
+
+    expect(main.show).not.toHaveBeenCalled();
+    expect(main.webContents.send).not.toHaveBeenCalled();
   });
 });
