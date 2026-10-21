@@ -607,7 +607,7 @@ describe('agent browser services: leave site', () => {
     expect(webuiConfirms.listConfirms('conv-a')).toHaveLength(1);
     settled.abort();
 
-    expect(await leave).toBe(false);
+    expect(await leave).toBeNull(); // withdrawn, not answered: the desktop's answer stands
     expect(webuiConfirms.listConfirms('conv-a')).toEqual([]);
   });
 });
@@ -799,6 +799,42 @@ describe('agent browser services: YOLO chats and "Always allow"', () => {
     await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
     expect(webuiConfirms.answerConfirm(webuiConfirms.listConfirms('conv-1')[0].id, false, false)).toBe(true);
     expect(await answer).toEqual({ allow: false });
+  });
+
+  it('asks a YOLO chat when the user shares its tab during the mode lookup (R15)', async () => {
+    let finish: (yolo: boolean) => void = () => {};
+    isYoloChat.mockImplementationOnce(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const { click } = await agentTabAt(95, 'https://yolo-share.test');
+    const answer = click();
+    await vi.waitFor(() => expect(isYoloChat).toHaveBeenCalledWith('conv-1'));
+
+    await call('share', { webContentsId: 95, on: true });
+    finish(true);
+
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
+    expect(webuiConfirms.answerConfirm(webuiConfirms.listConfirms('conv-1')[0].id, false, false)).toBe(true);
+    expect(await answer).toEqual({ allow: false });
+  });
+
+  it('takes the first of a phone answer and an IPC answer to the same ask, either way round', async () => {
+    yolo.on = false;
+    const { click } = await agentTabAt(96, 'https://race.test');
+    const first = click();
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
+    const [open] = webuiConfirms.listConfirms('conv-1');
+    expect(webuiConfirms.answerConfirm(open.id, false, false)).toBe(true); // the phone's Deny lands first
+    expect(await call('replyConfirm', { id: open.id, allow: true, alwaysForSite: true })).toMatchObject({
+      success: false,
+    });
+    expect(await first).toEqual({ allow: false });
+    expect(allowFile()).not.toContain('race.test'); // the losing Always allow remembered nothing
+
+    const second = click();
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-1')).toHaveLength(1));
+    const [again] = webuiConfirms.listConfirms('conv-1');
+    expect(await call('replyConfirm', { id: again.id, allow: true, alwaysForSite: false })).toEqual({ success: true });
+    expect(webuiConfirms.answerConfirm(again.id, false, false)).toBe(false); // web-host answers 404
+    expect(await second).toEqual({ allow: true });
   });
 
   it('still asks "Leave site?" in a YOLO chat once the user typed on the page', async () => {
@@ -1013,6 +1049,37 @@ describe('agent browser services: WebUI browser view', () => {
     await services?.close();
     services = null;
     expect(getBrowserViewService()).toBeNull();
+  });
+});
+
+describe('agent browser services: the phone on a shared tab', () => {
+  it("lists a shared Personal tab for the chat whose agent drives it, with that chat's ask, until it is unshared", async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-a' });
+    const tab = newTab(42, personalSession, 'https://bank.test/');
+    tab.debugger.handler = (method) =>
+      method === 'Page.getFrameTree'
+        ? { frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } } }
+        : {};
+    await call('share', { webContentsId: 42, on: true });
+    expect(getBrowserViewService()?.listTabs('conv-a')).toEqual([]); // no agent used it yet
+    const sessionId = String(
+      (await send('Target.attachToTarget', { targetId: 'wc-42', flatten: true })).result?.sessionId
+    );
+    await send('Page.getFrameTree', {}, sessionId);
+
+    expect(getBrowserViewService()?.listTabs('conv-a')).toEqual([
+      expect.objectContaining({ id: 'wc-42', url: 'https://bank.test/' }),
+    ]);
+    expect(getBrowserViewService()?.listTabs('conv-b')).toEqual([]);
+    const answer = send('AionRelay.requestConfirm', { webContentsId: 42, label: 'Pay', sessionId, frameId: 'TOP' });
+    await vi.waitFor(() => expect(webuiConfirms.listConfirms('conv-a')).toHaveLength(1));
+
+    await call('share', { webContentsId: 42, on: false });
+
+    expect(getBrowserViewService()?.listTabs('conv-a')).toEqual([]);
+    expect((await answer).result).toEqual({ allow: false }); // the ask went with the sharing
+    expect(webuiConfirms.listConfirms('conv-a')).toEqual([]);
   });
 });
 

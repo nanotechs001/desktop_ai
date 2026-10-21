@@ -67,13 +67,14 @@ export type RelayServerDeps = {
   onAgentAction(event: AgentActionEvent): void;
   /**
    * Asks the user to allow a risky action on a tab; resolves with the answer. `signal` aborts when the ask is moot.
-   * `yoloChat`, when set, is the chat whose YOLO mode may answer instead: the asking client's own, on its own unshared agent tab.
+   * `yoloChat` reads, whenever the gate decides, the chat whose YOLO mode may answer instead: the asking client's own,
+   * on its own unshared agent tab; undefined once it is not.
    */
   requestConfirm(
     request: Omit<ConfirmRequest, 'id'>,
     signal: AbortSignal,
     webContentsId: number,
-    yoloChat?: string
+    yoloChat?: () => string | undefined
   ): Promise<boolean>;
   /**
    * When a chat was created and whether it is a scheduled run's own chat; null when unknown. Without it a bot's chat
@@ -415,8 +416,9 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
 
   /**
    * Runs `ask` with a signal that aborts when the ask is moot (the tab's main frame navigates to another document or
-   * the tab closes, or the client leaves), counting it against the client's few open asks. A destroyed tab or a
-   * client already at that limit is denied without asking.
+   * the tab closes, the client leaves, or it may no longer act on the tab: unshared, or taken over by its bot's newer
+   * chat), counting it against the client's few open asks. A destroyed tab or a client already at that limit is
+   * denied without asking.
    */
   const whileAsking = async (
     conn: Connection,
@@ -433,12 +435,16 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     const offDestroyed = registry.onDestroyed((last) => {
       if (last.webContentsId === webContentsId) moot.abort();
     });
+    const offChange = registry.onChange(() => {
+      if (!mayAct(registry.ownership(webContentsId), conn.client)) moot.abort();
+    });
     conn.confirmsInFlight += 1;
     try {
       return await ask(AbortSignal.any([moot.signal, conn.closed.signal]));
     } finally {
       conn.confirmsInFlight -= 1;
       offDestroyed();
+      offChange();
       contents.removeListener('did-start-navigation', onNavigate);
     }
   };
@@ -467,7 +473,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     id: number
   ): Promise<boolean> => {
     try {
-      return (await deps.requestConfirm(request, signal, id, yoloChatOf(conn, id))) === true && !signal.aborted;
+      return (await deps.requestConfirm(request, signal, id, () => yoloChatOf(conn, id))) === true && !signal.aborted;
     } catch (error) {
       console.warn('[AgentBrowserRelay] confirm failed, denied:', error);
       return false;

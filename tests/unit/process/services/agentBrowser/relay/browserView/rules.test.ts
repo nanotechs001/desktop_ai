@@ -39,8 +39,20 @@ describe('viewableTabs', () => {
     ]);
   });
 
-  it('drops a user tab even when it is shared (no conversation owns it)', () => {
+  it('drops a shared user tab no agent of the conversation used', () => {
     expect(viewableTabs([tab(1, { sharedWith: 'all' })], [target(1)], 'conv')).toEqual([]);
+    const usedByOther = (id: number) => (id === 1 ? 'other' : undefined);
+    expect(viewableTabs([tab(1, { sharedWith: 'all' })], [target(1)], 'conv', new Map(), usedByOther)).toEqual([]);
+  });
+
+  it("lists a shared user tab the conversation's agent used last, so the phone can watch what it is asked about", () => {
+    const usedBy = (id: number) => (id === 1 || id === 2 ? 'conv' : undefined);
+    // Unshared again: the agent may no longer act there, so the phone may not watch it either.
+    const all = [tab(1, { sharedWith: 'all' }), tab(2), agentTab(3, 'conv')];
+    expect(viewableTabs(all, [1, 2, 3].map(target), 'conv', new Map([[1, 5]]), usedBy)).toEqual([
+      { id: 'wc-1', title: 'Title 1', url: 'https://example.com/1', active: true },
+      { id: 'wc-3', title: 'Title 3', url: 'https://example.com/3' },
+    ]);
   });
 
   it('drops a tab with no matching target', () => {

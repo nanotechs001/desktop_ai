@@ -91,9 +91,12 @@ export type WindowOpenHooks = {
 
 /**
  * `leave`: an agent's own tab goes on unasked (nobody may be watching it). `ask`: "Leave site?" on the desktop and,
- * with `askChat`, in a chat too (resolves true for Leave; `signal` withdraws it once the other answered).
+ * with `askChat`, in a chat too (resolves true for Leave, false for Stay, null when nobody answered there, e.g. it
+ * timed out; `signal` withdraws it once the other answered).
  */
-export type UnloadPlan = { kind: 'leave' } | { kind: 'ask'; askChat?: (signal: AbortSignal) => Promise<boolean> };
+export type UnloadPlan =
+  | { kind: 'leave' }
+  | { kind: 'ask'; askChat?: (signal: AbortSignal) => Promise<boolean | null> };
 
 let hooks: WindowOpenHooks = {};
 
@@ -350,13 +353,14 @@ const pendingUrlOf = (contents: Electron.WebContents): string | null => {
 /**
  * Asks on the desktop (a non-blocking box) and in the tab's chat at once; the first answer wins and withdraws the
  * other. The page has already stayed, so Leave runs the blocked load again when main knows it; otherwise the tab's
- * next attempt (the user's or the agent's retry) leaves unasked.
+ * next attempt (the user's or the agent's retry) leaves unasked. A chat card nobody answered (it timed out) is no
+ * answer: the page keeps staying, and the desktop box stays open and still decides.
  */
 const askDesktopAndChat = (
   contents: Electron.WebContents,
   owner: Electron.BrowserWindow,
   t: MenuTranslate,
-  askChat: (signal: AbortSignal) => Promise<boolean>
+  askChat: (signal: AbortSignal) => Promise<boolean | null>
 ): void => {
   const { id } = contents;
   if (asking.has(id)) return;
@@ -369,7 +373,7 @@ const askDesktopAndChat = (
   const desktop = dialog
     .showMessageBox(owner, { ...leaveOptions(t), signal: settled.signal })
     .then(({ response }) => response === LEAVE_BUTTON);
-  const chat = askChat(settled.signal);
+  const chat = askChat(settled.signal).then((leave) => leave ?? desktop);
   void Promise.race([desktop, chat])
     .catch((error: unknown) => {
       console.error('[BrowserSession] the leave-site ask failed; the page stays:', error);

@@ -66,7 +66,14 @@ const openTab = vi.fn();
 const closeTab = vi.fn();
 const onAgentAction = vi.fn<(event: AgentActionEvent) => void>();
 const requestConfirm =
-  vi.fn<(req: ConfirmAsk, signal: AbortSignal, webContentsId: number, yoloChat?: string) => Promise<boolean>>();
+  vi.fn<
+    (
+      req: ConfirmAsk,
+      signal: AbortSignal,
+      webContentsId: number,
+      yoloChat?: () => string | undefined
+    ) => Promise<boolean>
+  >();
 let nextTab: () => Promise<FakeContents> = () => new Promise(() => {});
 const waitForTab = vi.fn((_url: string, _conversationId?: string, _profile?: BrowserTabProfile) => nextTab());
 /** Main's conversation → Agent lookup: each chat its own Agent, no chat the default Agent. */
@@ -813,7 +820,8 @@ describe('relay server: AionRelay methods', () => {
       const bankTree = {
         frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } },
       };
-      const yoloChatOfCall = (): unknown => requestConfirm.mock.calls[0][3];
+      /** The asking chat as the gate reads it when it decides. */
+      const yoloChatOfCall = (): unknown => requestConfirm.mock.calls[0][3]?.();
 
       it("is never the tab owner's chat: a client with no chat header is always asked (R13)", async () => {
         const { ask } = await confirmTab(undefined, 40, 'conv_A-1');
@@ -843,6 +851,13 @@ describe('relay server: AionRelay methods', () => {
 
       it('is none on its own agent tab once shared (R15)', async () => {
         await ownTab(true);
+        expect(yoloChatOfCall()).toBeUndefined();
+      });
+
+      it('is read when the gate decides: sharing the tab during the mode lookup takes it away (R15)', async () => {
+        await ownTab(false);
+        expect(yoloChatOfCall()).toBe('conv_B-2');
+        registry.share(52, true);
         expect(yoloChatOfCall()).toBeUndefined();
       });
 
@@ -1005,6 +1020,72 @@ describe('relay server: AionRelay methods', () => {
       expect(signal?.aborted).toBe(false);
       trigger(contents);
       expect(signal?.aborted).toBe(true);
+      expect((await reply).result).toEqual({ allow: false });
+    });
+
+    /** A pending ask whose signal the test can watch; it settles false when aborted. */
+    const pendingAsk = () => {
+      const seen: { signal?: AbortSignal } = {};
+      requestConfirm.mockImplementation(
+        (_ask, s) =>
+          new Promise((resolve) => {
+            seen.signal = s;
+            s.addEventListener('abort', () => resolve(false));
+          })
+      );
+      return seen;
+    };
+
+    it("withdraws an open ask when the bot's newer chat takes the tab over", async () => {
+      const client = await connect(await start(), 'claude', { 'X-Aion-Conversation': 'conv-old' });
+      await client.send('AionRelay.listTabs');
+      const contents = new FakeContents(53, 'https://bank.test/');
+      contents.debugger.handler = (method) =>
+        method === 'Page.getFrameTree'
+          ? { frameTree: { frame: { id: 'TOP', url: 'https://bank.test/', securityOrigin: 'https://bank.test' } } }
+          : {};
+      registry.track(contents, { kind: 'agent', agentId: 'bot-1' });
+      registry.claim(53, { ...(relay?.clients()[0] as RelayClient), conversationId: 'conv-old' });
+      const sessionId = await attach(client, 53);
+      const seen = pendingAsk();
+      const reply = client.send('AionRelay.requestConfirm', {
+        webContentsId: 53,
+        label: 'Pay',
+        sessionId,
+        frameId: 'TOP',
+      });
+      await vi.waitFor(() => expect(seen.signal).toBeDefined());
+
+      // An ownership change that leaves the asker able to act keeps the ask.
+      registry.touch(53, 'conv-old');
+      registry.share(53, false);
+      expect(seen.signal?.aborted).toBe(false);
+
+      registry.reclaimAgentTabs('bot-1', { clientId: 'newer', label: 'claude', conversationId: 'conv-new' });
+
+      expect(seen.signal?.aborted).toBe(true);
+      expect((await reply).result).toEqual({ allow: false });
+    });
+
+    it('withdraws an open ask on a shared user tab once it is unshared', async () => {
+      const client = await connect(await start());
+      const shared = new FakeContents(54, 'https://shop.test/');
+      shared.debugger.handler = (method) => (method === 'Page.getFrameTree' ? TREE : {});
+      registry.track(shared);
+      registry.share(54, true);
+      const sessionId = await attach(client, 54);
+      const seen = pendingAsk();
+      const reply = client.send('AionRelay.requestConfirm', {
+        webContentsId: 54,
+        label: 'Pay',
+        sessionId,
+        frameId: 'TOP',
+      });
+      await vi.waitFor(() => expect(seen.signal).toBeDefined());
+
+      registry.share(54, false);
+
+      expect(seen.signal?.aborted).toBe(true);
       expect((await reply).result).toEqual({ allow: false });
     });
 

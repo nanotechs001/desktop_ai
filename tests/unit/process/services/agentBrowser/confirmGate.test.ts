@@ -207,6 +207,28 @@ describe('PendingConfirms', () => {
     expect(confirms.list()).toEqual([]);
   });
 
+  it('tells a timeout or a withdrawal (null: nobody answered) from an answer', async () => {
+    vi.useFakeTimers();
+    const confirms = new PendingConfirms({ file });
+    const timedOut = confirms.ask(ask, 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await timedOut).toBeNull();
+
+    const controller = new AbortController();
+    const withdrawn = confirms.ask(ask, 1000, controller.signal);
+    controller.abort();
+    expect(await withdrawn).toBeNull();
+    expect(await confirms.ask(ask, 1000, AbortSignal.abort())).toBeNull();
+
+    const denied = confirms.ask(ask, 1000);
+    confirms.reply(confirms.list()[0].id, false, false);
+    expect(await denied).toBe(false);
+    const allowed = confirms.ask(ask, 1000);
+    confirms.reply(confirms.list()[0].id, true, false);
+    expect(await allowed).toBe(true);
+    expect(confirms.list()).toEqual([]);
+  });
+
   it('reads a corrupt or malformed allow file as empty and never throws', () => {
     for (const content of ['{not json', '[]', '{"origins": "x"}', '{"origins": [1, null]}']) {
       writeFileSync(path.join(dir, 'bad.json'), content);
@@ -310,8 +332,8 @@ describe('PendingConfirms in a YOLO chat', () => {
     const onChange = vi.fn();
     confirms.onChange(onChange);
 
-    expect(await confirms.request(inChat, undefined, undefined, 'conv-y')).toBe(true);
-    expect(await confirms.request(script, undefined, undefined, 'conv-y')).toBe(true);
+    expect(await confirms.request(inChat, undefined, undefined, () => 'conv-y')).toBe(true);
+    expect(await confirms.request(script, undefined, undefined, () => 'conv-y')).toBe(true);
     expect(isYolo).toHaveBeenCalledWith('conv-y');
     expect(onChange).not.toHaveBeenCalled();
     expect(confirms.list()).toEqual([]);
@@ -340,8 +362,8 @@ describe('PendingConfirms in a YOLO chat', () => {
       file,
       isYolo: async (id) => (id === 'boom' ? Promise.reject(new Error('down')) : false),
     });
-    void confirms.request(inChat, undefined, undefined, 'conv-y');
-    void confirms.request(inChat, undefined, undefined, 'boom');
+    void confirms.request(inChat, undefined, undefined, () => 'conv-y');
+    void confirms.request(inChat, undefined, undefined, () => 'boom');
     void confirms.request(ask);
     await vi.waitFor(() => expect(confirms.list()).toHaveLength(3));
   });
@@ -353,12 +375,28 @@ describe('PendingConfirms in a YOLO chat', () => {
       { ...inChat, kind: 'leave', frameOrigin: null, label: '' },
       undefined,
       undefined,
-      'conv-y'
+      () => 'conv-y'
     );
     expect(confirms.list().map((r) => r.kind)).toEqual(['leave']);
     expect(isYolo).not.toHaveBeenCalled();
     confirms.reply(confirms.list()[0].id, false, false);
     expect(await leave).toBe(false);
+  });
+
+  it('asks when the tab stopped being its own unshared tab during the lookup (R15)', async () => {
+    let finish: (yolo: boolean) => void = () => {};
+    const isYolo = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const confirms = new PendingConfirms({ file, isYolo });
+    let yoloChat: string | undefined = 'conv-y';
+    const answer = confirms.request(inChat, undefined, undefined, () => yoloChat);
+    await vi.waitFor(() => expect(isYolo).toHaveBeenCalledWith('conv-y'));
+
+    yoloChat = undefined; // the user shared the tab while the mode lookup ran
+    finish(true);
+
+    await vi.waitFor(() => expect(confirms.list()).toHaveLength(1));
+    confirms.reply(confirms.list()[0].id, false, false);
+    expect(await answer).toBe(false);
   });
 
   it('denies when the action was called off during the lookup', async () => {
@@ -370,7 +408,7 @@ describe('PendingConfirms in a YOLO chat', () => {
         return true;
       },
     });
-    expect(await confirms.request(inChat, undefined, controller.signal, 'conv-y')).toBe(false);
+    expect(await confirms.request(inChat, undefined, controller.signal, () => 'conv-y')).toBe(false);
     expect(confirms.list()).toEqual([]);
   });
 });

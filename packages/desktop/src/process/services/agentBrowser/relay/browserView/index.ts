@@ -60,7 +60,14 @@ export function createBrowserViewService({ registry, sessions }: BrowserViewDeps
   };
 
   return {
-    listTabs: (conversationId) => viewableTabs(registry.all(), registry.listTargets(), conversationId, actedAt),
+    listTabs: (conversationId) =>
+      viewableTabs(
+        registry.all(),
+        registry.listTargets(),
+        conversationId,
+        actedAt,
+        (webContentsId) => registry.lastUse(webContentsId)?.conversationId
+      ),
     async openStream(tabId, peer) {
       const webContentsId = webContentsIdFromTargetId(tabId);
       if (webContentsId === null) return { error: 'tab-closed' };

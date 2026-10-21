@@ -170,7 +170,7 @@ const unloadPlan = (registry: TargetRegistry, confirms: PendingConfirms, webCont
     clientLabel: owner === 'user' ? '' : owner.label,
     conversationId,
   };
-  return { kind: 'ask', askChat: (signal) => confirms.request(request, undefined, signal) };
+  return { kind: 'ask', askChat: (signal) => confirms.ask(request, undefined, signal) };
 };
 
 /**
@@ -354,7 +354,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     request: Omit<ConfirmRequest, 'id'>,
     signal: AbortSignal,
     webContentsId: number,
-    yoloChat?: string
+    yoloChat?: () => string | undefined
   ): Promise<boolean> => {
     confirming.set(webContentsId, (confirming.get(webContentsId) ?? 0) + 1);
     try {

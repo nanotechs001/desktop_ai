@@ -717,18 +717,18 @@ describe('installBeforeUnloadDialog with agent browser control', () => {
     return { tab, fire };
   };
 
-  /** A chat ask the test answers; `signal` is what the dialog passed it. */
+  /** A chat ask the test answers (null: nobody answered there, e.g. it timed out); `signal` is what the dialog passed it. */
   const chatAsk = () => {
-    let answer: (leave: boolean) => void = () => {};
+    let answer: (leave: boolean | null) => void = () => {};
     const seen: { signal: AbortSignal | null } = { signal: null };
     const askChat = vi.fn(
       (signal: AbortSignal) =>
-        new Promise<boolean>((resolve) => {
+        new Promise<boolean | null>((resolve) => {
           seen.signal = signal;
           answer = resolve;
         })
     );
-    return { askChat, seen, answer: (leave: boolean) => answer(leave) };
+    return { askChat, seen, answer: (leave: boolean | null) => answer(leave) };
   };
 
   /** The desktop box stays open until the test answers it or its signal closes it (as Stay). */
@@ -828,6 +828,26 @@ describe('installBeforeUnloadDialog with agent browser control', () => {
     expect(tab.loadURL).not.toHaveBeenCalled();
     desktopBox();
     expect(fire().preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('keeps the page and the desktop box open when the chat side times out; the box still decides', async () => {
+    const chat = chatAsk();
+    setWindowOpenHooks({ unloadBlocked: () => ({ kind: 'ask', askChat: chat.askChat }) });
+    const box = desktopBox();
+    const { tab, fire } = await blockedTab('https://elsewhere.test/next');
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+
+    chat.answer(null); // the chat card timed out unanswered
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.showMessageBox.mock.calls[0][1].signal?.aborted).toBe(false);
+    expect(tab.loadURL).not.toHaveBeenCalled();
+    // Still one ask open: a repeat attempt meanwhile does not ask again.
+    expect(fire().preventDefault).not.toHaveBeenCalled();
+    expect(chat.askChat).toHaveBeenCalledTimes(1);
+
+    box.leave();
+    await vi.waitFor(() => expect(tab.loadURL).toHaveBeenCalledWith('https://elsewhere.test/next'));
   });
 
   it('closes the box and the chat card when the tab goes away', async () => {

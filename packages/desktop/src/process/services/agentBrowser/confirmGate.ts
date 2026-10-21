@@ -152,7 +152,7 @@ export function createYoloLookup(
   };
 }
 
-type Open = { request: ConfirmRequest; resolve: (allow: boolean) => void; release: () => void };
+type Open = { request: ConfirmRequest; resolve: (answer: boolean | null) => void; release: () => void };
 
 /** Risky agent actions waiting for the user. Unanswered, aborted and unknown requests are all denials. */
 export class PendingConfirms {
@@ -175,40 +175,48 @@ export class PendingConfirms {
   /**
    * Resolves with the user's answer at once when the origin is always allowed or `yoloChat` is in YOLO mode, else
    * once they answer. Denies after `timeoutMs` and when `signal` aborts (the tab navigated or closed, the agent left).
-   * `yoloChat` is the asking connection's own chat, given only for its own unshared tab (rulings R13, R15); never
-   * `req.conversationId`, which may be the tab owner's chat and only says where the ask shows.
+   * `yoloChat` gives the asking connection's own chat, only for its own unshared tab (rulings R13, R15); never
+   * `req.conversationId`, which may be the tab owner's chat and only says where the ask shows. It is read again once
+   * the mode lookup answers, so a tab shared meanwhile is asked.
    */
   request(
     req: Omit<ConfirmRequest, 'id'>,
     timeoutMs = CONFIRM_TIMEOUT_MS,
     signal?: AbortSignal,
-    yoloChat?: string
+    yoloChat?: () => string | undefined
   ): Promise<boolean> {
     if (signal?.aborted) return Promise.resolve(false);
     const key = allowKey(req);
     if (key !== null && this.allowLists()[kindOf(req)].has(key)) return Promise.resolve(true);
+    const asked = (): Promise<boolean> => this.ask(req, timeoutMs, signal).then((answer) => answer === true);
+    const chat = yoloChat?.();
     // "Leave site?" guards the user's own unsaved text, not an agent permission: YOLO never answers it.
-    if (req.kind === 'leave' || !yoloChat || !this.isYolo) return this.ask(req, timeoutMs, signal);
-    return this.isYolo(yoloChat)
+    if (req.kind === 'leave' || !chat || !this.isYolo) return asked();
+    return this.isYolo(chat)
       .catch(() => false)
       .then((yolo) => {
         if (signal?.aborted) return false;
-        if (!yolo) return this.ask(req, timeoutMs, signal);
+        if (!yolo || yoloChat?.() !== chat) return asked();
         // Never the label or the code: they are page text and agent code.
         console.info(`[AgentBrowser] ${req.origin} ${kindOf(req)} auto-allowed (yolo)`);
         return true;
       });
   }
 
-  private ask(req: Omit<ConfirmRequest, 'id'>, timeoutMs: number, signal?: AbortSignal): Promise<boolean> {
+  /**
+   * Always asks (no allow list, no YOLO): the user's answer, or null when nobody answered, because it timed out after
+   * `timeoutMs` or `signal` withdrew it. A null is a denial for an agent action; "Leave site?" keeps its desktop box.
+   */
+  ask(req: Omit<ConfirmRequest, 'id'>, timeoutMs = CONFIRM_TIMEOUT_MS, signal?: AbortSignal): Promise<boolean | null> {
+    if (signal?.aborted) return Promise.resolve(null);
     return new Promise((resolve) => {
       const id = randomUUID();
-      const deny = (): void => void this.reply(id, false, false);
-      const timer = setTimeout(deny, timeoutMs);
-      signal?.addEventListener('abort', deny, { once: true });
+      const unanswered = (): void => this.settle([this.open.get(id)], null);
+      const timer = setTimeout(unanswered, timeoutMs);
+      signal?.addEventListener('abort', unanswered, { once: true });
       const release = (): void => {
         clearTimeout(timer);
-        signal?.removeEventListener('abort', deny);
+        signal?.removeEventListener('abort', unanswered);
       };
       this.open.set(id, { request: { ...req, id }, resolve, release });
       this.notify();
@@ -230,13 +238,20 @@ export class PendingConfirms {
     const settled = remembered
       ? [...this.open.values()].filter((o) => kindOf(o.request) === kind && allowKey(o.request) === key)
       : [entry];
+    this.settle(settled, allow);
+    return true;
+  }
+
+  /** Closes the given open asks (gone ones skipped) with `answer`, after telling the views they are gone. */
+  private settle(entries: Array<Open | undefined>, answer: boolean | null): void {
+    const settled = entries.filter((o): o is Open => o !== undefined);
     settled.forEach((o) => {
       o.release();
       this.open.delete(o.request.id);
     });
+    if (settled.length === 0) return;
     this.notify();
-    settled.forEach((o) => o.resolve(allow));
-    return true;
+    settled.forEach((o) => o.resolve(answer));
   }
 
   list(): ConfirmRequest[] {
