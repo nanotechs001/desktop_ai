@@ -329,6 +329,8 @@
       "openModelSettings": "Añadir un proveedor de modelos en Ajustes",
       "tooltipBot": "Cambia este bot a {{engine}}. Volverá a tu motor predeterminado la próxima vez que cambies el predeterminado en Ajustes.",
       "tooltipChatOnly": "Continúa en un chat nuevo con esta opción y la conversación reciente. No cambia nada más.",
+      "targetLimited": "{{engine}} también ha alcanzado su límite de uso.",
+      "targetLimitedUntil": "{{engine}} también ha alcanzado su límite de uso, hasta {{time}}.",
       "failed": "No se pudo cambiar y continuar. No se cambió nada.",
       "handoff": {
         "header": "Continuación de un chat anterior (la IA anterior alcanzó su límite de uso). Contexto:",

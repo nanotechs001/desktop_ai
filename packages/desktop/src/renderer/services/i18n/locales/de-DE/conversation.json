@@ -329,6 +329,8 @@
       "openModelSettings": "Modellanbieter in den Einstellungen hinzufügen",
       "tooltipBot": "Stellt diesen Bot auf {{engine}} um. Er kehrt zu deiner Standard-Engine zurück, sobald du den Standard in den Einstellungen das nächste Mal änderst.",
       "tooltipChatOnly": "Fährt in einem neuen Chat mit dieser Auswahl und dem bisherigen Gespräch fort. Sonst ändert sich nichts.",
+      "targetLimited": "{{engine}} hat sein Nutzungslimit ebenfalls erreicht.",
+      "targetLimitedUntil": "{{engine}} hat sein Nutzungslimit ebenfalls erreicht, bis {{time}}.",
       "failed": "Wechseln und Fortfahren ist fehlgeschlagen. Es wurde nichts geändert.",
       "handoff": {
         "header": "Fortsetzung eines früheren Chats (die vorherige KI hat ihr Nutzungslimit erreicht). Kontext:",

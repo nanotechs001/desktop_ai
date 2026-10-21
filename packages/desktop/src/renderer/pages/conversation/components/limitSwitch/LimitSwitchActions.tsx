@@ -20,8 +20,10 @@ import {
 } from '@/renderer/utils/model/agentTypes';
 import { getConversationOrNull } from '../../utils/conversationCache';
 import type { HandoffLabels } from './handoffMessage';
+import { useAllSubscriptionUsage } from './subscriptionUsage';
 import { pinnableAssistantId, switchAndContinue } from './switchAndContinue';
 import { listSwitchTargets, type SwitchTarget } from './switchTargets';
+import { formatResetTime } from './usageWarning';
 
 const PREFIX = 'conversation.agentError.switch';
 
@@ -66,10 +68,11 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
   const { data: conversation } = useSWR(`conversation/${conversationId}`, () => getConversationOrNull(conversationId));
   const { data: engines } = useSWR<ManagedAgent[]>(ENGINE_CATALOG_SWR_KEY, fetchManagedAgentsOrThrow);
   const { providers, getAvailableModels, formatModelLabel } = useModelProviderList();
+  const usage = useAllSubscriptionUsage();
 
   if (!conversation || !engines) return null;
 
-  const targets = listSwitchTargets({ conversation, engines, providers, getAvailableModels });
+  const targets = listSwitchTargets({ conversation, engines, providers, getAvailableModels, usage });
   const { modelEngine } = targets;
   const botId = pinnableAssistantId(conversation);
   const engineName = (engine: ManagedAgent): string => engine.name_i18n?.[i18n.language] || engine.name;
@@ -79,6 +82,15 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
     return botId && engineChanges
       ? t(`${PREFIX}.tooltipBot`, { engine: engineName(engine) })
       : t(`${PREFIX}.tooltipChatOnly`);
+  };
+
+  // An engine still at its own plan limit is shown but cannot be picked until it resets.
+  const limitedTooltip = (engine: ManagedAgent): string | null => {
+    if (!(engine.id in targets.limitedUntil)) return null;
+    const until = targets.limitedUntil[engine.id];
+    return until === null
+      ? t(`${PREFIX}.targetLimited`, { engine: engineName(engine) })
+      : t(`${PREFIX}.targetLimitedUntil`, { engine: engineName(engine), time: formatResetTime(until, i18n.language) });
   };
 
   const run = async (target: SwitchTarget): Promise<void> => {
@@ -114,13 +126,20 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
     <div className='flex flex-col gap-6px'>
       <div className='text-t-secondary text-12px'>{t(`${PREFIX}.title`)}</div>
       <div className='flex flex-wrap gap-6px'>
-        {targets.engines.map((engine) => (
-          <Tooltip key={engine.id} content={tooltipFor(engine, false)}>
-            <Button size='mini' disabled={busy} onClick={() => void run({ kind: 'engine', engine })}>
-              {engineName(engine)}
-            </Button>
-          </Tooltip>
-        ))}
+        {targets.engines.map((engine) => {
+          const limited = limitedTooltip(engine);
+          return (
+            <Tooltip key={engine.id} content={limited ?? tooltipFor(engine, false)}>
+              <Button
+                size='mini'
+                disabled={busy || limited !== null}
+                onClick={() => void run({ kind: 'engine', engine })}
+              >
+                {engineName(engine)}
+              </Button>
+            </Tooltip>
+          );
+        })}
         {modelEngine &&
           targets.providers.map(({ provider, models }) => (
             <Dropdown

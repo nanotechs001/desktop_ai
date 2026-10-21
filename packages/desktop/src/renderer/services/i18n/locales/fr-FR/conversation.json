@@ -329,6 +329,8 @@
       "openModelSettings": "Ajouter un fournisseur de modèles dans les Paramètres",
       "tooltipBot": "Fait passer ce bot sur {{engine}}. Il revient à votre moteur par défaut la prochaine fois que vous changez le moteur par défaut dans les Paramètres.",
       "tooltipChatOnly": "Continue dans une nouvelle discussion avec ce choix et la conversation récente. Rien d’autre ne change.",
+      "targetLimited": "{{engine}} a aussi atteint sa limite d'utilisation.",
+      "targetLimitedUntil": "{{engine}} a aussi atteint sa limite d'utilisation, jusqu'à {{time}}.",
       "failed": "Impossible de changer et de continuer. Rien n’a été modifié.",
       "handoff": {
         "header": "Suite d’une discussion précédente (l’IA précédente a atteint sa limite d’utilisation). Contexte :",

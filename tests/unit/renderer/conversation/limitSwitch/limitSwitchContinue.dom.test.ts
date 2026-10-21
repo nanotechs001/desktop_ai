@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
     emit: vi.fn(),
     send: vi.fn(),
     remove: vi.fn(),
+    runtimeMode: vi.fn(),
   };
 });
 
@@ -46,6 +47,7 @@ vi.mock('@/common', () => ({
       createWithConversation: { invoke: mocks.clone },
       sendMessage: { invoke: mocks.send },
       remove: { invoke: mocks.remove },
+      runtimeMode: { invoke: mocks.runtimeMode },
     },
     database: { getConversationMessages: { invoke: mocks.getMessages } },
     assistants: {
@@ -139,6 +141,7 @@ beforeEach(() => {
   mocks.updateAssistant.mockResolvedValue({});
   mocks.catalog.mockResolvedValue({ allServers: [BROWSER, ARTIFACTS, NOTES], userServers: [], builtinServers: [] });
   mocks.clone.mockResolvedValue({ id: 'c2' });
+  mocks.runtimeMode.mockResolvedValue({ mode: null, live: false });
   mocks.clientSetting.mockResolvedValue([BROWSER, ARTIFACTS, NOTES]);
   mocks.listAssistants.mockResolvedValue([
     { id: 'bot-1', source: 'user', name: 'Travel Bot', agent_id: 'claude' },
@@ -362,6 +365,84 @@ describe('switchAndContinue', () => {
       expect(mocks.store.get('agent.enginePins')).toEqual({ 'bot-1': 'claude', other: 'x' });
       setItem.mockRestore();
       warn.mockRestore();
+    });
+  });
+
+  describe('from a chat in a bypass mode (M5)', () => {
+    const CODEX_YOLO = { ...CODEX, yolo_id: 'agent-full-access' } as ManagedAgent;
+    const YOLO_PERMISSION = { mode: 'fixed', value: 'yolo' };
+
+    it('keeps the new chat and the bot in bypass mode, with the alias the backend maps per engine', async () => {
+      mocks.runtimeMode.mockResolvedValue({ mode: 'bypassPermissions', live: true });
+
+      await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX_YOLO }, labels });
+
+      expect(mocks.runtimeMode).toHaveBeenCalledWith({ conversation_id: 'c1' });
+      expect(mocks.updateAssistant).toHaveBeenCalledWith({
+        id: 'bot-1',
+        agent_id: 'codex',
+        defaults: { model: { mode: 'auto' }, permission: YOLO_PERMISSION, thought_level: { mode: 'auto' } },
+      });
+      expect(sent().extra.session_mode).toBe('yolo');
+      expect(sent().assistant).toMatchObject({ id: 'bot-1', conversation_overrides: { permission: 'yolo' } });
+    });
+
+    it('reads the stored mode when the chat has no live runtime', async () => {
+      mocks.getConversation.mockResolvedValue({ ...SOURCE, extra: { ...SOURCE.extra, session_mode: 'yolo' } });
+
+      await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX_YOLO }, labels });
+
+      expect(sent().extra.session_mode).toBe('yolo');
+    });
+
+    it('trusts the live mode over a stale stored one', async () => {
+      mocks.getConversation.mockResolvedValue({
+        ...SOURCE,
+        extra: { ...SOURCE.extra, session_mode: 'bypassPermissions' },
+      });
+      mocks.runtimeMode.mockResolvedValue({ mode: 'default', live: true });
+
+      await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX_YOLO }, labels });
+
+      expect(sent().extra).not.toHaveProperty('session_mode');
+      expect(mocks.updateAssistant.mock.calls[0][0].defaults.permission).toEqual({ mode: 'auto' });
+    });
+
+    it('starts a target engine with no bypass mode on its defaults', async () => {
+      mocks.runtimeMode.mockResolvedValue({ mode: 'bypassPermissions', live: true });
+
+      for (const engine of [CODEX, { ...CODEX, yolo_id: 'build' } as ManagedAgent]) {
+        mocks.clone.mockClear();
+        mocks.updateAssistant.mockClear();
+        await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine }, labels });
+
+        expect(sent().extra).not.toHaveProperty('session_mode');
+        expect(sent().assistant).not.toHaveProperty('conversation_overrides');
+        expect(mocks.updateAssistant.mock.calls[0][0].defaults.permission).toEqual({ mode: 'auto' });
+      }
+    });
+
+    it("moves an engine chat to the target's entry in bypass mode", async () => {
+      mocks.getConversation.mockResolvedValue({
+        ...SOURCE,
+        assistant: { id: 'bare:claude', source: 'generated', name: 'Claude', avatar: '🤖', backend: 'claude' },
+        extra: { ...SOURCE.extra, preset_assistant_id: 'bare:claude' },
+      });
+      mocks.runtimeMode.mockResolvedValue({ mode: 'bypassPermissions', live: true });
+
+      await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX_YOLO }, labels });
+
+      expect(mocks.updateAssistant).not.toHaveBeenCalled();
+      expect(sent().extra.session_mode).toBe('yolo');
+      expect(sent().assistant).toMatchObject({ id: 'bare:codex', conversation_overrides: { permission: 'yolo' } });
+    });
+
+    it('asks nothing of a failed mode lookup and falls back to the stored mode', async () => {
+      mocks.runtimeMode.mockRejectedValue(new Error('offline'));
+
+      await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX_YOLO }, labels });
+
+      expect(sent().extra).not.toHaveProperty('session_mode');
     });
   });
 });

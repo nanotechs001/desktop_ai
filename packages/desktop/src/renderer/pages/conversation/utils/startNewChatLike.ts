@@ -63,6 +63,8 @@ export type NewChatChange = {
   model?: TProviderWithModel;
   /** Run as this assistant instead of the source's (an engine chat moving to another engine's own entry). */
   assistant?: TConversationAssistantIdentity;
+  /** Start in this permission mode, over the assistant's default (its `permission` override). */
+  sessionMode?: string;
 };
 
 /**
@@ -105,8 +107,11 @@ export async function startNewChatLike(source: TChatConversation, change: NewCha
   // The stored copy, so settings changed since the page loaded (e.g. session mode) carry over.
   const latest = (await getConversationOrNull(source.id)) ?? source;
   const sourceExtra: Record<string, unknown> = latest.extra ?? {};
-  const { engine } = change;
-  const assistant = change.assistant ?? latest.assistant;
+  const { engine, sessionMode } = change;
+  const identity = change.assistant ?? latest.assistant;
+  // The backend sets the mode from the assistant's resolved default, so the override is what makes it stick.
+  const assistant =
+    identity && sessionMode ? { ...identity, conversation_overrides: { permission: sessionMode } } : identity;
   // A temporary folder belongs to its chat: without a workspace the backend makes a fresh one, as for any new chat.
   const dropWorkspace = sourceExtra.is_temporary_workspace === true;
   const carried = CARRIED_EXTRA_KEYS.filter(
@@ -121,6 +126,7 @@ export async function startNewChatLike(source: TChatConversation, change: NewCha
     ...Object.fromEntries(carried.map((key) => [key, sourceExtra[key]])),
     // A chat without any assistant names its engine in `extra`, as such chats always have.
     ...(engine && !assistant ? { agent_id: engine.id, backend: engine.backend } : {}),
+    ...(sessionMode ? { session_mode: sessionMode } : {}),
     selected_session_mcp_servers: await freshSessionMcpServers(sourceExtra.session_mcp_servers),
   };
   const type: TChatConversation['type'] = engine?.agent_type ?? latest.type;

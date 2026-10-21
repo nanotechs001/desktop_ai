@@ -14,7 +14,12 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  targets: { engines: [] as unknown[], providers: [] as unknown[], modelEngine: undefined as unknown },
+  targets: {
+    engines: [] as unknown[],
+    providers: [] as unknown[],
+    modelEngine: undefined as unknown,
+    limitedUntil: {} as Record<string, number | null>,
+  },
   switchAndContinue: vi.fn(async () => 'c2'),
 }));
 
@@ -60,7 +65,7 @@ const spy = (name: 'showConversation' | 'openPageInMain' | 'openAgentSettings') 
   vi.spyOn(ipcBridge.agentWidget[name], 'invoke').mockResolvedValue(undefined);
 
 beforeEach(() => {
-  h.targets = { engines: [{ id: 'codex', name: 'Codex' }], providers: [], modelEngine: undefined };
+  h.targets = { engines: [{ id: 'codex', name: 'Codex' }], providers: [], modelEngine: undefined, limitedUntil: {} };
   window.location.hash = '#/widget/c1';
 });
 
@@ -79,8 +84,18 @@ describe('in-chat links inside a robot window', () => {
     expect(path).toBe('/widget/c1');
   });
 
+  it('an engine still at its own plan limit is shown but cannot be picked (risk 16)', async () => {
+    h.targets = { ...h.targets, limitedUntil: { codex: null } };
+    h.switchAndContinue.mockClear();
+    renderIn(<LimitSwitchActions conversationId='c1' />, '/widget/c1');
+    const codex = (await screen.findByText('Codex')).closest('button');
+    expect(codex?.disabled).toBe(true);
+    fireEvent.click(codex as HTMLButtonElement);
+    expect(h.switchAndContinue).not.toHaveBeenCalled();
+  });
+
   it('with no engine to switch to, its settings button opens the settings in the main window', async () => {
-    h.targets = { engines: [], providers: [], modelEngine: undefined };
+    h.targets = { engines: [], providers: [], modelEngine: undefined, limitedUntil: {} };
     const open = spy('openPageInMain');
     renderIn(<LimitSwitchActions conversationId='c1' />, '/widget/c1');
     fireEvent.click(await screen.findByText('conversation.agentError.switch.openEngineSettings'));

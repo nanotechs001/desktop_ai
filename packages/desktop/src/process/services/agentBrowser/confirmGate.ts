@@ -9,8 +9,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { isYoloMode } from '@/common/config/constants';
 import type { ConfirmRequest } from '@/common/types/browser';
 import type { ConversationRuntimeMode } from '@/common/types/platform/acpTypes';
+
+export { isYoloMode, TRUE_BYPASS_MODES } from '@/common/config/constants';
 
 /** An unanswered confirm is denied after this long. */
 export const CONFIRM_TIMEOUT_MS = 120_000;
@@ -104,21 +107,6 @@ function saveAllowLists(file: string, lists: AllowLists): void {
 export const YOLO_CACHE_MS = 2000;
 /** A mode lookup slower than this answers "not YOLO", so the user is asked. */
 export const MODE_LOOKUP_TIMEOUT_MS = 5000;
-
-/**
- * Mode ids that skip every permission ask (ruling R12). Catalog `yolo_id`s are not used: OpenCode's and MiMo's `build`
- * and Cursor's `agent` are their everyday modes.
- */
-export const TRUE_BYPASS_MODES: ReadonlySet<string> = new Set([
-  'bypassPermissions',
-  'agent-full-access',
-  'full-access',
-  'yolo',
-  'yoloNoSandbox',
-]);
-
-/** True when `mode` skips every permission ask, for any engine. */
-export const isYoloMode = (mode: string | null | undefined): boolean => !!mode && TRUE_BYPASS_MODES.has(mode);
 
 /** What main asks aioncore to learn a chat's current permission mode. */
 export type ChatModeDeps = {

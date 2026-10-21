@@ -329,6 +329,8 @@
       "openModelSettings": "在設定中新增模型服務商",
       "tooltipBot": "將此助理切換到 {{engine}}。下次你在設定中變更預設引擎時，它會回到你的預設引擎。",
       "tooltipChatOnly": "帶著最近的對話，在使用此選項的新對話中繼續。其他設定不變。",
+      "targetLimited": "{{engine}} 也已達到用量上限。",
+      "targetLimitedUntil": "{{engine}} 也已達到用量上限，將於 {{time}} 重置。",
       "failed": "無法切換並繼續，未做任何變更。",
       "handoff": {
         "header": "繼續先前的對話（先前的 AI 已達到用量上限）。上下文：",

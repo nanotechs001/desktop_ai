@@ -195,4 +195,48 @@ describe('listSwitchTargets', () => {
     expect(targets.modelEngine).toBeNull();
     expect(targets.providers).toEqual([]);
   });
+
+  describe('a target engine still at its plan limit (risk 16)', () => {
+    const NOW = 1_800_000_000_000;
+    const inAnHour = NOW / 1000 + 3600;
+    const reading = (windows: Record<string, { utilization: number; resets_at: number | null }>, age = 0) => ({
+      windows,
+      updated_at: NOW - age,
+    });
+    const limitedOf = (usage: Record<string, ReturnType<typeof reading>>) =>
+      listSwitchTargets({
+        conversation: acpChat,
+        engines: [engine('claude'), engine('codex', { backend: 'codex' }), engine('gemini-cli', { backend: 'gem' })],
+        providers: [],
+        getAvailableModels,
+        usage,
+        now: NOW,
+      }).limitedUntil;
+
+    it('marks an engine whose stored window is at 100% or more until it resets', () => {
+      expect(limitedOf({ codex: reading({ five_hour: { utilization: 1, resets_at: inAnHour } }) })).toEqual({
+        codex: inAnHour,
+      });
+      expect(
+        limitedOf({
+          gem: reading({
+            five_hour: { utilization: 1.2, resets_at: inAnHour },
+            seven_day: { utilization: 1, resets_at: inAnHour + 60 },
+          }),
+        })
+      ).toEqual({ 'gemini-cli': inAnHour + 60 });
+      expect(limitedOf({ codex: reading({ seven_day: { utilization: 1, resets_at: null } }) })).toEqual({
+        codex: null,
+      });
+    });
+
+    it('offers it as before once the window resets, below 100%, or on a stale reading', () => {
+      expect(limitedOf({ codex: reading({ five_hour: { utilization: 1, resets_at: NOW / 1000 - 1 } }) })).toEqual({});
+      expect(limitedOf({ codex: reading({ five_hour: { utilization: 0.99, resets_at: inAnHour } }) })).toEqual({});
+      expect(
+        limitedOf({ codex: reading({ seven_day: { utilization: 1, resets_at: null } }, 8 * 24 * 60 * 60 * 1000) })
+      ).toEqual({});
+      expect(limitedOf({})).toEqual({});
+    });
+  });
 });

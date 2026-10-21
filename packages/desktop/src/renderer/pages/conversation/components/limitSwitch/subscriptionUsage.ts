@@ -248,3 +248,8 @@ export function useSubscriptionUsage(backend: string, conversationId: string): B
     windowlessConversations.has(conversationId) ? null : (state[backend] ?? null)
   );
 }
+
+/** Every engine's stored plan usage, kept current across windows like {@link useSubscriptionUsage}. */
+export function useAllSubscriptionUsage(): SubscriptionUsageState {
+  return useSyncExternalStore(subscribe, () => state);
+}

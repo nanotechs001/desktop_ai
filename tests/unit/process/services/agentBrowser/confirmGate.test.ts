@@ -380,6 +380,7 @@ describe('isYoloMode', () => {
     ['bypassPermissions', true], // Claude
     ['agent-full-access', true], // Codex
     ['full-access', true], // Codex, legacy
+    [':danger-full-access', true], // Codex's raw full-access profile id; aioncore runs it with approval "never"
     ['yolo', true], // aionrs, and AionUi's alias
     ['yoloNoSandbox', true],
     ['build', false], // OpenCode's and MiMo's everyday mode (their catalog yolo_id)

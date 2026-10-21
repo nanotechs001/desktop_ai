@@ -130,3 +130,22 @@ export const WEBUI_DEFAULT_PORT = (() => {
 // Stable ID for the Google Auth virtual provider.
 // Shared between frontend (useModelProviderList) and backend (SystemActions).
 export const GOOGLE_AUTH_PROVIDER_ID = 'google-auth-gemini';
+
+// ===== Agent permission modes =====
+
+/**
+ * Mode ids that skip every permission ask (ruling R12). Catalog `yolo_id`s are not used: OpenCode's and MiMo's `build`
+ * and Cursor's `agent` are their everyday modes. `:danger-full-access` is Codex's raw profile id, which aioncore runs
+ * as full access with approval `never` (`codex_approval_for_mode` in `session_agent.rs`).
+ */
+export const TRUE_BYPASS_MODES: ReadonlySet<string> = new Set([
+  'bypassPermissions',
+  'agent-full-access',
+  'full-access',
+  ':danger-full-access',
+  'yolo',
+  'yoloNoSandbox',
+]);
+
+/** True when `mode` skips every permission ask, for any engine. */
+export const isYoloMode = (mode: string | null | undefined): boolean => !!mode && TRUE_BYPASS_MODES.has(mode);

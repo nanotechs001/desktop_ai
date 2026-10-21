@@ -317,6 +317,8 @@
       "openModelSettings": "Ayarlar’dan model sağlayıcı ekle",
       "tooltipBot": "Bu botu {{engine}} motoruna geçirir. Ayarlar'da varsayılanı bir sonraki değiştirdiğinizde varsayılan motorunuza döner.",
       "tooltipChatOnly": "Son konuşmayla bu seçenekte yeni bir sohbette devam edilir. Başka hiçbir şey değişmez.",
+      "targetLimited": "{{engine}} da kullanım sınırına ulaştı.",
+      "targetLimitedUntil": "{{engine}} da kullanım sınırına ulaştı; sıfırlanma: {{time}}.",
       "failed": "Geçiş yapılıp devam edilemedi. Hiçbir şey değiştirilmedi.",
       "handoff": {
         "header": "Önceki bir sohbete devam ediliyor (önceki yapay zekâ kullanım sınırına ulaştı). Bağlam:",

@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
+import { isYoloMode } from '@/common/config/constants';
 import type {
   IProvider,
   TChatConversation,
@@ -16,6 +17,7 @@ import {
   ENGINE_CHANGE_DEFAULTS_RESET,
   enginePinOrigin,
   persistEnginePin,
+  reloadEnginePins,
 } from '@/renderer/hooks/agent/useDefaultEngine';
 import { loadLatestConversationMessages, MAX_MESSAGE_PAGE_LIMIT } from '@/renderer/utils/chat/messagePagination';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
@@ -49,12 +51,29 @@ async function engineEntryIdentity(engine: ManagedAgent): Promise<TConversationA
   };
 }
 
+/** The generic bypass alias aioncore maps to each engine's own `yolo_id` (`normalize_requested_mode`). */
+const YOLO_ALIAS = 'yolo';
+
+/** True when the chat skips every permission ask: its live runtime's mode, else the mode it stored. */
+async function runsInBypassMode(conversation: TChatConversation): Promise<boolean> {
+  const runtime = await ipcBridge.conversation.runtimeMode
+    .invoke({ conversation_id: conversation.id })
+    .catch((error: unknown): null => {
+      console.warn('[limitSwitch] Could not read the chat permission mode; using the stored one:', error);
+      return null;
+    });
+  const stored = (conversation.extra as { session_mode?: string } | undefined)?.session_mode;
+  return isYoloMode(runtime?.live ? runtime.mode : stored);
+}
+
 /**
  * Pin a bot to `engineId` and re-bind its record, as the default-engine sync does (model, permission and thought
- * level go back to auto). The pin is tagged `limit`: the next default-engine change releases it (ruling R17). Returns
- * an undo that restores the previous pin (and its origin), engine and those defaults.
+ * level go back to auto; the permission is `permission` when given). The pin is tagged `limit`: the next
+ * default-engine change releases it (ruling R17). Returns an undo that restores the previous pin (and its origin),
+ * engine and those defaults.
  */
-async function pinAssistant(assistantId: string, engineId: string): Promise<() => Promise<void>> {
+async function pinAssistant(assistantId: string, engineId: string, permission?: string): Promise<() => Promise<void>> {
+  await reloadEnginePins();
   const previousPin = configService.get('agent.enginePins')?.[assistantId] ?? null;
   const previousOrigin = enginePinOrigin(assistantId);
   const detail = await ipcBridge.assistants.get.invoke({ id: assistantId });
@@ -63,7 +82,9 @@ async function pinAssistant(assistantId: string, engineId: string): Promise<() =
     await ipcBridge.assistants.update.invoke({
       id: assistantId,
       agent_id: engineId,
-      defaults: ENGINE_CHANGE_DEFAULTS_RESET,
+      defaults: permission
+        ? { ...ENGINE_CHANGE_DEFAULTS_RESET, permission: { mode: 'fixed', value: permission } }
+        : ENGINE_CHANGE_DEFAULTS_RESET,
     });
   } catch (error) {
     await persistEnginePin(assistantId, previousPin, previousOrigin);
@@ -122,13 +143,19 @@ export async function switchAndContinue({ conversationId, target, labels }: Swit
   const assistantId = engineChanges ? pinnableAssistantId(conversation) : null;
   const onEngineEntry = engineChanges && conversation.assistant && !assistantId;
   const entry = onEngineEntry ? await engineEntryIdentity(target.engine) : undefined;
-  const undoPin = assistantId ? await pinAssistant(assistantId, target.engine.id) : null;
+  // A bypass chat stays one on an engine that has a bypass mode, so an unattended bot does not stall at every ask.
+  const sessionMode =
+    engineChanges && isYoloMode(target.engine.yolo_id) && (await runsInBypassMode(conversation))
+      ? YOLO_ALIAS
+      : undefined;
+  const undoPin = assistantId ? await pinAssistant(assistantId, target.engine.id, sessionMode) : null;
   let createdId: string | undefined;
   try {
     createdId = await startNewChatLike(conversation, {
       engine: engineChanges ? target.engine : undefined,
       assistant: entry,
       model: target.kind === 'model' ? toProviderModel(target.provider, target.model) : undefined,
+      sessionMode,
     });
     if (!createdId) throw new Error('The backend created no conversation');
     await deliverHandoff(createdId, target.engine.agent_type === 'aionrs' ? 'aionrs' : 'acp', handoff);
