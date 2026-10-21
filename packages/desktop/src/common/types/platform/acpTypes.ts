@@ -229,10 +229,6 @@ export type EnsureConversationRuntimeResponse = {
 /** `GET /api/conversations/{id}/runtime/mode`: the live runtime's mode; `{ mode: null, live: false }` when idle or a team chat. */
 export type ConversationRuntimeMode = { mode: string | null; live: boolean; agent_id?: string; backend?: string };
 
-export type GetConfigOptionsResponse = {
-  config_options: AcpConfigOptionDto[];
-};
-
 export type SetConfigOptionRequest = {
   value: string;
 };

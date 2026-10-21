@@ -8,11 +8,3 @@ export interface IMessageSearchItem {
   message_created_at: number;
   preview_text: string;
 }
-
-export interface IMessageSearchResponse {
-  items: IMessageSearchItem[];
-  total: number;
-  page: number;
-  page_size: number;
-  has_more: boolean;
-}

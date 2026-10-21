@@ -41,25 +41,6 @@ export const scopeToToken = (scope: SidebarScope): string => {
   }
 };
 
-/**
- * Flatten every conversation row across all groups into a single list (order
- * preserved). Used for the flat-list consumers (batch selection, fork-lineage
- * name resolution) that predate the grouped read model.
- */
-export const flattenSidebarConversations = (response: SidebarResponse): TChatConversation[] => {
-  const out: TChatConversation[] = [];
-  const seen = new Set<string>();
-  for (const group of response.groups) {
-    for (const item of group.items) {
-      if (!seen.has(item.conversation.id)) {
-        seen.add(item.conversation.id);
-        out.push(item.conversation);
-      }
-    }
-  }
-  return out;
-};
-
 const mapItem = (raw: SidebarItem): SidebarItem => {
   // The backend derives pin truth from a `user_order` row and sends it as a
   // top-level `pinned` flag on the wire `ConversationResponse`. The renderer

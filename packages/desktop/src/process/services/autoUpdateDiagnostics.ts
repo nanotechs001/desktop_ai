@@ -178,7 +178,3 @@ export function recordAutoUpdateNativeInstallTimeout(
     options
   );
 }
-
-export function readAutoUpdateDiagnostics(userDataPath: string): AutoUpdateDiagnostics | undefined {
-  return readDiagnosticsFile(getAutoUpdateDiagnosticsPath(userDataPath));
-}
