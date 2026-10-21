@@ -1336,6 +1336,43 @@ describe('persisted state normalization', () => {
   });
 });
 
+describe('the main window follows the robot chat', () => {
+  const makeMain = () => ({
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
+    webContents: { send: vi.fn() },
+  });
+
+  it('tells the main window, without focusing it, when a popup opens or moves to another chat', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    appear(manager, A);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    manager.openPopup(A, 'bot-1');
+    expect(main.webContents.send).toHaveBeenLastCalledWith('tray:follow-robot-chat', { conversation_id: A });
+
+    manager.retarget(A, B); // the popup's new chat, or one picked from the bot's history
+    expect(main.webContents.send).toHaveBeenLastCalledWith('tray:follow-robot-chat', { conversation_id: B });
+    expect(main.focus).not.toHaveBeenCalled();
+    expect(main.show).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the popup closes', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    appear(manager, A);
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+    manager.setExpanded(A, false);
+    expect(main.webContents.send).not.toHaveBeenCalled();
+  });
+});
+
 describe('AgentWidgetManager watchInMain', () => {
   const makeMain = () => ({
     isDestroyed: () => false,

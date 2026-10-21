@@ -79,6 +79,7 @@ const trayEvents = [
   'tray:navigate-to-conversation',
   'tray:open-agent-settings',
   'tray:open-link-in-conversation',
+  'tray:follow-robot-chat',
   'tray:open-about',
   'tray:pause-all-tasks',
   'tray:check-update',

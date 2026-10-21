@@ -34,7 +34,7 @@ import OrphanChatsPrompt from '@renderer/components/OrphanChatsPrompt';
 import { useBotColorSeed } from '@renderer/hooks/agent/useBotColor';
 import { useDefaultAgentSync, useEngineDriftSync } from '@renderer/hooks/agent/useDefaultEngine';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
-import { useAgentWidgetSync } from '@renderer/pages/agentWidget/useAgentWidgetSync';
+import { followRobotChat, useAgentWidgetSync } from '@renderer/pages/agentWidget/useAgentWidgetSync';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
 import { useBrowserNotification } from '@renderer/hooks/system/notification/useBrowserNotification';
 import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/useDesktopTurnNotification';
@@ -149,6 +149,9 @@ const Layout: React.FC<{
   useBotColorSeed();
   const navigate = useNavigate();
   const location = useLocation();
+  // Read by window event handlers that are not re-bound on every route change.
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
   const workspaceAvailable = location.pathname.startsWith('/conversation/');
   const toggleSider = useCallback(() => {
     setCollapsed((previous) => !previous);
@@ -376,6 +379,14 @@ const Layout: React.FC<{
       void navigate(`/conversation/${conversation_id}`);
     };
 
+    // A robot's popup moved to another chat: the main window follows when it shows a VA Bot chat
+    const handleFollowRobotChat = (event: CustomEvent<{ conversation_id: string }>) => {
+      followRobotChat(pathnameRef.current, event.detail.conversation_id, {
+        revealBrowserFor,
+        navigate: (path) => void navigate(path),
+      }).catch((error: unknown) => console.warn('[Layout] could not follow the robot chat:', error));
+    };
+
     // A VA Bot robot's popup asked for that bot's settings
     const handleOpenAgentSettings = (event: CustomEvent<{ agent_id: string }>) => {
       void navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: event.detail.agent_id } });
@@ -406,6 +417,7 @@ const Layout: React.FC<{
     window.addEventListener('tray:navigate-to-conversation', handleNavigateToConversation as EventListener);
     window.addEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
     window.addEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
+    window.addEventListener('tray:follow-robot-chat', handleFollowRobotChat as EventListener);
     window.addEventListener('tray:open-about', handleOpenAbout as EventListener);
     window.addEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
     window.addEventListener('tray:check-update', handleCheckUpdate as EventListener);
@@ -415,6 +427,7 @@ const Layout: React.FC<{
       window.removeEventListener('tray:navigate-to-conversation', handleNavigateToConversation as EventListener);
       window.removeEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
       window.removeEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
+      window.removeEventListener('tray:follow-robot-chat', handleFollowRobotChat as EventListener);
       window.removeEventListener('tray:open-about', handleOpenAbout as EventListener);
       window.removeEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
       window.removeEventListener('tray:check-update', handleCheckUpdate as EventListener);

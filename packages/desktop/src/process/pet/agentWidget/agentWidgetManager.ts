@@ -326,6 +326,7 @@ export class AgentWidgetManager {
     }
     this.place(entry);
     if (expanded && !entry.win.isDestroyed()) entry.win.focus();
+    if (expanded) this.followInMain(conversationId);
   }
 
   setChatLocation(conversationId: string, location: AgentChatLocation): void {
@@ -601,6 +602,16 @@ export class AgentWidgetManager {
     // Only a live robot may ask: the bridge is also reachable from WebUI sockets.
     if (!this.entries.has(conversationId) || !isHttpUrl(url)) return;
     this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId, url });
+  }
+
+  /**
+   * The chat in a robot's popup changed (opened, a new chat, one from its history): the main window may switch its
+   * browser pane to it (Layout.tsx decides). It is not brought forward.
+   */
+  private followInMain(conversationId: string): void {
+    const main = this.host.getMainWindow();
+    if (main && !main.isDestroyed())
+      main.webContents.send('tray:follow-robot-chat', { conversation_id: conversationId });
   }
 
   /** Show the main window on a robot's conversation with its browser pane open; the chat stays in its popup. */
