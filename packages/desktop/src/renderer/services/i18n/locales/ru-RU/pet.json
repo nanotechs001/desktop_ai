@@ -7,6 +7,8 @@
     "untitledAgent": "Агент",
     "minimize": "Свернуть",
     "closePopup": "Закрыть чат",
+    "expandWindow": "Развернуть окно",
+    "restoreWindow": "Восстановить окно",
     "returnToMain": "Открыть в главном окне",
     "botSettings": "Настройки VA Bot",
     "hideWidget": "Скрыть виджет",

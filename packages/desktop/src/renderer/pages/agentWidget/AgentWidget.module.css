@@ -108,6 +108,19 @@
   bottom: 0;
 }
 
+/* The expanded window: the robot stands in the top band (overlapping the panel's top edge), the panel fills the rest. */
+.root[data-window='expanded'] .bot {
+  top: 0;
+  bottom: auto;
+}
+
+.root[data-window='expanded'] .popup {
+  top: var(--top-band);
+  bottom: 0;
+  height: auto;
+  transform-origin: 50% 0;
+}
+
 .hidden {
   display: none;
 }
@@ -128,6 +141,10 @@
   top: -8px;
   bottom: auto;
   transform: rotate(225deg);
+}
+
+.root[data-window='expanded'] .pointer {
+  display: none;
 }
 
 .header {

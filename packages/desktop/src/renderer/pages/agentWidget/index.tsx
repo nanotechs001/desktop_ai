@@ -57,7 +57,9 @@ const AgentWidgetPage: React.FC = () => {
   const [chatMounted, setChatMounted] = useState(false);
   const { state, awaitingUser, wake } = useAgentAnimationState(id, expanded && chatLocation === 'widget');
   const reduceMotion = Boolean(settings?.reduceMotion);
-  const [presentation, advancePresentation] = useRobotPresentation(expanded, reduceMotion);
+  // The expanded window: the robot stands in the band above the chat, walking it, instead of turning to the user.
+  const windowExpanded = expanded && layout?.window_mode === 'expanded';
+  const [presentation, advancePresentation] = useRobotPresentation(expanded && !windowExpanded, reduceMotion);
   const transitioning = isTurning(presentation);
   const lastToggleAtRef = useRef(0);
   // Lifecycle animation the main process asked for; 'pending' holds appearing's first frame until the window shows.
@@ -249,9 +251,11 @@ const AgentWidgetPage: React.FC = () => {
     <div
       className={styles.root}
       data-vertical={layout.popup_vertical}
+      data-window={windowExpanded ? 'expanded' : 'compact'}
       style={
         {
           '--bot-size': `${layout.bot_size}px`,
+          '--top-band': `${layout.top_band}px`,
           '--hop-height': `${HOP_HEIGHT_PHYSICAL_PX / (window.devicePixelRatio || 1)}px`,
         } as React.CSSProperties
       }

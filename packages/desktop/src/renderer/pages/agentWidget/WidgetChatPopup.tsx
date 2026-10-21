@@ -7,11 +7,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { Alert, Button, Spin, Tooltip } from '@arco-design/web-react';
-import { Close, History, Left, Minus, Plus, PreviewCloseOne, SettingTwo, Tv } from '@icon-park/react';
+import { Close, FullScreen, History, Left, OffScreen, Plus, PreviewCloseOne, SettingTwo, Tv } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
-import type { AgentAnimationState, AgentWidgetLayout } from '@/common/types/agent/agentWidget';
+import type { AgentAnimationState, AgentWidgetLayout, AgentWidgetWindowMode } from '@/common/types/agent/agentWidget';
 import ConversationChatBody from '@/renderer/pages/conversation/components/ConversationChatBody';
 import { HistoryPanelBody } from '@/renderer/components/layout/Titlebar/HistoryPanel';
 import { ConversationHistoryProvider } from '@/renderer/hooks/context/ConversationHistoryContext';
@@ -27,6 +27,7 @@ type WidgetChatPopupProps = {
   visible: boolean;
   /** The chat is mounted here (lazy: only after the first open, and only while the widget owns it). */
   chatReady: boolean;
+  /** Escape: close the popup back to the robot. */
   onMinimize: () => void;
   onClose: () => void;
   onReturnToMain: () => void;
@@ -90,6 +91,11 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
   const startNewChat = useStartNewChat(props.conversation, props.onShowConversation);
   const conversationId = props.conversation?.id;
   const [agentSite, dismissAgentSite] = useAgentTabNotice(conversationId);
+  const setWindowMode = (mode: AgentWidgetWindowMode) => {
+    ipcBridge.agentWidget.setWindowMode
+      .invoke({ conversation_id: layout.conversation_id, mode })
+      .catch((error: unknown) => console.warn('[WidgetChatPopup] could not change the window mode:', error));
+  };
   const watch = () => {
     dismissAgentSite();
     if (!conversationId) return;
@@ -131,7 +137,13 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
             props.onOpenBotSettings(agentId)
           )}
         {action(t('pet.widget.hideWidget'), <PreviewCloseOne theme='outline' size='14' />, props.onHideWidget)}
-        {action(t('pet.widget.minimize'), <Minus theme='outline' size='14' />, props.onMinimize)}
+        {layout.window_mode === 'expanded'
+          ? action(t('pet.widget.restoreWindow'), <OffScreen theme='outline' size='14' />, () =>
+              setWindowMode('compact')
+            )
+          : action(t('pet.widget.expandWindow'), <FullScreen theme='outline' size='14' />, () =>
+              setWindowMode('expanded')
+            )}
         {action(t('pet.widget.closePopup'), <Close theme='outline' size='14' />, props.onClose)}
       </header>
       {agentSite && (

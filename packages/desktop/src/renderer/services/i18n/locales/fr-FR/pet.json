@@ -7,6 +7,8 @@
     "untitledAgent": "Agent",
     "minimize": "Réduire",
     "closePopup": "Fermer la conversation",
+    "expandWindow": "Agrandir la fenêtre",
+    "restoreWindow": "Restaurer la fenêtre",
     "returnToMain": "Ouvrir dans la fenêtre principale",
     "botSettings": "Paramètres du VA Bot",
     "hideWidget": "Masquer le widget",

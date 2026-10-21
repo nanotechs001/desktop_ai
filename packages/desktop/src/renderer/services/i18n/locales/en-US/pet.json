@@ -7,6 +7,8 @@
     "untitledAgent": "Agent",
     "minimize": "Minimize",
     "closePopup": "Close chat",
+    "expandWindow": "Expand window",
+    "restoreWindow": "Restore window",
     "returnToMain": "Open in main window",
     "botSettings": "VA Bot settings",
     "hideWidget": "Hide widget",

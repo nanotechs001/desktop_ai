@@ -23,23 +23,25 @@ vi.mock('@/renderer/hooks/context/ConversationHistoryContext', () => ({
   ConversationHistoryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import WidgetChatPopup from '@/renderer/pages/agentWidget/WidgetChatPopup';
 
 const SETTINGS_LABEL = 'pet.widget.botSettings';
-const LAYOUT = { bot_offset_x: 0, bot_size: 64 };
+const LAYOUT = { conversation_id: 'c1', bot_offset_x: 0, bot_size: 64, window_mode: 'compact' };
 
 const renderPopup = (
   assistant: { id: string; name: string; source?: string } | undefined,
   onOpenBotSettings = vi.fn(),
-  onShowConversation = vi.fn()
+  onShowConversation = vi.fn(),
+  layout: object = LAYOUT
 ) => {
   render(
     <WidgetChatPopup
       conversation={{ id: 'c1', assistant } as never}
       name='Bot'
       state='idle'
-      layout={LAYOUT as never}
+      layout={layout as never}
       visible
       chatReady
       onMinimize={vi.fn()}
@@ -152,5 +154,33 @@ describe('WidgetChatPopup new chat', () => {
   it('is absent without a VA Bot', () => {
     renderPopup(undefined);
     expect(screen.queryByRole('button', { name: NEW_CHAT })).toBeNull();
+  });
+});
+
+describe('WidgetChatPopup window mode', () => {
+  const EXPAND = 'pet.widget.expandWindow';
+  const RESTORE = 'pet.widget.restoreWindow';
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('offers Expand just before the close button in compact mode, and no minimize button', () => {
+    const invoke = vi.spyOn(ipcBridge.agentWidget.setWindowMode, 'invoke').mockResolvedValue(undefined);
+    renderPopup({ id: 'bot-1', name: 'Bot' });
+    const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(labels.indexOf(EXPAND) + 1).toBe(labels.indexOf('pet.widget.closePopup'));
+    expect(labels).not.toContain(RESTORE);
+    expect(labels).not.toContain('pet.widget.minimize');
+    fireEvent.click(screen.getByRole('button', { name: EXPAND }));
+    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'expanded' });
+  });
+
+  it('offers Restore instead in expanded mode', () => {
+    const invoke = vi.spyOn(ipcBridge.agentWidget.setWindowMode, 'invoke').mockResolvedValue(undefined);
+    renderPopup({ id: 'bot-1', name: 'Bot' }, vi.fn(), vi.fn(), { ...LAYOUT, window_mode: 'expanded' });
+    const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(labels).not.toContain(EXPAND);
+    expect(labels).not.toContain('pet.widget.minimize');
+    fireEvent.click(screen.getByRole('button', { name: RESTORE }));
+    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'compact' });
   });
 });
