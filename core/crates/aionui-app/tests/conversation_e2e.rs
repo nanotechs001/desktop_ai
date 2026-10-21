@@ -1474,14 +1474,16 @@ async fn selected_session_mcp_snapshot_wins_over_raw_key() {
     assert_eq!(extra["mcp_servers"], json!(["my-server"]));
 }
 
-/// A create with no session snapshot (a scheduled run, a channel chat) gets the user's
-/// built-in rows; a sent snapshot, even an empty one, is kept as sent.
+/// Only a cron executor's own run (`scheduled_run: true`) with no session snapshot gets the
+/// user's built-in rows. A channel chat or any other create without one gets none, and a sent
+/// snapshot, even an empty one, is kept as sent.
 #[tokio::test]
-async fn create_without_session_snapshot_gets_the_builtin_rows() {
+async fn only_a_scheduled_run_without_session_snapshot_gets_the_builtin_rows() {
     let (mut app, services) = build_app().await;
     let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
 
-    let extra = create_with_extra(&mut app, "/api/conversations", json!({}), &token, &csrf).await;
+    let scheduled = json!({ "scheduled_run": true });
+    let extra = create_with_extra(&mut app, "/api/conversations", scheduled.clone(), &token, &csrf).await;
     assert!(
         extra.get("session_mcp_servers").is_none(),
         "no built-in row yet: {extra}"
@@ -1489,7 +1491,7 @@ async fn create_without_session_snapshot_gets_the_builtin_rows() {
 
     let browser_row = seed_mcp_row(&services, "aionui-browser", true, "/app/builtin-mcp-browser.js").await;
     seed_mcp_row(&services, "aionui-notes", false, "/tmp/not-builtin.js").await;
-    let extra = create_with_extra(&mut app, "/api/conversations", json!({}), &token, &csrf).await;
+    let extra = create_with_extra(&mut app, "/api/conversations", scheduled, &token, &csrf).await;
     assert_eq!(
         extra["session_mcp_servers"],
         json!([{
@@ -1506,10 +1508,29 @@ async fn create_without_session_snapshot_gets_the_builtin_rows() {
         "{extra}"
     );
 
+    // A channel chat's extra, a create with no flag, and a bound job's chat get no built-ins.
+    for other in [
+        json!({ "session_mode": "yolo", "backend": "claude" }),
+        json!({}),
+        json!({ "scheduled_run": false, "cron_job_id": "job-1" }),
+    ] {
+        let extra = create_with_extra(&mut app, "/api/conversations", other.clone(), &token, &csrf).await;
+        assert!(
+            extra.get("session_mcp_servers").is_none(),
+            "{other} got built-ins: {extra}"
+        );
+        assert!(
+            !extra["mcp_servers"]
+                .as_array()
+                .is_some_and(|names| names.contains(&json!("aionui-browser"))),
+            "{other} got built-ins: {extra}"
+        );
+    }
+
     let extra = create_with_extra(
         &mut app,
         "/api/conversations",
-        json!({ "selected_session_mcp_servers": [] }),
+        json!({ "scheduled_run": true, "selected_session_mcp_servers": [] }),
         &token,
         &csrf,
     )

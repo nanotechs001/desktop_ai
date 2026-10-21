@@ -1356,10 +1356,14 @@ impl ConversationService {
                 })
             })
             .transpose()?;
-        // Chats the backend makes (scheduled runs, channels) send no snapshot: give them the
-        // built-ins the renderer's `withBrowserMcp` adds. Team provisioning always sends one.
+        // A cron executor's own run sends no snapshot: give it the built-ins the renderer's
+        // `withBrowserMcp` adds. Channel chats don't get them, so whoever messages a bound bot
+        // can't drive its signed-in browser. Team provisioning always sends a snapshot.
+        let is_scheduled_run = extra.get("scheduled_run").and_then(serde_json::Value::as_bool) == Some(true);
         let selected_session_mcp_servers = match selected_session_mcp_servers {
-            None if !is_team_conversation => self.default_builtin_session_mcp_servers(user_id).await?,
+            None if is_scheduled_run && !is_team_conversation => {
+                self.default_builtin_session_mcp_servers(user_id).await?
+            }
             sent => sent,
         };
         let selected_mcp_statuses = if is_team_conversation {
@@ -5388,7 +5392,7 @@ fn context_skill_names(context: &AgentSessionContext) -> Vec<String> {
 }
 
 impl ConversationService {
-    /// The user's built-in session MCP rows, for a create that sends no snapshot; `None` when
+    /// The user's built-in session MCP rows, for a scheduled run that sends no snapshot; `None` when
     /// the user has none, so nothing is stored.
     async fn default_builtin_session_mcp_servers(
         &self,
