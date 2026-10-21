@@ -62,7 +62,11 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
   },
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktopMock }));
-vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({ useAgentWidgetSync: () => {} }));
+vi.mock('@renderer/pages/agentWidget/useAgentWidgetSync', () => ({
+  useAgentWidgetSync: () => {},
+  followRobotChat: async () => false,
+  onAgentTabActivity: () => () => {},
+}));
 vi.mock('@renderer/components/OrphanChatsPrompt', () => ({ default: () => null }));
 vi.mock('@renderer/pages/conversation/Preview/browser/BrowserTabLayer', () => ({ default: () => null }));
 const revealBrowserFor = vi.hoisted(() => vi.fn());
