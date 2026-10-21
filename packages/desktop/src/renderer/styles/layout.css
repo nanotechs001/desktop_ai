@@ -289,3 +289,26 @@
     opacity: 0;
   }
 }
+
+/* A block that unfolds to its height when it mounts (a notice above the send box): the rows of a one-cell grid ease
+   from 0fr, so whatever sits below eases along instead of jumping. */
+.motion-reveal-rows {
+  display: grid;
+  animation: motion-reveal-rows var(--motion-base) var(--motion-ease-out);
+}
+
+.motion-reveal-rows > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes motion-reveal-rows {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}

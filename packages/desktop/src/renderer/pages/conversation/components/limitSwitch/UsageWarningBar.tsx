@@ -56,24 +56,25 @@ const UsageWarningBar: React.FC<{ conversationId: string }> = ({ conversationId 
       : t(`${PREFIX}.resets`, { time: formatResetTime(warning.resetsAt, i18n.language) });
 
   return (
-    <div
-      className='mb-6px flex flex-col gap-6px rounded-8px px-10px py-8px text-12px bg-warning-light-1 text-t-primary'
-      role='status'
-    >
-      <div className='flex items-start justify-between gap-8px'>
-        <span>{resets ? `${usage} · ${resets}` : usage}</span>
-        <Button
-          size='mini'
-          type='text'
-          aria-label={t(`${PREFIX}.dismiss`)}
-          icon={<Close theme='outline' size='12' />}
-          onClick={() => {
-            dismissUsageWarning(keys);
-            setDismissals((n) => n + 1);
-          }}
-        />
+    // Unfolds when a reading arrives (motion-reveal-rows), so the send box and the messages above it ease up instead
+    // of jumping.
+    <div className='motion-reveal-rows' role='status'>
+      <div className='mb-6px flex flex-col gap-6px rounded-8px px-10px py-8px text-12px bg-warning-light-1 text-t-primary'>
+        <div className='flex items-start justify-between gap-8px'>
+          <span>{resets ? `${usage} · ${resets}` : usage}</span>
+          <Button
+            size='mini'
+            type='text'
+            aria-label={t(`${PREFIX}.dismiss`)}
+            icon={<Close theme='outline' size='12' />}
+            onClick={() => {
+              dismissUsageWarning(keys);
+              setDismissals((n) => n + 1);
+            }}
+          />
+        </div>
+        <LimitSwitchActions conversationId={conversationId} reason='nearLimit' />
       </div>
-      <LimitSwitchActions conversationId={conversationId} reason='nearLimit' />
     </div>
   );
 };
