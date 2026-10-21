@@ -1609,10 +1609,14 @@ export const agentWidget = {
   remove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:remove'),
   getSnapshot: bridge.buildProvider<AgentWidgetSnapshot | null, AgentWidgetTarget>('agent-widget:get-snapshot'),
   setExpanded: bridge.buildProvider<void, AgentWidgetTarget & { expanded: boolean }>('agent-widget:set-expanded'),
-  /** The robot's popup mode (kept per robot): the small popup or the large desktop chat window. */
-  setWindowMode: bridge.buildProvider<void, AgentWidgetTarget & { mode: AgentWidgetWindowMode }>(
-    'agent-widget:set-window-mode'
-  ),
+  /**
+   * The robot's popup mode (kept per robot): the small popup or the large desktop chat window. `reduce_motion`: the
+   * robot window's own reduced-motion reading (the OS preference only the renderer sees), which skips the ease.
+   */
+  setWindowMode: bridge.buildProvider<
+    void,
+    AgentWidgetTarget & { mode: AgentWidgetWindowMode; reduce_motion?: boolean }
+  >('agent-widget:set-window-mode'),
   /**
    * The expanded window is moved by its title bar or resized by an edge or corner: screen deltas (DIP) since the
    * pointer went down; main applies them.

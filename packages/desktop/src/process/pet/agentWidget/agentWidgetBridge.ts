@@ -38,7 +38,9 @@ const schemas = {
   ensure: target.extend({ force: z.boolean().optional(), agent_id: agentId.optional() }).strict(),
   openPopup: target.extend({ agent_id: agentId.optional() }).strict(),
   setExpanded: target.extend({ expanded: z.boolean() }).strict(),
-  setWindowMode: target.extend({ mode: z.enum(['compact', 'expanded']) }).strict(),
+  setWindowMode: target
+    .extend({ mode: z.enum(['compact', 'expanded']), reduce_motion: z.boolean().optional() })
+    .strict(),
   adjustWindow: target
     .extend({
       gesture: z.enum(AGENT_WIDGET_WINDOW_GESTURES),
@@ -102,8 +104,8 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
     manager.setExpanded(conversation_id, expanded);
   });
   w.setWindowMode.provider(async (p) => {
-    const { conversation_id, mode } = parse(schemas.setWindowMode, p, 'setWindowMode');
-    manager.setWindowMode(conversation_id, mode);
+    const { conversation_id, mode, reduce_motion } = parse(schemas.setWindowMode, p, 'setWindowMode');
+    manager.setWindowMode(conversation_id, mode, reduce_motion);
   });
   w.adjustWindow.provider(async (p) => {
     const { conversation_id, gesture, phase, dx, dy } = parse(schemas.adjustWindow, p, 'adjustWindow');

@@ -396,9 +396,10 @@ export class AgentWidgetManager {
 
   /**
    * The robot's popup mode, kept per robot until changed. An open popup re-places at once (restoring returns it above
-   * the robot on the taskbar); a collapsed robot only records it for its next open.
+   * the robot on the taskbar); a collapsed robot only records it for its next open. `reduceMotion`: the asking robot
+   * window's reduced-motion reading (it also sees the OS preference), on top of the app setting.
    */
-  setWindowMode(conversationId: string, mode: AgentWidgetWindowMode): void {
+  setWindowMode(conversationId: string, mode: AgentWidgetWindowMode, reduceMotion = false): void {
     const record = this.state.widgets[conversationId];
     if (!record || (record.window_mode ?? 'compact') === mode) return;
     record.window_mode = mode;
@@ -406,7 +407,8 @@ export class AgentWidgetManager {
     if (entry) {
       this.stopGlide(entry);
       // An open popup eases into its new shape (a switch mid-way turns back from where the window is).
-      if (entry.record.expanded && !this.state.settings.reduceMotion) this.startWindowTransition(entry);
+      if (entry.record.expanded && !reduceMotion && !this.state.settings.reduceMotion)
+        this.startWindowTransition(entry);
       this.place(entry);
     }
     void this.persist();

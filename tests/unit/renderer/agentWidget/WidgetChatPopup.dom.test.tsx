@@ -176,7 +176,7 @@ describe('WidgetChatPopup window mode', () => {
     expect(labels).not.toContain(RESTORE);
     expect(labels).not.toContain('pet.widget.minimize');
     fireEvent.click(screen.getByRole('button', { name: EXPAND }));
-    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'expanded' });
+    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'expanded', reduce_motion: true });
   });
 
   it('offers Restore instead in expanded mode', () => {
@@ -186,7 +186,7 @@ describe('WidgetChatPopup window mode', () => {
     expect(labels).not.toContain(EXPAND);
     expect(labels).not.toContain('pet.widget.minimize');
     fireEvent.click(screen.getByRole('button', { name: RESTORE }));
-    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'compact' });
+    expect(invoke).toHaveBeenCalledWith({ conversation_id: 'c1', mode: 'compact', reduce_motion: true });
   });
 });
 

@@ -1620,6 +1620,13 @@ describe('expanded window mode', () => {
       expect(transitioning()).toBe(false);
     });
 
+    it("snaps at once when the robot window reports the OS's reduced-motion preference", async () => {
+      const { manager, win } = await openCompact();
+      manager.setWindowMode(A, 'expanded', true);
+      expect(win.bounds).toEqual(EXPANDED);
+      expect(transitioning()).toBe(false);
+    });
+
     it('a second switch mid-way turns back from where the window is, with no jump and no leftover timer', async () => {
       const { manager, win, compact } = await openCompact();
       manager.setWindowMode(A, 'expanded');

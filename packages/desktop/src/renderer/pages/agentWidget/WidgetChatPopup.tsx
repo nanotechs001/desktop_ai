@@ -37,6 +37,7 @@ import { useConversationListSync } from '@/renderer/pages/conversation/GroupedHi
 import { EmbeddedAssistantEditor } from '@/renderer/pages/settings/AssistantSettings/AssistantEditorPage';
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { formatRelativeTime } from '@/renderer/utils/chat/relativeTime';
+import { isMotionReduced } from '@/renderer/hooks/ui/useMotion';
 import styles from './AgentWidget.module.css';
 import { onAgentTabActivity } from './useAgentWidgetSync';
 
@@ -243,7 +244,7 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
   const windowGesture = useWindowGesture(layout.conversation_id);
   const setWindowMode = (mode: AgentWidgetWindowMode) => {
     ipcBridge.agentWidget.setWindowMode
-      .invoke({ conversation_id: layout.conversation_id, mode })
+      .invoke({ conversation_id: layout.conversation_id, mode, reduce_motion: isMotionReduced() })
       .catch((error: unknown) => console.warn('[WidgetChatPopup] could not change the window mode:', error));
   };
   const navItem = (key: ExpandedView, label: string, icon: React.ReactNode) => (
