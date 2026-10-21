@@ -414,6 +414,9 @@ export class AgentWidgetManager {
     }
     const active = entry.windowGesture;
     if (!active || active.gesture !== gesture) return;
+    // Pointer coordinates carry fractions; window bounds must be whole pixels (setPosition rejects anything else).
+    dx = Math.round(dx);
+    dy = Math.round(dy);
     if (active.gesture === 'move') {
       entry.bandBounds = this.reachableBandBounds({
         ...active.origin,

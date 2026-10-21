@@ -62,11 +62,15 @@ vi.mock('electron', () => {
       this.ignoreMouse = ignore;
     }
     setPosition(x: number, y: number) {
+      // Like Electron: position and size arguments must be integers.
+      if (!Number.isInteger(x) || !Number.isInteger(y)) throw new TypeError('conversion failure from setPosition');
       // Like Windows: moving onto a display with another scale factor rescales the window.
       const k = h.scaleAt(x) / h.scaleAt(this.bounds.x);
       this.bounds = { x, y, width: Math.round(this.bounds.width * k), height: Math.round(this.bounds.height * k) };
     }
     setBounds(b: Rect) {
+      if (![b.x, b.y, b.width, b.height].every(Number.isInteger))
+        throw new TypeError('conversion failure from setBounds');
       this.bounds = { ...b };
     }
     getBounds() {
@@ -1694,6 +1698,33 @@ describe('expanded window mode', () => {
     vi.advanceTimersByTime(1_000);
     expect(win.bounds.x).toBe(x);
     expect(win.bounds.y + win.bounds.height).toBe(1040);
+  });
+
+  it('drags and resizes the expanded window by fractional pointer deltas, and the robot stops its drag pose', async () => {
+    h.displays = [
+      { id: 1, bounds: { x: 0, y: 0, width: 1511, height: 945 }, workArea: { x: 0, y: 25, width: 1511, height: 883 } },
+    ];
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    const win = liveWindows().at(-1)!;
+    appear(manager, A);
+    manager.setWindowMode(A, 'expanded');
+    manager.setExpanded(A, true);
+    const before = { ...win.bounds };
+
+    manager.adjustWindow(A, 'move', 'start', 0, 0);
+    expect(lastDragPhase(A)).toBe('dragging');
+    // Chromium reports pointer screen coordinates with fractions.
+    manager.adjustWindow(A, 'move', 'move', -100.6, 37.25);
+    manager.adjustWindow(A, 'move', 'end', -100.6, 37.25);
+
+    expect(win.bounds.x).toBe(before.x - 101);
+    expect(win.bounds.y).toBe(before.y + 37);
+    expect(lastDragPhase(A)).toBe('none');
+
+    manager.adjustWindow(A, 'e', 'start', 0, 0);
+    manager.adjustWindow(A, 'e', 'end', -40.4, 0);
+    expect(win.bounds.width).toBe(before.width - 40);
   });
 
   describe('closing drops the robot where it stands', () => {
