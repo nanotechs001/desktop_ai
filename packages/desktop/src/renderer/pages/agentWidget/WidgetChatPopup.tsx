@@ -145,7 +145,8 @@ const useAgentTabNotice = (conversationId: string | undefined): [string | null, 
 };
 
 const action = (label: string, icon: React.ReactNode, onClick: () => void) => (
-  <Tooltip content={label} position='bottom'>
+  // Keyed by label: a button that swaps for another (Expand ↔ Restore) gets its own tooltip, not the open one renamed.
+  <Tooltip key={label} content={<span className='whitespace-nowrap'>{label}</span>} position='bottom' trigger='hover'>
     <Button size='mini' type='text' aria-label={label} icon={icon} onClick={onClick} />
   </Tooltip>
 );
