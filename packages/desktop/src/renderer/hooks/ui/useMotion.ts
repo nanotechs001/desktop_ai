@@ -59,3 +59,26 @@ export function useAnimating(value: unknown, ms: number): boolean {
   }, [animating, ms, previous]);
   return animating;
 }
+
+/**
+ * False on mount and for two frames after `key` changes, then true. Gates a transition so a state that settles right
+ * after mounting (a drawer that closes itself on entering the phone layout) snaps instead of sliding on load.
+ */
+export function useSettledAfter(key: unknown): boolean {
+  const [state, setState] = useState({ key, settled: false });
+  if (!Object.is(state.key, key)) setState({ key, settled: false });
+  useEffect(() => {
+    if (state.settled) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() =>
+        setState((current) => (Object.is(current.key, key) ? { key, settled: true } : current))
+      );
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [key, state.settled]);
+  return state.settled && Object.is(state.key, key);
+}

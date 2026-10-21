@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { act, render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/renderer/pages/conversation/explorer/ExplorerContainer', () => ({
@@ -56,5 +56,31 @@ describe('ProjectPanelMobileOverlay (P3 mobile)', () => {
     const first = panel().getAttribute('data-mount-id');
     rerender(<ProjectPanelMobileOverlay projectId='p1' collapsed={true} onCollapse={() => {}} widthPx={360} />);
     expect(panel().getAttribute('data-mount-id')).toBe(first);
+  });
+
+  it('slides as a sheet once settled and fades its backdrop out before removing it', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: false, media: query }))
+    );
+    const ui = (collapsed: boolean) => (
+      <ProjectPanelMobileOverlay projectId='p1' collapsed={collapsed} onCollapse={() => {}} widthPx={360} />
+    );
+    const { rerender } = render(ui(false));
+    // Not on the first frames: a drawer that closes itself on entering the phone layout must not slide on load.
+    expect(panel()).not.toHaveClass('motion-sheet');
+    act(() => vi.advanceTimersByTime(100));
+    expect(panel()).toHaveClass('motion-sheet');
+
+    rerender(ui(true));
+    const backdrop = document.querySelector('.fixed.inset-0') as HTMLElement;
+    expect(backdrop.style.opacity).toBe('0');
+    expect(backdrop.style.pointerEvents).toBe('none');
+    act(() => vi.advanceTimersByTime(300));
+    expect(document.querySelector('.fixed.inset-0')).toBeNull();
+    expect(screen.queryByLabelText('Collapse explorer')).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });

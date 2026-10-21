@@ -272,3 +272,20 @@
 [dir='rtl'] .rtl-text-right {
   text-align: right;
 }
+
+/* Mobile drawers (sider, explorer, workspace): the sheet slides, its backdrop fades in on mount and out on close.
+   Durations are the motion tokens, which the reduced-motion gate zeroes. */
+.motion-sheet {
+  transition: transform var(--motion-base) var(--motion-ease-sheet);
+}
+
+.motion-backdrop {
+  animation: motion-fade-in var(--motion-base) var(--motion-ease-out);
+  transition: opacity var(--motion-base) var(--motion-ease-out);
+}
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+}

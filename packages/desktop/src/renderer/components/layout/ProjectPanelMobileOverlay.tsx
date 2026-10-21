@@ -16,9 +16,11 @@
  * (same no-remount principle as the desktop host column).
  */
 
+import classNames from 'classnames';
 import React, { useRef } from 'react';
 
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
+import { MOTION_MS, useAnimating, useSettledAfter } from '@/renderer/hooks/ui/useMotion';
 
 export type ProjectPanelMobileOverlayProps = {
   projectId: string;
@@ -36,18 +38,28 @@ export const ProjectPanelMobileOverlay: React.FC<ProjectPanelMobileOverlayProps>
 }) => {
   const mountIdRef = useRef<string>('');
   if (mountIdRef.current === '') mountIdRef.current = `pem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // The panel slides and its backdrop and handle fade out before they go; not on the frames right after mounting.
+  const settled = useSettledAfter(projectId);
+  const closing = useAnimating(collapsed, MOTION_MS.base) && collapsed;
 
   return (
     <>
       {/* Backdrop */}
-      {!collapsed && <div className='fixed inset-0 bg-black/30 z-90' onClick={onCollapse} aria-hidden='true' />}
+      {(!collapsed || closing) && (
+        <div
+          className='fixed inset-0 bg-black/30 z-90 motion-backdrop'
+          style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : undefined }}
+          onClick={onCollapse}
+          aria-hidden='true'
+        />
+      )}
 
       {/* Fixed panel (kept mounted; slides off-screen when collapsed) */}
       <div
         data-explorer-mobile-overlay
         data-mount-id={mountIdRef.current}
         data-collapsed={collapsed ? 'true' : 'false'}
-        className='!bg-1 relative'
+        className={classNames('!bg-1 relative', settled && 'motion-sheet')}
         style={{
           position: 'fixed',
           right: 0,
@@ -56,7 +68,6 @@ export const ProjectPanelMobileOverlay: React.FC<ProjectPanelMobileOverlayProps>
           width: `${Math.round(widthPx)}px`,
           zIndex: 100,
           transform: collapsed ? 'translateX(100%)' : 'translateX(0)',
-          transition: 'none',
           pointerEvents: collapsed ? 'none' : 'auto',
           borderLeft: '1px solid var(--bg-3)',
         }}
@@ -65,11 +76,14 @@ export const ProjectPanelMobileOverlay: React.FC<ProjectPanelMobileOverlayProps>
       </div>
 
       {/* Floating collapse handle */}
-      {!collapsed && (
+      {(!collapsed || closing) && (
         <button
           type='button'
-          className='fixed z-101 flex items-center justify-center transition-colors workspace-toggle-floating'
+          className='fixed z-101 flex items-center justify-center transition-colors workspace-toggle-floating motion-backdrop'
           style={{
+            opacity: collapsed ? 0 : 1,
+            pointerEvents: collapsed ? 'none' : undefined,
+            transition: 'opacity var(--motion-base) var(--motion-ease-out), background-color 150ms',
             top: '50%',
             right: `${Math.round(widthPx)}px`,
             transform: 'translateY(-50%)',

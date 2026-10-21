@@ -47,7 +47,7 @@ import { useBrowserNotification } from '@renderer/hooks/system/notification/useB
 import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/useDesktopTurnNotification';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
-import { MOTION_MS, useAnimating, useMotionPreference } from '@renderer/hooks/ui/useMotion';
+import { MOTION_MS, useAnimating, useMotionPreference, useSettledAfter } from '@renderer/hooks/ui/useMotion';
 import { isElectronDesktop } from '@renderer/utils/platform';
 import brandLogo from '@renderer/assets/logos/brand/app.png';
 import '@renderer/styles/layout.css';
@@ -510,13 +510,21 @@ const Layout: React.FC<{
     collapsedRef.current = collapsed;
   }, [collapsed]);
 
+  // The mobile sider slides as a sheet (not on the frames after entering the phone layout, where it closes itself), and
+  // keeps its width and labels until it is off screen: Arco's collapse shrinks it to 0.
+  const mobileSiderSettled = useSettledAfter(isMobile);
+  const siderToggling = useAnimating(collapsed, MOTION_MS.base);
+  const mobileSiderMotion = isMobile && mobileSiderSettled;
+  const mobileSiderClosing = mobileSiderMotion && collapsed && siderToggling;
+  const siderCollapsed = collapsed && !mobileSiderClosing;
   const siderStyle = isMobile
     ? {
         position: 'fixed' as const,
         left: 0,
         zIndex: 100,
         transform: collapsed ? 'translateX(-100%)' : 'translateX(0)',
-        transition: 'none',
+        // Inline, so Arco's own width transition does not run on the phone.
+        transition: mobileSiderMotion ? 'transform var(--motion-base) var(--motion-ease-sheet)' : 'none',
         pointerEvents: collapsed ? ('none' as const) : ('auto' as const),
       }
     : {
@@ -532,8 +540,13 @@ const Layout: React.FC<{
               for settings or another chat only hides them (an agent may be working in one). */}
         <BrowserTabLayer />
         {/* 移动端左侧边栏蒙板 / Mobile left sider backdrop */}
-        {isMobile && !collapsed && (
-          <div className='fixed inset-0 bg-black/30 z-90' onClick={() => setCollapsed(true)} aria-hidden='true' />
+        {isMobile && (!collapsed || mobileSiderClosing) && (
+          <div
+            className={classNames('fixed inset-0 bg-black/30 z-90', mobileSiderMotion && 'motion-backdrop')}
+            style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : undefined }}
+            onClick={() => setCollapsed(true)}
+            aria-hidden='true'
+          />
         )}
 
         <ArcoLayout className={'size-full layout flex-1 min-h-0'}>
@@ -541,17 +554,17 @@ const Layout: React.FC<{
           {(isMobile || isSettingsRoute) && (
             <ArcoLayout.Sider
               collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
-              collapsed={collapsed}
+              collapsed={siderCollapsed}
               width={siderWidth}
               className={classNames('!bg-2 layout-sider', {
-                collapsed: collapsed,
+                collapsed: siderCollapsed,
               })}
               style={siderStyle}
             >
               <ArcoLayout.Header
                 className={classNames(
                   'flex items-center pt-8px pb-8px layout-sider-header',
-                  collapsed ? 'justify-center px-0' : 'justify-start ps-18px pe-16px gap-12px',
+                  siderCollapsed ? 'justify-center px-0' : 'justify-start ps-18px pe-16px gap-12px',
                   isMobile && 'layout-sider-header--mobile'
                 )}
               >
@@ -561,7 +574,7 @@ const Layout: React.FC<{
                   draggable={false}
                   data-brand-logo
                   className={classNames('shrink-0 size-32px object-contain cursor-pointer', {
-                    '!size-24px': collapsed,
+                    '!size-24px': siderCollapsed,
                   })}
                   onClick={onClick}
                 />
@@ -586,7 +599,7 @@ const Layout: React.FC<{
                 ) : (
                   <div className='text-16px text-t-primary collapsed-hidden font-semibold'>Pixebot Browser</div>
                 )}
-                {isMobile && !collapsed && (
+                {isMobile && !siderCollapsed && (
                   <button
                     type='button'
                     className='app-titlebar__button app-titlebar__button--mobile'
@@ -606,7 +619,7 @@ const Layout: React.FC<{
                         cleanupSiderTooltips();
                         if (isMobile) setCollapsed(true);
                       },
-                      collapsed,
+                      collapsed: siderCollapsed,
                     } as any)
                   : sider}
               </ArcoLayout.Content>
