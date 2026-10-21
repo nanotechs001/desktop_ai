@@ -1,6 +1,8 @@
 import type { ConfigKey, ConfigKeyMap } from './configKeys';
 
 type Subscriber = (value: unknown) => void;
+/** Keys this window stored, with their new values (`null`: removed). */
+type WriteListener = (entries: Record<string, unknown>) => void;
 
 declare global {
   interface Window {
@@ -47,6 +49,7 @@ async function fetchJson<T>(method: string, path: string, body?: unknown): Promi
 class ConfigServiceImpl {
   private cache = new Map<string, unknown>();
   private subscribers = new Map<string, Set<Subscriber>>();
+  private writeListeners = new Set<WriteListener>();
   private initialized = false;
   private initPromise: Promise<void> | null = null;
 
@@ -84,6 +87,7 @@ class ConfigServiceImpl {
     this.cache.set(key, value);
     this.notify(key, value);
     await fetchJson<void>('PUT', '/api/settings/client', { [key]: value });
+    this.announce({ [key]: value });
   }
 
   setLocal<K extends ConfigKey>(key: K, value: ConfigKeyMap[K]): void {
@@ -95,6 +99,7 @@ class ConfigServiceImpl {
     this.cache.delete(key);
     this.notify(key, undefined);
     await fetchJson<void>('PUT', '/api/settings/client', { [key]: null });
+    this.announce({ [key]: null });
   }
 
   async setBatch(entries: Partial<{ [K in ConfigKey]: ConfigKeyMap[K] }>): Promise<void> {
@@ -103,6 +108,33 @@ class ConfigServiceImpl {
       this.notify(key as ConfigKey, value);
     }
     await fetchJson<void>('PUT', '/api/settings/client', entries);
+    this.announce(entries);
+  }
+
+  /**
+   * Called after each stored write (not `setLocal`), so the other windows, which keep their own cache, can follow.
+   * Returns the unsubscribe.
+   */
+  onWrite(listener: WriteListener): () => void {
+    this.writeListeners.add(listener);
+    return () => {
+      this.writeListeners.delete(listener);
+    };
+  }
+
+  /** Values another window stored: this cache and its subscribers follow; nothing is written (`null`: removed). */
+  applyRemote(entries: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(entries)) {
+      if (value === null) this.cache.delete(key);
+      else this.cache.set(key, value);
+      this.notify(key as ConfigKey, value ?? undefined);
+    }
+  }
+
+  /** Re-read `keys` from the stored settings, before a read-modify-write another window may have raced. */
+  async reload(keys: readonly ConfigKey[]): Promise<void> {
+    const data = (await fetchJson<Record<string, unknown> | undefined>('GET', '/api/settings/client')) ?? {};
+    this.applyRemote(Object.fromEntries(keys.map((key) => [key, data[key] ?? null])));
   }
 
   subscribe(key: ConfigKey, callback: Subscriber): () => void {
@@ -124,6 +156,10 @@ class ConfigServiceImpl {
     this.subscribers.clear();
     this.initialized = false;
     this.initPromise = null;
+  }
+
+  private announce(entries: Record<string, unknown>): void {
+    for (const listener of this.writeListeners) listener(entries);
   }
 
   private notify(key: ConfigKey, value: unknown): void {

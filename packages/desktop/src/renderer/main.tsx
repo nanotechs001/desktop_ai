@@ -90,11 +90,15 @@ import {
 } from './components/layout/InstallationIntegrityDialog';
 import { createRuntimeInstallationReconciler } from './services/runtime/runtimeInstallationReconciler';
 import { getWidgetConversationId } from './pages/agentWidget/chatLocation';
+import { installCrossWindowSync } from './services/crossWindowSync';
+import { isElectronDesktop } from './utils/platform';
 
 // Floating agent widget windows load this same bundle at #/widget/:id. They
 // share the backend session but skip main-window-only startup work and dialogs.
 const isAgentWidgetWindow = getWidgetConversationId() !== null;
 if (isAgentWidgetWindow) document.documentElement.classList.add('agent-widget-window');
+// Each window (main, every robot) keeps its own settings cache: saves in one reach the others.
+if (isElectronDesktop()) installCrossWindowSync();
 // WebUI: the bootstrap cron repair in Main failed with 401 while signed out; retry once signed in.
 if (!isAgentWidgetWindow) onAuthenticated(() => void repairAllCronJobTimeZonesOnce());
 

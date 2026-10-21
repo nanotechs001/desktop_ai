@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
+import { afterAssistantsChanged } from '@/renderer/services/crossWindowSync';
 import { deleteVaBot, type DeleteVaBotOutcome } from './deleteVaBot';
 
 type UseAssistantEditorParams = {
@@ -148,6 +149,8 @@ export const useAssistantEditor = ({
 
   const refreshAssistantCatalog = useCallback(async () => {
     await Promise.all([loadAssistants(), swrMutate('assistants.list')]);
+    // The robot's embedded editor and the main window keep separate caches.
+    afterAssistantsChanged();
   }, [loadAssistants]);
 
   const refreshAssistantDetailCaches = useCallback(

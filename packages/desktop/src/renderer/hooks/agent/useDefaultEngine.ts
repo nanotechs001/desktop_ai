@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
+import { afterAssistantsChanged } from '@/renderer/services/crossWindowSync';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { DEFAULT_AGENT_SETTING_KEY, isConnectedEngine, pickDefaultEngineId } from '@/common/types/agent/defaultAgent';
@@ -64,12 +65,22 @@ export function planEngineRebinds(
 /** Who made a pin: the user (Settings, the Agent editor) or a usage-limit switch, which a default change releases. */
 export type EnginePinOrigin = 'user' | 'limit';
 
+/**
+ * The pins are whole maps written back from this window's cache; a robot window, the main window or a phone may have
+ * written one meanwhile. Re-read them first so no other pin is lost; a failed read leaves the cached ones.
+ */
+const reloadPins = (): Promise<void> =>
+  configService
+    .reload(['agent.enginePins', 'agent.enginePinOrigins'])
+    .catch((error: unknown) => console.warn('[engine] could not re-read the engine pins:', error));
+
 /** Pin an Agent to an engine, or clear the pin with `null`. `origin` tags it; a user pin drops a `limit` tag. */
 export async function persistEnginePin(
   assistantId: string,
   engineId: string | null,
   origin: EnginePinOrigin = 'user'
 ): Promise<void> {
+  await reloadPins();
   const { [assistantId]: _previous, ...others } = configService.get('agent.enginePins') ?? {};
   await configService.set('agent.enginePins', engineId ? { ...others, [assistantId]: engineId } : others);
   const origins = configService.get('agent.enginePinOrigins') ?? {};
@@ -88,6 +99,7 @@ export const enginePinOrigin = (assistantId: string): EnginePinOrigin =>
  * own pins stay. Only pins still tagged are dropped: a pin the user re-made since then is theirs.
  */
 export async function releaseLimitPins(): Promise<void> {
+  await reloadPins();
   const origins = configService.get('agent.enginePinOrigins') ?? {};
   const released = new Set(Object.keys(origins).filter((id) => origins[id] === 'limit'));
   if (released.size === 0) return;
@@ -193,7 +205,10 @@ async function syncEngineBindings(request: SyncRequest): Promise<SyncOutcome> {
     console.error(`[engine] Failed to re-bind Agent ${plan[index].assistant.id}:`, result.reason);
     return true;
   }).length;
-  if (plan.length > 0) await swrMutate('assistants.list');
+  if (plan.length > 0) {
+    await swrMutate('assistants.list');
+    afterAssistantsChanged();
+  }
   return { failedCount, skipped: false };
 }
 

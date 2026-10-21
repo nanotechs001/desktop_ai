@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
         store.set(key, value);
       }),
       subscribe: () => () => {},
+      reload: vi.fn(async () => {}),
     },
     getConversation: vi.fn(),
     clone: vi.fn(),

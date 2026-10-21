@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
         store.set(key, value);
         notify(key, value);
       }),
+      reload: vi.fn(async (_keys: string[]) => {}),
       subscribe: (key: string, callback: (value: unknown) => void) => {
         if (!subscribers.has(key)) subscribers.set(key, new Set());
         subscribers.get(key)!.add(callback);
@@ -170,6 +171,20 @@ describe('persistEnginePin', () => {
     await persistEnginePin('x', null);
     expect(mocks.store.get('agent.enginePins')).toEqual({ y: 'b' });
     expect(original).toEqual({ x: 'a' });
+  });
+
+  it('re-reads the stored pins first, so a pin another window wrote meanwhile is kept', async () => {
+    mocks.store.set('agent.enginePins', { x: 'a' });
+    mocks.configService.reload.mockImplementationOnce(async () => {
+      mocks.store.set('agent.enginePins', { x: 'a', robot: 'codex' });
+      mocks.store.set('agent.enginePinOrigins', { robot: 'limit' });
+    });
+
+    await persistEnginePin('y', 'b', 'limit');
+
+    expect(mocks.configService.reload).toHaveBeenCalledWith(['agent.enginePins', 'agent.enginePinOrigins']);
+    expect(mocks.store.get('agent.enginePins')).toEqual({ x: 'a', robot: 'codex', y: 'b' });
+    expect(mocks.store.get('agent.enginePinOrigins')).toEqual({ robot: 'limit', y: 'limit' });
   });
 
   it("tags a usage-limit pin, and a user's own pin or a cleared pin drops the tag", async () => {

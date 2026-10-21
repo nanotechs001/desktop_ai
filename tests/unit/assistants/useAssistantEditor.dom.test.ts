@@ -61,6 +61,7 @@ const engineConfig = vi.hoisted(() => {
       set: vi.fn(async (key: string, value: unknown) => {
         store.set(key, value);
       }),
+      reload: vi.fn(async () => {}),
     },
   };
 });
