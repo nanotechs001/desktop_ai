@@ -576,6 +576,27 @@
       "unknown": "використання"
     }
   },
+  "subscriptionUsage": {
+    "title": "Використання {{engine}}",
+    "ariaLabel": "Використання {{engine}}: витрачено {{pct}}%",
+    "windows": {
+      "fiveHour": "5-годинне вікно",
+      "sevenDay": "За тиждень",
+      "sevenDayOpus": "За тиждень (Opus)",
+      "sevenDaySonnet": "За тиждень (Sonnet)"
+    },
+    "used": "витрачено {{pct}}%",
+    "resetsIn": "скидання через {{duration}}",
+    "resetsAt": "скидання: {{time}}",
+    "reset": "скинуто",
+    "updatedJustNow": "Оновлено щойно",
+    "updatedAgo": "Оновлено {{duration}} тому",
+    "duration": {
+      "minutes": "{{m}} хв",
+      "hoursMinutes": "{{h}} год {{m}} хв",
+      "days": "{{d}} дн."
+    }
+  },
   "skill_generator": {
     "title": "Створити Навичку/Правило",
     "generate": "Створити",

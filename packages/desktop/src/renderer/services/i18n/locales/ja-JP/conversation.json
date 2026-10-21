@@ -568,6 +568,27 @@
       "unknown": "使用量"
     }
   },
+  "subscriptionUsage": {
+    "title": "{{engine}} の使用量",
+    "ariaLabel": "{{engine}} の使用量: {{pct}}% 使用",
+    "windows": {
+      "fiveHour": "5 時間枠",
+      "sevenDay": "週間",
+      "sevenDayOpus": "週間（Opus）",
+      "sevenDaySonnet": "週間（Sonnet）"
+    },
+    "used": "{{pct}}% 使用",
+    "resetsIn": "{{duration}}後にリセット",
+    "resetsAt": "{{time}} にリセット",
+    "reset": "リセット済み",
+    "updatedJustNow": "たった今更新",
+    "updatedAgo": "{{duration}}前に更新",
+    "duration": {
+      "minutes": "{{m}}分",
+      "hoursMinutes": "{{h}}時間{{m}}分",
+      "days": "{{d}}日"
+    }
+  },
   "skill_generator": {
     "title": "Generate Skill/Rule",
     "generate": "Generate",

@@ -568,6 +568,27 @@
       "unknown": "사용량"
     }
   },
+  "subscriptionUsage": {
+    "title": "{{engine}} 사용량",
+    "ariaLabel": "{{engine}} 사용량: {{pct}}% 사용",
+    "windows": {
+      "fiveHour": "5시간 한도",
+      "sevenDay": "주간",
+      "sevenDayOpus": "주간 (Opus)",
+      "sevenDaySonnet": "주간 (Sonnet)"
+    },
+    "used": "{{pct}}% 사용",
+    "resetsIn": "{{duration}} 후 초기화",
+    "resetsAt": "{{time}}에 초기화",
+    "reset": "초기화됨",
+    "updatedJustNow": "방금 업데이트됨",
+    "updatedAgo": "{{duration}} 전 업데이트",
+    "duration": {
+      "minutes": "{{m}}분",
+      "hoursMinutes": "{{h}}시간 {{m}}분",
+      "days": "{{d}}일"
+    }
+  },
   "skill_generator": {
     "title": "스킬/규칙 생성",
     "generate": "생성",

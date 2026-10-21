@@ -568,6 +568,27 @@
       "unknown": "usage"
     }
   },
+  "subscriptionUsage": {
+    "title": "{{engine}} usage",
+    "ariaLabel": "{{engine}} usage: {{pct}}% used",
+    "windows": {
+      "fiveHour": "5-hour window",
+      "sevenDay": "Weekly",
+      "sevenDayOpus": "Weekly (Opus)",
+      "sevenDaySonnet": "Weekly (Sonnet)"
+    },
+    "used": "{{pct}}% used",
+    "resetsIn": "resets in {{duration}}",
+    "resetsAt": "resets {{time}}",
+    "reset": "reset",
+    "updatedJustNow": "Updated just now",
+    "updatedAgo": "Updated {{duration}} ago",
+    "duration": {
+      "minutes": "{{m}}m",
+      "hoursMinutes": "{{h}}h {{m}}m",
+      "days": "{{d}}d"
+    }
+  },
   "skill_generator": {
     "title": "Generate Skill/Rule",
     "generate": "Generate",

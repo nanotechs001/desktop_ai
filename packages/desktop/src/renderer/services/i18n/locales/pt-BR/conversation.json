@@ -574,6 +574,27 @@
       "unknown": "de uso"
     }
   },
+  "subscriptionUsage": {
+    "title": "Uso do {{engine}}",
+    "ariaLabel": "Uso do {{engine}}: {{pct}}% usado",
+    "windows": {
+      "fiveHour": "Janela de 5 horas",
+      "sevenDay": "Semanal",
+      "sevenDayOpus": "Semanal (Opus)",
+      "sevenDaySonnet": "Semanal (Sonnet)"
+    },
+    "used": "{{pct}}% usado",
+    "resetsIn": "reinicia em {{duration}}",
+    "resetsAt": "reinicia: {{time}}",
+    "reset": "reiniciado",
+    "updatedJustNow": "Atualizado agora",
+    "updatedAgo": "Atualizado há {{duration}}",
+    "duration": {
+      "minutes": "{{m}} min",
+      "hoursMinutes": "{{h}} h {{m}} min",
+      "days": "{{d}} d"
+    }
+  },
   "skill_generator": {
     "title": "Gerar Habilidade/Regra",
     "generate": "Gerar",

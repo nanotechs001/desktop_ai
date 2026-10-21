@@ -568,6 +568,27 @@
       "unknown": "用量"
     }
   },
+  "subscriptionUsage": {
+    "title": "{{engine}} 用量",
+    "ariaLabel": "{{engine}} 用量：已用 {{pct}}%",
+    "windows": {
+      "fiveHour": "5 小时窗口",
+      "sevenDay": "每周",
+      "sevenDayOpus": "每周（Opus）",
+      "sevenDaySonnet": "每周（Sonnet）"
+    },
+    "used": "已用 {{pct}}%",
+    "resetsIn": "{{duration}}后重置",
+    "resetsAt": "{{time}} 重置",
+    "reset": "已重置",
+    "updatedJustNow": "刚刚更新",
+    "updatedAgo": "{{duration}}前更新",
+    "duration": {
+      "minutes": "{{m}} 分钟",
+      "hoursMinutes": "{{h}} 小时 {{m}} 分钟",
+      "days": "{{d}} 天"
+    }
+  },
   "skill_generator": {
     "title": "生成 Skill/规则",
     "generate": "生成",

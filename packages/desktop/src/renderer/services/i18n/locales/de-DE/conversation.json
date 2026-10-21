@@ -569,6 +569,27 @@
       "unknown": "Nutzung"
     }
   },
+  "subscriptionUsage": {
+    "title": "{{engine}}-Nutzung",
+    "ariaLabel": "{{engine}}-Nutzung: {{pct}} % verbraucht",
+    "windows": {
+      "fiveHour": "5-Stunden-Fenster",
+      "sevenDay": "Wöchentlich",
+      "sevenDayOpus": "Wöchentlich (Opus)",
+      "sevenDaySonnet": "Wöchentlich (Sonnet)"
+    },
+    "used": "{{pct}} % verbraucht",
+    "resetsIn": "Zurücksetzung in {{duration}}",
+    "resetsAt": "Zurücksetzung: {{time}}",
+    "reset": "zurückgesetzt",
+    "updatedJustNow": "Gerade aktualisiert",
+    "updatedAgo": "Vor {{duration}} aktualisiert",
+    "duration": {
+      "minutes": "{{m}} Min.",
+      "hoursMinutes": "{{h}} Std. {{m}} Min.",
+      "days": "{{d}} Tg."
+    }
+  },
   "skill_generator": {
     "title": "Skill/Regel generieren",
     "generate": "Generieren",

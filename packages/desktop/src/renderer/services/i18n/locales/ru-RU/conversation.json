@@ -576,6 +576,27 @@
       "unknown": "использование"
     }
   },
+  "subscriptionUsage": {
+    "title": "Использование {{engine}}",
+    "ariaLabel": "Использование {{engine}}: израсходовано {{pct}}%",
+    "windows": {
+      "fiveHour": "5-часовое окно",
+      "sevenDay": "За неделю",
+      "sevenDayOpus": "За неделю (Opus)",
+      "sevenDaySonnet": "За неделю (Sonnet)"
+    },
+    "used": "израсходовано {{pct}}%",
+    "resetsIn": "сброс через {{duration}}",
+    "resetsAt": "сброс: {{time}}",
+    "reset": "сброшено",
+    "updatedJustNow": "Обновлено только что",
+    "updatedAgo": "Обновлено {{duration}} назад",
+    "duration": {
+      "minutes": "{{m}} мин",
+      "hoursMinutes": "{{h}} ч {{m}} мин",
+      "days": "{{d}} дн."
+    }
+  },
   "skill_generator": {
     "title": "Создать навык/правило",
     "generate": "Создать",

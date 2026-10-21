@@ -568,6 +568,27 @@
       "unknown": "استفاده"
     }
   },
+  "subscriptionUsage": {
+    "title": "مصرف {{engine}}",
+    "ariaLabel": "مصرف {{engine}}: {{pct}}٪ استفاده‌شده",
+    "windows": {
+      "fiveHour": "بازه ۵ ساعته",
+      "sevenDay": "هفتگی",
+      "sevenDayOpus": "هفتگی (Opus)",
+      "sevenDaySonnet": "هفتگی (Sonnet)"
+    },
+    "used": "{{pct}}٪ استفاده‌شده",
+    "resetsIn": "بازنشانی تا {{duration}} دیگر",
+    "resetsAt": "بازنشانی: {{time}}",
+    "reset": "بازنشانی شد",
+    "updatedJustNow": "همین الان به‌روزرسانی شد",
+    "updatedAgo": "{{duration}} پیش به‌روزرسانی شد",
+    "duration": {
+      "minutes": "{{m}} دقیقه",
+      "hoursMinutes": "{{h}} ساعت {{m}} دقیقه",
+      "days": "{{d}} روز"
+    }
+  },
   "skill_generator": {
     "title": "ساخت مهارت/قانون",
     "generate": "ساخت",

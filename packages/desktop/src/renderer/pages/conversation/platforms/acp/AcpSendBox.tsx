@@ -48,6 +48,7 @@ import { Brain, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import UsageWarningBar from '../../components/limitSwitch/UsageWarningBar';
+import SubscriptionUsageIndicator from '../../components/limitSwitch/SubscriptionUsageIndicator';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { buildSendFailureError } from './buildSendFailureError';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
@@ -853,6 +854,7 @@ Check Settings → Engine.`,
           // guessed denominator. No usage report at all → nothing.
           <>
             {tokenUsage ? <ContextUsageIndicator tokenUsage={tokenUsage} context_limit={context_limit} /> : undefined}
+            <SubscriptionUsageIndicator backend={backend} conversationId={conversation_id} />
           </>
         }
         onAddToDraft={handleAddToQueue}

@@ -558,6 +558,27 @@
       "unknown": "kullanım"
     }
   },
+  "subscriptionUsage": {
+    "title": "{{engine}} kullanımı",
+    "ariaLabel": "{{engine}} kullanımı: %{{pct}} kullanıldı",
+    "windows": {
+      "fiveHour": "5 saatlik pencere",
+      "sevenDay": "Haftalık",
+      "sevenDayOpus": "Haftalık (Opus)",
+      "sevenDaySonnet": "Haftalık (Sonnet)"
+    },
+    "used": "%{{pct}} kullanıldı",
+    "resetsIn": "{{duration}} içinde sıfırlanır",
+    "resetsAt": "sıfırlanma: {{time}}",
+    "reset": "sıfırlandı",
+    "updatedJustNow": "Az önce güncellendi",
+    "updatedAgo": "{{duration}} önce güncellendi",
+    "duration": {
+      "minutes": "{{m}} dk",
+      "hoursMinutes": "{{h}} sa {{m}} dk",
+      "days": "{{d}} g"
+    }
+  },
   "skill_generator": {
     "title": "Yetenek/Kural Oluştur",
     "generate": "Oluştur",

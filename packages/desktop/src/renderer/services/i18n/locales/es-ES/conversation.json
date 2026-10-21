@@ -569,6 +569,27 @@
       "unknown": "de uso"
     }
   },
+  "subscriptionUsage": {
+    "title": "Uso de {{engine}}",
+    "ariaLabel": "Uso de {{engine}}: {{pct}} % usado",
+    "windows": {
+      "fiveHour": "Ventana de 5 horas",
+      "sevenDay": "Semanal",
+      "sevenDayOpus": "Semanal (Opus)",
+      "sevenDaySonnet": "Semanal (Sonnet)"
+    },
+    "used": "{{pct}} % usado",
+    "resetsIn": "se restablece en {{duration}}",
+    "resetsAt": "se restablece: {{time}}",
+    "reset": "restablecido",
+    "updatedJustNow": "Actualizado ahora mismo",
+    "updatedAgo": "Actualizado hace {{duration}}",
+    "duration": {
+      "minutes": "{{m}} min",
+      "hoursMinutes": "{{h}} h {{m}} min",
+      "days": "{{d}} d"
+    }
+  },
   "skill_generator": {
     "title": "Generar habilidad/regla",
     "generate": "Generar",
