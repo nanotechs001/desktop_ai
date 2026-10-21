@@ -76,6 +76,8 @@
 }
 
 .badge {
+  /* Pops in with a short scale instead of appearing at full size. */
+  animation: badge-in var(--motion-base) var(--motion-ease-out);
   position: absolute;
   top: 10%;
   right: 14%;
@@ -219,6 +221,7 @@
 }
 
 .body {
+  animation: view-fade var(--motion-fast) var(--motion-ease-out);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -264,6 +267,8 @@
 
 /* A bot's chat history, over the whole popup (back returns to the chat). */
 .historyOverlay {
+  /* Slides in a little over the chat instead of covering it in one frame. */
+  animation: view-in var(--motion-base) var(--motion-ease-out);
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -428,6 +433,8 @@
 
 /* Recent and Settings fill the main area in place of the chat. */
 .view {
+  /* Chat, Recent and Settings fade in as they are shown (display: none restarts the animation each time). */
+  animation: view-fade var(--motion-fast) var(--motion-ease-out);
   flex: 1;
   min-height: 0;
   display: flex;
@@ -507,4 +514,33 @@
 .resizeHandle[data-resize='nw'],
 .resizeHandle[data-resize='se'] {
   cursor: nwse-resize;
+}
+
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+@keyframes view-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge,
+  .historyOverlay,
+  .view,
+  .body {
+    animation: none;
+  }
 }
