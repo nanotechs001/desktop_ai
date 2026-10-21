@@ -48,7 +48,7 @@
       "scale": "Widget-Größe",
       "alwaysOnTop": "Immer im Vordergrund",
       "reduceMotion": "Bewegung reduzieren",
-      "reduceMotionDesc": "Standbilder statt Animation, kein Herumlaufen im Leerlauf.",
+      "reduceMotionDesc": "Schaltet Animationen der Oberfläche ab und hält die Roboter still.",
       "muteVoice": "Stimme stummschalten",
       "muteVoiceDesc": "Antworten nicht vorlesen.",
       "returnChats": "Alle Chats ins Hauptfenster zurückholen"

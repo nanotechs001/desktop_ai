@@ -48,7 +48,7 @@
       "scale": "Widget boyutu",
       "alwaysOnTop": "Her zaman üstte",
       "reduceMotion": "Hareketi azalt",
-      "reduceMotionDesc": "Sabit pozlar kullan ve boştayken yürümeyi durdur.",
+      "reduceMotionDesc": "Arayüz animasyonlarını kapatır ve robotları sabit tutar.",
       "muteVoice": "Sesi kapat",
       "muteVoiceDesc": "Yanıtları sesli okuma.",
       "returnChats": "Tüm sohbetleri ana pencereye geri al"

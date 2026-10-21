@@ -48,7 +48,7 @@
       "scale": "小助手大小",
       "alwaysOnTop": "始终置顶",
       "reduceMotion": "减少动态效果",
-      "reduceMotionDesc": "保持静止姿态并停止空闲走动。",
+      "reduceMotionDesc": "关闭界面动画，并让机器人保持静止。",
       "muteVoice": "静音语音",
       "muteVoiceDesc": "不朗读回复。",
       "returnChats": "将所有对话移回主窗口"

@@ -48,7 +48,7 @@
       "scale": "Widget size",
       "alwaysOnTop": "Always on top",
       "reduceMotion": "Reduce motion",
-      "reduceMotionDesc": "Hold still poses and stop idle walking.",
+      "reduceMotionDesc": "Turn off interface animations and keep the robots still.",
       "muteVoice": "Mute voice",
       "muteVoiceDesc": "Keep spoken replies silent.",
       "returnChats": "Return all chats to the main window"

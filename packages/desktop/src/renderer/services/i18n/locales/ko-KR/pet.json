@@ -48,7 +48,7 @@
       "scale": "위젯 크기",
       "alwaysOnTop": "항상 위에 표시",
       "reduceMotion": "동작 줄이기",
-      "reduceMotionDesc": "정지 자세를 유지하고 대기 중 걷기를 멈춥니다.",
+      "reduceMotionDesc": "인터페이스 애니메이션을 끄고 로봇을 정지 상태로 유지합니다.",
       "muteVoice": "음성 끄기",
       "muteVoiceDesc": "응답을 소리 내어 읽지 않습니다.",
       "returnChats": "모든 채팅을 메인 창으로 가져오기"

@@ -48,7 +48,7 @@
       "scale": "ウィジェットのサイズ",
       "alwaysOnTop": "常に最前面に表示",
       "reduceMotion": "動きを減らす",
-      "reduceMotionDesc": "静止ポーズを保ち、待機中の歩行を止めます。",
+      "reduceMotionDesc": "画面のアニメーションをオフにし、ロボットを静止させます。",
       "muteVoice": "音声をミュート",
       "muteVoiceDesc": "返信を読み上げません。",
       "returnChats": "すべてのチャットをメインウィンドウに戻す"

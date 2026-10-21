@@ -84,7 +84,8 @@ const AgentWidgetSection: React.FC = () => {
         label={t('pet.widget.settings.reduceMotion')}
         description={t('pet.widget.settings.reduceMotionDesc')}
       >
-        <Switch checked={settings.reduceMotion} disabled={off} onChange={(reduceMotion) => update({ reduceMotion })} />
+        {/* App-wide (Layout reads it too), so it stays usable while the robots are off. */}
+        <Switch checked={settings.reduceMotion} onChange={(reduceMotion) => update({ reduceMotion })} />
       </PreferenceRow>
       <PreferenceRow label={t('pet.widget.settings.muteVoice')} description={t('pet.widget.settings.muteVoiceDesc')}>
         <Switch checked={settings.muteVoice} disabled={off} onChange={(muteVoice) => update({ muteVoice })} />

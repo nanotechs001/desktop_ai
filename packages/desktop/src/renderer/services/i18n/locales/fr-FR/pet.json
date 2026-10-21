@@ -48,7 +48,7 @@
       "scale": "Taille du widget",
       "alwaysOnTop": "Toujours au premier plan",
       "reduceMotion": "Réduire les animations",
-      "reduceMotionDesc": "Poses fixes et pas de promenade au repos.",
+      "reduceMotionDesc": "Désactive les animations de l’interface et garde les robots immobiles.",
       "muteVoice": "Couper la voix",
       "muteVoiceDesc": "Ne pas lire les réponses à voix haute.",
       "returnChats": "Ramener toutes les conversations dans la fenêtre principale"

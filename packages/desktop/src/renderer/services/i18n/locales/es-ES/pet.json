@@ -48,7 +48,7 @@
       "scale": "Tamaño del widget",
       "alwaysOnTop": "Siempre visible",
       "reduceMotion": "Reducir movimiento",
-      "reduceMotionDesc": "Poses fijas y sin caminar en reposo.",
+      "reduceMotionDesc": "Desactiva las animaciones de la interfaz y mantiene quietos los robots.",
       "muteVoice": "Silenciar voz",
       "muteVoiceDesc": "No leer las respuestas en voz alta.",
       "returnChats": "Traer todos los chats a la ventana principal"
