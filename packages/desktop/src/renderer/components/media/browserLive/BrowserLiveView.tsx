@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input } from '@arco-design/web-react';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { Keyboard, OneToOne, ZoomIn, ZoomOut } from '@icon-park/react';
+import AgentConfirmCards from '@/renderer/pages/conversation/components/AgentConfirmCards/AgentConfirmCards';
 import { useCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import LiveTabPicker from './LiveTabPicker';
@@ -33,6 +34,7 @@ const HIDDEN_INPUT_STYLE: React.CSSProperties = { fontSize: IOS_NO_ZOOM_FONT_PX 
  * The WebUI's stand-in for `<webview>` in the browser preview: a live picture of the conversation's agent tab on the
  * desktop, streamed over `/api/browser-view/stream`. Taps, vertical swipes and typing go back to that tab; the picture
  * can be zoomed and panned on the phone. It follows the tab the agent works in (else its newest) until the user picks one.
+ * The chat's browser asks show here too: on a phone the open live view covers the chat that also shows them.
  */
 const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, style }) => {
   const { t } = useTranslation();
@@ -74,7 +76,21 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
 
   const retry = useCallback(() => setGeneration((count) => count + 1), []);
 
-  if (!canWatch || tabs?.length === 0) return <>{fallback}</>;
+  const asks =
+    canWatch && isWatchableConversation(conversationId) ? (
+      <div className='shrink-0 max-h-40vh overflow-auto px-8px'>
+        <AgentConfirmCards conversationId={conversationId} />
+      </div>
+    ) : null;
+
+  if (!canWatch || tabs?.length === 0) {
+    return (
+      <>
+        {asks}
+        {fallback}
+      </>
+    );
+  }
 
   const statusBar =
     status === 'stopped' ? (
@@ -103,6 +119,7 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
           {t('preview.browser.liveKeyboard')}
         </Button>
       </div>
+      {asks}
       {tabs && tabs.length > 1 && <LiveTabPicker tabs={tabs} selectedId={listed?.id} onPick={setPickedId} />}
       {statusBar && <div className='px-8px py-6px'>{statusBar}</div>}
       <div className='relative flex-1 min-h-0'>

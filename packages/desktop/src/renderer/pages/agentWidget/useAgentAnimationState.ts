@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
 import type { AgentAnimationState } from '@/common/types/agent/agentWidget';
 import { addEventListener } from '@/renderer/utils/emitter';
+import { useIpcConfirms } from '@/renderer/pages/conversation/components/AgentConfirmCards/useAgentConfirms';
 import {
   applyStreamFrame,
   applyTurnCompleted,
@@ -31,7 +32,7 @@ const RECHECK_MS = 1000;
  */
 export type AgentAnimationView = {
   state: AgentAnimationState;
-  /** A permission request or question is waiting for the user's answer. */
+  /** A permission request, a question or a browser ask (risky action, "Leave site?") is waiting for the user. */
   awaitingUser: boolean;
   /** The user handled the robot (drag): it counts as activity, so a sleeping robot wakes up. */
   wake: () => void;
@@ -100,8 +101,11 @@ export function useAgentAnimationState(conversationId: string, chatVisible: bool
     setState(resolveAnimationState(activityRef.current, Date.now(), undefined, restRef.current));
   }, [chatVisible]);
 
+  // Main's browser asks for this chat: the chat cards are in the popup, which may be closed.
+  const browserAsk = useIpcConfirms().some((ask) => ask.conversationId === conversationId);
+
   const wake = useCallback(() => updateRef.current((a) => ({ ...a, lastActivityAt: Date.now() })), []);
-  return { state, awaitingUser, wake };
+  return { state, awaitingUser: awaitingUser || browserAsk, wake };
 }
 
 /**
