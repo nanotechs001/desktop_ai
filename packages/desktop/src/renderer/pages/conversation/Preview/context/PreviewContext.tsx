@@ -23,6 +23,7 @@ import {
   previewScopeStorageKey,
   type PreviewScopeKey,
 } from './previewScope';
+import { dropOpenBurstDuplicates } from './openBurstDuplicates';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import {
   enterScope,
@@ -511,8 +512,8 @@ const loadScopeState = (scope: string): PersistedScopeState => {
       activeTabId?: unknown;
       userClosed?: unknown;
     };
-    const tabs = parsePersistedTabs(parsed.tabs);
     let activeTabId = typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null;
+    const tabs = dropOpenBurstDuplicates(parsePersistedTabs(parsed.tabs), activeTabId);
     if (activeTabId && !tabs.some((tab) => tab.id === activeTabId)) activeTabId = tabs[0]?.id || null;
     return {
       isOpen: parsed.isOpen === true && tabs.length > 0,
@@ -658,7 +659,16 @@ const scopeOfConversation = async (conversationId: string): Promise<PreviewScope
   }
 };
 
-export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+type PreviewProviderProps = {
+  children?: React.ReactNode;
+  /**
+   * A floating robot window: main's browser tab events reach every window, and only the main window may record them
+   * (a robot's copy went to the shared `preview-ui:<scope>` storage, one extra restored tab per robot per open).
+   */
+  readOnly?: boolean;
+};
+
+export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, readOnly = false }) => {
   // State starts empty; the active scope's persisted state is loaded on the first
   // `closePreviewIfScopeChanged` (per-project restore, see switchScope below).
   const [isOpen, setIsOpen] = useState(false);
@@ -1113,51 +1123,55 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // `?.` only tolerates test mocks that omit `browser`/`agentBrowser`; production always defines them.
   useEffect(
     () =>
-      ipcBridge.browser?.openTabRequested.on(({ url, conversationId, profile }) => {
-        void (async () => {
-          const session = accountSessionRef.current;
-          const scope = conversationId ? await scopeOfConversation(conversationId) : null;
-          if (accountSessionRef.current !== session) return;
-          const opened =
-            scope != null && scope !== currentScopeRef.current
-              ? openAgentTabInBackground(scope, url, profile)
-              : openRequestedTabOnScreen(url, Boolean(conversationId), profile);
-          if (opened) return;
-          ipcBridge.agentBrowser?.refuseTab
-            .invoke({ url, max: MAX_BROWSER_TABS, ...(conversationId ? { conversationId } : {}) })
-            .catch((error: unknown) => console.warn('[PreviewContext] could not refuse a tab request:', error));
-        })();
-      }),
-    [openAgentTabInBackground, openRequestedTabOnScreen]
+      readOnly
+        ? undefined
+        : ipcBridge.browser?.openTabRequested.on(({ url, conversationId, profile }) => {
+            void (async () => {
+              const session = accountSessionRef.current;
+              const scope = conversationId ? await scopeOfConversation(conversationId) : null;
+              if (accountSessionRef.current !== session) return;
+              const opened =
+                scope != null && scope !== currentScopeRef.current
+                  ? openAgentTabInBackground(scope, url, profile)
+                  : openRequestedTabOnScreen(url, Boolean(conversationId), profile);
+              if (opened) return;
+              ipcBridge.agentBrowser?.refuseTab
+                .invoke({ url, max: MAX_BROWSER_TABS, ...(conversationId ? { conversationId } : {}) })
+                .catch((error: unknown) => console.warn('[PreviewContext] could not refuse a tab request:', error));
+            })();
+          }),
+    [readOnly, openAgentTabInBackground, openRequestedTabOnScreen]
   );
 
   // An Agent's browser profile is being deleted: its tabs go everywhere they live (on screen, mounted in the
   // background, stored in other scopes), so none reopens on the deleted partition. Main closes their pages too.
   useEffect(
     () =>
-      ipcBridge.browser?.profileRemoved?.on(({ agentId }) => {
-        setBackground(backgroundRef.current.filter((entry) => !isAgentProfileTab(entry.tab, agentId)));
-        for (const key of listPersistedPreviewScopeKeys()) {
-          const scope = key.slice(PREVIEW_SCOPE_KEY_PREFIX.length);
-          const stored = loadScopeState(scope);
-          if (stored.tabs.some((tab) => isAgentProfileTab(tab, agentId))) {
-            persistScopeState(scope, {
-              ...stored,
-              tabs: stored.tabs.filter((tab) => !isAgentProfileTab(tab, agentId)),
-            });
-          }
-        }
-        // Decided from tabsRef, so the updater stays pure: no state is set inside it.
-        const kept = tabsRef.current.filter((tab) => !isAgentProfileTab(tab, agentId));
-        if (kept.length === tabsRef.current.length) return;
-        setTabs((prevTabs) => prevTabs.filter((tab) => !isAgentProfileTab(tab, agentId)));
-        if (kept.some((tab) => tab.id === activeTabIdRef.current)) return;
-        const nextActive = kept.at(-1)?.id ?? null;
-        setActiveTabId(nextActive);
-        activeTabIdRef.current = nextActive;
-        if (!nextActive) setIsOpen(false);
-      }),
-    [setBackground]
+      readOnly
+        ? undefined
+        : ipcBridge.browser?.profileRemoved?.on(({ agentId }) => {
+            setBackground(backgroundRef.current.filter((entry) => !isAgentProfileTab(entry.tab, agentId)));
+            for (const key of listPersistedPreviewScopeKeys()) {
+              const scope = key.slice(PREVIEW_SCOPE_KEY_PREFIX.length);
+              const stored = loadScopeState(scope);
+              if (stored.tabs.some((tab) => isAgentProfileTab(tab, agentId))) {
+                persistScopeState(scope, {
+                  ...stored,
+                  tabs: stored.tabs.filter((tab) => !isAgentProfileTab(tab, agentId)),
+                });
+              }
+            }
+            // Decided from tabsRef, so the updater stays pure: no state is set inside it.
+            const kept = tabsRef.current.filter((tab) => !isAgentProfileTab(tab, agentId));
+            if (kept.length === tabsRef.current.length) return;
+            setTabs((prevTabs) => prevTabs.filter((tab) => !isAgentProfileTab(tab, agentId)));
+            if (kept.some((tab) => tab.id === activeTabIdRef.current)) return;
+            const nextActive = kept.at(-1)?.id ?? null;
+            setActiveTabId(nextActive);
+            activeTabIdRef.current = nextActive;
+            if (!nextActive) setIsOpen(false);
+          }),
+    [readOnly, setBackground]
   );
 
   /**

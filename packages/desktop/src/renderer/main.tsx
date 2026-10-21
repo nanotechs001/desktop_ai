@@ -247,7 +247,7 @@ const AppProviders: React.FC<PropsWithChildren> = ({ children }) =>
         null,
         React.createElement(
           PreviewProvider,
-          null,
+          { readOnly: isAgentWidgetWindow },
           React.createElement(
             React.Fragment,
             null,
