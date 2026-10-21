@@ -13,6 +13,7 @@ import type { IConversationRateLimitUpdatedEvent } from '@/common/adapter/ipcBri
 const mocks = vi.hoisted(() => ({
   listeners: new Set<(event: IConversationRateLimitUpdatedEvent) => void>(),
   conversation: null as unknown,
+  getConversation: null as null | ((id: string) => Promise<unknown>),
   assistants: [] as unknown[],
 }));
 vi.mock('@/common', async (importOriginal) => {
@@ -36,7 +37,7 @@ vi.mock('@/common', async (importOriginal) => {
   };
 });
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
-  getConversationOrNull: async () => mocks.conversation,
+  getConversationOrNull: async (id: string) => (mocks.getConversation ? mocks.getConversation(id) : mocks.conversation),
 }));
 
 type Store = typeof import('@/renderer/pages/conversation/components/limitSwitch/subscriptionUsage');
@@ -57,6 +58,13 @@ const reading = (over: Partial<IConversationRateLimitUpdatedEvent> = {}): IConve
   ...over,
 });
 
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+/** A stored 5-hour window without a reset time, read at `updated_at`. */
+const noReset = (updated_at: number) => ({
+  windows: { five_hour: { utilization: 0.4, resets_at: null } },
+  updated_at,
+});
+
 const load = async (): Promise<Store> => {
   vi.resetModules();
   return import('@/renderer/pages/conversation/components/limitSwitch/subscriptionUsage');
@@ -72,6 +80,7 @@ describe('subscription usage store', () => {
     localStorage.clear();
     mocks.listeners.clear();
     mocks.conversation = null;
+    mocks.getConversation = null;
     mocks.assistants = [];
     vi.spyOn(Date, 'now').mockReturnValue(NOW_MS);
   });
@@ -237,12 +246,81 @@ describe('subscription usage store', () => {
 
   it('gates on a five_hour or seven_day window', async () => {
     const { hasSubscriptionWindows } = await load();
-    expect(hasSubscriptionWindows(null)).toBe(false);
-    expect(hasSubscriptionWindows({ windows: { overage: { utilization: 1, resets_at: null } }, updated_at: 0 })).toBe(
-      false
-    );
-    expect(hasSubscriptionWindows({ windows: { seven_day: { utilization: 0, resets_at: null } }, updated_at: 0 })).toBe(
-      true
-    );
+    expect(hasSubscriptionWindows(null, NOW_MS)).toBe(false);
+    expect(
+      hasSubscriptionWindows({ windows: { overage: { utilization: 1, resets_at: null } }, updated_at: NOW_MS }, NOW_MS)
+    ).toBe(false);
+    expect(
+      hasSubscriptionWindows(
+        { windows: { seven_day: { utilization: 0, resets_at: null } }, updated_at: NOW_MS },
+        NOW_MS
+      )
+    ).toBe(true);
+  });
+
+  it('gates on a window that has not expired', async () => {
+    const { hasSubscriptionWindows } = await load();
+    const usage = (fiveHourReset: number, weeklyReset: number) => ({
+      windows: {
+        five_hour: { utilization: 0.5, resets_at: fiveHourReset },
+        seven_day: { utilization: 0.5, resets_at: weeklyReset },
+      },
+      updated_at: NOW_MS - 1000,
+    });
+    expect(hasSubscriptionWindows(usage(NOW_S - 10, NOW_S - 5), NOW_MS)).toBe(false);
+    expect(hasSubscriptionWindows(usage(NOW_S - 10, NOW_S + 5), NOW_MS)).toBe(true);
+  });
+
+  it('gates on a reading from the last 7 days, which is also when a window without a reset expires', async () => {
+    const { hasSubscriptionWindows } = await load();
+    expect(hasSubscriptionWindows(noReset(NOW_MS - WEEK_MS + 1000), NOW_MS)).toBe(true);
+    expect(hasSubscriptionWindows(noReset(NOW_MS - WEEK_MS - 1000), NOW_MS)).toBe(false);
+    const futureReset = {
+      windows: { seven_day: { utilization: 0.4, resets_at: NOW_S + 3600 } },
+      updated_at: NOW_MS - WEEK_MS - 1000,
+    };
+    expect(hasSubscriptionWindows(futureReset, NOW_MS)).toBe(false);
+  });
+
+  it("hides the account's usage in a chat whose own latest reading came with no windows (an API-key session)", async () => {
+    const store = await load();
+    const { result } = renderHook(() => store.useSubscriptionUsage('claude', 'c-1'));
+    mocks.conversation = { id: 'c-2', type: 'acp', extra: { backend: 'claude' } };
+    push(reading({ conversation_id: 'c-2', windows: [{ kind: 'five_hour', utilization: 0.3, resets_at: null }] }));
+    await waitFor(() => expect(result.current?.windows.five_hour?.utilization).toBe(0.3));
+
+    push(reading({ conversation_id: 'c-1', utilization: 0.5 }));
+    expect(result.current).toBeNull();
+    const { result: other } = renderHook(() => store.useSubscriptionUsage('claude', 'c-3'));
+    expect(other.current?.windows.five_hour?.utilization).toBe(0.3);
+
+    push(reading({ conversation_id: 'c-1', windows: [{ kind: 'five_hour', utilization: 0.35, resets_at: null }] }));
+    expect(result.current?.windows.five_hour?.utilization).toBe(0.35);
+  });
+
+  it('never lets an earlier reading overwrite a later one whose engine lookup resolved first', async () => {
+    const store = await load();
+    const lookups: Array<() => void> = [];
+    mocks.getConversation = (id: string) =>
+      new Promise((resolve) => {
+        lookups.push(() => resolve({ id, type: 'acp', extra: { backend: 'claude' } }));
+      });
+    const { result } = renderHook(() => store.useSubscriptionUsage('claude', 'c-1'));
+
+    vi.mocked(Date.now).mockReturnValue(NOW_MS + 1000);
+    push(reading({ conversation_id: 'c-bg', windows: [{ kind: 'five_hour', utilization: 0.1, resets_at: null }] }));
+    vi.mocked(Date.now).mockReturnValue(NOW_MS + 2000);
+    push(reading({ conversation_id: 'c-bg', windows: [{ kind: 'five_hour', utilization: 0.2, resets_at: null }] }));
+    expect(lookups).toHaveLength(1);
+    vi.mocked(Date.now).mockReturnValue(NOW_MS + 3000);
+    push(reading({ conversation_id: 'c-1', windows: [{ kind: 'five_hour', utilization: 0.3, resets_at: null }] }));
+    expect(result.current?.windows.five_hour?.utilization).toBe(0.3);
+
+    await act(async () => {
+      lookups[0]();
+    });
+
+    expect(result.current?.windows.five_hour?.utilization).toBe(0.3);
+    expect(result.current?.updated_at).toBe(NOW_MS + 3000);
   });
 });

@@ -22,6 +22,8 @@ export type BackendUsage = { windows: Partial<Record<RateLimitWindowKind, UsageW
 export type SubscriptionUsageState = Record<string, BackendUsage>;
 
 const SECONDS_TO_MS = 1000;
+/** A reading older than this is no longer shown: the login may have changed, and a window without a reset ends here. */
+export const MAX_READING_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const WINDOW_KINDS: readonly RateLimitWindowKind[] = [
   'five_hour',
   'seven_day',
@@ -34,7 +36,8 @@ const WINDOW_KINDS: readonly RateLimitWindowKind[] = [
 /**
  * `state` with the reading's windows merged into `backend`'s. Only subscription readings carry windows (API-key,
  * Bedrock and Vertex sessions never do), so a reading without any changes nothing. Its headline window joins them
- * when it names one they lack (claude reports weekly Opus/Sonnet only as the headline).
+ * when it names one they lack (claude reports weekly Opus/Sonnet only as the headline). `now` is the reading's
+ * arrival: one that arrived before the stored reading changes nothing.
  */
 export function mergeReading(
   state: SubscriptionUsageState,
@@ -46,7 +49,7 @@ export function mergeReading(
   for (const w of event.windows) {
     if (w.utilization !== null) incoming[w.kind] = { utilization: w.utilization, resets_at: w.resets_at };
   }
-  if (Object.keys(incoming).length === 0) return state;
+  if (Object.keys(incoming).length === 0 || (state[backend]?.updated_at ?? -Infinity) > now) return state;
   const headline = event.rate_limit_type;
   if (headline && event.utilization !== null && !incoming[headline]) {
     incoming[headline] = { utilization: event.utilization, resets_at: event.resets_at };
@@ -70,9 +73,16 @@ export function currentWindows(
   return result;
 }
 
-/** The indicator's gate: a 5-hour or weekly window is known for this engine. */
-export const hasSubscriptionWindows = (usage: BackendUsage | null | undefined): boolean =>
-  Boolean(usage?.windows.five_hour || usage?.windows.seven_day);
+/** The indicator's gate: a recent reading with a 5-hour or weekly window that has not reset yet. */
+export function hasSubscriptionWindows(usage: BackendUsage | null | undefined, now: number): boolean {
+  if (!usage || now - usage.updated_at > MAX_READING_AGE_MS) return false;
+  return [usage.windows.five_hour, usage.windows.seven_day].some(
+    (w) => w && (w.resets_at === null || w.resets_at * SECONDS_TO_MS > now)
+  );
+}
+
+const hasWindows = (event: IConversationRateLimitUpdatedEvent): boolean =>
+  event.windows.some((w) => w.utilization !== null);
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -121,10 +131,17 @@ let state: SubscriptionUsageState = readStorage();
 const listeners = new Set<() => void>();
 /** Engine of each chat that has a send box mounted, so its readings need no lookup. */
 const backendByConversation = new Map<string, string>();
+/** Engine lookups of chats not on screen, one per chat. */
+const backendLookups = new Map<string, Promise<string | undefined>>();
+/** Chats whose latest reading had no windows: an API-key session, whatever the account store holds. */
+const windowlessConversations = new Set<string>();
 let feedStarted = false;
+let lastArrival = 0;
 
-function apply(backend: string, event: IConversationRateLimitUpdatedEvent): void {
-  const next = mergeReading(state, backend, event, Date.now());
+const notify = (): void => listeners.forEach((listener) => listener());
+
+function apply(backend: string, event: IConversationRateLimitUpdatedEvent, arrivedAt: number): void {
+  const next = mergeReading(state, backend, event, arrivedAt);
   if (next === state) return;
   state = next;
   try {
@@ -132,7 +149,7 @@ function apply(backend: string, event: IConversationRateLimitUpdatedEvent): void
   } catch {
     // shortcut: storage unavailable, so the usage lasts only until reload
   }
-  listeners.forEach((listener) => listener());
+  notify();
 }
 
 /** The engine of a chat that is not on screen, preset-aware like the on-screen chat's (`ChatConversation`). */
@@ -154,17 +171,44 @@ async function lookUpBackend(conversationId: string): Promise<string | undefined
   return resolveConversationBackend(conversation, preset.info?.backend);
 }
 
+/** {@link lookUpBackend}, once per chat; a failed or empty lookup is tried again next time. */
+function cachedBackend(conversationId: string): Promise<string | undefined> {
+  let lookup = backendLookups.get(conversationId);
+  if (!lookup) {
+    lookup = lookUpBackend(conversationId).then(
+      (backend) => {
+        if (!backend) backendLookups.delete(conversationId);
+        return backend;
+      },
+      (error: unknown) => {
+        backendLookups.delete(conversationId);
+        throw error;
+      }
+    );
+    backendLookups.set(conversationId, lookup);
+  }
+  return lookup;
+}
+
 /** Feeds every reading, from any chat, into the store. Idempotent; the app starts it at launch (`Layout`). */
 export function startSubscriptionUsageFeed(): void {
   if (feedStarted) return;
   feedStarted = true;
   ipcBridge.conversation.rateLimitUpdated.on((event) => {
+    // Strictly increasing, so readings that arrive in the same millisecond keep their order.
+    const arrivedAt = (lastArrival = Math.max(Date.now(), lastArrival + 1));
+    const windowless = !hasWindows(event);
+    if (windowless !== windowlessConversations.has(event.conversation_id)) {
+      if (windowless) windowlessConversations.add(event.conversation_id);
+      else windowlessConversations.delete(event.conversation_id);
+      notify();
+    }
+    if (windowless) return;
     const known = backendByConversation.get(event.conversation_id);
-    if (known) return apply(known, event);
-    if (!event.windows.some((w) => w.utilization !== null)) return;
-    lookUpBackend(event.conversation_id)
+    if (known) return apply(known, event, arrivedAt);
+    cachedBackend(event.conversation_id)
       .then((backend) => {
-        if (backend) apply(backend, event);
+        if (backend) apply(backend, event, arrivedAt);
       })
       .catch((error: unknown) => {
         console.warn('[subscriptionUsage] could not resolve the engine of a usage reading', error);
@@ -180,7 +224,8 @@ const subscribe = (listener: () => void): (() => void) => {
 
 /**
  * The account's latest plan usage for an engine, shared by every chat on it and kept across reloads. Null when no
- * subscription reading has arrived for it. Apply {@link currentWindows} before showing it.
+ * subscription reading has arrived for it, or when this chat's own latest reading had no windows. Apply
+ * {@link currentWindows} before showing it.
  */
 export function useSubscriptionUsage(backend: string, conversationId: string): BackendUsage | null {
   useEffect(() => {
@@ -189,5 +234,7 @@ export function useSubscriptionUsage(backend: string, conversationId: string): B
       if (backendByConversation.get(conversationId) === backend) backendByConversation.delete(conversationId);
     };
   }, [backend, conversationId]);
-  return useSyncExternalStore(subscribe, () => state[backend] ?? null);
+  return useSyncExternalStore(subscribe, () =>
+    windowlessConversations.has(conversationId) ? null : (state[backend] ?? null)
+  );
 }

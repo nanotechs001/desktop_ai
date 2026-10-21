@@ -183,7 +183,10 @@ describe('SubscriptionUsageIndicator', () => {
       'subscription-usage:v1',
       JSON.stringify({
         claude: {
-          windows: { five_hour: { utilization: 0.9, resets_at: NOW_S - 1 } },
+          windows: {
+            five_hour: { utilization: 0.9, resets_at: NOW_S - 1 },
+            seven_day: { utilization: 0, resets_at: NOW_S + 3 * 24 * HOUR },
+          },
           updated_at: NOW_MS - 3 * HOUR * 1000,
         },
       })
@@ -194,5 +197,52 @@ describe('SubscriptionUsageIndicator', () => {
     const popover = screen.getByTestId('popover');
     expect(popover).toHaveTextContent('0% used · reset');
     expect(popover).toHaveTextContent('Updated 3h 0m ago');
+  });
+
+  it('hides once every 5-hour and weekly window has reset', async () => {
+    localStorage.setItem(
+      'subscription-usage:v1',
+      JSON.stringify({
+        claude: { windows: { five_hour: { utilization: 0.9, resets_at: NOW_S - 1 } }, updated_at: NOW_MS - 1000 },
+      })
+    );
+    const { container } = await renderIndicator();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('hides in a chat whose own latest reading came with no windows (an API-key session)', async () => {
+    localStorage.setItem(
+      'subscription-usage:v1',
+      JSON.stringify({
+        claude: { windows: { five_hour: { utilization: 0.4, resets_at: NOW_S + HOUR } }, updated_at: NOW_MS },
+      })
+    );
+    const { container } = await renderIndicator();
+    expect(screen.getByRole('button', { name: 'Claude usage: 40% used' })).toBeInTheDocument();
+    push({ utilization: 0.5, resets_at: NOW_S + HOUR });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('updates when a window resets, without a new reading', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await renderIndicator();
+      push({
+        windows: [
+          { kind: 'five_hour', utilization: 0.8, resets_at: NOW_S + 60 },
+          { kind: 'seven_day', utilization: 0.2, resets_at: NOW_S + 3 * 24 * HOUR },
+        ],
+      });
+      expect(screen.getByRole('button', { name: 'Claude usage: 80% used' })).toBeInTheDocument();
+
+      vi.mocked(Date.now).mockReturnValue(NOW_MS + 60_000);
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+
+      expect(screen.getByRole('button', { name: 'Claude usage: 20% used' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

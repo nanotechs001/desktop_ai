@@ -6,12 +6,18 @@
 
 import { Popover, Progress } from '@arco-design/web-react';
 import type { TFunction } from 'i18next';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RateLimitWindowKind } from '@/common/adapter/ipcBridge';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { formatResetTime } from './usageWarning';
-import { currentWindows, hasSubscriptionWindows, useSubscriptionUsage, type UsageWindow } from './subscriptionUsage';
+import {
+  currentWindows,
+  hasSubscriptionWindows,
+  MAX_READING_AGE_MS,
+  useSubscriptionUsage,
+  type UsageWindow,
+} from './subscriptionUsage';
 
 const PREFIX = 'conversation.subscriptionUsage';
 const WARNING_PCT = 75;
@@ -20,6 +26,8 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const SECONDS_TO_MS = 1000;
+/** setTimeout's longest delay; a later reset is waited for in steps. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 /** Popover rows in order, with the i18n key (under `windows`) of each name. */
 const ROWS: readonly [RateLimitWindowKind, string][] = [
@@ -70,9 +78,25 @@ const SubscriptionUsageIndicator: React.FC<{ backend: string; conversationId: st
   const { t, i18n } = useTranslation();
   const isMobile = Boolean(useLayoutContext()?.isMobile);
   const usage = useSubscriptionUsage(backend, conversationId);
-  if (!usage || !hasSubscriptionWindows(usage)) return null;
+  // Re-render at the next reset (or when the reading grows too old), so the ring never shows a window past it.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!usage) return;
+    const now = Date.now();
+    const next = Math.min(
+      ...[
+        ...Object.values(usage.windows).map((w) => (w.resets_at ?? 0) * SECONDS_TO_MS),
+        usage.updated_at + MAX_READING_AGE_MS,
+      ].filter((at) => at > now)
+    );
+    if (!Number.isFinite(next)) return;
+    const timer = setTimeout(() => setTick((n) => n + 1), Math.min(next - now, MAX_TIMEOUT_MS));
+    return () => clearTimeout(timer);
+  }, [usage, tick]);
 
   const now = Date.now();
+  if (!usage || !hasSubscriptionWindows(usage, now)) return null;
+
   const windows = currentWindows(usage, now);
   const pct = Math.max(toPct(windows.five_hour), toPct(windows.seven_day));
   const level = levelOf(pct);
