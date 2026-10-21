@@ -126,6 +126,7 @@ vi.mock('@/common', () => {
     'remove',
     'getSnapshot',
     'setExpanded',
+    'setWindowMode',
     'setChatLocation',
     'getChatLocations',
     'handoffDraft',
@@ -1423,5 +1424,171 @@ describe('AgentWidgetManager watchInMain', () => {
 
     expect(main.show).not.toHaveBeenCalled();
     expect(main.webContents.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('expanded window mode', () => {
+  // 1920x1040 work area, 88 px robot: band 66 (0.75 of the robot), panel 960x640, window 960x706 centred.
+  const BAND = 66;
+  const EXPANDED = { x: 480, y: 167, width: 960, height: 706 };
+  const START_OFFSET = 960 - BOT - 24;
+  type WindowLayout = LayoutEvent & {
+    expanded: boolean;
+    window_mode: 'compact' | 'expanded';
+    top_band: number;
+    bot_offset_x: number;
+    popup_vertical: 'above' | 'below';
+  };
+  const layoutOf = (id: string) => lastLayout(id) as WindowLayout | undefined;
+  const offsetsOf = (id: string) =>
+    (emittedOf('layoutChanged') as WindowLayout[])
+      .filter((l) => l.conversation_id === id && l.top_band > 0)
+      .map((l) => l.bot_offset_x);
+
+  it('collapsed, only records the mode; the next popup opens as a large window centred, robot at top-right', async () => {
+    const { manager, mem } = await makeManager();
+    manager.ensure(A);
+    const win = liveWindows()[0];
+    appear(manager, A);
+    const collapsed = { ...win.bounds };
+
+    manager.setWindowMode(A, 'expanded');
+    expect(win.bounds).toEqual(collapsed);
+    expect(mem.get().widgets[A].window_mode).toBe('expanded');
+
+    manager.setExpanded(A, true);
+    expect(win.bounds).toEqual(EXPANDED);
+    expect(layoutOf(A)).toMatchObject({
+      expanded: true,
+      window_mode: 'expanded',
+      popup_vertical: 'below',
+      bot_offset_x: START_OFFSET,
+      top_band: BAND,
+    });
+
+    manager.setExpanded(A, false);
+    expect(win.bounds).toEqual(collapsed); // the taskbar robot as always
+    expect(layoutOf(A)).toMatchObject({ top_band: 0, window_mode: 'expanded' });
+  });
+
+  it('expanding an open popup re-places at once; restoring returns to the compact popup above the robot', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    const win = liveWindows()[0];
+    appear(manager, A);
+    manager.setExpanded(A, true);
+    const compact = { ...win.bounds };
+    expect(layoutOf(A)).toMatchObject({ window_mode: 'compact', top_band: 0 });
+
+    manager.setWindowMode(A, 'expanded');
+    expect(win.bounds).toEqual(EXPANDED);
+
+    manager.setWindowMode(A, 'compact');
+    expect(win.bounds).toEqual(compact);
+    expect(layoutOf(A)).toMatchObject({ expanded: true, window_mode: 'compact', top_band: 0 });
+  });
+
+  it('keeps the mode across a restart and a retarget', async () => {
+    const first = await makeManager();
+    first.manager.ensure(A);
+    first.manager.setWindowMode(A, 'expanded');
+    first.manager.dispose();
+
+    const second = await makeManager(first.mem.get());
+    const win = liveWindows()[0];
+    appear(second.manager, A);
+    second.manager.setExpanded(A, true);
+    expect(win.bounds).toEqual(EXPANDED);
+
+    second.manager.retarget(A, B);
+    expect(second.mem.get().widgets[B].window_mode).toBe('expanded');
+    expect(second.manager.getSnapshot(B)?.layout).toMatchObject({ window_mode: 'expanded', top_band: BAND });
+    expect(win.bounds).toEqual(EXPANDED);
+  });
+
+  it('several robots can be expanded at once', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.ensure(B);
+    appear(manager, A);
+    appear(manager, B);
+    manager.setWindowMode(A, 'expanded');
+    manager.setWindowMode(B, 'expanded');
+    manager.setExpanded(A, true);
+    manager.setExpanded(B, true);
+    expect(manager.getSnapshot(A)?.layout.top_band).toBe(BAND);
+    expect(manager.getSnapshot(B)?.layout.top_band).toBe(BAND);
+  });
+
+  /** An open, expanded robot; the cursor rests over it (hovering never stops walking in the band). */
+  async function expandedWalker() {
+    const manager = await wanderingManager(0.5); // strolls every 2.75 s, target = middle of the band
+    manager.ensure(A);
+    const win = liveWindows()[0];
+    appear(manager, A);
+    manager.setWindowMode(A, 'expanded');
+    manager.setExpanded(A, true);
+    h.cursor = { x: EXPANDED.x + START_OFFSET + 10, y: EXPANDED.y + 10 };
+    return { manager, win };
+  }
+
+  it('walks along the top band while idle, at 2 px per 50 ms, facing its way, without moving the window', async () => {
+    const { win } = await expandedWalker();
+    vi.advanceTimersByTime(3_000 + 300); // first stroll after one stroll delay, then a turn pause
+    expect(layoutOf(A)).toMatchObject({ moving: true, facing: 'left' });
+    const x0 = layoutOf(A)!.bot_offset_x;
+    vi.advanceTimersByTime(500);
+    expect(x0 - layoutOf(A)!.bot_offset_x).toBe(20);
+    vi.advanceTimersByTime(60_000);
+    expect(layoutOf(A)).toMatchObject({ moving: false, bot_offset_x: 16 + Math.round(0.5 * (960 - BOT - 32)) });
+    for (const x of offsetsOf(A)) {
+      expect(x).toBeGreaterThanOrEqual(16);
+      expect(x).toBeLessThanOrEqual(960 - BOT - 16);
+    }
+    expect(win.bounds).toEqual(EXPANDED);
+  });
+
+  it('does not walk when not idle or with reduce motion', async () => {
+    const { manager } = await expandedWalker();
+    manager.reportState(A, 'working');
+    vi.advanceTimersByTime(60_000);
+    expect(layoutOf(A)).toMatchObject({ moving: false, bot_offset_x: START_OFFSET });
+
+    manager.setSettings({ reduceMotion: true });
+    manager.reportState(A, 'idle');
+    vi.advanceTimersByTime(60_000);
+    expect(layoutOf(A)).toMatchObject({ moving: false, bot_offset_x: START_OFFSET });
+  });
+
+  it('collapsing mid-walk stops it and puts the robot back on the taskbar where it stood', async () => {
+    const { manager, win } = await expandedWalker();
+    manager.setExpanded(A, false);
+    const collapsed = { ...win.bounds };
+    manager.setExpanded(A, true);
+    vi.advanceTimersByTime(3_000 + 600);
+    expect(layoutOf(A)?.moving).toBe(true);
+    manager.setExpanded(A, false);
+    expect(layoutOf(A)?.moving).toBe(false);
+    expect(win.bounds).toEqual(collapsed);
+    vi.advanceTimersByTime(1_000);
+    expect(win.bounds.x).toBe(collapsed.x);
+  });
+
+  it('snaps the robot back into the band after a re-place', async () => {
+    const { manager } = await expandedWalker();
+    manager.setSettings({ scale: 1.5 }); // 132 px robot: the band's right end moves left of the robot
+    expect(layoutOf(A)?.bot_offset_x).toBe(960 - 132 - 16);
+  });
+
+  it('rejects a malformed setWindowMode at the IPC boundary', async () => {
+    const { manager } = await makeManager();
+    initAgentWidgetBridge(manager);
+    manager.ensure(A);
+    await expect(h.providers.setWindowMode({ conversation_id: A, mode: 'huge' })).rejects.toThrow();
+    await expect(h.providers.setWindowMode({ conversation_id: A })).rejects.toThrow();
+    await expect(h.providers.setWindowMode({ conversation_id: A, mode: 'expanded', x: 1 })).rejects.toThrow();
+    await expect(h.providers.setWindowMode({ conversation_id: '../x', mode: 'expanded' })).rejects.toThrow();
+    await expect(h.providers.setWindowMode({ conversation_id: A, mode: 'expanded' })).resolves.toBeUndefined();
+    expect(manager.getSnapshot(A)?.record.window_mode).toBe('expanded');
   });
 });

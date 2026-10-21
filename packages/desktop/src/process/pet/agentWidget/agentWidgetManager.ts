@@ -20,12 +20,16 @@ import type {
   AgentWidgetDragPhase,
   AgentWidgetLifecycleAnimation,
   AgentWidgetSnapshot,
+  AgentWidgetWindowMode,
 } from '@/common/types/agent/agentWidget';
 import { DROP_IMPACT_MS, isHttpUrl, robotAnimationMs } from '@/common/types/agent/agentWidget';
 import { mergeSettings, normalizeWidgetState, processConfigIO, type WidgetStateIO } from './agentWidgetStore';
 import {
+  bandWalkRange,
   carriedPosition,
   computePlacement,
+  expandedBandHeight,
+  expandedPlacement,
   landingY,
   getWalkTrack,
   followTarget,
@@ -100,8 +104,10 @@ type WidgetEntry = {
   win: BrowserWindow;
   state: AgentAnimationState;
   displayId: number;
-  /** Absolute screen x (DIP) of the robot's left edge. */
+  /** Absolute screen x (DIP) of the robot's left edge on the taskbar (kept while the expanded window shows). */
   botX: number;
+  /** The robot's x inside the expanded window's top band (null: not showing; it starts at the top-right). */
+  bandX: number | null;
   dragging: boolean;
   /** Pointer position inside the robot box when the drag started. */
   grab: { x: number; y: number };
@@ -319,14 +325,31 @@ export class AgentWidgetManager {
     entry.record.expanded = expanded;
     entry.focusedSinceOpen = false;
     entry.openedAt = Date.now();
+    // A stroll (on the taskbar or along the expanded window's band) never outlives the popup opening or closing.
+    this.stopGlide(entry);
     if (expanded) {
-      this.stopGlide(entry);
       this.finishLanding(entry);
       this.setChatLocation(conversationId, 'widget');
     }
     this.place(entry);
     if (expanded && !entry.win.isDestroyed()) entry.win.focus();
     if (expanded) this.followInMain(conversationId);
+  }
+
+  /**
+   * The robot's popup mode, kept per robot until changed. An open popup re-places at once (restoring returns it above
+   * the robot on the taskbar); a collapsed robot only records it for its next open.
+   */
+  setWindowMode(conversationId: string, mode: AgentWidgetWindowMode): void {
+    const record = this.state.widgets[conversationId];
+    if (!record || (record.window_mode ?? 'compact') === mode) return;
+    record.window_mode = mode;
+    const entry = this.entries.get(conversationId);
+    if (entry) {
+      this.stopGlide(entry);
+      this.place(entry);
+    }
+    void this.persist();
   }
 
   setChatLocation(conversationId: string, location: AgentChatLocation): void {
@@ -667,6 +690,7 @@ export class AgentWidgetManager {
       state: 'idle',
       displayId: display.id,
       botX,
+      bandX: null,
       dragging: false,
       grab: { x: 0, y: 0 },
       airY: null,
@@ -836,7 +860,14 @@ export class AgentWidgetManager {
   private place(entry: WidgetEntry): void {
     if (entry.win.isDestroyed()) return;
     const placement = this.currentPlacement(entry);
-    entry.botX = placement.bounds.x + placement.botOffsetX;
+    if (this.inBand(entry)) {
+      // Just opened: the first stroll along the band waits one stroll delay, like on the taskbar.
+      if (entry.bandX === null) entry.nextWanderAt = Date.now() + this.wanderDelay();
+      entry.bandX = placement.botOffsetX;
+    } else {
+      entry.bandX = null;
+      entry.botX = placement.bounds.x + placement.botOffsetX;
+    }
     this.setBounds(entry, placement.bounds);
 
     const layout = this.layoutFor(entry, placement);
@@ -904,16 +935,24 @@ export class AgentWidgetManager {
       moving: entry.moving,
       hop_headroom: entry.record.expanded ? 0 : this.headroom(entry),
       drag_phase: entry.dragPhase,
+      window_mode: entry.record.window_mode ?? 'compact',
+      top_band: this.inBand(entry) ? expandedBandHeight(this.botSize()) : 0,
     };
   }
 
   private currentPlacement(entry: WidgetEntry): WidgetPlacement {
     const track = this.currentTrack(entry);
+    if (this.inBand(entry)) return expandedPlacement(track.workArea, this.botSize(), entry.bandX);
     const headroom = this.headroom(entry);
     const placement = computePlacement(track, entry.botX, this.botSize(), entry.record.expanded, POPUP_SIZE, headroom);
     // Carried or falling: same box, lifted off the track.
     if (entry.airY === null || entry.record.expanded) return placement;
     return { ...placement, bounds: { ...placement.bounds, y: entry.airY - headroom } };
+  }
+
+  /** The expanded window is showing: the robot walks its top band instead of the taskbar. */
+  private inBand(entry: WidgetEntry): boolean {
+    return entry.record.expanded && entry.record.window_mode === 'expanded';
   }
 
   private currentTrack(entry: WidgetEntry): WalkTrack {
@@ -941,6 +980,10 @@ export class AgentWidgetManager {
     const cursor = screen.getCursorScreenPoint();
     const cursorDisplayId = screen.getDisplayNearestPoint(cursor).id;
     for (const [id, entry] of this.entries) {
+      if (this.inBand(entry)) {
+        this.tickBandWander(entry, now);
+        continue;
+      }
       if (entry.moving || entry.displayId !== cursorDisplayId || !this.canWander(entry)) continue;
       const display = this.displayById(entry.displayId) ?? this.defaultDisplay();
       const track = this.track(display);
@@ -966,25 +1009,47 @@ export class AgentWidgetManager {
     }
   }
 
+  /** In the expanded window the robot strolls the top band to a random spot; there is no mouse to follow. */
+  private tickBandWander(entry: WidgetEntry, now: number): void {
+    if (entry.moving || !this.canWander(entry) || entry.nextWanderAt > now) return;
+    entry.nextWanderAt = now + this.wanderDelay();
+    const { min, max } = bandWalkRange(this.currentPlacement(entry).bounds.width, this.botSize());
+    this.startGlide(entry, min + Math.round(this.random() * (max - min)), null);
+  }
+
   private canWander(entry: WidgetEntry): boolean {
+    // In the expanded window's band the robot walks with its popup open and under the cursor.
+    const band = this.inBand(entry);
     return (
       entry.phase === 'live' &&
       entry.dragPhase === 'none' &&
       entry.state === 'idle' &&
-      !entry.record.expanded &&
+      (band || !entry.record.expanded) &&
       !entry.dragging &&
       !entry.transitioning &&
       !entry.win.isDestroyed() &&
       entry.win.isVisible() &&
-      !this.isHovered(entry)
+      (band || !this.isHovered(entry))
     );
   }
 
-  private startGlide(entry: WidgetEntry, target: number, track: WalkTrack): void {
+  /** Where the robot walks: its x inside the expanded window's band, or on the taskbar. */
+  private walkX(entry: WidgetEntry): number {
+    return this.inBand(entry) && entry.bandX !== null ? entry.bandX : entry.botX;
+  }
+
+  private setWalkX(entry: WidgetEntry, x: number): void {
+    if (this.inBand(entry)) entry.bandX = x;
+    else entry.botX = x;
+  }
+
+  /** `track` is the taskbar walked (the spot is saved on arrival); null for the expanded window's band. */
+  private startGlide(entry: WidgetEntry, target: number, track: WalkTrack | null): void {
     this.stopGlide(entry);
-    if (Math.abs(target - entry.botX) < DIRECTION_DEADBAND_PX) return;
+    const x = this.walkX(entry);
+    if (Math.abs(target - x) < DIRECTION_DEADBAND_PX) return;
     // Face the destination before moving; turning around pauses briefly first.
-    const facing = target > entry.botX ? 'right' : 'left';
+    const facing = target > x ? 'right' : 'left';
     if (facing !== entry.facing) {
       entry.facing = facing;
       this.place(entry);
@@ -998,20 +1063,21 @@ export class AgentWidgetManager {
   }
 
   /** Walk toward `target` at the unchanged glide speed; the renderer hops while `moving`. */
-  private beginGlide(entry: WidgetEntry, target: number, track: WalkTrack): void {
+  private beginGlide(entry: WidgetEntry, target: number, track: WalkTrack | null): void {
     entry.moving = true;
     this.place(entry);
     entry.glideTimer = setInterval(() => {
       if (!this.canWander(entry)) return this.stopGlide(entry);
-      const delta = target - entry.botX;
+      const x = this.walkX(entry);
+      const delta = target - x;
       if (Math.abs(delta) <= GLIDE_PX_PER_TICK) {
-        entry.botX = target;
+        this.setWalkX(entry, target);
         this.place(entry);
         this.stopGlide(entry);
-        this.savePosition(entry, track);
+        if (track) this.savePosition(entry, track);
         return;
       }
-      entry.botX += Math.sign(delta) * GLIDE_PX_PER_TICK;
+      this.setWalkX(entry, x + Math.sign(delta) * GLIDE_PX_PER_TICK);
       this.place(entry);
     }, GLIDE_TICK_MS);
   }

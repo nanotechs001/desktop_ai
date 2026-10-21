@@ -108,6 +108,46 @@ export function computePlacement(
   return { bounds: { x: wx, y: wy, width, height }, popupSide, popupVertical, botOffsetX: x - wx };
 }
 
+/** The band above the expanded window's panel is this fraction of the robot; the rest overlaps the panel's top. */
+export const EXPANDED_BAND_RATIO = 0.75;
+const EXPANDED_PANEL = { width: 960, height: 640 };
+// Gap kept between the expanded window and the work area's edges (total for both sides).
+const EXPANDED_MARGIN_PX = 48;
+// Where the robot first stands: this far from the panel's right edge.
+const EXPANDED_START_INSET_PX = 24;
+// The robot walks no closer than this to the window's left and right edges.
+const BAND_WALK_INSET_PX = 16;
+
+export const expandedBandHeight = (botSize: number): number => Math.round(botSize * EXPANDED_BAND_RATIO);
+
+/** The x range (robot's left edge, inside the window) the robot walks along the expanded window's top band. */
+export function bandWalkRange(windowWidth: number, botSize: number): { min: number; max: number } {
+  return { min: BAND_WALK_INSET_PX, max: Math.max(BAND_WALK_INSET_PX, windowWidth - botSize - BAND_WALK_INSET_PX) };
+}
+
+/**
+ * The expanded window: a top band holding the robot plus the chat panel below it, centred in the work area.
+ * `botOffsetX` is the robot's x inside the window (null: the panel's top-right), kept within the walk range.
+ */
+export function expandedPlacement(workArea: Rect, botSize: number, botOffsetX: number | null): WidgetPlacement {
+  const band = expandedBandHeight(botSize);
+  const width = Math.min(EXPANDED_PANEL.width, workArea.width - EXPANDED_MARGIN_PX);
+  const height = band + Math.min(EXPANDED_PANEL.height, workArea.height - EXPANDED_MARGIN_PX - band);
+  const range = bandWalkRange(width, botSize);
+  const offset = clamp(botOffsetX ?? width - botSize - EXPANDED_START_INSET_PX, range.min, range.max);
+  return {
+    bounds: {
+      x: workArea.x + Math.round((workArea.width - width) / 2),
+      y: workArea.y + Math.round((workArea.height - height) / 2),
+      width,
+      height,
+    },
+    popupSide: 'right',
+    popupVertical: 'below',
+    botOffsetX: offset,
+  };
+}
+
 /**
  * Nearest x to `desired` that keeps one robot-width-plus-gap away from every
  * other robot on the same track. When the track is full, robots group

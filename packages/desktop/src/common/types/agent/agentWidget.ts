@@ -53,6 +53,9 @@ export type AgentWidgetSettings = {
   muteVoice: boolean;
 };
 
+/** How a robot's open popup is shown: the small popup above the robot, or a large desktop chat window. */
+export type AgentWidgetWindowMode = 'compact' | 'expanded';
+
 /** Persisted per-widget record. One record per conversation, never more. */
 export type AgentWidgetRecord = {
   widget_id: string;
@@ -68,6 +71,8 @@ export type AgentWidgetRecord = {
   agent_id?: string;
   /** The conversation's last change (ms), to keep the newest one when two windows claim the same bot. */
   modified_at?: number;
+  /** The robot's chosen popup mode (missing = 'compact'); kept until the user changes it. */
+  window_mode?: AgentWidgetWindowMode;
 };
 
 /** A robot the user hid ("Hide widget"); the titlebar lists these so they can be shown again. */
@@ -87,7 +92,7 @@ export type AgentWidgetLayout = {
   expanded: boolean;
   /** Which side the popup extends toward, relative to the robot. */
   popup_side: 'left' | 'right';
-  /** 'below' only when the taskbar is docked at the top of the screen. */
+  /** 'below' when the taskbar is docked at the top of the screen, and in the expanded window (robot on top). */
   popup_vertical: 'above' | 'below';
   /** Robot box size in CSS px. */
   bot_size: number;
@@ -101,6 +106,10 @@ export type AgentWidgetLayout = {
   hop_headroom: number;
   /** The user is carrying the robot ('dragging') or it is falling back onto the taskbar ('landing'). */
   drag_phase: AgentWidgetDragPhase;
+  /** The robot's chosen popup mode; the expanded window only shows while `expanded`. */
+  window_mode: AgentWidgetWindowMode;
+  /** Height of the band above the panel the robot walks in, in CSS px (0 unless the expanded window is showing). */
+  top_band: number;
 };
 
 export type AgentWidgetDragPhase = 'none' | 'dragging' | 'landing';

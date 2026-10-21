@@ -84,6 +84,7 @@ import type {
   AgentWidgetRobot,
   AgentWidgetSettings,
   AgentWidgetSnapshot,
+  AgentWidgetWindowMode,
 } from '@/common/types/agent/agentWidget';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
@@ -1603,6 +1604,10 @@ export const agentWidget = {
   remove: bridge.buildProvider<void, AgentWidgetTarget>('agent-widget:remove'),
   getSnapshot: bridge.buildProvider<AgentWidgetSnapshot | null, AgentWidgetTarget>('agent-widget:get-snapshot'),
   setExpanded: bridge.buildProvider<void, AgentWidgetTarget & { expanded: boolean }>('agent-widget:set-expanded'),
+  /** The robot's popup mode (kept per robot): the small popup or the large desktop chat window. */
+  setWindowMode: bridge.buildProvider<void, AgentWidgetTarget & { mode: AgentWidgetWindowMode }>(
+    'agent-widget:set-window-mode'
+  ),
   setChatLocation: bridge.buildProvider<void, AgentWidgetTarget & { location: AgentChatLocation }>(
     'agent-widget:set-chat-location'
   ),

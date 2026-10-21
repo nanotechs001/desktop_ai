@@ -25,6 +25,7 @@ const schemas = {
   ensure: target.extend({ force: z.boolean().optional(), agent_id: agentId.optional() }).strict(),
   openPopup: target.extend({ agent_id: agentId.optional() }).strict(),
   setExpanded: target.extend({ expanded: z.boolean() }).strict(),
+  setWindowMode: target.extend({ mode: z.enum(['compact', 'expanded']) }).strict(),
   setChatLocation: target.extend({ location: z.enum(['main', 'widget']) }).strict(),
   handoffDraft: target.extend({ text: z.string().max(100_000) }).strict(),
   reportState: target.extend({ state: z.enum(AGENT_ANIMATION_STATES), transitioning: z.boolean().optional() }).strict(),
@@ -64,6 +65,10 @@ export function initAgentWidgetBridge(manager: AgentWidgetManager): void {
   w.setExpanded.provider(async (p) => {
     const { conversation_id, expanded } = parse(schemas.setExpanded, p, 'setExpanded');
     manager.setExpanded(conversation_id, expanded);
+  });
+  w.setWindowMode.provider(async (p) => {
+    const { conversation_id, mode } = parse(schemas.setWindowMode, p, 'setWindowMode');
+    manager.setWindowMode(conversation_id, mode);
   });
   w.setChatLocation.provider(async (p) => {
     const { conversation_id, location } = parse(schemas.setChatLocation, p, 'setChatLocation');

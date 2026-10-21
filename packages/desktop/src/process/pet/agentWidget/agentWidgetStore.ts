@@ -45,6 +45,7 @@ const recordSchema = z.object({
   chat_location: z.enum(['main', 'widget']),
   agent_id: z.string().min(1).max(256).optional(),
   modified_at: z.number().finite().optional(),
+  window_mode: z.enum(['compact', 'expanded']).optional(),
 });
 
 export const clampScale = (scale: number): number => Math.min(MAX_WIDGET_SCALE, Math.max(MIN_WIDGET_SCALE, scale));
