@@ -27,8 +27,6 @@
     "noHistory": "Sohbet geçmişi yok",
     "searchChats": "Sohbetlerde ara",
     "noMatches": "Eşleşen sohbet yok",
-    "deleteTitle": "Sil",
-    "deleteConfirm": "Bu sohbeti silmek istediğinizden emin misiniz?",
     "confirmDelete": "Sil",
     "cancelDelete": "İptal",
     "editName": "İsmi Düzenle",
@@ -41,7 +39,6 @@
     "renameSuccess": "Başarıyla yeniden adlandırıldı",
     "renameFailed": "Yeniden adlandırma başarısız oldu",
     "batchManage": "Batch Manage",
-    "batchModeExit": "Exit Batch Mode",
     "selectAll": "Select All",
     "selectedCount": "{{count}} selected",
     "batchExport": "Batch Export",
@@ -71,26 +68,14 @@
     "markAsRead": "Okundu olarak işaretle",
     "pinned": "Pinned",
     "pinFailed": "Pin operation failed",
-    "pinnedSection": "Pinned",
     "deleteSuccess": "Başarıyla silindi",
     "deleteFailed": "Silme başarısız oldu",
-    "projectsSection": "Projeler",
-    "conversationsSection": "Konuşmalar",
-    "newConversationInProject": "Bu projede yeni konuşma",
     "deleting": "Siliniyor...",
-    "reorderPinned": "Sabitlenmiş sohbetin sırasını değiştirmek için sürükleyin",
     "forkedFrom": "“{{name}}” konuşmasından çatallandı",
     "forkedConversation": "Çatallanmış konuşma",
     "archive": "Arşivle",
     "archiveSuccess": "Arşivlendi",
     "archiveFailed": "Arşivleme başarısız",
-    "batchArchive": "Batch archive",
-    "batchArchiveConfirm": "Archive {{count}} selected topics? You can restore or delete them from Archived in Settings.",
-    "batchArchiveSuccess": "Archived {{count}} topics",
-    "archiveProject": "Archive project",
-    "archiveProjectTitle": "Archive project",
-    "archiveProjectConfirm": "Archive project \"{{name}}\"? Its {{count}} conversation(s) will be archived too. You can restore or delete them from Archived in Settings.",
-    "archiving": "Archiving...",
     "chatHistory": "Sohbet geçmişi",
     "botChatHistory": "{{name}} sohbet geçmişi"
   },
@@ -359,7 +344,6 @@
     "empty": "Burası boş",
     "emptyDescription": "Dosyalar yüklendikten veya bir klasör açıldıktan sonra burada görünecektir",
     "searchPlaceholder": "Dosyalarda ara...",
-    "createNewConversation": "Mevcut çalışma alanında yeni sohbet oluştur",
     "search.empty": "Arama sonucu boş",
     "addFile": "Dosya Ekle",
     "refresh": "Yenile",
@@ -579,28 +563,6 @@
       "days": "{{d}} g"
     }
   },
-  "skill_generator": {
-    "title": "Yetenek/Kural Oluştur",
-    "generate": "Oluştur",
-    "description": "Oluşturmak için konuşma geçmişini analiz et:",
-    "type_skill": "Yetenek (Python)",
-    "type_rule": "Kural (JSON/MD)",
-    "name_label": "Ajan Adı:",
-    "name_placeholder": "örn. Excel Çevirici",
-    "menu_generate": "Geçmişten Oluştur",
-    "menu_load": "Kural/Yetenek Yükle",
-    "load_title": "Kural/Yetenek Yükle",
-    "load_error": "Dosyalar yüklenemedi",
-    "no_files": "Projede ilgili dosya bulunamadı",
-    "read_error": "Dosya okunamadı",
-    "rule_loaded": "Kural başarıyla yüklendi",
-    "no_workspace": "Proje yapılandırılmadı",
-    "name_required": "Lütfen hazır ayar için bir isim girin",
-    "no_history": "Konuşma geçmişi bulunamadı",
-    "request_sent": "İstek ajana gönderildi",
-    "failed": "Oluşturulamadı",
-    "preset_registered": "Ajan hazır ayarı başarıyla kaydedildi!"
-  },
   "dropdown": {
     "cliAgents": "CLI Agents",
     "presetAssistants": "Preset Agents"
@@ -618,7 +580,6 @@
     "label": "Düşünüyor..."
   },
   "skills": {
-    "loaded": "Yüklenen Beceriler",
     "slashHint": "Beceri"
   },
   "mcp": {

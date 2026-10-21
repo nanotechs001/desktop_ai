@@ -26,8 +26,6 @@
     "searchAria": "Поиск по переписке"
   },
   "availableCommands": "{{count}} доступных команд",
-  "availableCommands_one": "{{count}} доступная команда",
-  "availableCommands_other": "{{count}} доступных команд",
   "availableCommands_few": "{{count}} доступные команды",
   "availableCommands_many": "{{count}} доступных команд",
   "slash.title": "Команды",

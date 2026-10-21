@@ -24,8 +24,6 @@
     "searchAria": "대화 검색"
   },
   "availableCommands": "{{count}}개의 사용 가능한 명령어",
-  "availableCommands_one": "{{count}}개의 사용 가능한 명령어",
-  "availableCommands_other": "{{count}}개의 사용 가능한 명령어",
   "atFile.hint": "파일을 검색하려면 입력하세요",
   "atFile.menuLabel": "파일 멘션",
   "atFile.loading": "불러오는 중...",

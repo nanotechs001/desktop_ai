@@ -24,8 +24,6 @@
     "searchAria": "Buscar en la conversación"
   },
   "availableCommands": "{{count}} comandos disponibles",
-  "availableCommands_one": "{{count}} comando disponible",
-  "availableCommands_other": "{{count}} comandos disponibles",
   "atFile.hint": "Escribe para buscar archivos",
   "atFile.menuLabel": "Menciones de archivos",
   "atFile.loading": "Cargando...",

@@ -24,8 +24,6 @@
     "searchAria": "جست‌وجو در گفتگو"
   },
   "availableCommands": "{{count}} دستور موجود",
-  "availableCommands_one": "{{count}} دستور موجود",
-  "availableCommands_other": "{{count}} دستور موجود",
   "atFile.hint": "برای جستجوی فایل‌ها تایپ کنید",
   "atFile.menuLabel": "اشاره به فایل‌ها",
   "atFile.loading": "در حال بارگذاری...",

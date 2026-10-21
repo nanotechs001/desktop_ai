@@ -25,8 +25,6 @@
     "searchAria": "Пошук у розмові"
   },
   "availableCommands": "Доступні команди: {{count}}",
-  "availableCommands_one": "Доступні команди: {{count}}",
-  "availableCommands_other": "Доступні команди: {{count}}",
   "availableCommands_few": "Доступні команди: {{count}}",
   "availableCommands_many": "Доступні команди: {{count}}",
   "atFile.hint": "Введіть, щоб знайти файли",

@@ -24,8 +24,6 @@
     "searchAria": "搜尋對話內容"
   },
   "availableCommands": "{{count}} 個可用指令",
-  "availableCommands_one": "{{count}} 個可用指令",
-  "availableCommands_other": "{{count}} 個可用指令",
   "atFile.hint": "輸入以搜尋檔案",
   "atFile.menuLabel": "檔案提及",
   "atFile.loading": "載入中...",

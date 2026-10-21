@@ -24,8 +24,6 @@
     "searchAria": "Search conversation"
   },
   "availableCommands": "{{count}} Available Commands",
-  "availableCommands_one": "{{count}} Available Command",
-  "availableCommands_other": "{{count}} Available Commands",
   "atFile.hint": "Type to search for files",
   "atFile.menuLabel": "File mentions",
   "atFile.loading": "Loading...",
