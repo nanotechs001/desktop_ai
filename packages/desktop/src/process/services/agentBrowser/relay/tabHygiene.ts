@@ -90,6 +90,8 @@ export function startTabHygiene({
       const owner = registry.ownership(webContentsId)?.owner;
       if (!owner || owner === 'user') return;
       agentTabs.add(webContentsId);
+      // Already being closed (an earlier adopt of the same takeover chose it): it must not count the others again.
+      if (closing.has(webContentsId)) return;
       const chat = owner.conversationId;
       if (!chat) return;
       // A fresh array from filter, so sorting it in place touches nothing else.

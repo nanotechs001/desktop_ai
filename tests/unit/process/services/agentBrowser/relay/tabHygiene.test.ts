@@ -69,6 +69,22 @@ describe('per-chat agent tab cap', () => {
     expect(closeTab.mock.calls).toEqual([[2]]);
   });
 
+  it(`a takeover of 4 tabs, adopted newest first, leaves ${MAX_AGENT_TABS_PER_CHAT}`, () => {
+    // Four tabs of the bot's two older chats, oldest first.
+    [1, 2, 3, 4].forEach((id) => {
+      agentTab(id, id <= 2 ? 'conv-a' : 'conv-b');
+      vi.advanceTimersByTime(1000);
+    });
+    expect(closeTab).not.toHaveBeenCalled();
+    // The bot's newer chat takes them all, then the relay adopts each one, newest first.
+    [4, 3, 2, 1].forEach((id) =>
+      registry.claim(id, { clientId: 'client-new', label: 'claude', conversationId: 'conv-new' })
+    );
+    [4, 3, 2, 1].forEach((id) => hygiene.adopt(id));
+
+    expect(closeTab.mock.calls).toEqual([[1]]);
+  });
+
   it('counts each chat on its own', () => {
     agentTab(1, 'conv-a');
     agentTab(2, 'conv-a');
