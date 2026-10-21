@@ -19,6 +19,7 @@ import { useChatLocation } from './chatLocation';
 import { isTurning, resolveRobotVisual, type RobotInteraction, type RobotStrip } from './agentAnimationState';
 import RobotSprite, { preloadRobotStrips } from './RobotSprite';
 import { useAgentAnimationState, useRobotPresentation } from './useAgentAnimationState';
+import { retireRobotChat } from './useAgentWidgetSync';
 import WidgetChatPopup from './WidgetChatPopup';
 import styles from './AgentWidget.module.css';
 
@@ -184,21 +185,22 @@ const AgentWidgetPage: React.FC = () => {
     };
   }, [id]);
 
-  // The conversation was deleted, or is a regular chat (robots are for VA Bots only): drop the widget.
+  // A regular chat (robots are for VA Bots only): drop the widget. A deleted one: the robot moves to its bot's newest
+  // remaining chat, or goes when there is none.
   useEffect(() => {
-    const regularChat =
-      conversation && !isVaBotAgent(conversation.assistant, configService.get(DEFAULT_AGENT_SETTING_KEY));
-    if (id && !isLoading && (conversation === null || regularChat)) {
+    if (!id || isLoading) return;
+    if (conversation === null) void retireRobotChat(id).catch(() => {});
+    else if (conversation && !isVaBotAgent(conversation.assistant, configService.get(DEFAULT_AGENT_SETTING_KEY))) {
       void ipcBridge.agentWidget.remove.invoke({ conversation_id: id }).catch(() => {});
     }
   }, [id, isLoading, conversation]);
 
   // Archived or deleted from this robot's own history panel: the main window's listener never hears this window's
-  // events, so drop the robot here (as the main window does when the chat is archived or deleted there).
+  // events, so the robot moves on (or goes) here, as the main window has it when the chat is archived or deleted there.
   useEffect(() => {
     if (!id) return;
     const removeIfCurrent = (conversationId: string) => {
-      if (conversationId === id) void ipcBridge.agentWidget.remove.invoke({ conversation_id: id }).catch(() => {});
+      if (conversationId === id) void retireRobotChat(id).catch(() => {});
     };
     const offArchived = addEventListener('conversation.archived', removeIfCurrent);
     const offDeleted = addEventListener('conversation.deleted', removeIfCurrent);

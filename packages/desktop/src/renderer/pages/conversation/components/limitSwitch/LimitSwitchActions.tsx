@@ -8,10 +8,11 @@ import { Button, Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react
 import { Down } from '@icon-park/react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
 import type { TChatConversation } from '@/common/config/storage';
 import { useModelProviderList } from '@/renderer/hooks/agent/useModelProviderList';
+import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
+import { afterAssistantsChanged } from '@/renderer/services/crossWindowSync';
 import {
   ENGINE_CATALOG_SWR_KEY,
   fetchManagedAgentsOrThrow,
@@ -59,7 +60,7 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
   reason = 'limitHit',
 }) => {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
+  const { openConversation, openPage } = useChatNavigation();
   const labels = useHandoffLabels(reason);
   const [busy, setBusy] = useState(false);
   const { data: conversation } = useSWR(`conversation/${conversationId}`, () => getConversationOrNull(conversationId));
@@ -86,7 +87,9 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
     try {
       const id = await switchAndContinue({ conversationId, target, labels });
       await swrMutate('assistants.list');
-      await navigate(`/conversation/${id}`);
+      // The bot was re-pinned: windows with their own caches (robots, main) reload it.
+      afterAssistantsChanged();
+      openConversation(id);
     } catch (error) {
       console.error('[limitSwitch] Switch and continue failed:', error);
       Message.error(t(`${PREFIX}.failed`));
@@ -100,7 +103,7 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
     return (
       <div className='flex flex-wrap items-center gap-6px text-t-secondary text-12px'>
         <span>{t(`${PREFIX}.noAlternatives`)}</span>
-        <Button size='mini' onClick={() => void navigate(onModelEngine ? MODEL_SETTINGS_PATH : ENGINE_SETTINGS_PATH)}>
+        <Button size='mini' onClick={() => openPage(onModelEngine ? MODEL_SETTINGS_PATH : ENGINE_SETTINGS_PATH)}>
           {t(onModelEngine ? `${PREFIX}.openModelSettings` : `${PREFIX}.openEngineSettings`)}
         </Button>
       </div>

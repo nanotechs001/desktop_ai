@@ -208,6 +208,7 @@ const Layout: React.FC<{
     isVaChatCollapsed,
     toggleVaChat,
     revealBrowserFor,
+    revealFileFor,
   } = usePreviewContext();
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
@@ -395,6 +396,18 @@ const Layout: React.FC<{
       }).catch((error: unknown) => console.warn('[Layout] could not follow the robot chat:', error));
     };
 
+    // A file link clicked in a robot's chat: that conversation's preview pane shows it, once it is on screen
+    const handleOpenFileInConversation = (event: CustomEvent<{ conversation_id: string; path: string }>) => {
+      const { conversation_id, path } = event.detail;
+      revealFileFor(conversation_id, path);
+      void navigate(`/conversation/${conversation_id}`);
+    };
+
+    // A robot's chat linked to a main-window page (engine settings, a scheduled task); main checked the path
+    const handleNavigateToPage = (event: CustomEvent<{ path: string }>) => {
+      void navigate(event.detail.path);
+    };
+
     // A VA Bot robot's popup asked for that bot's settings
     const handleOpenAgentSettings = (event: CustomEvent<{ agent_id: string }>) => {
       void navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: event.detail.agent_id } });
@@ -426,6 +439,8 @@ const Layout: React.FC<{
     window.addEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
     window.addEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
     window.addEventListener('tray:follow-robot-chat', handleFollowRobotChat as EventListener);
+    window.addEventListener('tray:open-file-in-conversation', handleOpenFileInConversation as EventListener);
+    window.addEventListener('tray:navigate-to-page', handleNavigateToPage as EventListener);
     window.addEventListener('tray:open-about', handleOpenAbout as EventListener);
     window.addEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
     window.addEventListener('tray:check-update', handleCheckUpdate as EventListener);
@@ -436,23 +451,25 @@ const Layout: React.FC<{
       window.removeEventListener('tray:open-agent-settings', handleOpenAgentSettings as EventListener);
       window.removeEventListener('tray:open-link-in-conversation', handleOpenLinkInConversation as EventListener);
       window.removeEventListener('tray:follow-robot-chat', handleFollowRobotChat as EventListener);
+      window.removeEventListener('tray:open-file-in-conversation', handleOpenFileInConversation as EventListener);
+      window.removeEventListener('tray:navigate-to-page', handleNavigateToPage as EventListener);
       window.removeEventListener('tray:open-about', handleOpenAbout as EventListener);
       window.removeEventListener('tray:pause-all-tasks', handlePauseAllTasks as EventListener);
       window.removeEventListener('tray:check-update', handleCheckUpdate as EventListener);
     };
-  }, [navigate, revealBrowserFor]);
+  }, [navigate, revealBrowserFor, revealFileFor]);
 
-  // An agent whose chat is in a robot popup opened or switched a page: the main window's pane follows that chat.
+  // An agent whose chat is in a robot popup opened or switched a page: main has the main window's pane follow that
+  // chat (tray:follow-robot-chat) only for the robot the user works with, while its popup is open.
   useEffect(
     () =>
       onAgentTabActivity((conversationId) => {
         if (!isChatInWidget(conversationId)) return;
-        followRobotChat(pathnameRef.current, conversationId, {
-          revealBrowserFor,
-          navigate: (path) => void navigate(path),
-        }).catch((error: unknown) => console.warn('[Layout] could not follow the robot chat:', error));
+        ipcBridge.agentWidget.followActivity
+          .invoke({ conversation_id: conversationId })
+          .catch((error: unknown) => console.warn('[Layout] could not follow the robot chat:', error));
       }),
-    [navigate, revealBrowserFor]
+    []
   );
 
   const siderWidth = isMobile

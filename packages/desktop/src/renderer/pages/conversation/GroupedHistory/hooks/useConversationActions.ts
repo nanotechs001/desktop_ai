@@ -7,6 +7,7 @@
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
 import { requestConversationSendBoxPrefill } from '@/renderer/hooks/chat/useSendBoxDraft';
+import { getWidgetConversationId, useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
 import { refreshConversationCache } from '@/renderer/pages/conversation/utils/conversationCache';
 import { isLegacyReadOnlyConversationType } from '@/renderer/pages/conversation/utils/conversationRuntime';
 import { emitter } from '@/renderer/utils/emitter';
@@ -48,6 +49,7 @@ export const useConversationActions = ({
   const { id } = useParams();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { openConversation } = useChatNavigation();
 
   // Close dropdown when entering batch mode
   useEffect(() => {
@@ -186,23 +188,24 @@ export const useConversationActions = ({
       setDropdownVisibleId(null);
 
       if (isLegacyReadOnlyConversationType(conversation.type)) {
-        void navigate('/guid', {
-          state: {
-            prefillPrompt,
-            preservePrefillDraft: true,
-            focusPrefill: true,
-          },
-        });
+        // A robot window has no home page of its own, and robots only hold VA Bot chats, never these.
+        if (!getWidgetConversationId()) {
+          void navigate('/guid', {
+            state: {
+              prefillPrompt,
+              preservePrefillDraft: true,
+              focusPrefill: true,
+            },
+          });
+        }
       } else {
         requestConversationSendBoxPrefill(conversation.id, prefillPrompt);
-        if (id !== conversation.id) {
-          void navigate(`/conversation/${conversation.id}`);
-        }
+        if (id !== conversation.id) openConversation(conversation.id);
       }
 
       onSessionClick?.();
     },
-    [id, navigate, onSessionClick, t]
+    [id, navigate, openConversation, onSessionClick, t]
   );
 
   const handleArchive = useCallback(

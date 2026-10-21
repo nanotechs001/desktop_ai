@@ -11,8 +11,24 @@ vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
   getConversationOrNull: vi.fn(async (id: string) => conversations.get(id) ?? null),
 }));
 vi.mock('@/common/config/configService', () => ({ configService: { get: vi.fn(() => undefined) } }));
+const bridge = vi.hoisted(() => ({
+  robots: [] as Array<{ conversation_id: string; agent_id?: string; hidden: boolean }>,
+  chats: [] as Array<{ id: string; created_at: number; assistant?: { id: string } }>,
+  showConversation: vi.fn(async (_p: unknown) => undefined),
+  remove: vi.fn(async (_p: unknown) => undefined),
+}));
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    agentWidget: {
+      listRobots: { invoke: async () => bridge.robots },
+      showConversation: { invoke: bridge.showConversation },
+      remove: { invoke: bridge.remove },
+    },
+    database: { getUserConversations: { invoke: async () => ({ items: bridge.chats, has_more: false }) } },
+  },
+}));
 
-import { followRobotChat } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
+import { followRobotChat, retireRobotChat } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 
 const deps = () => ({ revealBrowserFor: vi.fn(), navigate: vi.fn() });
 
@@ -44,5 +60,39 @@ describe('followRobotChat', () => {
     await expect(followRobotChat('/conversation/bot-a', 'bot-a', d)).resolves.toBe(false);
     expect(d.revealBrowserFor).not.toHaveBeenCalled();
     expect(d.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('retireRobotChat', () => {
+  beforeEach(() => {
+    bridge.showConversation.mockClear();
+    bridge.remove.mockClear();
+    bridge.robots = [{ conversation_id: 'gone', agent_id: 'bot-1', hidden: false }];
+    bridge.chats = [
+      { id: 'older', created_at: 1, assistant: { id: 'bot-1' } },
+      { id: 'newest', created_at: 3, assistant: { id: 'bot-1' } },
+      { id: 'other-bot', created_at: 9, assistant: { id: 'bot-2' } },
+    ];
+  });
+
+  it("moves the robot of a deleted chat (or a rolled-back switch) to its bot's newest remaining chat", async () => {
+    await retireRobotChat('gone');
+    expect(bridge.showConversation).toHaveBeenCalledWith({ conversation_id: 'gone', to: 'newest' });
+    expect(bridge.remove).not.toHaveBeenCalled();
+  });
+
+  it('removes the robot when its bot has no chat left, or it stands for no bot', async () => {
+    bridge.chats = [{ id: 'other-bot', created_at: 9, assistant: { id: 'bot-2' } }];
+    await retireRobotChat('gone');
+    bridge.robots = [{ conversation_id: 'plain', hidden: false }];
+    await retireRobotChat('plain');
+    expect(bridge.remove.mock.calls).toEqual([[{ conversation_id: 'gone' }], [{ conversation_id: 'plain' }]]);
+    expect(bridge.showConversation).not.toHaveBeenCalled();
+  });
+
+  it('leaves alone a chat that has no robot', async () => {
+    await retireRobotChat('no-robot');
+    expect(bridge.remove).not.toHaveBeenCalled();
+    expect(bridge.showConversation).not.toHaveBeenCalled();
   });
 });

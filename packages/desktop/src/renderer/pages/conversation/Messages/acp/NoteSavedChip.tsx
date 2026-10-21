@@ -8,10 +8,10 @@ import { Button } from '@arco-design/web-react';
 import { BookOne } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import type { NoteChipData } from '@/common/chat/artifactToolCall';
 import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
+import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 
 export type NoteSavedChipProps = NoteChipData & { conversationId?: string };
@@ -23,7 +23,7 @@ export type NoteSavedChipProps = NoteChipData & { conversationId?: string };
  */
 const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversationId }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { openBotSettings } = useChatNavigation();
   // Shares the chat page's cache entry, so this is no extra request.
   const { data: conversation } = useSWR(conversationId ? `conversation/${conversationId}` : null, () =>
     getConversationOrNull(conversationId!)
@@ -48,7 +48,7 @@ const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversatio
             type='text'
             className='!px-0'
             disabled={conversationId !== undefined && conversation === undefined}
-            onClick={() => navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: agentId } })}
+            onClick={() => openBotSettings(agentId)}
           >
             {t('messages.noteChip.open')}
           </Button>

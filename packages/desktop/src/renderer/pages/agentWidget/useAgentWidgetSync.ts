@@ -14,6 +14,7 @@ import { configService } from '@/common/config/configService';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { ensureConversationRuntime } from '@/renderer/pages/conversation/utils/ensureConversationRuntime';
 import { resolveCronJobId } from '@/renderer/pages/cron/cronUtils';
+import { hasGuidDraft } from '@/renderer/pages/guid/utils/guidDraftStore';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { getWidgetConversationId } from './chatLocation';
@@ -53,8 +54,33 @@ export async function launchWidgetWhenReady(conversationId: string): Promise<boo
   return ipcBridge.agentWidget.ensure.invoke({ conversation_id: conversationId, agent_id: conversation.assistant?.id });
 }
 
-const removeWidget = (conversationId: string): void => {
-  void ipcBridge.agentWidget.remove.invoke({ conversation_id: conversationId }).catch(() => {});
+// shortcut: one page of the list (the list store reads the same), page through it if a user ever has more chats.
+const CHAT_LIST_LIMIT = 10_000;
+
+/** The bot's newest chat other than `except` (created last: the one its tabs and robot go to), if any. */
+async function newestChatOfBot(agentId: string, except: string): Promise<string | undefined> {
+  const page = await ipcBridge.database.getUserConversations.invoke({ limit: CHAT_LIST_LIMIT });
+  return (page?.items ?? [])
+    .filter((chat) => chat.id !== except && chat.assistant?.id === agentId)
+    .toSorted((a, b) => b.created_at - a.created_at)[0]?.id;
+}
+
+/**
+ * A robot's chat is gone (deleted, archived, a failed switch rolled back): the robot moves to its bot's newest
+ * remaining chat, and is removed only when the bot has none left or it stands for no bot.
+ */
+export async function retireRobotChat(conversationId: string): Promise<void> {
+  const robot = (await ipcBridge.agentWidget.listRobots.invoke())?.find((r) => r.conversation_id === conversationId);
+  if (!robot) return;
+  const next = robot.agent_id ? await newestChatOfBot(robot.agent_id, conversationId) : undefined;
+  if (next) await ipcBridge.agentWidget.showConversation.invoke({ conversation_id: conversationId, to: next });
+  else await ipcBridge.agentWidget.remove.invoke({ conversation_id: conversationId });
+}
+
+const retireWidget = (conversationId: string): void => {
+  retireRobotChat(conversationId).catch((error: unknown) =>
+    console.warn('[agentWidget] could not move or remove the robot of a closed chat:', error)
+  );
 };
 
 /** Main window only: follow conversation lifecycle events and create/remove widgets to match. */
@@ -63,10 +89,10 @@ export function useAgentWidgetSync(): void {
     if (!isElectronDesktop() || getWidgetConversationId()) return;
     const offList = ipcBridge.conversation.listChanged.on(({ conversation_id, action }) => {
       if (action === 'created') void launchWidgetWhenReady(conversation_id).catch(() => {});
-      else if (action === 'deleted') removeWidget(conversation_id);
+      else if (action === 'deleted') retireWidget(conversation_id);
     });
-    const offDeleted = addEventListener('conversation.deleted', removeWidget);
-    const offArchived = addEventListener('conversation.archived', removeWidget);
+    const offDeleted = addEventListener('conversation.deleted', retireWidget);
+    const offArchived = addEventListener('conversation.archived', retireWidget);
     return () => {
       offList();
       offDeleted();
@@ -142,14 +168,23 @@ type FollowRobotChatDeps = {
   navigate: (path: string) => void;
 };
 
+/** The user is typing in this window: it has focus and so does a text field in it. */
+const isTypingHere = (): boolean => {
+  if (typeof document === 'undefined' || !document.hasFocus()) return false;
+  const el = document.activeElement;
+  return el instanceof HTMLElement && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+};
+
 /**
  * A robot's popup moved to chat `to` (opened, a new chat, one from its history). The main window follows with that
  * chat's browser pane while it shows the home page or a VA Bot chat: elsewhere (a plain chat, settings) it stays put.
+ * It never leaves what the user is doing here: a prompt on the home page (its input is lost on unmount), or typing.
  */
 export async function followRobotChat(pathname: string, to: string, deps: FollowRobotChatDeps): Promise<boolean> {
   const onScreen = /^\/conversation\/([^/?#]+)/.exec(pathname)?.[1];
   const onHome = pathname === '/' || pathname === '/guid';
   if (onScreen === to || (!onScreen && !onHome)) return false;
+  if ((onHome && hasGuidDraft()) || isTypingHere()) return false;
   if (onScreen) {
     const current = await getConversationOrNull(onScreen);
     if (!current || !isVaBotAgent(current.assistant, configService.get(DEFAULT_AGENT_SETTING_KEY))) return false;

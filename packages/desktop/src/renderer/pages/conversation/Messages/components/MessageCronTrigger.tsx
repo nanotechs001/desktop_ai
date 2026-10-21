@@ -9,11 +9,11 @@ import { iconColors } from '@/renderer/styles/colors';
 import { AlarmClock, Right } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
 
 const MessageCronTrigger: React.FC<{ artifact: ICronTriggerArtifact }> = ({ artifact }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { openPage } = useChatNavigation();
   const rawContent = artifact.payload as
     | ICronTriggerArtifact['payload']
     | {
@@ -47,7 +47,7 @@ const MessageCronTrigger: React.FC<{ artifact: ICronTriggerArtifact }> = ({ arti
     <div
       data-testid='message-cron-trigger'
       className='w-full mx-auto cursor-pointer'
-      onClick={() => navigate(`/scheduled/${cron_job_id}`)}
+      onClick={() => openPage(`/scheduled/${cron_job_id}`)}
     >
       <div
         className='flex items-center gap-8px px-16px py-12px rd-12px b-1 b-solid bg-fill-0 hover:bg-fill-1 transition-colors'

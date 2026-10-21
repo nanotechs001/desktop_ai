@@ -8,10 +8,10 @@ import { Button, Input, Tag } from '@arco-design/web-react';
 import { Lightning } from '@icon-park/react';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
 import { SKILL_PROPOSAL_LIMITS, type SaveSkillResult, type SkillProposal } from '@/common/types/agent/skillProposal';
+import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
 
 export type SkillProposalCardProps = SkillProposal & { conversationId?: string };
 
@@ -51,7 +51,7 @@ const isOwnSkill = (skill: { name: string; description?: string }, name: string,
  */
 const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description, steps, conversationId }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { openBotSettings } = useChatNavigation();
   // Same key as the skills settings pages, so the list is shared and refreshed together.
   const { data: skills, mutate } = useSWR(SKILLS_KEY, () => ipcBridge.fs.listAvailableSkills.invoke());
   const [draft, setDraft] = useState(steps);
@@ -120,14 +120,7 @@ const SkillProposalCard: React.FC<SkillProposalCardProps> = ({ name, description
         text,
         result.agent_id && !result.library_only ? (
           <div>
-            <Button
-              size='mini'
-              type='text'
-              className='!px-0'
-              onClick={() =>
-                navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: result.agent_id } })
-              }
-            >
+            <Button size='mini' type='text' className='!px-0' onClick={() => openBotSettings(result.agent_id)}>
               {t('messages.skillCard.openSettings')}
             </Button>
           </div>

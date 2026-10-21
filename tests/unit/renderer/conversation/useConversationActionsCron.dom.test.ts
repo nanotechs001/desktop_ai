@@ -8,8 +8,9 @@ import type { TChatConversation } from '@/common/config/storage';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { navigateMock, requestPrefillMock, routeState } = vi.hoisted(() => ({
+const { navigateMock, requestPrefillMock, routeState, showConversationMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
+  showConversationMock: vi.fn(async () => undefined),
   requestPrefillMock: vi.fn(),
   routeState: { id: 'current-conversation' as string | undefined },
 }));
@@ -35,6 +36,7 @@ vi.mock('@/common', () => ({
       remove: { invoke: vi.fn() },
       update: { invoke: vi.fn() },
     },
+    agentWidget: { showConversation: { invoke: showConversationMock } },
   },
 }));
 
@@ -82,6 +84,22 @@ describe('create scheduled task conversation action', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     routeState.id = 'current-conversation';
+    window.location.hash = '';
+  });
+
+  it('in a robot window, moves the robot to the chat instead of navigating its own router', () => {
+    window.location.hash = '#/widget/current-conversation';
+    const { result } = renderActions();
+
+    act(() => result.current.handleCreateCronTask(makeConversation('background-conversation', 'acp')));
+    act(() => result.current.handleCreateCronTask(makeConversation('readonly-gemini', 'gemini')));
+
+    expect(requestPrefillMock).toHaveBeenCalledWith('background-conversation', 'Create with /cron in AionUi');
+    expect(showConversationMock).toHaveBeenCalledWith({
+      conversation_id: 'current-conversation',
+      to: 'background-conversation',
+    });
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('prefills the current editable conversation without navigating', () => {

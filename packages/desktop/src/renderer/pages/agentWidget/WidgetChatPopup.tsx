@@ -67,6 +67,8 @@ const RECENT_LIMIT = 30;
 const GESTURE_THRESHOLD_PX = 3;
 // The expanded window's resize handles: thin invisible strips on the panel's sides, and its corners.
 const RESIZE_EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
+// Presses on these parts of the popup are not work in the chat, so the main window does not follow them.
+const NOT_IN_CHAT_SELECTOR = 'header, [data-resize], aside';
 
 /**
  * Pointer handlers that move (title bar) or resize (an edge) the expanded window. They send the pointer's screen
@@ -272,9 +274,9 @@ const WidgetChatPopup: React.FC<WidgetChatPopupProps> = (props) => {
       aria-label={botName}
       data-widget-hit
       onPointerDownCapture={(e) => {
-        // Working in this chat brings its browser up in the main window; the title-bar buttons (close, hide,
-        // settings...) are not working in the chat.
-        if (e.button !== 0 || (e.target as Element).closest('header button') || !props.conversation?.id) return;
+        // Working in this chat brings its browser up in the main window. The title bar (its buttons, a window drag),
+        // the resize handles and the sidebar (a Recent pick follows on its own) are not working in the chat.
+        if (e.button !== 0 || (e.target as Element).closest(NOT_IN_CHAT_SELECTOR) || !props.conversation?.id) return;
         ipcBridge.agentWidget.followInMain
           .invoke({ conversation_id: props.conversation.id })
           .catch((error: unknown) => console.warn('[WidgetChatPopup] could not ask the main window to follow:', error));

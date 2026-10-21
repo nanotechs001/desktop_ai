@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import type { AgentChatLocation } from '@/common/types/agent/agentWidget';
 import { requestConversationSendBoxPrefill, takeSendBoxDraftText } from '@/renderer/hooks/chat/useSendBoxDraft';
@@ -93,4 +94,49 @@ export function useChatLocation(conversationId: string | undefined): AgentChatLo
 export function isChatInWidget(conversationId: string): boolean {
   start();
   return getLocation(conversationId) === 'widget';
+}
+
+export type ChatNavigation = {
+  /** Show another chat: the robot moves to it in a robot window. */
+  openConversation: (conversationId: string) => void;
+  /** Show a main-window page a chat links to (`/settings/agent`, `/settings/model`, `/scheduled/:id`). */
+  openPage: (path: string) => void;
+  /** Open a VA Bot's settings in the Agent editor. */
+  openBotSettings: (agentId: string) => void;
+};
+
+const warn = (what: string) => (error: unknown) => console.warn(`[chatNavigation] could not ${what}:`, error);
+
+/**
+ * Links inside a chat, for the window that shows it. The main window navigates. A robot window never moves its own
+ * router off the robot page (that would turn it into a second main window): it moves the robot to the chat, or has
+ * the main window show the page, the way the popup's settings gear does.
+ */
+export function useChatNavigation(): ChatNavigation {
+  const navigate = useNavigate();
+  return useMemo(() => {
+    // Read per call: a robot that moves to another chat keeps the page and changes its hash.
+    const robot = () => getWidgetConversationId();
+    return {
+      openConversation: (to) => {
+        const from = robot();
+        if (!from) return void navigate(`/conversation/${to}`);
+        if (from === to) return;
+        ipcBridge.agentWidget.showConversation.invoke({ conversation_id: from, to }).catch(warn('move the robot'));
+      },
+      openPage: (path) => {
+        const from = robot();
+        if (!from) return void navigate(path);
+        ipcBridge.agentWidget.openPageInMain.invoke({ conversation_id: from, path }).catch(warn('open the page'));
+      },
+      openBotSettings: (agentId) => {
+        const from = robot();
+        if (!from)
+          return void navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: agentId } });
+        ipcBridge.agentWidget.openAgentSettings
+          .invoke({ conversation_id: from, agent_id: agentId })
+          .catch(warn('open the settings'));
+      },
+    };
+  }, [navigate]);
 }

@@ -9,7 +9,7 @@ import { parseError } from '@/common/utils';
 import { Message } from '@arco-design/web-react';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
 import { emitter } from '@/renderer/utils/emitter';
 import type { TFunction } from 'i18next';
 
@@ -29,12 +29,12 @@ export function getForkErrorMessage(error: unknown, t: TFunction): string {
 
 /**
  * Fork the current conversation at a message: call the fork API, jump into the
- * forked conversation, and pre-warm its runtime so a backend-side fork failure
+ * forked conversation (a robot moves to it), and pre-warm its runtime so a backend-side fork failure
  * surfaces immediately instead of on the first send.
  */
 export function useForkConversation(conversationId: string | undefined) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { openConversation } = useChatNavigation();
   const forkingRef = useRef(false);
 
   return useCallback(
@@ -50,7 +50,8 @@ export function useForkConversation(conversationId: string | undefined) {
           throw new Error('fork returned no conversation');
         }
         emitter.emit('chat.history.refresh');
-        void navigate(`/conversation/${forked.id}`);
+        // In a robot window the robot moves to the fork (its router never leaves the robot page).
+        openConversation(forked.id);
         // Lazy fork + eager surfacing: materialize the backend session now so
         // "parent session gone" style failures show up before the first send.
         void ipcBridge.conversation.ensureRuntime.invoke({ conversation_id: forked.id }).catch((): void => undefined);
@@ -61,6 +62,6 @@ export function useForkConversation(conversationId: string | undefined) {
         forkingRef.current = false;
       }
     },
-    [conversationId, navigate, t]
+    [conversationId, openConversation, t]
   );
 }

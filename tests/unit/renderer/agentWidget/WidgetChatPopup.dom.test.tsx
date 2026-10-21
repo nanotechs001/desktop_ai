@@ -202,4 +202,15 @@ describe('WidgetChatPopup follow in the main window', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'pet.widget.hideWidget' }), { button: 0 });
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it('a title-bar drag, a resize handle or the sidebar of the expanded window does not either', () => {
+    const invoke = vi.spyOn(ipcBridge.agentWidget.followInMain, 'invoke').mockResolvedValue(undefined);
+    vi.spyOn(ipcBridge.agentWidget.adjustWindow, 'invoke').mockResolvedValue(undefined);
+    renderPopup({ id: 'bot-1', name: 'Bot' }, vi.fn(), vi.fn(), { ...LAYOUT, window_mode: 'expanded' });
+    const dialog = screen.getByRole('dialog');
+    fireEvent.pointerDown(dialog.querySelector('header')!, { button: 0, pointerId: 1 });
+    fireEvent.pointerDown(dialog.querySelector('[data-resize="se"]')!, { button: 0, pointerId: 1 });
+    fireEvent.pointerDown(dialog.querySelector('aside')!, { button: 0 });
+    expect(invoke).not.toHaveBeenCalled();
+  });
 });

@@ -9,6 +9,7 @@ import { useDragUpload } from '@/renderer/hooks/file/useDragUpload';
 import { usePasteService } from '@/renderer/hooks/file/usePasteService';
 import { allSupportedExts, type FileMetadata } from '@/renderer/services/FileService';
 import { measureCaretTop, scrollCaretToLastLine } from '../utils/caretUtils';
+import { setGuidDraftPresent } from '../utils/guidDraftStore';
 import { useCallback, useEffect, useState } from 'react';
 
 export type GuidInputResult = {
@@ -47,6 +48,12 @@ export const useGuidInput = ({ locationState }: UseGuidInputOptions): GuidInputR
   const [dir, setDir] = useState<string>('');
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Tell code that would navigate away on its own (following a robot's chat) that a prompt is being written.
+  useEffect(() => {
+    setGuidDraftPresent(input.trim().length > 0 || files.length > 0);
+    return () => setGuidDraftPresent(false);
+  }, [input, files]);
 
   // Read workspace from location.state (passed from tabs add button)
   useEffect(() => {
