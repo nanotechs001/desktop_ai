@@ -1182,7 +1182,6 @@ const PreviewPanel: React.FC = () => {
       isDirty: tab.isDirty,
       favicon: tab.content_type === 'browser' ? tab.metadata?.favicon : undefined,
       agentActive: tab.content_type === 'browser' ? tab.metadata?.agentActive : undefined,
-      agentOwned: tab.content_type === 'browser' ? tab.metadata?.agentOwned : undefined,
       profile: tab.content_type === 'browser' ? (tab.metadata?.profile ?? PERSONAL_PROFILE) : undefined,
       canCopyPath: canCopyAbsolutePath(paths.absolute, isElectronDesktop()),
       canCopyRelativePath: Boolean(paths.relative),

@@ -6,7 +6,7 @@
 
 import { iconColors } from '@/renderer/styles/colors';
 import { Close, Comments, Plus } from '@icon-park/react';
-import { Button, Tag } from '@arco-design/web-react';
+import { Button } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -63,11 +63,6 @@ export interface PreviewTab {
    * Agent is currently driving this browser tab
    */
   agentActive?: boolean;
-
-  /**
-   * An agent opened this browser tab
-   */
-  agentOwned?: boolean;
 
   /**
    * The browser profile of a browser tab (Personal or an Agent's), shown as its avatar; absent for other tabs
@@ -293,11 +288,6 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                       className='w-6px h-6px rd-full bg-success animate-pulse flex-shrink-0'
                       title={t('preview.browser.agentActiveTooltip')}
                     />
-                  )}
-                  {tab.agentOwned && (
-                    <Tag size='small' className='flex-shrink-0'>
-                      {t('preview.browserChrome.agent.badge')}
-                    </Tag>
                   )}
                   {/* 未保存指示器 / Unsaved indicator */}
                   {tab.isDirty && (
