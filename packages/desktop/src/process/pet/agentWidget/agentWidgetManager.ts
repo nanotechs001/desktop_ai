@@ -1067,8 +1067,9 @@ export class AgentWidgetManager {
     }
     entry.lastSize = { width: bounds.width, height: bounds.height };
     // Windows does not always reflow a transparent frameless window on setBounds (electron#20729);
-    // hide → setBounds → show forces DWM to rebuild it, same workaround as the pet window.
-    if (process.platform !== 'win32' || !win.isVisible()) {
+    // hide → setBounds → show forces DWM to rebuild it, same workaround as the pet window. Not while the user resizes
+    // the expanded window: that resizes on every frame, and would flash on every one.
+    if (process.platform !== 'win32' || !win.isVisible() || entry.windowGesture) {
       win.setBounds(bounds, false);
       this.restoreAfterDpiChange(win, bounds);
       return;

@@ -1962,6 +1962,24 @@ describe('expanded window mode', () => {
       expect(win.bounds).toMatchObject({ y: 0, height: EXPANDED.y + BAND + 440 });
     });
 
+    it('on Windows a resize never hides and re-shows the window on each frame', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      try {
+        const { manager, win } = await openExpanded();
+        win.visible = true;
+        const hide = vi.spyOn(win as unknown as { hide: () => void }, 'hide');
+        const east = gesture(manager, 'e');
+        east('start');
+        for (let i = 1; i <= 5; i++) east('move', -i * 10, 0);
+        east('end', -50, 0);
+        expect(win.bounds.width).toBe(EXPANDED.width - 50);
+        expect(hide).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(process, 'platform', platform);
+      }
+    });
+
     it('the robot walks within the new width after a resize', async () => {
       const { manager } = await expandedWalker();
       const corner = gesture(manager, 'sw');
