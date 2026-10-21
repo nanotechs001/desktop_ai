@@ -852,9 +852,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
   useLayoutEffect(() => {
     const previous = lastContentTabRef.current;
     lastContentTabRef.current = activeTabId;
-    const content = contentRef.current;
-    if (!content || !previous || previous === activeTabId || isMotionReduced()) return;
-    for (const child of Array.from(content.children)) {
+    const contentBox = contentRef.current;
+    if (!contentBox || !previous || previous === activeTabId || isMotionReduced()) return;
+    for (const child of Array.from(contentBox.children)) {
       child.animate?.([{ opacity: 0 }, { opacity: 1 }], {
         duration: MOTION_MS.fast,
         easing: 'cubic-bezier(0.2, 0, 0, 1)',
