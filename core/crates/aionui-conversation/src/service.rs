@@ -1356,6 +1356,12 @@ impl ConversationService {
                 })
             })
             .transpose()?;
+        // Chats the backend makes (scheduled runs, channels) send no snapshot: give them the
+        // built-ins the renderer's `withBrowserMcp` adds. Team provisioning always sends one.
+        let selected_session_mcp_servers = match selected_session_mcp_servers {
+            None if !is_team_conversation => self.default_builtin_session_mcp_servers(user_id).await?,
+            sent => sent,
+        };
         let selected_mcp_statuses = if is_team_conversation {
             match extra.as_object_mut().and_then(|obj| obj.remove("mcp_statuses")) {
                 Some(value) => serde_json::from_value::<Vec<ConversationMcpStatus>>(value).map_err(|e| {
@@ -5382,6 +5388,27 @@ fn context_skill_names(context: &AgentSessionContext) -> Vec<String> {
 }
 
 impl ConversationService {
+    /// The user's built-in session MCP rows, for a create that sends no snapshot; `None` when
+    /// the user has none, so nothing is stored.
+    async fn default_builtin_session_mcp_servers(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<Vec<SessionMcpServer>>, ConversationError> {
+        let repo = self
+            .mcp_server_repo
+            .read()
+            .ok()
+            .and_then(|guard| guard.as_ref().cloned());
+        let Some(repo) = repo else {
+            return Ok(None);
+        };
+        let mut servers = Vec::new();
+        for name in aionui_ai_agent::factory::builtin_mcp_env::BUILTIN_SESSION_MCP_NAMES {
+            servers.extend(builtin_session_mcp_server(Some(repo.as_ref()), user_id, name).await?);
+        }
+        Ok((!servers.is_empty()).then_some(servers))
+    }
+
     /// Build the typed four-field runtime MCP snapshot from explicit request
     /// selections (or the global enabled fallback when `selected_ids` is
     /// `None`), deduped by name and classified against the agent's transport

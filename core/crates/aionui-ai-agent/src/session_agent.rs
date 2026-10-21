@@ -1911,9 +1911,14 @@ pub async fn build_session_instance(
         neutral.push(if backend_label == "codex" {
             codex_snapshot_server(server, runtime_env, mcp_server_repo.map(|repo| repo.as_ref()), &user_id).await
         } else {
-            // claude is left as is: it already reaches the built-ins' env, and its MCP
-            // config rides argv (visible in the process list), so no tokens go there.
-            server.clone()
+            // claude gets no env: it already reaches the built-ins' env, and its MCP config
+            // rides argv (visible in the process list), so no tokens go there.
+            crate::factory::builtin_mcp_env::with_builtin_row_transport(
+                server,
+                mcp_server_repo.map(|repo| repo.as_ref()),
+                &user_id,
+            )
+            .await
         });
     }
     let mut mcp_servers: Vec<McpServerSpec> = neutral.iter().map(session_server_to_spec).collect();

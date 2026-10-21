@@ -640,7 +640,8 @@ impl IConversationRepository for StubConvRepo {
 
     async fn create(&self, row: &aionui_db::models::ConversationRow) -> Result<(), aionui_db::DbError> {
         self.rows.lock().unwrap().insert(row.id.clone(), row.clone());
-        Ok(())
+        // The acp_session row a create writes needs its conversation in SQLite.
+        self.seed_sqlite_row(row).await
     }
     async fn update(
         &self,
@@ -3608,4 +3609,67 @@ async fn cd4_on_conversation_delete_preserves_all_cron_jobs() {
     let events = bc.take_events();
     let removed_events: Vec<_> = events.iter().filter(|e| e.name == "cron.job-removed").collect();
     assert!(removed_events.is_empty());
+}
+
+/// A scheduled new-chat run sends no session MCP snapshot; the created chat still gets the
+/// user's built-in browser, artifacts and notes servers, as a renderer-created chat does.
+#[tokio::test]
+async fn new_conversation_run_gets_the_builtin_session_mcps() {
+    use aionui_db::{CreateMcpServerParams, IMcpServerRepository, SqliteMcpServerRepository};
+
+    let (svc, _, bc, conv_repo, conv_service) = setup_with_conv_runtime().await;
+    let mcp_db = init_database_memory().await.unwrap();
+    // This DB holds no user rows; the MCP rows only need to exist for "u1".
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(mcp_db.pool())
+        .await
+        .unwrap();
+    let mcp_repo = Arc::new(SqliteMcpServerRepository::new(mcp_db.pool().clone()));
+    for (name, builtin) in [
+        ("aionui-browser", true),
+        ("aionui-artifacts", true),
+        ("aionui-notes", true),
+        ("my-server", false),
+    ] {
+        mcp_repo
+            .create(CreateMcpServerParams {
+                user_id: "u1",
+                name,
+                description: None,
+                enabled: true,
+                transport_type: "stdio",
+                transport_config: &format!(r#"{{"command":"node","args":["/app/{name}.js"]}}"#),
+                tools: None,
+                original_json: None,
+                builtin,
+            })
+            .await
+            .unwrap();
+    }
+    conv_service.with_mcp_server_repo(mcp_repo as Arc<dyn IMcpServerRepository>);
+    std::mem::forget(mcp_db);
+
+    let mut req = make_create_req("Scheduled New Chat", every_60s());
+    req.execution_mode = Some("new_conversation".into());
+    let job = svc.add_job("u1", req).await.unwrap();
+    bc.take_events();
+
+    let response = svc.run_now("u1", &job.id).await.unwrap();
+    assert_ne!(response.conversation_id, job.conversation_id);
+
+    let created = conv_repo.get("u1", &response.conversation_id).await.unwrap().unwrap();
+    let extra: serde_json::Value = serde_json::from_str(&created.extra).unwrap();
+    let names: Vec<&str> = extra["session_mcp_servers"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no session snapshot: {extra}"))
+        .iter()
+        .filter_map(|server| server["name"].as_str())
+        .collect();
+    assert_eq!(names, ["aionui-browser", "aionui-artifacts", "aionui-notes"]);
+    // The app tells a scheduled run's own chat from the user's chats by this.
+    assert_eq!(extra["scheduled_run"], true);
+    assert_eq!(
+        extra["session_mcp_servers"][0]["transport"]["args"],
+        serde_json::json!(["/app/aionui-browser.js"])
+    );
 }

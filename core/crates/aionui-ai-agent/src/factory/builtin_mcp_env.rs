@@ -8,8 +8,8 @@
 //! lanes pass them explicitly. Only the built-in names get them: on any other server the
 //! tokens would leak. A snapshot entry may carry a built-in name only when the user's MCP row of
 //! that name is a built-in one (checked when the conversation's MCP snapshot is built); at launch
-//! the tokens go only to an entry whose command and args are that row's, which also covers
-//! snapshots stored before that check.
+//! a built-in runs that row's current transport, so the tokens go only to the row's command, also
+//! for snapshots stored before that check or before the built-in script moved.
 
 use aionui_api_types::{SessionMcpServer, SessionMcpTransport};
 use aionui_db::IMcpServerRepository;
@@ -64,6 +64,26 @@ pub(crate) async fn with_builtin_mcp_env(
     with_builtin_mcp_env_from(server, runtime_env, trusted.as_ref(), |key| std::env::var(key).ok())
 }
 
+/// A copy of `server` launching `user_id`'s built-in row as it is now, with no env added: the
+/// claude lane, whose MCP config rides argv, so no tokens go there. Any other server, or a
+/// built-in name without a stdio built-in row, is kept as is.
+pub(crate) async fn with_builtin_row_transport(
+    server: &SessionMcpServer,
+    repo: Option<&dyn IMcpServerRepository>,
+    user_id: &str,
+) -> SessionMcpServer {
+    if !is_builtin_mcp_name(&server.name) {
+        return server.clone();
+    }
+    match builtin_row_transport(repo, user_id, &server.name).await {
+        Some(row @ SessionMcpTransport::Stdio { .. }) => SessionMcpServer {
+            transport: row,
+            ..server.clone()
+        },
+        _ => server.clone(),
+    }
+}
+
 /// The unresolved transport of `user_id`'s built-in MCP row named `name`, the form the
 /// conversation snapshot stores; `None` without a repository, a row, or a built-in row.
 pub(crate) async fn builtin_row_transport(
@@ -87,8 +107,10 @@ pub(crate) async fn builtin_row_transport(
 }
 
 /// The URL and token are set together from the process env, never from the spec, so a spec
-/// cannot pair a foreign URL with the real token; each built-in gets only its own pair, and only
-/// when the spec launches the same command and args as `trusted`, the user's built-in row.
+/// cannot pair a foreign URL with the real token; each built-in gets only its own pair. A
+/// built-in launches `trusted`, the user's built-in row, as it is now, whatever transport the
+/// snapshot stored: the row is rewritten when the built-in script moves, and the tokens go only
+/// to that trusted command. Without a stdio row the snapshot launches as stored, with no env.
 pub(crate) fn with_builtin_mcp_env_from(
     server: &SessionMcpServer,
     runtime_env: &[(String, String)],
@@ -99,19 +121,21 @@ pub(crate) fn with_builtin_mcp_env_from(
     let Some((url_key, token_key)) = credential_keys(&server.name) else {
         return server;
     };
-    let SessionMcpTransport::Stdio { command, args, env } = &mut server.transport else {
+    let Some(row @ SessionMcpTransport::Stdio { .. }) = trusted else {
+        if let SessionMcpTransport::Stdio { env, .. } = &mut server.transport {
+            env.retain(|key, _| !MANAGED_ENV_KEYS.contains(&key.as_str()));
+        }
+        tracing::warn!(server = %server.name, "builtin MCP: no built-in stdio row; no env passed");
+        return server;
+    };
+    if *row != server.transport {
+        tracing::info!(server = %server.name, "builtin MCP: launching the built-in row's current transport");
+    }
+    server.transport = row.clone();
+    let SessionMcpTransport::Stdio { env, .. } = &mut server.transport else {
         return server;
     };
     env.retain(|key, _| !MANAGED_ENV_KEYS.contains(&key.as_str()));
-    let is_row_launch = matches!(
-        trusted,
-        Some(SessionMcpTransport::Stdio { command: row_command, args: row_args, .. })
-            if row_command == command && row_args == args
-    );
-    if !is_row_launch {
-        tracing::warn!(server = %server.name, "builtin MCP: launch differs from the built-in row; no env passed");
-        return server;
-    }
     let non_empty = |value: Option<String>| value.filter(|value| !value.is_empty());
     let mut added = Vec::new();
     if let (Some(url), Some(token)) = (non_empty(process_env(url_key)), non_empty(process_env(token_key))) {
@@ -131,6 +155,10 @@ pub(crate) fn with_builtin_mcp_env_from(
     tracing::info!(server = %server.name, keys = ?added, "builtin MCP: env passed explicitly");
     server
 }
+
+/// The built-in servers every conversation gets (`BUILTIN_SESSION_MCP_NAMES` in the renderer's
+/// `withBrowserMcp.ts`), in that order.
+pub const BUILTIN_SESSION_MCP_NAMES: [&str; 3] = ["aionui-browser", "aionui-artifacts", "aionui-notes"];
 
 /// True for the app's built-in MCP server names.
 pub fn is_builtin_mcp_name(name: &str) -> bool {
@@ -293,20 +321,25 @@ mod tests {
     }
 
     #[test]
-    fn spec_url_is_replaced_by_the_process_url() {
+    fn spec_env_is_replaced_by_the_rows_and_the_process_url() {
+        let mut trusted = row();
+        if let SessionMcpTransport::Stdio { env, .. } = &mut trusted {
+            env.insert("ROW_KEY".into(), "row".into());
+        }
         let server = with_builtin_mcp_env_from(
             &stdio(
                 "aionui-browser",
-                &[(RELAY_URL, "ws://evil.example:1"), ("USER_KEY", "kept")],
+                &[(RELAY_URL, "ws://evil.example:1"), ("USER_KEY", "dropped")],
             ),
             &runtime_env(),
-            Some(&row()),
+            Some(&trusted),
             fake_process_env,
         );
         let env = env_of(&server);
         assert_eq!(env[RELAY_URL], "ws://127.0.0.1:4100");
         assert_eq!(env[RELAY_TOKEN], "relay-secret");
-        assert_eq!(env["USER_KEY"], "kept");
+        assert_eq!(env["ROW_KEY"], "row");
+        assert!(!env.contains_key("USER_KEY"), "{env:?}");
     }
 
     #[test]
@@ -330,22 +363,57 @@ mod tests {
     }
 
     #[test]
-    fn a_builtin_name_with_a_foreign_transport_gets_no_token() {
-        let mut evil = stdio("aionui-browser", &[(RELAY_TOKEN, "stale"), ("USER_KEY", "kept")]);
-        if let SessionMcpTransport::Stdio { command, .. } = &mut evil.transport {
+    fn a_builtin_name_with_a_foreign_transport_launches_the_row_instead() {
+        // The token only ever goes to the row's command: a foreign command or args is not run.
+        let mut evil = stdio("aionui-browser", &[(RELAY_TOKEN, "stale")]);
+        if let SessionMcpTransport::Stdio { command, args, .. } = &mut evil.transport {
             *command = "/tmp/evil".into();
-        }
-        let server = with_builtin_mcp_env_from(&evil, &runtime_env(), Some(&row()), fake_process_env);
-        assert_eq!(env_of(&server).len(), 1, "{:?}", env_of(&server));
-        assert_eq!(env_of(&server)["USER_KEY"], "kept");
-
-        // Same command, other args: still not the built-in.
-        let mut other_args = stdio("aionui-browser", &[]);
-        if let SessionMcpTransport::Stdio { args, .. } = &mut other_args.transport {
             *args = vec!["/tmp/evil.js".into()];
         }
-        let server = with_builtin_mcp_env_from(&other_args, &runtime_env(), Some(&row()), fake_process_env);
+        let server = with_builtin_mcp_env_from(&evil, &runtime_env(), Some(&row()), fake_process_env);
+        let SessionMcpTransport::Stdio { command, args, env } = &server.transport else {
+            panic!("stdio expected");
+        };
+        assert_eq!(
+            (command.as_str(), args.as_slice()),
+            ("node", ["server.js".to_owned()].as_slice())
+        );
+        assert_eq!(env[RELAY_TOKEN], "relay-secret");
+    }
+
+    #[test]
+    fn a_non_stdio_row_passes_no_env() {
+        let http_row = SessionMcpTransport::Http {
+            url: "http://127.0.0.1:1".into(),
+            headers: Default::default(),
+        };
+        let server = with_builtin_mcp_env_from(
+            &stdio("aionui-browser", &[(RELAY_TOKEN, "stale")]),
+            &runtime_env(),
+            Some(&http_row),
+            fake_process_env,
+        );
         assert!(env_of(&server).is_empty(), "{:?}", env_of(&server));
+    }
+
+    #[test]
+    fn a_snapshot_from_an_older_row_path_launches_the_current_row() {
+        // The built-in script moved (app moved, translocated, dev path changed) after the chat
+        // was created: the chat launches the row's current script, with its env.
+        let mut old = stdio("aionui-browser", &[(RELAY_TOKEN, "stale")]);
+        if let SessionMcpTransport::Stdio { args, .. } = &mut old.transport {
+            *args = vec!["/old/path/server.js".into()];
+        }
+        let server = with_builtin_mcp_env_from(&old, &runtime_env(), Some(&row()), fake_process_env);
+        let SessionMcpTransport::Stdio { command, args, env } = &server.transport else {
+            panic!("stdio expected");
+        };
+        assert_eq!(
+            (command.as_str(), args.as_slice()),
+            ("node", ["server.js".to_owned()].as_slice())
+        );
+        assert_eq!(env[RELAY_TOKEN], "relay-secret");
+        assert_eq!(env[AIONUI_CONVERSATION_ID_ENV], "conv-1");
     }
 
     #[test]
@@ -394,6 +462,22 @@ mod tests {
         assert_eq!(
             builtin_row_transport(None, "system_default_user", "aionui-browser").await,
             None
+        );
+
+        // The claude lane launches the row's current script and adds no env.
+        let mut old = stdio("aionui-browser", &[]);
+        if let SessionMcpTransport::Stdio { args, .. } = &mut old.transport {
+            *args = vec!["/old/path/server.js".into()];
+        }
+        let launched = with_builtin_row_transport(&old, Some(repo), "system_default_user").await;
+        assert_eq!(launched.transport, row());
+        let mut not_builtin = stdio("aionui-artifacts", &[]);
+        if let SessionMcpTransport::Stdio { args, .. } = &mut not_builtin.transport {
+            *args = vec!["/old/path/server.js".into()];
+        }
+        assert_eq!(
+            with_builtin_row_transport(&not_builtin, Some(repo), "system_default_user").await,
+            not_builtin
         );
     }
 

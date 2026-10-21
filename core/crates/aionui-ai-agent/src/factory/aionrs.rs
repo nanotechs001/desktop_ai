@@ -108,6 +108,7 @@ pub(super) async fn build(
     merge_session_snapshot_mcp_servers(
         &mut extra_mcp_servers,
         &overrides.session_mcp_servers,
+        deps.mcp_server_repo.as_deref(),
         &ctx.user_id,
         &ctx.conversation_id,
         deps.broadcaster.clone(),
@@ -779,11 +780,14 @@ async fn session_server_to_mcp_server_config(
 async fn merge_session_snapshot_mcp_servers(
     extra_mcp_servers: &mut HashMap<String, McpServerConfig>,
     session_mcp_servers: &[SessionMcpServer],
+    repo: Option<&dyn IMcpServerRepository>,
     user_id: &str,
     conversation_id: &str,
     broadcaster: Arc<dyn EventBroadcaster>,
 ) {
     for server in session_mcp_servers {
+        // A built-in launches its row's current script (the row moves with the app).
+        let server = &crate::factory::builtin_mcp_env::with_builtin_row_transport(server, repo, user_id).await;
         // Reserved name defense: the team coordination MCP must win. The inline
         // merge below OVERWRITES on name collision, so a snapshot entry named
         // `aionui-team` would otherwise replace the coordination bridge.
@@ -1165,6 +1169,7 @@ mod tests {
         merge_session_snapshot_mcp_servers(
             &mut extra_mcp_servers,
             &snapshot,
+            None,
             TEST_USER_ID,
             "conv-1",
             test_broadcaster(),
@@ -2041,6 +2046,7 @@ mod tests {
         merge_session_snapshot_mcp_servers(
             &mut extra_mcp_servers,
             &snapshot,
+            None,
             TEST_USER_ID,
             "conv-1",
             test_broadcaster(),
@@ -2122,6 +2128,7 @@ mod tests {
         merge_session_snapshot_mcp_servers(
             &mut assembled,
             &session_snapshot,
+            None,
             TEST_USER_ID,
             "conv-assembly",
             test_broadcaster(),
@@ -2177,6 +2184,7 @@ mod tests {
         merge_session_snapshot_mcp_servers(
             &mut servers,
             &snapshot,
+            None,
             "user-override",
             "conv-override",
             test_broadcaster(),
