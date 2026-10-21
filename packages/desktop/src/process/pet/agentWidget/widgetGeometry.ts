@@ -118,7 +118,12 @@ const EXPANDED_START_INSET_PX = 24;
 // The robot walks no closer than this to the window's left and right edges.
 const BAND_WALK_INSET_PX = 16;
 
-export const expandedBandHeight = (botSize: number): number => Math.round(botSize * EXPANDED_BAND_RATIO);
+// Room above the robot for its slime hop (the hop itself is drawn by the renderer).
+export const HOP_HEADROOM_PX = 12;
+
+/** The band holds the hop headroom plus the part of the robot above the panel. */
+export const expandedBandHeight = (botSize: number): number =>
+  HOP_HEADROOM_PX + Math.round(botSize * EXPANDED_BAND_RATIO);
 
 /** The x range (robot's left edge, inside the window) the robot walks along the expanded window's top band. */
 export function bandWalkRange(windowWidth: number, botSize: number): { min: number; max: number } {

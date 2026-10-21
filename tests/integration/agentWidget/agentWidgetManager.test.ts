@@ -1428,9 +1428,10 @@ describe('AgentWidgetManager watchInMain', () => {
 });
 
 describe('expanded window mode', () => {
-  // 1920x1040 work area, 88 px robot: band 66 (0.75 of the robot), panel 960x640, window 960x706 centred.
-  const BAND = 66;
-  const EXPANDED = { x: 480, y: 167, width: 960, height: 706 };
+  // 1920x1040 work area, 88 px robot: band 78 (0.75 of the robot plus the hop headroom), panel 960x640, window
+  // 960x718 centred.
+  const BAND = 66 + HOP_HEADROOM;
+  const EXPANDED = { x: 480, y: 161, width: 960, height: 718 };
   const START_OFFSET = 960 - BOT - 24;
   type WindowLayout = LayoutEvent & {
     expanded: boolean;
@@ -1469,6 +1470,43 @@ describe('expanded window mode', () => {
     manager.setExpanded(A, false);
     expect(win.bounds).toEqual(collapsed); // the taskbar robot as always
     expect(layoutOf(A)).toMatchObject({ top_band: 0, window_mode: 'expanded' });
+  });
+
+  it('insets the robot by its hop headroom; the band grows by as much, so the overlap with the panel is unchanged', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    appear(manager, A);
+    manager.setWindowMode(A, 'expanded');
+    manager.setExpanded(A, true);
+    const layout = layoutOf(A)!;
+    expect(layout.hop_headroom).toBe(HOP_HEADROOM);
+    expect(layout.top_band - layout.hop_headroom).toBe(66);
+    // The robot's bottom (headroom + size) overlaps the panel by a quarter of the robot.
+    expect(layout.hop_headroom + BOT - layout.top_band).toBe(BOT - 66);
+  });
+
+  it('stays open when focus leaves the expanded window; the compact popup still collapses on blur', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    const win = liveWindows()[0];
+    appear(manager, A);
+    const clickOutside = () => {
+      vi.advanceTimersByTime(1_000); // past the open grace period
+      win.emit('focus');
+      Object.assign(win, { focused: false });
+      win.emit('blur');
+      vi.advanceTimersByTime(1_000);
+    };
+
+    manager.setWindowMode(A, 'expanded');
+    manager.setExpanded(A, true);
+    clickOutside();
+    expect(layoutOf(A)).toMatchObject({ expanded: true, window_mode: 'expanded' });
+    expect(win.bounds).toEqual(EXPANDED);
+
+    manager.setWindowMode(A, 'compact');
+    clickOutside();
+    expect(layoutOf(A)).toMatchObject({ expanded: false, window_mode: 'compact' });
   });
 
   it('expanding an open popup re-places at once; restoring returns to the compact popup above the robot', async () => {

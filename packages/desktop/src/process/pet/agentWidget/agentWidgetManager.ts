@@ -29,6 +29,7 @@ import {
   carriedPosition,
   computePlacement,
   expandedBandHeight,
+  HOP_HEADROOM_PX,
   expandedPlacement,
   landingY,
   getWalkTrack,
@@ -62,8 +63,6 @@ const FRAME_IDLE_MS = 50;
 const DRAG_WATCHDOG_MS = 8000;
 const GLIDE_TICK_MS = 50;
 const GLIDE_PX_PER_TICK = 2;
-// Room above a collapsed robot for its slime hop (the hop itself is drawn by the renderer).
-const HOP_HEADROOM_PX = 12;
 // Targets closer than this never turn the robot: no direction flicker on tiny moves.
 const DIRECTION_DEADBAND_PX = 6;
 // The robot turns toward the mouse only when it is clearly to one side (no flipping as the mouse jitters).
@@ -736,7 +735,10 @@ export class AgentWidgetManager {
     win.on('blur', () => {
       if (!entry.focusedSinceOpen || Date.now() - entry.openedAt < OPEN_BLUR_GRACE_MS) return;
       setTimeout(() => {
-        if (win.isDestroyed() || entry.resizing || win.isFocused() || !entry.record.expanded) return;
+        // The expanded window is a desktop chat window: it stays open until closed or minimized.
+        if (win.isDestroyed() || entry.resizing || win.isFocused() || !entry.record.expanded || this.inBand(entry)) {
+          return;
+        }
         this.setExpanded(entry.record.conversation_id, false); // collapse only — the agent and its chat keep running
       }, BLUR_COLLAPSE_DELAY_MS);
     });
@@ -933,7 +935,8 @@ export class AgentWidgetManager {
       bot_offset_x: placement.botOffsetX,
       facing: entry.facing,
       moving: entry.moving,
-      hop_headroom: entry.record.expanded ? 0 : this.headroom(entry),
+      // In the band the robot is inset by its headroom from the window's top edge (the band includes it).
+      hop_headroom: this.inBand(entry) ? HOP_HEADROOM_PX : entry.record.expanded ? 0 : this.headroom(entry),
       drag_phase: entry.dragPhase,
       window_mode: entry.record.window_mode ?? 'compact',
       top_band: this.inBand(entry) ? expandedBandHeight(this.botSize()) : 0,
