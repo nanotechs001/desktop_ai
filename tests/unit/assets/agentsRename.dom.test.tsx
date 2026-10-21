@@ -66,6 +66,9 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: translate, i18n: { language: 'en-US' } }),
 }));
 
+// The desktop app, whose main adds the managed rule blocks.
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
+
 vi.mock('@/renderer/hooks/config/useConfig', () => ({
   useConfig: (key: string) => [mocks.config.get(key), vi.fn()],
 }));
@@ -74,6 +77,7 @@ vi.mock('@/common/config/configService', () => ({
   configService: {
     get: (key: string) => mocks.config.get(key),
     set: vi.fn(async () => {}),
+    reload: async () => {},
     setLocal: (key: string, value: unknown) => mocks.config.set(key, value),
     whenReady: async () => {},
     initialize: async () => {},

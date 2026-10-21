@@ -421,6 +421,21 @@ describe('useEngineDriftSync', () => {
     expect(mocks.updateAssistant).toHaveBeenCalledTimes(1);
   });
 
+  it('re-reads the pins before re-binding, so a pin another window wrote is not undone (M4)', async () => {
+    mocks.listAssistants.mockResolvedValue([assistant('robot-pinned', 'b')]);
+    mocks.configService.reload.mockImplementationOnce(async () => {
+      mocks.store.set('agent.enginePins', { 'robot-pinned': 'b' });
+    });
+
+    renderHook(() => useEngineDriftSync(), { wrapper });
+
+    await waitFor(() =>
+      expect(mocks.configService.reload).toHaveBeenCalledWith(['agent.enginePins', 'agent.enginePinOrigins'])
+    );
+    await act(async () => {});
+    expect(mocks.updateAssistant).not.toHaveBeenCalled();
+  });
+
   it('warns about background re-bind failures only once per session', async () => {
     mocks.listAssistants.mockResolvedValue([assistant('drifted', 'b')]);
     mocks.updateAssistant.mockRejectedValue(new Error('boom'));

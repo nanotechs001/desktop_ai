@@ -69,7 +69,7 @@ export type EnginePinOrigin = 'user' | 'limit';
  * The pins are whole maps written back from this window's cache; a robot window, the main window or a phone may have
  * written one meanwhile. Re-read them first so no other pin is lost; a failed read leaves the cached ones.
  */
-const reloadPins = (): Promise<void> =>
+export const reloadEnginePins = (): Promise<void> =>
   configService
     .reload(['agent.enginePins', 'agent.enginePinOrigins'])
     .catch((error: unknown) => console.warn('[engine] could not re-read the engine pins:', error));
@@ -80,7 +80,7 @@ export async function persistEnginePin(
   engineId: string | null,
   origin: EnginePinOrigin = 'user'
 ): Promise<void> {
-  await reloadPins();
+  await reloadEnginePins();
   const { [assistantId]: _previous, ...others } = configService.get('agent.enginePins') ?? {};
   await configService.set('agent.enginePins', engineId ? { ...others, [assistantId]: engineId } : others);
   const origins = configService.get('agent.enginePinOrigins') ?? {};
@@ -99,7 +99,7 @@ export const enginePinOrigin = (assistantId: string): EnginePinOrigin =>
  * own pins stay. Only pins still tagged are dropped: a pin the user re-made since then is theirs.
  */
 export async function releaseLimitPins(): Promise<void> {
-  await reloadPins();
+  await reloadEnginePins();
   const origins = configService.get('agent.enginePinOrigins') ?? {};
   const released = new Set(Object.keys(origins).filter((id) => origins[id] === 'limit'));
   if (released.size === 0) return;
@@ -180,6 +180,8 @@ async function syncEngineBindings(request: SyncRequest): Promise<SyncOutcome> {
     return { failedCount: 0, skipped: true };
   }
 
+  // Seeding and the re-bind plan read the pins: another window (a robot, the phone) may have changed them.
+  await reloadEnginePins();
   let seeded = true;
   try {
     await seedEnginePins(assistants, seedFromId, !commitDefault);
