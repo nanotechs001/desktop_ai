@@ -39,6 +39,7 @@ import {
   HOP_HEADROOM_PX,
   keepWindowReachable,
   resizeWindow,
+  roundRect,
   windowHeaderPoint,
   landingY,
   getWalkTrack,
@@ -1005,7 +1006,7 @@ export class AgentWidgetManager {
   /** Apply the current placement to the window and tell its renderer when the layout shape changed. */
   private place(entry: WidgetEntry): void {
     if (entry.win.isDestroyed()) return;
-    if (this.inBand(entry)) entry.bandBounds ??= this.openingBandBounds(entry);
+    if (this.inBand(entry)) entry.bandBounds = roundRect(entry.bandBounds ?? this.openingBandBounds(entry));
     const placement = this.currentPlacement(entry);
     if (this.inBand(entry)) {
       // Just opened: the first stroll along the band waits one stroll delay, like on the taskbar.
@@ -1060,8 +1061,10 @@ export class AgentWidgetManager {
     entry.windowTransition = null;
   }
 
-  private setBounds(entry: WidgetEntry, bounds: Rect): void {
+  private setBounds(entry: WidgetEntry, rect: Rect): void {
     const { win } = entry;
+    // Electron takes whole pixels only (setPosition throws on a fraction, which wedged drags and the window ease).
+    const bounds = roundRect(rect);
     const sizeChanged = bounds.width !== entry.lastSize.width || bounds.height !== entry.lastSize.height;
     if (!sizeChanged) {
       win.setPosition(bounds.x, bounds.y, false);

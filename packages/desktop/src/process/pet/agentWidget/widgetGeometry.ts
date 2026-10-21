@@ -307,3 +307,11 @@ export function easeOutRect(from: Rect, to: Rect, t: number): Rect {
     height: at(from.height, to.height),
   };
 }
+
+/** `rect` on whole pixels, the only bounds Electron windows accept. */
+export const roundRect = (rect: Rect): Rect => ({
+  x: Math.round(rect.x),
+  y: Math.round(rect.y),
+  width: Math.round(rect.width),
+  height: Math.round(rect.height),
+});

@@ -54,6 +54,13 @@ const recordSchema = z.object({
       height: z.number().finite().positive(),
     })
     .strict()
+    // Older builds saved fractional bounds, which no window accepts.
+    .transform((b) => ({
+      x: Math.round(b.x),
+      y: Math.round(b.y),
+      width: Math.round(b.width),
+      height: Math.round(b.height),
+    }))
     .optional(),
 });
 

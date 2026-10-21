@@ -1727,6 +1727,39 @@ describe('expanded window mode', () => {
     expect(win.bounds.width).toBe(before.width - 40);
   });
 
+  it('a remembered expanded window saved with fractions still drags, restores and re-expands', async () => {
+    const { manager } = await makeManager({
+      settings: { enabled: true },
+      widgets: {
+        [A]: {
+          widget_id: 'w-a',
+          conversation_id: A,
+          expanded: false,
+          hidden: false,
+          chat_location: 'main',
+          x_ratio: 0.5,
+          window_mode: 'expanded',
+          expanded_bounds: { x: 889.921875, y: 307.109375, width: 1200, height: 725 },
+        },
+      },
+    });
+    const win = liveWindows().at(-1)!;
+    appear(manager, A);
+    manager.setExpanded(A, true);
+    expect(win.bounds).toEqual({ x: 890, y: 307, width: 1200, height: 725 });
+
+    manager.adjustWindow(A, 'move', 'start', 0, 0);
+    manager.adjustWindow(A, 'move', 'end', 30, 20);
+    expect(win.bounds).toMatchObject({ x: 920, y: 327 });
+    expect(lastDragPhase(A)).toBe('none');
+
+    manager.setWindowMode(A, 'compact');
+    vi.advanceTimersByTime(1_000);
+    manager.setWindowMode(A, 'expanded');
+    vi.advanceTimersByTime(1_000);
+    expect(win.bounds).toEqual({ x: 920, y: 327, width: 1200, height: 725 });
+  });
+
   describe('closing drops the robot where it stands', () => {
     const BAND_LEFT = EXPANDED.x + START_OFFSET;
     const BAND_TOP = EXPANDED.y + HOP_HEADROOM;
