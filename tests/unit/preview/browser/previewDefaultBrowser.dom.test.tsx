@@ -642,24 +642,32 @@ describe("the bot scope takes over its chats' stored tabs once", () => {
     content_type: 'browser',
     metadata: { profile: { kind: 'agent', agentId } },
   });
-  const store = (scope: string, tabs: object[]) =>
+  const store = (scope: string, tabs: object[], savedAt = 1) =>
     localStorage.setItem(
       previewScopeStorageKey(scope),
-      JSON.stringify({ isOpen: true, tabs, activeTabId: (tabs[0] as { id: string }).id })
+      JSON.stringify({ isOpen: true, tabs, activeTabId: (tabs[0] as { id: string }).id, savedAt })
     );
   const storedIdsOf = (scope: string) => storedScope(scope).tabs.map((tab: { id: string }) => tab.id);
 
   it('merges the bot-profile tabs of every stored scope, de-duplicated, and leaves the rest where they are', () => {
-    store('/ws/c1', [
-      botTab('browser-1-a', 'https://a.test/'),
-      { id: 'browser-2-p', title: 'p', content: 'https://personal.test/', content_type: 'browser' },
-      { id: 'markdown-3', title: 'Doc', content: '# doc', content_type: 'markdown' },
-    ]);
-    store('/ws/c2', [
-      botTab('browser-4-a', 'https://a.test/'),
-      botTab('browser-5-b', 'https://b.test/'),
-      botTab('browser-6-x', 'https://x.test/', 'bot-x'),
-    ]);
+    store(
+      '/ws/c1',
+      [
+        botTab('browser-1-a', 'https://a.test/'),
+        { id: 'browser-2-p', title: 'p', content: 'https://personal.test/', content_type: 'browser' },
+        { id: 'markdown-3', title: 'Doc', content: '# doc', content_type: 'markdown' },
+      ],
+      2
+    );
+    store(
+      '/ws/c2',
+      [
+        botTab('browser-4-a', 'https://a.test/'),
+        botTab('browser-5-b', 'https://b.test/'),
+        botTab('browser-6-x', 'https://x.test/', 'bot-x'),
+      ],
+      1
+    );
     mount();
 
     enterScope('bot:bot-b', { ...OPEN_BROWSER, conversationId: 'c1' });
@@ -667,19 +675,50 @@ describe("the bot scope takes over its chats' stored tabs once", () => {
     expect(ctx.tabs.map((tab) => tab.content)).toEqual(['https://a.test/', 'https://b.test/']);
     expect(ctx.isOpen).toBe(true);
     expect(storedIdsOf('/ws/c1')).toEqual(['browser-2-p', 'markdown-3']);
-    expect(storedIdsOf('/ws/c2')).toEqual(['browser-6-x']);
+    // The older copy of the same address is not taken, so it stays where it was.
+    expect(storedIdsOf('/ws/c2')).toEqual(['browser-4-a', 'browser-6-x']);
   });
 
-  it('caps the merged tabs at the browser tab cap', () => {
+  it('caps the merged tabs, most recently stored scope first, and leaves the tabs it does not take where they are', () => {
     store(
-      '/ws/c1',
-      Array.from({ length: MAX_BROWSER_TABS + 2 }, (_, i) => botTab(`browser-${i}`, `https://t${i}.test/`))
+      '/ws/old',
+      Array.from({ length: MAX_BROWSER_TABS }, (_, i) => botTab(`browser-old-${i}`, `https://old${i}.test/`)),
+      100
+    );
+    store(
+      '/ws/new',
+      [botTab('browser-new-0', 'https://new0.test/'), botTab('browser-new-1', 'https://old0.test/')],
+      200
     );
     mount();
 
     enterScope('bot:bot-b', { ...OPEN_BROWSER, conversationId: 'c1' });
 
     expect(ctx.tabs).toHaveLength(MAX_BROWSER_TABS);
+    expect(ctx.tabs.slice(0, 2).map((tab) => tab.id)).toEqual(['browser-new-0', 'browser-new-1']);
+    // Not taken (over the cap, or the same address as a newer one): still stored where they were, never lost.
+    expect(storedIdsOf('/ws/new')).toEqual([]);
+    expect(storedIdsOf('/ws/old')).toEqual(['browser-old-0', 'browser-old-9']);
+  });
+
+  it('moves a live tab it takes into the bot scope: shown once, the same webview, and no longer stored in its old scope', () => {
+    store('/ws/p', [botTab('browser-1-live', 'https://live.test/')]);
+    mount();
+    enterScope('/ws/p', { ...OPEN_BROWSER, conversationId: 'r' });
+    const live = ctx.liveBrowserTabs.find((tab) => tab.id === 'browser-1-live');
+    expect(live).toBeDefined();
+
+    enterScope('bot:bot-b', { ...OPEN_BROWSER, conversationId: 'c1' });
+
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(['browser-1-live']);
+    expect(ctx.liveBrowserTabs.filter((tab) => tab.id === 'browser-1-live')).toEqual([live]);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(storedIdsOf('/ws/p')).not.toContain('browser-1-live');
+    enterScope('/ws/p', { ...OPEN_BROWSER, conversationId: 'r' });
+    expect(ctx.tabs.map((tab) => tab.id)).not.toContain('browser-1-live');
+    expect(ctx.liveBrowserTabs.filter((tab) => tab.id === 'browser-1-live')).toHaveLength(1);
   });
 
   it('runs once: a later stored bot tab elsewhere stays where it is', () => {

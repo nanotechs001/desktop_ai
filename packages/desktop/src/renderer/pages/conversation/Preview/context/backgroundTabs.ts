@@ -60,6 +60,13 @@ export const enterScope = (
   };
 };
 
+/** The background with the tabs `ids` names parked under `scope` (their webviews stay as they are). */
+export const moveIntoScope = (
+  background: readonly BackgroundTab[],
+  ids: ReadonlySet<string>,
+  scope: string
+): BackgroundTab[] => background.map((entry) => (ids.has(entry.tab.id) ? { ...entry, scope } : entry));
+
 /**
  * The browser tabs whose webviews stay mounted: every tab of the scope on screen, then background
  * tabs until {@link MAX_LIVE_BROWSER_TABS}, dropping the least recently used user tabs (never an

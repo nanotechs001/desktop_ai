@@ -79,6 +79,7 @@ import {
   type PreviewContextValue,
 } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { previewScopeStorageKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
+import { configService } from '@/common/config/configService';
 import {
   resetCurrentConversationForTest,
   setCurrentConversation,
@@ -138,6 +139,7 @@ beforeEach(() => {
   resetCurrentConversationForTest();
   h.scopes = {};
   h.bots = {};
+  configService.setLocal('agent.builtinDefaultId', 'aion-default-agent');
   vi.useFakeTimers();
   // Past any pane input an earlier test noted: each test starts later than every earlier one, on a clock of its own.
   testClock = Math.max(testClock, Date.now()) + 10 * USER_INPUT_GRACE_MS;
@@ -276,6 +278,68 @@ describe('only the user closes the pane for good', () => {
     enter('/s/c1', { ...OPEN, conversationId: 'c1' });
 
     expect(ctx.isOpen).toBe(false);
+  });
+});
+
+describe('the bot scope takes over a live tab of the scope on screen', () => {
+  it("when an agent's tab first opens in the bot scope: the live tab leaves the screen and its old scope's storage", async () => {
+    h.bots.c1 = 'bot-b';
+    localStorage.setItem(
+      previewScopeStorageKey('/s/p'),
+      JSON.stringify({
+        isOpen: true,
+        activeTabId: 'browser-1-live',
+        tabs: [
+          {
+            id: 'browser-1-live',
+            title: 'x',
+            content: 'https://live.test/',
+            content_type: 'browser',
+            metadata: { profile: BOT },
+          },
+        ],
+      })
+    );
+    mount();
+    enter('/s/p', { ...OPEN, conversationId: 'r' });
+    const live = ctx.liveBrowserTabs.find((tab) => tab.id === 'browser-1-live');
+
+    await requestTab({ url: 'https://agent.test/', background: false, conversationId: 'c1', profile: BOT });
+    flushPersist();
+
+    expect(browserTabs().map((tab) => tab.id)).not.toContain('browser-1-live');
+    expect(storedIds('/s/p')).not.toContain('browser-1-live');
+    expect(ctx.liveBrowserTabs.filter((tab) => tab.id === 'browser-1-live')).toEqual([live]);
+    enter(BOT_SCOPE, botChat('c1'));
+    expect(browserTabs().map((tab) => tab.content)).toEqual(['https://live.test/', 'https://agent.test/']);
+  });
+});
+
+describe("an agent's tab waits for the settings before it picks a scope", () => {
+  it('opens in the chat of an adopted default Agent, not in a bot scope, once the default id loads', async () => {
+    let loaded: () => void = () => {};
+    configService.reset(); // the settings (and so the default id) have not loaded yet
+    const settings = vi.spyOn(configService, 'whenReady').mockReturnValue(
+      new Promise<void>((resolve) => {
+        loaded = resolve;
+      })
+    );
+    h.scopes.c1 = '/s/c1';
+    h.bots.c1 = 'adopted';
+    mount();
+    enter('/s/c1', { ...OPEN, conversationId: 'c1' });
+
+    await act(async () => {
+      for (const handler of h.openTab) handler({ url: 'https://agent.test/', background: false, conversationId: 'c1' });
+      // The chat lookup answers while the settings still load; they bring the default id only after.
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      configService.setLocal('agent.builtinDefaultId', 'adopted');
+      loaded();
+    });
+
+    expect(browserTabs().map((tab) => tab.content)).toContain('https://agent.test/');
+    settings.mockRestore();
+    configService.reset();
   });
 });
 

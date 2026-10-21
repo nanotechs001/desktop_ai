@@ -35,7 +35,14 @@ import { configService } from '@/common/config/configService';
 import { DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
 import { dropOpenBurstDuplicates } from './openBurstDuplicates';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { enterScope, isBrowserTab, leaveScope, liveBrowserTabs, type BackgroundTab } from './backgroundTabs';
+import {
+  enterScope,
+  isBrowserTab,
+  leaveScope,
+  liveBrowserTabs,
+  moveIntoScope,
+  type BackgroundTab,
+} from './backgroundTabs';
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { getCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
@@ -644,33 +651,52 @@ const botProfile = (agentId?: string): BrowserTabProfile | undefined =>
 const isAgentProfileTab = (tab: PreviewTab, agentId: string): boolean =>
   tab.content_type === 'browser' && tab.metadata?.profile?.kind === 'agent' && tab.metadata.profile.agentId === agentId;
 
-/**
- * A VA Bot's scope the first time it is stored: before one browser per bot, each chat of the bot kept its own browser
- * tabs in its project scope. The tabs in the bot's own profile move from every stored scope into the bot's, once (the
- * bot scope then exists), de-duplicated by address and capped at {@link MAX_BROWSER_TABS}. Everything else, a
- * Personal tab or a file, stays where it was.
- */
-const adoptStoredBotTabs = (scope: string, agentId: string): void => {
-  const adopted: PreviewTab[] = [];
-  for (const key of listPersistedPreviewScopeKeys()) {
-    const other = key.slice(PREVIEW_SCOPE_KEY_PREFIX.length);
-    const stored = loadScopeState(other);
-    const botTabs = stored.tabs.filter((tab) => isAgentProfileTab(tab, agentId));
-    if (botTabs.length === 0) continue;
-    adopted.push(...botTabs);
-    persistScopeState(other, { ...stored, tabs: stored.tabs.filter((tab) => !botTabs.includes(tab)) });
-  }
-  const tabs = adopted
-    .filter((tab, i) => adopted.findIndex((first) => first.content === tab.content) === i)
-    .slice(0, MAX_BROWSER_TABS);
-  persistScopeState(scope, { isOpen: tabs.length > 0, tabs, activeTabId: tabs[0]?.id ?? null });
+/** When a stored scope's tabs last changed (0 when unknown, so it counts as the oldest). */
+const savedAtOf = (scope: string): number => {
+  const savedAt = readPersistedEntry(previewScopeStorageKey(scope))?.savedAt;
+  return typeof savedAt === 'number' ? savedAt : 0;
 };
 
-/** A scope's stored state, for entering it or opening a tab in it; a bot scope adopts its chats' old tabs first. */
-const loadEnteredScope = (scope: string): PersistedScopeState => {
+/**
+ * A VA Bot's scope the first time it is stored: before one browser per bot, each chat of the bot kept its own browser
+ * tabs in its project scope. The tabs in the bot's own profile move from the stored scopes into the bot's, once (the
+ * bot scope then exists): the most recently stored scope first, de-duplicated by address and capped at
+ * {@link MAX_BROWSER_TABS}. Only the tabs taken leave their scope, so none is lost; a Personal tab or a file stays too.
+ * Returns the ids taken, whose live webviews must follow.
+ */
+const adoptStoredBotTabs = (scope: string, agentId: string): ReadonlySet<string> => {
+  const sources = listPersistedPreviewScopeKeys()
+    .map((key) => key.slice(PREVIEW_SCOPE_KEY_PREFIX.length))
+    .filter((other) => other !== scope)
+    .map((other) => ({ other, savedAt: savedAtOf(other), stored: loadScopeState(other) }))
+    .toSorted((a, b) => b.savedAt - a.savedAt);
+  const candidates = sources.flatMap(({ stored }) => stored.tabs.filter((tab) => isAgentProfileTab(tab, agentId)));
+  const tabs = candidates
+    .filter((tab, i) => candidates.findIndex((first) => first.content === tab.content) === i)
+    .slice(0, MAX_BROWSER_TABS);
+  const taken = new Set(tabs.map((tab) => tab.id));
+  for (const { other, stored } of sources) {
+    if (stored.tabs.some((tab) => taken.has(tab.id))) {
+      persistScopeState(other, { ...stored, tabs: stored.tabs.filter((tab) => !taken.has(tab.id)) });
+    }
+  }
+  persistScopeState(scope, { isOpen: tabs.length > 0, tabs, activeTabId: tabs[0]?.id ?? null });
+  return taken;
+};
+
+const NONE_TAKEN: ReadonlySet<string> = new Set();
+
+/**
+ * A scope's stored state, for entering it or opening a tab in it; a bot scope first adopts its chats' old tabs
+ * (`adopted`, the ids it took).
+ */
+const loadEnteredScope = (scope: string): { state: PersistedScopeState; adopted: ReadonlySet<string> } => {
   const agentId = botOfScope(scope);
-  if (agentId && readPersistedEntry(previewScopeStorageKey(scope)) === null) adoptStoredBotTabs(scope, agentId);
-  return loadScopeState(scope);
+  const adopted =
+    agentId && readPersistedEntry(previewScopeStorageKey(scope)) === null
+      ? adoptStoredBotTabs(scope, agentId)
+      : NONE_TAKEN;
+  return { state: loadScopeState(scope), adopted };
 };
 
 /** A fresh tab id; browser ids sort by creation time, which keeps their webviews' DOM order stable. */
@@ -689,7 +715,15 @@ const patchTab = (tab: PreviewTab, patch: PreviewTabPatch): PreviewTab => ({
 const scopeOfConversation = async (conversationId: string): Promise<PreviewScopeKey> => {
   try {
     const conversation = await getConversationOrNull(conversationId);
-    return conversation ? previewScopeOfChat(conversation, configService.get(DEFAULT_AGENT_SETTING_KEY)) : null;
+    if (!conversation) return null;
+    // Whether an Agent is a bot depends on the default Agent's id (an adopted one is no bot): wait for the settings,
+    // as the conversation route does. A failed load counts as loaded without one.
+    if (conversation.assistant?.id && configService.get(DEFAULT_AGENT_SETTING_KEY) === undefined) {
+      await configService
+        .whenReady()
+        .catch((error: unknown) => console.warn('[PreviewContext] settings did not load:', error));
+    }
+    return previewScopeOfChat(conversation, configService.get(DEFAULT_AGENT_SETTING_KEY));
   } catch (error) {
     console.warn('[PreviewContext] could not look up the chat of an agent tab:', error);
     return null;
@@ -1150,13 +1184,37 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   );
 
   /**
+   * The tabs `ids` names now belong to `scope`, which is not on screen (a bot scope took them over): parked ones are
+   * re-keyed, ones on screen leave it for the background. Their webviews stay as they are.
+   */
+  const takeIntoScope = useCallback(
+    (scope: string, ids: ReadonlySet<string>) => {
+      if (ids.size === 0) return;
+      const leaving = tabsRef.current.filter((tab) => ids.has(tab.id));
+      const moved = moveIntoScope(backgroundRef.current, ids, scope);
+      setBackground(leaving.length > 0 ? leaveScope(moved, scope, leaving, Date.now()) : moved);
+      if (leaving.length === 0) return;
+      const kept = tabsRef.current.filter((tab) => !ids.has(tab.id));
+      setTabs(kept);
+      tabsRef.current = kept;
+      if (kept.some((tab) => tab.id === activeTabIdRef.current)) return;
+      const nextActive = kept.at(-1)?.id ?? null;
+      setActiveTabId(nextActive);
+      activeTabIdRef.current = nextActive;
+      if (!nextActive) setIsOpen(false);
+    },
+    [setBackground]
+  );
+
+  /**
    * Opens an agent's tab in a scope that is not on screen: stored there (shown, and the panel reopened,
    * when the user opens that chat) and mounted hidden meanwhile so the agent can work in it. False at
    * that scope's tab cap.
    */
   const openAgentTabInBackground = useCallback(
     (scope: string, url: string, profile?: BrowserTabProfile): boolean => {
-      const stored = loadEnteredScope(scope);
+      const { state: stored, adopted } = loadEnteredScope(scope);
+      takeIntoScope(scope, adopted);
       const scopeTabs = enterScope(backgroundRef.current, scope, stored.tabs).tabs;
       if (scopeTabs.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) return false;
       const tab: PreviewTab = {
@@ -1176,7 +1234,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       setBackground([...backgroundRef.current, { scope, tab, since: Date.now() }]);
       return true;
     },
-    [setBackground]
+    [setBackground, takeIntoScope]
   );
 
   // Main process asked for a new browser tab (target=_blank / window.open from a page, an extension, or an
@@ -1470,10 +1528,12 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       if (prev != null && prev === options?.carryFromScope && scopeKey != null) {
         // Same conversation, new scope key: merge the live tabs into the project's saved ones, never over them.
         currentScopeRef.current = scopeKey;
-        const saved = loadEnteredScope(scopeKey);
-        // The tabs parked under the old key move with the conversation.
-        const carried = backgroundRef.current.map((entry) =>
-          entry.scope === prev ? { ...entry, scope: scopeKey } : entry
+        const { state: saved, adopted } = loadEnteredScope(scopeKey);
+        // The tabs parked under the old key move with the conversation, and so do the ones a bot scope adopted.
+        const carried = moveIntoScope(
+          backgroundRef.current.map((entry) => (entry.scope === prev ? { ...entry, scope: scopeKey } : entry)),
+          adopted,
+          scopeKey
         );
         const { tabs: savedTabs, rest } = enterScope(carried, scopeKey, saved.tabs);
         // The untouched blank tab the route opened only because the workspace scope was empty; never a
@@ -1533,9 +1593,13 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       // would drop the subscriptions the restore had just created.
       resetPreviewWatch();
       currentScopeRef.current = scopeKey;
-      const loaded = scopeKey != null ? loadEnteredScope(scopeKey) : EMPTY_SCOPE_STATE;
-      // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return.
-      const left = prev != null ? leaveScope(backgroundRef.current, prev, leaving, Date.now()) : backgroundRef.current;
+      const { state: loaded, adopted } =
+        scopeKey != null ? loadEnteredScope(scopeKey) : { state: EMPTY_SCOPE_STATE, adopted: NONE_TAKEN };
+      // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return, the
+      // ones a bot scope just adopted from other scopes included (their webviews stay; only their scope changes).
+      const parked =
+        prev != null ? leaveScope(backgroundRef.current, prev, leaving, Date.now()) : backgroundRef.current;
+      const left = scopeKey != null ? moveIntoScope(parked, adopted, scopeKey) : parked;
       const entered = scopeKey == null ? { tabs: [], rest: left } : enterScope(left, scopeKey, loaded.tabs);
       const activeId = entered.tabs.some((tab) => tab.id === loaded.activeTabId)
         ? loaded.activeTabId
