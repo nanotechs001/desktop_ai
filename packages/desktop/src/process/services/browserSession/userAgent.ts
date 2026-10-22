@@ -30,7 +30,7 @@ export function toBrowserUserAgent(electronUa: string): string {
 export function toChromeUserAgent(electronUa: string): string {
   return toBrowserUserAgent(electronUa)
     .split(' ')
-    .filter((token) => !/^Electron\//.test(token))
+    .filter((token) => !token.startsWith('Electron/'))
     .join(' ');
 }
 
