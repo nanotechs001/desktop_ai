@@ -11,11 +11,12 @@
  */
 
 /**
- * (node, pageKey, guard, hitTest) → `{stale}` or `{rect, role, label, editable, options?}`, rect frame-local.
+ * (node, pageKey, guard, hitTest) → `{stale}` or `{rect, point, role, label, editable, options?}`, frame-local; the
+ * point is where to click (snapshot.js `pointIn`: the center, or a builder item's own area).
  * Freshness is about the target: the frame's page key (document and url) and the target's guard (role, name, state,
  * its dialog or row) must hash to what observe saw. A node that went or now shows another control is replaced by an
- * equivalent control near where it was, if there is one (snapshot.js `refind`). The center must be inside the
- * frame's viewport and, with hitTest, elementFromPoint there (through open shadow roots) is the target.
+ * equivalent control near where it was, if there is one (snapshot.js `refind`). The point must be inside the
+ * frame's viewport and, with hitTest, elementFromPoint at the point (through open shadow roots) is the target.
  */
 export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   const c = window.__aionFast;
@@ -34,8 +35,7 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   }
   if (!now) return { stale: 'the target changed since observe' };
   const r = e.getBoundingClientRect();
-  const x = r.x + r.width / 2;
-  const y = r.y + r.height / 2;
+  const [x, y] = c.pointIn(e);
   if (!(r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight)) {
     return { stale: 'the target is off-screen; scroll it into view first' };
   }
@@ -52,6 +52,7 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   }
   return {
     rect: { x: r.x, y: r.y, w: r.width, h: r.height },
+    point: { x, y },
     role: now[0],
     label: String(now[1] || now[0]).slice(0, 200),
     editable: !e.readOnly && e.getAttribute('aria-readonly') !== 'true',

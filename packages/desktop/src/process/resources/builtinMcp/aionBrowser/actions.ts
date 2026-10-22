@@ -195,16 +195,17 @@ const callIn = async (
   return reply.result?.value;
 };
 
-const parseResolved = (
-  value: unknown
-): Omit<Target, 'id' | 'frame' | 'isTop' | 'node' | 'point' | 'local'> | string => {
+const parseResolved = (value: unknown): Omit<Target, 'id' | 'frame' | 'isTop' | 'node' | 'local'> | string => {
   const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   if (typeof v.stale === 'string') return v.stale;
   const r = (v.rect && typeof v.rect === 'object' ? v.rect : {}) as Record<string, unknown>;
   if (![r.x, r.y, r.w, r.h].every(isNumber)) return 'the page changed since observe';
   const options = Array.isArray(v.options) ? v.options.filter((o): o is string => typeof o === 'string') : undefined;
+  const rect = { x: r.x as number, y: r.y as number, w: r.w as number, h: r.h as number };
+  const p = (v.point && typeof v.point === 'object' ? v.point : {}) as Record<string, unknown>;
   return {
-    rect: { x: r.x as number, y: r.y as number, w: r.w as number, h: r.h as number },
+    rect,
+    point: isNumber(p.x) && isNumber(p.y) ? { x: p.x, y: p.y } : { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
     role: typeof v.role === 'string' ? v.role : '',
     label: typeof v.label === 'string' ? v.label : '',
     editable: v.editable !== false,
@@ -214,8 +215,9 @@ const parseResolved = (
 
 /**
  * Resolves an observed id to its element, the way jev guards an action: the frame's page key and the target's guard
- * must match the baseline, the element's center must hit the element itself (not a cover), and the absolute point
- * must lie in the part of its frame the top viewport shows. Geometry is read fresh. Throws {@link StepError}.
+ * must match the baseline, its click point (the center, or a builder item's own area) must hit the element itself (not
+ * a cover), and the absolute point must lie in the part of its frame the top viewport shows. Geometry is read fresh.
+ * Throws {@link StepError}.
  */
 async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Promise<Target> {
   const match = TARGET_ID.exec(id);
@@ -236,7 +238,7 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   const found = parseResolved(value);
   if (typeof found === 'string') throw new StepError('stale', found);
   const rect = { ...found.rect, x: found.rect.x + frame.offset.x, y: found.rect.y + frame.offset.y };
-  const point = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+  const point = { x: found.point.x + frame.offset.x, y: found.point.y + frame.offset.y };
   if (!inside(point, frame.clip)) throw new StepError('stale', 'the target is off-screen; scroll it into view first');
   if (hitTest) await checkOwners(ctx, frames, frame, point);
   return { ...found, id, frame, isTop: frame === frames[0], node, rect, point, local: found.rect };

@@ -11,6 +11,8 @@
  * 6000 chars of text) so a 250-row snapshot stays small; aria states are kept only as true/false/mixed.
  * Rects stay frame-local, as in jev. Also: an unnamed control gets a guessed name (tooltip, id, icon class or its
  * place); builder-canvas elements (plain divs that are clickable or carry builder hints) are listed too, at most 60;
+ * builder items marked as GoHighLevel marks them (class c-<type>, id <type>-<hash>) by type and place, like
+ * image "image 3 · column 3 · row 2", and act clicks them where the click selects the item itself;
  * the page key is only the document and url; guards hold what makes a control that control (no node identity, no
  * surrounding text except a dialog's or a row's), so an equivalent node that replaced it is re-found where it was;
  * a new node that is the same control as a gone one keeps its id. For act's change list and observe's load wait it also
@@ -127,10 +129,92 @@
     return kind || (isData && words.includes('id') ? 'element' : null);
   };
   /**
+   * A builder item's type: a class c-<type> with an id <type>-<hash> (col-<hash> for a column), as GoHighLevel marks
+   * its sections, rows, columns and elements. Null for anything else.
+   */
+  const builderType = (e) => {
+    const id = e.id;
+    if (!id) return null;
+    for (const c of e.classList) {
+      const type = c.startsWith('c-') && c.slice(2);
+      if (type && (id.startsWith(type + '-') || (type === 'column' && id.startsWith('col-')))) return type;
+    }
+    return null;
+  };
+  /** The nearest builder item above `e`, null when there is none. */
+  const itemAbove = (e) => {
+    let p = e.parentElement;
+    while (p && !builderType(p)) p = p.parentElement;
+    return p;
+  };
+  const itemAt = (e) => (builderType(e) ? e : itemAbove(e));
+  /** The builder items of `x`'s type whose nearest item above is the same as `x`'s, `x` too, in document order. */
+  const siblingItems = (x) => {
+    const [parent, type] = [itemAbove(x), builderType(x)];
+    const root = parent || x.getRootNode();
+    // Memo for one synchronous run (a snapshot, or one act check): the page may change between runs.
+    if (!cache.memo) {
+      cache.memo = new Map();
+      queueMicrotask(() => (cache.memo = null));
+    }
+    if (!cache.memo.has(root)) cache.memo.set(root, new Map());
+    const types = cache.memo.get(root);
+    if (!types.has(type)) {
+      const all = root.querySelectorAll('.c-' + CSS.escape(type));
+      types.set(
+        type,
+        [...all].filter((y) => builderType(y) === type && itemAbove(y) === parent)
+      );
+    }
+    return types.get(type);
+  };
+  // Image alts that name nothing: placeholders while loading or broken, and file names.
+  const PLACEHOLDER_ALT = /^(loading\b|broken image)|\.[a-z0-9]{2,5}$/i;
+  const NO_TEXT = /^(STYLE|SCRIPT|NOSCRIPT|TEMPLATE)$/;
+  /** A builder item's own visible text and meaningful image alts, not those of the items inside it. */
+  const ownText = (e) => {
+    const walker = document.createTreeWalker(e, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => {
+        if (n.nodeType === 3) return visible(n.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+        if ((n !== e && builderType(n)) || NO_TEXT.test(n.tagName)) return NodeFilter.FILTER_REJECT;
+        const alt = n.tagName === 'IMG' && n.getAttribute('alt')?.trim();
+        return alt && !PLACEHOLDER_ALT.test(alt) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      },
+    });
+    let text = '';
+    for (let n = walker.nextNode(); n && text.length < MAX_GUESS; n = walker.nextNode()) {
+      text += ' ' + (n.nodeType === 3 ? n.textContent : n.getAttribute('alt'));
+    }
+    return text.replace(/\s+/g, ' ').trim();
+  };
+  const isSelected = (e) =>
+    e.getAttribute('aria-selected') === 'true' ||
+    !['false', null].includes(e.getAttribute('aria-current')) ||
+    e.classList.contains('selected') ||
+    [...e.querySelectorAll('.selected')].some((x) => itemAt(x) === e);
+  /**
+   * A builder item by type and place, like "image 3 · column 3 · row 2": its ordinal among same-type siblings, then
+   * each item above it, the section only when there are several; then its own text, and "(selected)".
+   */
+  const builderName = (e) => {
+    const parts = [];
+    let top = e;
+    for (let x = e; x; x = itemAbove(x)) {
+      parts.push(builderType(x) + ' ' + (siblingItems(x).indexOf(x) + 1));
+      top = x;
+    }
+    if (parts.length > 1 && siblingItems(top).length < 2) parts.pop();
+    const selected = isSelected(e) ? ' (selected)' : '';
+    const named = [parts.join(' · '), explicitName(e) || ownText(e)].filter(Boolean).join(' · ');
+    return named.slice(0, MAX_GUESS - selected.length) + selected;
+  };
+  /**
    * The role of a canvas element: clickable but not a control (a data-* builder hint, onclick, tabindex >= 0, or a
    * builder class with a pointer cursor). `styled` false skips the computed style, to pick candidates cheaply.
    */
   const hintRole = (e, styled = true) => {
+    const type = builderType(e);
+    if (type) return type;
     for (const a of e.attributes) {
       const kind = a.name.startsWith('data-') && kindOf(a.name.slice(5), true);
       if (kind) return kind;
@@ -184,7 +268,10 @@
             .map((n) =>
               n.nodeType === 3
                 ? n.textContent
-                : n.nodeType === 1 && n.getAttribute('aria-hidden') !== 'true' && !isLigature(n)
+                : n.nodeType === 1 &&
+                    n.getAttribute('aria-hidden') !== 'true' &&
+                    !isLigature(n) &&
+                    !NO_TEXT.test(n.tagName)
                   ? name(n, seen)
                   : ''
             )
@@ -285,10 +372,12 @@
   };
   /** What the control is called: a canvas element by its explicit name or text, a control by its name or a guess. */
   const label = (e, r) =>
-    (roles.includes(r) || !hintRole(e, false) ? name(e) || guessed(e) : explicitName(e) || name(e)).slice(
-      0,
-      MAX_STRING
-    );
+    (builderType(e)
+      ? builderName(e)
+      : roles.includes(r) || !hintRole(e, false)
+        ? name(e) || guessed(e)
+        : explicitName(e) || name(e)
+    ).slice(0, MAX_STRING);
   const PLACES =
     '[role="toolbar"],[role="menubar"],[role="menu"],[role="tablist"],[role="group"],header,nav,aside,footer,form';
   const places = new Map();
@@ -357,6 +446,26 @@
     const x = r.x + r.width / 2;
     const y = r.y + r.height / 2;
     return r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
+  };
+  const shows = (r) =>
+    r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.x < innerWidth && r.y < innerHeight;
+  /**
+   * Where a click selects `e` itself (frame-local): its center, or for a builder item the first of a few points of its
+   * visible part whose nearest item is `e` (a column's padding, not the image in it).
+   */
+  cache.pointIn = (e) => {
+    const r = e.getBoundingClientRect();
+    const center = [r.x + r.width / 2, r.y + r.height / 2];
+    if (!builderType(e)) return center;
+    const [left, top] = [Math.max(r.left, 0), Math.max(r.top, 0)];
+    const [right, bottom] = [Math.min(r.right, innerWidth), Math.min(r.bottom, innerHeight)];
+    for (const y of [(top + bottom) / 2, top + 3, bottom - 3]) {
+      for (const x of [(left + right) / 2, left + 3, right - 3]) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit && itemAt(hit) === e) return [x, y];
+      }
+    }
+    return center;
   };
   const rectOf = (r) => ({ x: r.x, y: r.y, w: r.width, h: r.height });
   const at = (r) => [r.x + r.width / 2 + scrollX, r.y + r.height / 2 + scrollY];
@@ -429,19 +538,23 @@
   }
   // Canvas elements: hinted, visible, centered in the viewport, not a control or inside one, smaller than half the
   // viewport (a page wrapper is not something to select). Of nested ones the outermost, plus inner ones with their
-  // own name or text; a wrapper exactly around a control is that control.
+  // own name or text; a wrapper exactly around a control is that control. Builder items (any size, partly in view)
+  // and focusable role="group" wrappers are always listed.
   const kept = new Set();
   let extra = 0;
   for (const e of hinted) {
     if (extra >= MAX_EXTRA) break;
     const r = e.getBoundingClientRect();
-    if (!inView(r) || r.width * r.height * 2 > innerWidth * innerHeight || e.closest(selector)) continue;
+    const item = Boolean(builderType(e));
+    if (item ? !shows(r) : !inView(r) || r.width * r.height * 2 > innerWidth * innerHeight) continue;
+    if (e.closest(selector)) continue;
     const kind = roleOf.get(e) ?? hintRole(e);
     if (!kind || !visible(e)) continue;
     let outer = e.parentElement;
     while (outer && !kept.has(outer)) outer = outer.parentElement;
-    if (outer && !owned.has(e) && !explicitName(e)) continue;
-    const inner = e.querySelector(selector)?.getBoundingClientRect();
+    const always = item || (e.getAttribute('role') === 'group' && e.tabIndex >= 0);
+    if (outer && !always && !owned.has(e) && !explicitName(e)) continue;
+    const inner = !item && e.querySelector(selector)?.getBoundingClientRect();
     if (
       inner &&
       [r.x - inner.x, r.y - inner.y, r.right - inner.right, r.bottom - inner.bottom].every((d) => Math.abs(d) <= 4)
