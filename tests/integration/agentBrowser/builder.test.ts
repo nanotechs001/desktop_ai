@@ -56,6 +56,17 @@ const inCanvas = (builder: string, expression: string): Promise<unknown> =>
 const rowsLabels = (obs: Observation, frameLabel: string): string[] =>
   obs.rows.filter((r) => r.frameLabel === frameLabel).map((r) => r.label);
 
+/** Opens the GoHighLevel-shaped canvas (funnel-canvas.html?ghl in a cross-origin "funnel-builder" iframe). */
+const openGhl = async (): Promise<{ session: string; obs: Observation; canvas: string }> => {
+  const session = await chrome.openPage(`${servers.originA}/funnel.html?ghl`);
+  const obs = await observeUntil(chrome.conn, session, (o) => o.rows.some((r) => r.frameLabel === BUILDER));
+  const key = obs.frames.find((f) => f.label === BUILDER)?.frameKey ?? '';
+  return { session, obs, canvas: frameByKey(chrome.conn, session, key)?.sessionId ?? '' };
+};
+
+const GHL_TOOLBAR = ['Move Up', 'Move Down', 'Open Settings', 'Save Element', 'Drag', 'Clone', 'Delete'];
+const IMAGE_3 = 'image 3 · column 3 · row 1 · section 1 · Our team';
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe.skipIf(!chromePath)('observe and act in a funnel builder on real Chrome', () => {
@@ -259,5 +270,59 @@ describe.skipIf(!chromePath)('observe and act in a funnel builder on real Chrome
     expect(rowsLabels(obs, 'lazy-builder')).toEqual(['Add section', 'Add row']);
     expect(Date.now() - started).toBeLessThan(4000);
     expect(formatObservation(obs)).not.toContain('Still loading');
+  });
+  it('lists every GoHighLevel section, row, column and element by type and place, once each', async () => {
+    const { obs } = await openGhl();
+
+    expect(obs.rows.filter((r) => r.frameLabel === BUILDER).map((r) => `${r.role} ${r.label}`)).toEqual([
+      'section section 1',
+      'row row 1 · section 1',
+      'column column 1 · row 1 · section 1',
+      'image image 1 · column 1 · row 1 · section 1',
+      'column column 2 · row 1 · section 1',
+      'image image 1 · column 2 · row 1 · section 1',
+      'column column 3 · row 1 · section 1',
+      'image image 1 · column 3 · row 1 · section 1',
+      'image image 2 · column 3 · row 1 · section 1',
+      `image ${IMAGE_3}`,
+      'section section 2',
+      'row row 1 · section 2',
+      'column column 1 · row 1 · section 2',
+      'headline headline 1 · column 1 · row 1 · section 2 · Our story',
+      'button button 1 · column 1 · row 1 · section 2 · Buy now',
+    ]);
+    const image = rowIn(obs, BUILDER, IMAGE_3);
+    expect(formatObservation(obs)).toContain(`[${image.id}] image "${IMAGE_3}" · in: "funnel-builder"`);
+  });
+
+  it('selects a GoHighLevel image by its id, marks it selected with its toolbar, and deletes it from there', async () => {
+    const { session, obs, canvas } = await openGhl();
+    const ctx = contextFor(session);
+    const image = rowIn(obs, BUILDER, IMAGE_3);
+
+    expect((await act(ctx, [{ op: 'click', target: image.id }])).results[0]).toMatchObject({ result: 'done' });
+    const selected = await observePage(chrome.conn, session);
+    expect(rowIn(selected, BUILDER, `${IMAGE_3} (selected)`).id).toBe(image.id);
+    const toolbar = selected.rows.filter((r) => r.frameLabel === BUILDER && r.role === 'element');
+    expect(toolbar.map((r) => r.label)).toEqual(GHL_TOOLBAR);
+
+    const deleted = await act(ctx, [{ op: 'click', target: rowIn(selected, BUILDER, 'Delete').id }]);
+    expect(deleted.results[0]).toMatchObject({ result: 'done' });
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select image-i5', 'delete image-i5']);
+    const after = rowsLabels(await observePage(chrome.conn, session), BUILDER);
+    expect(after.filter((label) => label.endsWith('· column 3 · row 1 · section 1'))).toHaveLength(2);
+    expect(after.some((label) => label.startsWith('image 3 '))).toBe(false);
+  });
+
+  it('clicks a GoHighLevel column on its own area, not on an element inside it', async () => {
+    const { session, obs, canvas } = await openGhl();
+
+    const ctx = contextFor(session);
+
+    const column = await act(ctx, [{ op: 'click', target: rowIn(obs, BUILDER, 'column 3 · row 1 · section 1').id }]);
+    const section = await act(ctx, [{ op: 'click', target: rowIn(obs, BUILDER, 'section 2').id }]);
+
+    expect([column, section].map((a) => a.results[0]?.result)).toEqual(['done', 'done']);
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select col-Fv3', 'select section-rK2']);
   });
 });

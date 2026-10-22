@@ -8,7 +8,8 @@
       other origin); otherwise it is the builder: an icon toolbar that mutates on a timer (autosave label, a hidden
       draft field), a same-origin canvas iframe, an elements panel that scrolls (part of it under a cover), a settings
       dialog the "Page settings" button opens, and a link that loads the canvas page. ?lazy is a shell whose iframe
-      (?slow) shows a ticking "Loading" text for 1 s and only then its controls.
+      (?slow) shows a ticking "Loading" text for 1 s and only then its controls. ?ghl is a shell whose cross-origin
+      "funnel-builder" iframe is a GoHighLevel canvas (funnel-canvas.html?ghl).
     -->
     <style>
       body {
@@ -126,11 +127,18 @@
         style="left: 0; top: 40px; width: 600px; height: 400px"
       ></iframe>
     </template>
+    <template id="ghl">
+      <iframe
+        title="funnel-builder"
+        src="{{OTHER}}/funnel-canvas.html?ghl"
+        style="left: 0; top: 40px; width: 1000px; height: 760px"
+      ></iframe>
+    </template>
     <template id="slow">
       <p id="status">Loading</p>
     </template>
     <script>
-      const mode = ['top', 'lazy', 'slow'].find((m) => location.search === `?${m}`) ?? 'builder';
+      const mode = ['top', 'lazy', 'slow', 'ghl'].find((m) => location.search === `?${m}`) ?? 'builder';
       document.body.append(document.getElementById(mode).content.cloneNode(true));
       window.clicks = [];
       document.addEventListener('click', (e) => {
