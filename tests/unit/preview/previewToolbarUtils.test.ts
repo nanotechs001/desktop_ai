@@ -4,6 +4,7 @@ import {
   canOpenInSystem,
   classifySaveOutcome,
   dirtyTabsInBatch,
+  unpinnedTabsInBatch,
   isOpenableFileRef,
   shouldOfferOpenInSystem,
   shouldShowDownload,
@@ -257,5 +258,12 @@ describe('classifySaveOutcome and bare refusals', () => {
   it('a conflict still wins over the refusal check', () => {
     const conflict = Object.assign(new Error('save refused'), { name: 'SaveRefusedError', status: 409 });
     expect(classifySaveOutcome(undefined, conflict)).toEqual({ kind: 'conflict' });
+  });
+});
+
+describe('unpinnedTabsInBatch', () => {
+  it('leaves the pinned tabs out of a bulk close', () => {
+    const batch = [{ id: 'a' }, { id: 'b', metadata: { pinned: true } }, { id: 'c', metadata: { pinned: false } }];
+    expect(unpinnedTabsInBatch(batch).map((tab) => tab.id)).toEqual(['a', 'c']);
   });
 });

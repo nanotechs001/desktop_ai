@@ -5,7 +5,7 @@
  */
 
 import { iconColors } from '@/renderer/styles/colors';
-import { Close, Comments, Plus } from '@icon-park/react';
+import { Close, Comments, Pin, Plus } from '@icon-park/react';
 import { Button } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
@@ -96,6 +96,12 @@ export interface PreviewTab {
    * manager would open on the backend host).
    */
   canRevealInFolder?: boolean;
+
+  /** Whether the tab can be pinned (browser tabs only) */
+  canPin?: boolean;
+
+  /** The user pinned this tab: it is never closed or unloaded unasked, and shows a pin icon */
+  pinned?: boolean;
 }
 
 /**
@@ -261,6 +267,11 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                     min-w-0 is what makes truncation possible: a flex child defaults
                     to its content width and refuses to shrink below it. */}
                 <span className='text-12px flex items-center gap-4px min-w-0'>
+                  {tab.pinned && (
+                    <span className='flex flex-shrink-0' title={t('preview.browser.pinnedTooltip')}>
+                      <Pin theme='outline' size='12' fill={iconColors.secondary} />
+                    </span>
+                  )}
                   {tab.profile && <ProfileBadge profile={tab.profile} size={12} />}
                   {/* 站点图标（浏览器 tab）/ Site icon (browser tabs) */}
                   {tab.favicon && (

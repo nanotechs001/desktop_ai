@@ -128,6 +128,9 @@ interface PreviewContextMenuProps {
    * Show the tab's file in the OS file manager
    */
   onRevealInFolder: (tabId: string) => void;
+
+  /** Pin or unpin the tab (browser tabs only) */
+  onTogglePin: (tabId: string) => void;
 }
 
 /**
@@ -183,6 +186,7 @@ const PreviewContextMenu: React.FC<PreviewContextMenuProps> = ({
   onCopyPath,
   onCopyRelativePath,
   onRevealInFolder,
+  onTogglePin,
 }) => {
   const { t } = useTranslation();
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -308,6 +312,14 @@ const PreviewContextMenu: React.FC<PreviewContextMenuProps> = ({
         shortcut={`${primaryModifierLabel}W`}
         onSelect={select(() => onCloseTab(tabId))}
       />
+
+      {/* A pinned tab never closes unasked; the bulk closes below leave it open too. */}
+      {currentTab?.canPin && (
+        <MenuItem
+          label={t(currentTab.pinned ? 'preview.unpinTab' : 'preview.pinTab')}
+          onSelect={select(() => onTogglePin(tabId))}
+        />
+      )}
 
       <MenuDivider />
 

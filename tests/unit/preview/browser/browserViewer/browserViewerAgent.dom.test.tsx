@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   share: vi.fn(
     (_arg: { webContentsId: number; on: boolean }): Promise<{ success: boolean }> => Promise.resolve({ success: true })
   ),
+  setTabPinned: vi.fn(
+    (_arg: { webContentsId: number; pinned: boolean }): Promise<{ success: boolean }> =>
+      Promise.resolve({ success: true })
+  ),
   messageError: vi.fn(),
   getOwnership: vi.fn(),
   ownership: null as ((list: TabOwnership[]) => void) | null,
@@ -37,6 +41,7 @@ vi.mock('@/common', () => ({
     },
     agentBrowser: {
       share: { invoke: mocks.share },
+      setTabPinned: { invoke: mocks.setTabPinned },
       getOwnership: { invoke: mocks.getOwnership },
       ownershipChanged: {
         on: (handler: (list: TabOwnership[]) => void) => {
@@ -259,5 +264,42 @@ describe('appendAction', () => {
     const [stored] = appendAction([], event({ label: 'x'.repeat(MAX_AGENT_LABEL_LENGTH + 50) }));
 
     expect(stored.label).toHaveLength(MAX_AGENT_LABEL_LENGTH);
+  });
+});
+
+describe('BrowserViewer pinned tabs', () => {
+  const viewer = (pinned?: boolean) => (
+    <BrowserViewer
+      url='https://example.com'
+      tabId='tab-1'
+      onUrlChange={vi.fn()}
+      onTitleChange={vi.fn()}
+      onFaviconChange={vi.fn()}
+      pinned={pinned}
+    />
+  );
+  const domReady = async (container: HTMLElement) =>
+    act(async () => {
+      container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
+    });
+
+  it('tells main a restored tab is pinned once its webContents is known, and every change after', async () => {
+    mocks.getOwnership.mockResolvedValue({ success: true, data: [tab()] });
+    const view = render(viewer(true));
+    expect(mocks.setTabPinned).not.toHaveBeenCalled();
+
+    await domReady(view.container);
+    expect(mocks.setTabPinned.mock.calls).toEqual([[{ webContentsId: WEB_CONTENTS_ID, pinned: true }]]);
+
+    view.rerender(viewer(false));
+    expect(mocks.setTabPinned.mock.calls.at(-1)).toEqual([{ webContentsId: WEB_CONTENTS_ID, pinned: false }]);
+  });
+
+  it('says nothing for a tab that was never pinned', async () => {
+    mocks.getOwnership.mockResolvedValue({ success: true, data: [tab()] });
+    const view = render(viewer());
+    await domReady(view.container);
+
+    expect(mocks.setTabPinned).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,13 @@ export const MAX_LIVE_BROWSER_TABS = 20;
 
 export const isBrowserTab = (tab: PreviewTab): boolean => tab.content_type === 'browser';
 
+/** The user pinned the tab: the pane never closes or unloads it on its own, and no tab count includes it. */
+export const isPinnedTab = (tab: PreviewTab): boolean => tab.metadata?.pinned === true;
+
+/** The browser tabs `tabs` holds that count toward a tab cap: every one the user did not pin. */
+export const cappedBrowserTabCount = (tabs: readonly PreviewTab[]): number =>
+  tabs.filter((tab) => isBrowserTab(tab) && !isPinnedTab(tab)).length;
+
 /**
  * The background with the leaving scope's browser tabs added. Their activity badge is cleared: it is
  * only kept up to date for the scope on screen, and the next agent action lights it again.
@@ -70,7 +77,7 @@ export const moveIntoScope = (
 /**
  * The browser tabs whose webviews stay mounted: every tab of the scope on screen, then background
  * tabs until {@link MAX_LIVE_BROWSER_TABS}, dropping the least recently used user tabs (never an
- * agent's). Sorted by id, so a tab's place among its siblings never changes: moving a `<webview>`
+ * agent's, never a pinned one, and pinned tabs are not counted). Sorted by id, so a tab's place among its siblings never changes: moving a `<webview>`
  * in the DOM reloads it.
  */
 export const liveBrowserTabs = (
@@ -79,10 +86,10 @@ export const liveBrowserTabs = (
   max = MAX_LIVE_BROWSER_TABS
 ): PreviewTab[] => {
   const onScreen = current.filter(isBrowserTab);
-  const excess = onScreen.length + background.length - max;
+  const excess = cappedBrowserTabCount(onScreen) + background.filter((entry) => !isPinnedTab(entry.tab)).length - max;
   const evicted = new Set(
     background
-      .filter((entry) => !entry.tab.metadata?.agentOwned)
+      .filter((entry) => !entry.tab.metadata?.agentOwned && !isPinnedTab(entry.tab))
       .toSorted((a, b) => a.since - b.since)
       .slice(0, Math.max(0, excess))
       .map((entry) => entry.tab.id)

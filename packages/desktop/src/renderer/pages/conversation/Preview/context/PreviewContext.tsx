@@ -36,8 +36,10 @@ import { DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
 import { dropOpenBurstDuplicates } from './openBurstDuplicates';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import {
+  cappedBrowserTabCount,
   enterScope,
   isBrowserTab,
+  isPinnedTab,
   leaveScope,
   liveBrowserTabs,
   moveIntoScope,
@@ -97,6 +99,7 @@ export interface PreviewMetadata {
   agentOwned?: boolean; // An agent opened this browser tab / Agent 打开了该浏览器 tab
   agentConversationId?: string; // The chat whose agent owns this tab in the relay (live, never restored)
   profile?: BrowserTabProfile; // The Agent browser profile of this tab; Personal when absent. Fixed for the tab's life
+  pinned?: boolean; // The user pinned this browser tab: never closed or unloaded unasked, left out of the tab caps
 }
 
 export interface PreviewTab {
@@ -1036,9 +1039,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       // Browser tab cap: when full, reuse the oldest and raise a signal the UI can
       // surface, so the reuse doesn't look like a bug.
       const atBrowserTabLimit =
-        !existingTab &&
-        type === 'browser' &&
-        currentTabs.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS;
+        !existingTab && type === 'browser' && cappedBrowserTabCount(currentTabs) >= MAX_BROWSER_TABS;
       if (atBrowserTabLimit) setBrowserTabLimitHitAt(Date.now());
 
       // Tab 标题：优先使用文件名，并从 title 中提取实际文件名
@@ -1074,6 +1075,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
             (tab) =>
               tab.content_type === 'browser' &&
               !tab.metadata?.agentOwned &&
+              !isPinnedTab(tab) &&
               profileKeyOf(tab.metadata?.profile) === profileKeyOf(meta?.profile)
           ) ?? null)
         : null;
@@ -1165,7 +1167,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
    */
   const openRequestedTabOnScreen = useCallback(
     (url: string, fromAgent: boolean, profile?: BrowserTabProfile): boolean => {
-      if (tabsRef.current.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) {
+      if (cappedBrowserTabCount(tabsRef.current) >= MAX_BROWSER_TABS) {
         setBrowserTabLimitHitAt(Date.now());
         return false;
       }
@@ -1216,7 +1218,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       const { state: stored, adopted } = loadEnteredScope(scope);
       takeIntoScope(scope, adopted);
       const scopeTabs = enterScope(backgroundRef.current, scope, stored.tabs).tabs;
-      if (scopeTabs.filter((tab) => tab.content_type === 'browser').length >= MAX_BROWSER_TABS) return false;
+      if (cappedBrowserTabCount(scopeTabs) >= MAX_BROWSER_TABS) return false;
       const tab: PreviewTab = {
         id: createTabId('browser'),
         content: url,
@@ -1630,8 +1632,12 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
 
   const closeTab = useCallback(
     (tabId: string, options?: { byUser?: boolean }) => {
-      // A background tab (another chat's; closed by its agent or an extension) leaves that scope too.
+      // A pinned tab closes only when the user closes it: main's closes (an agent, an extension, the idle sweep) are
+      // refused there already, and this also covers one that raced the pin.
       const parked = backgroundRef.current.find((entry) => entry.tab.id === tabId);
+      const target = parked?.tab ?? tabsRef.current.find((tab) => tab.id === tabId);
+      if (options?.byUser === false && target && isPinnedTab(target)) return;
+      // A background tab (another chat's; closed by its agent or an extension) leaves that scope too.
       if (parked) {
         setBackground(backgroundRef.current.filter((entry) => entry !== parked));
         const stored = loadScopeState(parked.scope);

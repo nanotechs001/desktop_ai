@@ -126,6 +126,10 @@ type ClosableTab = { id: string; isDirty?: boolean };
 export const dirtyTabsInBatch = <T extends ClosableTab>(batch: readonly T[]): T[] =>
   batch.filter((tab) => tab.isDirty === true);
 
+/** A bulk close (left / right / others / unmodified / all, or collapsing the panel) leaves pinned tabs open. */
+export const unpinnedTabsInBatch = <T extends { metadata?: { pinned?: boolean } }>(batch: readonly T[]): T[] =>
+  batch.filter((tab) => tab.metadata?.pinned !== true);
+
 /**
  * Whether closing this batch needs confirmation first.
  *

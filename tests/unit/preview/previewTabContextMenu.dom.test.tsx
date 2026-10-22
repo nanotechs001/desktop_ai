@@ -48,6 +48,7 @@ type MenuHandlers = {
   onCopyPath: ReturnType<typeof vi.fn>;
   onCopyRelativePath: ReturnType<typeof vi.fn>;
   onRevealInFolder: ReturnType<typeof vi.fn>;
+  onTogglePin: ReturnType<typeof vi.fn>;
 };
 
 const renderMenu = (
@@ -65,6 +66,7 @@ const renderMenu = (
     onCopyPath: vi.fn(),
     onCopyRelativePath: vi.fn(),
     onRevealInFolder: vi.fn(),
+    onTogglePin: vi.fn(),
   };
   const { container } = render(
     <PreviewContextMenu
@@ -356,6 +358,56 @@ describe('preview tab context menu — dismissal', () => {
     );
 
     expect(screen.queryByText('preview.close')).toBeNull();
+  });
+});
+
+describe('preview tab context menu — pinning', () => {
+  const BROWSER_TABS: PreviewTab[] = [
+    { id: 'p', title: 'Pinned page', canPin: true, pinned: true },
+    { id: 'u', title: 'Some page', canPin: true },
+  ];
+
+  it('offers "Pin tab" on an unpinned browser tab and toggles it, dismissing the menu', () => {
+    const handlers = renderMenu('u', { tabs: BROWSER_TABS });
+    fireEvent.click(screen.getByText('preview.pinTab'));
+
+    expect(handlers.onTogglePin).toHaveBeenCalledWith('u');
+    expect(handlers.onClose).toHaveBeenCalled();
+    expect(screen.queryByText('preview.unpinTab')).toBeNull();
+  });
+
+  it('offers "Unpin tab" on a pinned tab', () => {
+    const handlers = renderMenu('p', { tabs: BROWSER_TABS });
+    fireEvent.click(screen.getByText('preview.unpinTab'));
+
+    expect(handlers.onTogglePin).toHaveBeenCalledWith('p');
+    expect(screen.queryByText('preview.pinTab')).toBeNull();
+  });
+
+  it('offers no pin entry for a file tab', () => {
+    renderMenu('a');
+
+    expect(screen.queryByText('preview.pinTab')).toBeNull();
+    expect(screen.queryByText('preview.unpinTab')).toBeNull();
+  });
+
+  it('shows a pin icon in a pinned tab only', () => {
+    render(
+      <PreviewTabs
+        tabs={BROWSER_TABS}
+        activeTabId='p'
+        tabFadeState={{ left: false, right: false }}
+        tabsContainerRef={React.createRef<HTMLDivElement>() as never}
+        onSwitchTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByTitle('preview.browser.pinnedTooltip')).toHaveLength(1);
+    expect(
+      screen.getByText('Pinned page').parentElement?.querySelector('[title="preview.browser.pinnedTooltip"]')
+    ).toBeTruthy();
   });
 });
 

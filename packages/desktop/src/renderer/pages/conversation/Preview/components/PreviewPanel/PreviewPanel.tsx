@@ -20,12 +20,13 @@ import {
   shouldOfferOpenInSystem,
   dirtyTabsInBatch,
   isOpenableFileRef,
+  unpinnedTabsInBatch,
   wouldDownloadEmptyFile,
 } from './previewToolbarUtils';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { toLocalFileHref } from '@/renderer/components/Markdown/markdownUtils';
 import { PreviewToolbarExtrasProvider, type PreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
-import { usePreviewContext } from '../../context/PreviewContext';
+import { usePreviewContext, type PreviewTab as OpenTab } from '../../context/PreviewContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
 import { Link, Message } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -105,6 +106,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
     activeTab,
     closeTab,
     switchTab,
+    updateTab,
     collapsePreview,
     toggleMaximized,
     isVaBotMode,
@@ -352,9 +354,11 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
   // bypassing the confirmation that a single close had and silently discarding
   // unsaved edits.
   const requestCloseBatch = useCallback(
-    (tabsToClose: PreviewTab[], onAllClean?: () => void) => {
+    (batch: OpenTab[], onAllClean?: () => void) => {
       setContextMenu({ show: false, x: 0, y: 0, tabId: null });
-      if (tabsToClose.length === 0) return;
+      if (batch.length === 0) return;
+      // Checked after the empty batch, so collapsing a panel of pinned tabs only still collapses it.
+      const tabsToClose = unpinnedTabsInBatch(batch);
 
       const dirty = dirtyTabsInBatch(tabsToClose);
       if (dirty.length === 0) {
@@ -464,6 +468,15 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
       tabId,
     });
   }, []);
+
+  // Pin or unpin a browser tab; the pin is stored with the tab and reported to main by its viewer.
+  const handleTogglePin = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab?.content_type === 'browser') updateTab(tabId, { metadata: { pinned: tab.metadata?.pinned !== true } });
+    },
+    [tabs, updateTab]
+  );
 
   // 关闭左侧 tabs / Close tabs to the left
   const handleCloseLeft = useCallback(
@@ -1206,6 +1219,8 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
       favicon: tab.content_type === 'browser' ? tab.metadata?.favicon : undefined,
       agentActive: tab.content_type === 'browser' ? tab.metadata?.agentActive : undefined,
       profile: tab.content_type === 'browser' ? (tab.metadata?.profile ?? PERSONAL_PROFILE) : undefined,
+      canPin: tab.content_type === 'browser',
+      pinned: tab.content_type === 'browser' && tab.metadata?.pinned === true,
       canCopyPath: canCopyAbsolutePath(paths.absolute, isElectronDesktop()),
       canCopyRelativePath: Boolean(paths.relative),
       canRevealInFolder: canRevealInFolder(paths.absolute, isElectronDesktop()),
@@ -1326,6 +1341,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
           onCopyPath={handleCopyPath}
           onCopyRelativePath={handleCopyRelativePath}
           onRevealInFolder={handleRevealInFolder}
+          onTogglePin={handleTogglePin}
         />
       </div>
     </PreviewToolbarExtrasProvider>

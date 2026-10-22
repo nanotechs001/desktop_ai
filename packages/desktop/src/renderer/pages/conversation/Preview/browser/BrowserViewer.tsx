@@ -87,6 +87,8 @@ export interface BrowserViewerProps {
   onUserInput?: (tabId: string) => void;
   /** The browser profile the tab lives in; Personal when absent. Fixed for the tab's life (a new profile is a new tab) */
   profile?: BrowserTabProfile;
+  /** The user pinned the tab: main is told, so tab cleanup and agents leave it open */
+  pinned?: boolean;
 }
 
 /**
@@ -115,6 +117,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   onAgentAction,
   onUserInput,
   profile,
+  pinned = false,
 }) => {
   const preview = useOptionalPreviewContext();
   const { partition, error: profileError, retry: retryProfile } = useProfilePartition(profile);
@@ -328,6 +331,22 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   useEffect(() => {
     if (latestAction) onAgentAction?.(tabId);
   }, [latestAction, tabId, onAgentAction]);
+
+  // Main keeps no pin of its own across a restart or a remount (a new webContents), so the pin is reported each time
+  // the tab's webContents is known, and on every change; a tab that was never pinned says nothing.
+  const reportedPin = useRef<{ id: number; pinned: boolean } | null>(null);
+  useEffect(() => {
+    if (tabWebContentsId === null) return;
+    const last = reportedPin.current;
+    if (last?.id === tabWebContentsId ? last.pinned === pinned : !pinned) return;
+    reportedPin.current = { id: tabWebContentsId, pinned };
+    ipcBridge.agentBrowser.setTabPinned
+      .invoke({ webContentsId: tabWebContentsId, pinned })
+      .then((res) => {
+        if (!res.success) console.warn('[BrowserViewer] main did not take the tab pin:', res.msg);
+      })
+      .catch((error: unknown) => console.warn('[BrowserViewer] could not report the tab pin:', error));
+  }, [tabWebContentsId, pinned]);
 
   // `?.` only tolerates test mocks without the event; production always defines it.
   useEffect(() => {
