@@ -1441,10 +1441,10 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
    */
   const toggleMaximized = useCallback(() => setIsMaximized((prev) => !prev), []);
 
-  /** Entering a VA Bot conversation starts with its chat collapsed under the browser. */
+  /** Entering a VA Bot conversation shows its chat under the browser; the user folds it away (chat button, divider). */
   const setVaBotMode = useCallback((on: boolean) => {
     setIsVaBotMode(on);
-    if (on) setIsVaChatCollapsed(true);
+    if (on) setIsVaChatCollapsed(false);
   }, []);
 
   const toggleVaChat = useCallback(() => {

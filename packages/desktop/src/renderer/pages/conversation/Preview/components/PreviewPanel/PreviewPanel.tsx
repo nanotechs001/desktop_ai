@@ -167,6 +167,10 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
   // notice, "open in system" errors). Previously supplied by the version-history
   // hook; kept local now that the hook is gone.
   const [messageApi, messageContextHolder] = Message.useMessage();
+  // Arco's useMessage returns a new api object on every render (2.66.11); effects that react to an event read it
+  // from here, or they would show their notice again on every render.
+  const messageApiRef = useRef(messageApi);
+  messageApiRef.current = messageApi;
 
   /**
    * Save the active tab and report the outcome.
@@ -287,8 +291,12 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
    */
   useEffect(() => {
     if (!browserTabLimitHitAt) return;
-    messageApi.warning?.(t('preview.browser.tabLimitReached', { count: MAX_BROWSER_TABS }));
-  }, [browserTabLimitHitAt, messageApi, t]);
+    // One notice, updated in place, however often a busy agent hits the cap.
+    messageApiRef.current.warning?.({
+      id: 'browser-tab-limit',
+      content: t('preview.browser.tabLimitReached', { count: MAX_BROWSER_TABS }),
+    });
+  }, [browserTabLimitHitAt, t]);
 
   /**
    * Local storage filled up, so this scope's tabs will not be restored later.
@@ -297,8 +305,8 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
    */
   useEffect(() => {
     if (!persistQuotaExceededAt) return;
-    messageApi.warning?.(t('preview.persistQuotaExceeded'));
-  }, [persistQuotaExceededAt, messageApi, t]);
+    messageApiRef.current.warning?.(t('preview.persistQuotaExceeded'));
+  }, [persistQuotaExceededAt, t]);
 
   const setToolbarExtrasCallback = useCallback((extras: PreviewToolbarExtras | null) => {
     setToolbarExtras(extras);

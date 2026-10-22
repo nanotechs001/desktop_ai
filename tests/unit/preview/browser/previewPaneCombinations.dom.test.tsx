@@ -198,12 +198,13 @@ describe('the chat under an agent that opens the pane', () => {
     expect(ctx.isVaChatCollapsed).toBe(false);
   });
 
-  it('starts collapsed when the user enters a bot chat with its browser', () => {
+  // Clicking a bot opened its browser but folded its chat away; the chat now stays open and folds only on request.
+  it('keeps the chat open when the user enters a bot chat with its browser', () => {
     mount();
     act(() => ctx.setVaBotMode(true));
     enter(BOT_SCOPE, botChat('c1'));
     expect(ctx.isOpen).toBe(true);
-    expect(ctx.isVaChatCollapsed).toBe(true);
+    expect(ctx.isVaChatCollapsed).toBe(false);
   });
 });
 
