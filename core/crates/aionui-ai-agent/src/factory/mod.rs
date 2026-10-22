@@ -6,6 +6,7 @@ pub(crate) mod aionrs;
 mod antigravity;
 pub mod builtin_mcp_env;
 mod context;
+mod opencode_mcp;
 
 use std::path::PathBuf;
 use std::sync::Arc;

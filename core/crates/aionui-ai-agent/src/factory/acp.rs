@@ -272,6 +272,22 @@ pub(super) async fn build(
         }
     }
 
+    // OpenCode lists ACP servers only through its size-capped Code Mode catalog; the built-ins go
+    // through its config instead, so their tools are offered directly (see `opencode_mcp`).
+    let session_mcp_servers =
+        crate::mcp_resolve::drop_competing_browser_mcps(session_mcp_servers, describe_acp_mcp_server);
+    let (session_mcp_servers, opencode_config) = crate::factory::opencode_mcp::route_builtin_mcp_servers(
+        config.backend.as_deref(),
+        session_mcp_servers,
+        std::env::var_os(crate::factory::opencode_mcp::OPENCODE_CONFIG_CONTENT_ENV).is_some(),
+    );
+    if let Some(content) = opencode_config {
+        command_spec.env.push(aionui_common::EnvVar {
+            name: crate::factory::opencode_mcp::OPENCODE_CONFIG_CONTENT_ENV.to_owned(),
+            value: content,
+        });
+    }
+
     let params = Arc::new(
         assemble_acp_params(
             ctx.conversation_id.clone(),
@@ -556,6 +572,19 @@ fn parse_headers(value: Option<&serde_json::Value>) -> Vec<HttpHeader> {
         .collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     entries.into_iter().map(|(k, v)| HttpHeader::new(k, v)).collect()
+}
+
+/// The name and launch text of an ACP server, for `mcp_resolve::drop_competing_browser_mcps`.
+fn describe_acp_mcp_server(server: &McpServer) -> (String, String) {
+    match server {
+        McpServer::Stdio(stdio) => (
+            stdio.name.clone(),
+            format!("{} {}", stdio.command.display(), stdio.args.join(" ")),
+        ),
+        McpServer::Http(http) => (http.name.clone(), http.url.clone()),
+        McpServer::Sse(sse) => (sse.name.clone(), sse.url.clone()),
+        _ => (String::new(), String::new()),
+    }
 }
 
 async fn session_server_to_sdk_mcp_server(server: &SessionMcpServer) -> Result<McpServer, String> {

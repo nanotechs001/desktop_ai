@@ -196,6 +196,117 @@ fn parse_headers(value: Option<&serde_json::Value>) -> std::collections::HashMap
         .unwrap_or_default()
 }
 
+/// The app's own browser MCP server: the Pixebot browser pane.
+const PIXEBOT_BROWSER_MCP_NAME: &str = "aionui-browser";
+
+/// Markers of MCP servers that drive a browser of their own (chrome-devtools-mcp launches a
+/// separate Chrome, Playwright/Puppeteer their own Chromium, the rest hosted or extension
+/// browsers), matched against a server's name and launch text.
+const COMPETING_BROWSER_MARKERS: [&str; 10] = [
+    "chrome-devtools",
+    "playwright",
+    "puppeteer",
+    "browser-use",
+    "browserbase",
+    "browsermcp",
+    "mcp-chrome",
+    "hyperbrowser",
+    "stagehand",
+    "selenium",
+];
+
+/// True when the server `name`, launched by `launch` (its command and args, or its url), is a
+/// browser-automation server other than the Pixebot browser.
+pub(crate) fn is_competing_browser_mcp(name: &str, launch: &str) -> bool {
+    if name == PIXEBOT_BROWSER_MCP_NAME {
+        return false;
+    }
+    let text = format!("{name} {launch}").to_ascii_lowercase();
+    COMPETING_BROWSER_MARKERS.iter().any(|marker| text.contains(marker))
+}
+
+/// `servers` without competing browser servers when the Pixebot browser is among them: a bot
+/// with the pane must browse there, and a second browser opened outside the app (a VA bot on a
+/// weak model fell back to chrome-devtools' own Chrome). `describe` gives a server's name and
+/// launch text. Without the Pixebot browser the list is returned as is.
+pub(crate) fn drop_competing_browser_mcps<T>(servers: Vec<T>, describe: impl Fn(&T) -> (String, String)) -> Vec<T> {
+    if !servers
+        .iter()
+        .any(|server| describe(server).0 == PIXEBOT_BROWSER_MCP_NAME)
+    {
+        return servers;
+    }
+    let (kept, dropped): (Vec<T>, Vec<T>) = servers.into_iter().partition(|server| {
+        let (name, launch) = describe(server);
+        !is_competing_browser_mcp(&name, &launch)
+    });
+    if !dropped.is_empty() {
+        let names: Vec<String> = dropped.iter().map(|server| describe(server).0).collect();
+        info!(dropped = ?names, "mcp: competing browser servers left out; the Pixebot browser is present");
+    }
+    kept
+}
+
+/// The name and launch text of a neutral server, for [`drop_competing_browser_mcps`].
+pub(crate) fn describe_session_mcp_server(server: &SessionMcpServer) -> (String, String) {
+    let launch = match &server.transport {
+        SessionMcpTransport::Stdio { command, args, .. } => format!("{command} {}", args.join(" ")),
+        SessionMcpTransport::Http { url, .. }
+        | SessionMcpTransport::StreamableHttp { url, .. }
+        | SessionMcpTransport::Sse { url, .. } => url.clone(),
+    };
+    (server.name.clone(), launch)
+}
+
+#[cfg(test)]
+mod competing_browser_tests {
+    use super::*;
+
+    fn named(names: &[&str]) -> Vec<(String, String)> {
+        names
+            .iter()
+            .map(|name| ((*name).to_owned(), "node server.js".to_owned()))
+            .collect()
+    }
+
+    fn describe(server: &(String, String)) -> (String, String) {
+        server.clone()
+    }
+
+    #[test]
+    fn spots_browser_servers_by_name_or_launch_but_never_the_pixebot_browser() {
+        assert!(is_competing_browser_mcp(
+            "chrome-devtools",
+            "npx -y chrome-devtools-mcp@0.16.0"
+        ));
+        assert!(is_competing_browser_mcp("web", "npx @playwright/mcp@latest"));
+        assert!(is_competing_browser_mcp("Puppeteer", ""));
+        assert!(!is_competing_browser_mcp(
+            "aionui-browser",
+            "node aionBrowser.js chrome-devtools"
+        ));
+        assert!(!is_competing_browser_mcp("aionui-notes", "node aionNotes.js"));
+        assert!(!is_competing_browser_mcp("mcp-docs", "https://docs.example/mcp"));
+    }
+
+    #[test]
+    fn drops_competing_browsers_only_when_the_pixebot_browser_is_present() {
+        let with_pane = named(&["chrome-devtools", "aionui-browser", "aionui-notes", "playwright"]);
+        let kept: Vec<String> = drop_competing_browser_mcps(with_pane, describe)
+            .into_iter()
+            .map(|s| s.0)
+            .collect();
+        assert_eq!(kept, ["aionui-browser", "aionui-notes"]);
+
+        let without_pane = named(&["chrome-devtools", "mcp-docs"]);
+        let kept: Vec<String> = drop_competing_browser_mcps(without_pane, describe)
+            .into_iter()
+            .map(|s| s.0)
+            .collect();
+        assert_eq!(kept, ["chrome-devtools", "mcp-docs"]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

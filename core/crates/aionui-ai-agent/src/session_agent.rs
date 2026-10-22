@@ -1771,6 +1771,8 @@ pub async fn build_antigravity_instance(
         None => Vec::new(),
     };
     neutral.extend(config.session_mcp_servers.iter().cloned());
+    let neutral =
+        crate::mcp_resolve::drop_competing_browser_mcps(neutral, crate::mcp_resolve::describe_session_mcp_server);
     let mut mcp_servers: Vec<McpServerSpec> = neutral.iter().map(session_server_to_spec).collect();
     if let Some(cfg) = config.team_mcp_stdio_config.as_ref() {
         let mut coordination = vec![team_mcp_server_spec(cfg)];
@@ -1921,6 +1923,8 @@ pub async fn build_session_instance(
             .await
         });
     }
+    let neutral =
+        crate::mcp_resolve::drop_competing_browser_mcps(neutral, crate::mcp_resolve::describe_session_mcp_server);
     let mut mcp_servers: Vec<McpServerSpec> = neutral.iter().map(session_server_to_spec).collect();
     if let Some(cfg) = config.team_mcp_stdio_config.as_ref() {
         // Team-MCP is PREPENDED before the user's servers (clean-slate + legacy

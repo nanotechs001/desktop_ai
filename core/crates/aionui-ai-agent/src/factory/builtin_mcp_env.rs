@@ -36,6 +36,12 @@ const SECRET_ENV_KEYS: [&str; 2] = [RELAY_TOKEN, ARTIFACTS_TOKEN];
 
 const REDACTED: &str = "[redacted]";
 
+/// True for the env keys a built-in's launch copies from aioncore's own process env (the relay
+/// and artifact-server url and token), which every agent subprocess inherits as well.
+pub(crate) fn is_process_env_credential(key: &str) -> bool {
+    [RELAY_URL, RELAY_TOKEN, ARTIFACTS_URL, ARTIFACTS_TOKEN].contains(&key)
+}
+
 /// The (url, token) pair a built-in reads, by name; `None` for every other server. Names must
 /// match `BUILTIN_*_MCP_NAME` in `packages/desktop/src/common/config/constants.ts`; the keys are
 /// what each server reads (`aionBrowser/relayClient.ts`; `aionArtifacts/apiClient.ts`, which

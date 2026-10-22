@@ -349,6 +349,18 @@ impl AcpAgentManager {
         // earlier turn cannot override a later benign empty turn.
         self.process.clear_stderr().await;
 
+        let usage = self.session.read().await.context_usage().cloned();
+        if compacts_before_prompt(self.backend(), usage.as_ref(), &data.content) {
+            tracing::info!(
+                sid,
+                "opencode: context over 90% of its window; compacting before the prompt"
+            );
+            let compact = PromptRequest::new(SessionId::new(sid), vec![ContentBlock::from(OPENCODE_COMPACT_COMMAND)]);
+            if let Err(error) = self.protocol.prompt(compact).await {
+                warn!(sid, error = %error, "opencode: compaction failed; sending the prompt anyway");
+            }
+        }
+
         let prompt_response = self
             .protocol
             .prompt(PromptRequest::new(SessionId::new(sid), prompt_blocks))
@@ -641,6 +653,27 @@ fn end_turn_usage_frame(usage: &Usage) -> Value {
     })
 }
 
+/// OpenCode's ACP command that compacts the session (`compact` in its advertised commands).
+const OPENCODE_COMPACT_COMMAND: &str = "/compact";
+
+/// Share of the context window past which an OpenCode session is compacted before the next prompt.
+const OPENCODE_COMPACT_THRESHOLD_PERCENT: u64 = 90;
+
+/// Whether to send OpenCode `/compact` before the user's `content`: its last usage is past
+/// [`OPENCODE_COMPACT_THRESHOLD_PERCENT`] of a known window. OpenCode left a long browsing chat
+/// over that line without compacting; verified against opencode v2.1.2 that a `/compact` prompt
+/// runs a completed compaction (its `session_message` gets a `compaction` row with a summary).
+/// Never when the user's own message is that command.
+fn compacts_before_prompt(backend: Option<&str>, usage: Option<&UsageUpdate>, content: &str) -> bool {
+    let Some(usage) = usage else {
+        return false;
+    };
+    backend == Some("opencode")
+        && usage.size > 0
+        && usage.used.saturating_mul(100) > usage.size.saturating_mul(OPENCODE_COMPACT_THRESHOLD_PERCENT)
+        && content.trim() != OPENCODE_COMPACT_COMMAND
+}
+
 /// Extract an end-of-turn usage frame from a prompt response.
 ///
 /// Sources, in priority order:
@@ -795,6 +828,50 @@ fn empty_finish_tip_code(stop_reason: StopReason) -> &'static str {
         StopReason::MaxTurnRequests => "ACP_EMPTY_TURN_MAX_TURN_REQUESTS",
         StopReason::Refusal => "ACP_EMPTY_TURN_REFUSAL",
         _ => "ACP_EMPTY_TURN",
+    }
+}
+
+#[cfg(test)]
+mod compaction_tests {
+    use super::*;
+
+    fn usage(used: u64, size: u64) -> UsageUpdate {
+        UsageUpdate::new(used, size)
+    }
+
+    #[test]
+    fn compacts_an_opencode_session_past_ninety_percent_before_the_next_prompt() {
+        assert!(compacts_before_prompt(
+            Some("opencode"),
+            Some(&usage(950_000, 1_048_576)),
+            "continue"
+        ));
+        assert!(!compacts_before_prompt(
+            Some("opencode"),
+            Some(&usage(900_000, 1_048_576)),
+            "continue"
+        ));
+        assert!(!compacts_before_prompt(
+            Some("opencode"),
+            Some(&usage(10, 0)),
+            "continue"
+        ));
+        assert!(!compacts_before_prompt(Some("opencode"), None, "continue"));
+    }
+
+    #[test]
+    fn leaves_other_engines_and_a_typed_compact_alone() {
+        assert!(!compacts_before_prompt(
+            Some("goose"),
+            Some(&usage(99, 100)),
+            "continue"
+        ));
+        assert!(!compacts_before_prompt(None, Some(&usage(99, 100)), "continue"));
+        assert!(!compacts_before_prompt(
+            Some("opencode"),
+            Some(&usage(99, 100)),
+            " /compact "
+        ));
     }
 }
 

@@ -115,6 +115,20 @@ pub(super) async fn build(
     )
     .await;
 
+    if extra_mcp_servers.contains_key("aionui-browser") {
+        extra_mcp_servers.retain(|name, config| {
+            let launch = config
+                .url
+                .clone()
+                .unwrap_or_else(|| format!("{} {}", config.command.as_deref().unwrap_or(""), config.args.as_deref().unwrap_or(&[]).join(" ")));
+            let competing = crate::mcp_resolve::is_competing_browser_mcp(name, &launch);
+            if competing {
+                info!(conversation_id = %ctx.conversation_id, server = %name, "mcp: competing browser server left out; the Pixebot browser is present");
+            }
+            !competing
+        });
+    }
+
     if !extra_mcp_servers.is_empty() {
         info!(
             conversation_id = %ctx.conversation_id,
