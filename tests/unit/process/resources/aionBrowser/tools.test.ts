@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RelayClient } from '@process/resources/builtinMcp/aionBrowser/relayClient';
-import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
+import { createBrowserMcpServer, toActSteps } from '@process/resources/builtinMcp/aionBrowser/tools';
 import { BROWSER_RULE_TEXT } from '@process/services/agentBrowser/browserRule';
 import { BUILTIN_BROWSER_MCP_NAME } from '@/common/config/constants';
 import { FakeRelay } from './fakeRelay';
@@ -356,5 +356,26 @@ describe('tabs report the tab the agent moved to', () => {
     const client = await connectClient(relay.env);
     await callTabs(client, { action: 'navigate', url: 'https://nope.example/', tab: 'wc-7' });
     expect(relay.callsTo('AionRelay.reportAction')).toEqual([]);
+  });
+});
+
+describe('act step ids', () => {
+  it('takes `id` as another name for `target`, since agents read "by id" and send id', () => {
+    expect(toActSteps([{ op: 'click', id: 'f0:16' }])).toEqual([{ op: 'click', target: 'f0:16' }]);
+    expect(toActSteps([{ op: 'type', id: 'f0:16', text: 'Manila' }])).toEqual([
+      { op: 'type', target: 'f0:16', text: 'Manila' },
+    ]);
+  });
+
+  it('keeps target when both are given, and leaves steps without either alone', () => {
+    expect(toActSteps([{ op: 'click', target: 'f1:2', id: 'f9:9' }])).toEqual([{ op: 'click', target: 'f1:2' }]);
+    expect(toActSteps([{ op: 'press', key: 'Enter' }])).toEqual([{ op: 'press', key: 'Enter' }]);
+  });
+
+  it('lists id in the act schema, so a strict client does not reject it', async () => {
+    const client = await connectClient(relay.env);
+    const { tools } = await client.listTools();
+    const act = tools.find((tool) => tool.name === 'act');
+    expect(JSON.stringify(act?.inputSchema)).toContain('"id"');
   });
 });

@@ -176,6 +176,7 @@ const actInput = {
         .object({
           op: z.enum(ACT_OPS),
           target: targetId.optional(),
+          id: targetId.optional().describe('Same as target.'),
           text: z
             .string()
             .max(MAX_ACTION_TEXT)
@@ -189,6 +190,13 @@ const actInput = {
     .max(MAX_ACTIONS),
   stop_on_change: z.boolean().optional().describe('Stop once an action changes the page controls. Defaults to true.'),
 };
+
+/** An act step as agents send it: some name the control `id`, after "by id" in the description. */
+type ActStepInput = ActStep & { id?: string };
+
+/** The steps with `id` read as `target` (an explicit target wins). */
+export const toActSteps = (steps: readonly ActStepInput[]): ActStep[] =>
+  steps.map(({ id, ...step }) => (step.target === undefined && id !== undefined ? { ...step, target: id } : step));
 
 const DRAG_DESCRIPTION = `${PANE_SENTENCE} Drag one observed control onto another, by ids from observe: HTML5 drag and drop (e.g. a builder panel widget into its preview iframe, also cross-origin) and pointer-based sortable lists. position: before, after or inside (default) the target. The drag must move at least 4 px (a shorter one is a click: use act). A release on a risky control (Publish, Send, Pay, Delete…) asks the user first. Returns done, stale (observe again), denied (the user refused: do not retry or work around it unless they ask) or error. ${UNTRUSTED_SENTENCE}`;
 
@@ -386,7 +394,7 @@ export function createBrowserMcpServer(relay: RelayClient): McpServer {
     ({ tab, actions, stop_on_change }) =>
       guarded(() =>
         onTab(relay, queue, tab, async (ctx) =>
-          ok(await act(ctx, actions as ActStep[], { stopOnChange: stop_on_change ?? true }))
+          ok(await act(ctx, toActSteps(actions as ActStepInput[]), { stopOnChange: stop_on_change ?? true }))
         )
       )
   );

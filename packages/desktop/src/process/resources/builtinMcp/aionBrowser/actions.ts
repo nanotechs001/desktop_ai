@@ -440,7 +440,7 @@ async function pointLabels(ctx: ActionContext, at: Point): Promise<Labeled[]> {
 async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle | null> {
   const { op } = step;
   if (op === 'press' || op === 'scroll') return op === 'press' ? press(ctx, step) : scroll(ctx, step);
-  const id = need(step.target, 'a target id from observe', op);
+  const id = need(step.target, `target: a control id from observe, as in {op: '${op}', target: 'f1:12'}`, op);
   let t = await resolveTarget(ctx, id);
   if (op === 'click') {
     const asked = await clickLabels(ctx, t);
