@@ -126,6 +126,16 @@ describe('gpuRecovery', () => {
     expect(fs.existsSync(configFile())).toBe(false);
   });
 
+  // Quitting or killing the app takes the GPU process down with it; counting that turned WebGL off after a few restarts.
+  it('does not count a GPU process that was killed or exited cleanly as a crash', async () => {
+    const { installGpuCrashHandler } = await import('@/process/utils/gpuRecovery');
+    installGpuCrashHandler();
+    for (const reason of ['killed', 'clean-exit', 'killed', 'clean-exit']) {
+      crashListener!({}, { type: 'GPU', reason, exitCode: 0 });
+    }
+    expect(fs.existsSync(configFile())).toBe(false);
+  });
+
   it('respects user override force-on when handling crashes', async () => {
     fs.writeFileSync(configFile(), JSON.stringify({ userOverride: 'force-on' }));
     const { installGpuCrashHandler } = await import('@/process/utils/gpuRecovery');

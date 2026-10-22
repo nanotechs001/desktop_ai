@@ -132,6 +132,9 @@ export function setGpuUserOverride(override: GpuOverride | null): GpuStatus {
 export function installGpuCrashHandler(): void {
   app.on('child-process-gone', (_event, details) => {
     if (details.type !== 'GPU') return;
+    // Quitting or killing the app takes the GPU process down too: not a crash. Counting those turned WebGL off
+    // after a few restarts, which blanks sites that need it.
+    if (details.reason === 'killed' || details.reason === 'clean-exit') return;
 
     const cfg = readConfig();
     const nextCount = (cfg.crashCount ?? 0) + 1;
