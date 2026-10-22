@@ -3242,6 +3242,29 @@ mod tests {
     const MAX_AUTO_INJECT_DESCRIPTION_CHARS: usize = 200;
 
     #[test]
+    fn page_builder_skill_ships_auto_injected_with_its_builder_references() {
+        let base = std::path::Path::new(BUILTIN_AUTO_SKILLS_SUBDIR).join("page-builder");
+        let manifest = BUILTIN_SKILLS
+            .get_file(base.join(SKILL_MANIFEST_FILE))
+            .expect("page-builder must be an auto-inject built-in skill");
+        let content = std::str::from_utf8(manifest.contents()).expect("UTF-8");
+        let (name, _) = parse_frontmatter_fields(content).expect("valid frontmatter");
+        assert_eq!(name, "page-builder");
+        for reference in ["ghl.md", "elementor.md", "gutenberg.md"] {
+            assert!(
+                BUILTIN_SKILLS
+                    .get_file(base.join("references").join(reference))
+                    .is_some(),
+                "missing references/{reference}"
+            );
+            assert!(
+                content.contains(&format!("references/{reference}")),
+                "SKILL.md must point to {reference}"
+            );
+        }
+    }
+
+    #[test]
     fn auto_inject_skill_descriptions_stay_within_injection_budget() {
         let auto_dir = BUILTIN_SKILLS
             .get_dir(BUILTIN_AUTO_SKILLS_SUBDIR)
