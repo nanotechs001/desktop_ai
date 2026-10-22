@@ -6,7 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type StubContents = { getType: () => string; session: unknown; on: () => void; setUserAgent: () => void };
+type StubContents = {
+  getType: () => string;
+  session: unknown;
+  on: () => void;
+  setUserAgent: () => void;
+  getUserAgent: () => string;
+};
 
 const mocks = vi.hoisted(() => {
   const browserSession = { setUserAgent: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() }, storagePath: '/u/p' };
@@ -84,6 +90,7 @@ const makeContents = (type: string, session: unknown = mocks.browserSession): St
   session,
   on: () => {},
   setUserAgent: () => {},
+  getUserAgent: () => '',
 });
 
 const makeMainWindow = (webContents: StubContents, destroyed = false) => ({
@@ -194,7 +201,8 @@ describe('initBrowserSession', () => {
     expect(mocks.fromPartition).toHaveBeenCalledWith('persist:aionui-browser');
     expect(mocks.browserSession.setUserAgent).toHaveBeenCalledTimes(1);
     expect(mocks.browserSession.setUserAgent).toHaveBeenCalledWith(BROWSER_UA);
-    expect(mocks.browserSession.webRequest.onBeforeSendHeaders).not.toHaveBeenCalled();
+    // One listener: it sets page loads' user agent (userAgent.test.ts); client hints stay Electron's own.
+    expect(mocks.browserSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads).toHaveBeenCalledWith(mocks.browserSession);
     expect(mocks.installPermissions).toHaveBeenCalledTimes(1);
@@ -504,7 +512,8 @@ describe('ensureBrowserSession (Agent profiles)', () => {
     expect(mocks.fromPartition).toHaveBeenCalledWith(partition);
     expect(mocks.agentSession.setUserAgent).toHaveBeenCalledTimes(1);
     expect(mocks.agentSession.setUserAgent).toHaveBeenCalledWith(BROWSER_UA);
-    expect(mocks.agentSession.webRequest.onBeforeSendHeaders).not.toHaveBeenCalled();
+    // One listener: it sets page loads' user agent (userAgent.test.ts); client hints stay Electron's own.
+    expect(mocks.agentSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledTimes(1);
     expect(mocks.installDownloads.mock.calls).toEqual([[mocks.browserSession], [mocks.agentSession]]);
     expect(mocks.installPermissions.mock.calls).toEqual([
       [mocks.browserSession, 'persist:aionui-browser'],

@@ -386,9 +386,18 @@ const navigateTab = (relay: RelayClient, queue: TabQueue, url: string | undefine
       NAVIGATE_TIMEOUT_MS,
       'The page'
     );
-    if (typeof reply.errorText === 'string' && reply.errorText)
+    // ERR_ABORTED: a newer load replaced this one (a redirect restarted with another user agent, or the page
+    // navigated itself), so the tab is still loading somewhere rather than failed.
+    const replaced = reply.errorText === 'net::ERR_ABORTED';
+    if (typeof reply.errorText === 'string' && reply.errorText && !replaced)
       return fail(`Could not load the page: ${reply.errorText}`);
     await reportTab(relay, target, 'navigate', url);
+    if (replaced)
+      return ok({
+        tab: tab ?? relay.currentTab,
+        url,
+        note: 'The load was redirected; observe the tab to see where it landed.',
+      });
     return ok({ tab: tab ?? relay.currentTab, url });
   });
 };

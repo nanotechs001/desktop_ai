@@ -19,7 +19,7 @@ import {
   rememberBrowserSession,
 } from './profiles/browserProfiles';
 import { installBrowserShortcuts } from './shortcuts';
-import { installSiteUserAgent, toBrowserUserAgent } from './userAgent';
+import { installRequestUserAgent, installSiteUserAgent, toBrowserUserAgent } from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
@@ -118,6 +118,7 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   sessions.set(partition, browserSession);
   rememberBrowserSession(partition, browserSession);
   browserSession.setUserAgent(toBrowserUserAgent(app.userAgentFallback));
+  installRequestUserAgent(browserSession, app.userAgentFallback);
   installDownloads(browserSession);
   installPermissions(browserSession, partition);
   extensionsSettled.set(partition, startExtensions(partition, browserSession, deps));

@@ -54,23 +54,70 @@ export function userAgentFor(url: string, electronUa: string): string {
 }
 
 /**
+ * Sends every page load (a tab's first, a redirect, a popup's) with the agent of the site it goes to, so the request
+ * never carries the session default only to be switched afterwards: a site that ties its login to the agent
+ * (WordPress on ViziPlatform) answered a fresh tab's first request with its login page. The page's other requests
+ * keep the tab's agent, which {@link installSiteUserAgent} keeps matching the page.
+ */
+export function installRequestUserAgent(session: Electron.Session, electronUa: string): void {
+  session.webRequest.onBeforeSendHeaders((details, callback) => {
+    if (details.resourceType !== 'mainFrame') return callback({ requestHeaders: details.requestHeaders });
+    const requestHeaders = Object.fromEntries(
+      Object.entries(details.requestHeaders).filter(([name]) => name.toLowerCase() !== 'user-agent')
+    );
+    requestHeaders['User-Agent'] = userAgentFor(details.url, electronUa);
+    callback({ requestHeaders });
+  });
+}
+
+/** about:blank and the like: no request goes out, and a popup's opener may be writing into it. */
+const isLocalPage = (url: string): boolean => /^about:/i.test(url);
+
+/**
  * Keeps a browser tab's user agent right for the site it is going to: set before each main-frame load (a link, a
  * redirect, a typed or scripted load), so the request and the page's `navigator.userAgent` agree. The session keeps
  * the Electron-token default; only tabs on other sites switch to plain Chrome.
  */
 export function installSiteUserAgent(contents: Electron.WebContents, electronUa: string): void {
-  let current = '';
-  const follow = (url: string) => {
+  // The tab's own agent (the session's), so a new tab's first load is a switch only when its site needs another.
+  let current = contents.getUserAgent();
+  /** Sets the user agent for `url`; true when it changed. An about: page sends no request, so it never switches. */
+  const follow = (url: string): boolean => {
+    if (isLocalPage(url)) return false;
     const next = userAgentFor(url, electronUa);
-    if (next === current) return;
+    if (next === current) return false;
     current = next;
     contents.setUserAgent(next);
+    return true;
   };
-  contents.on('will-navigate', (_event, url) => follow(url));
-  contents.on('will-redirect', (details) => {
-    if (details.isMainFrame) follow(details.url);
+  // Chromium answers a user-agent change during a load by reloading the page already shown, which races the load
+  // under way (gmail.com → mail.google.com stayed blank). So a load that needs the other agent is stopped first,
+  // leaving nothing to reload, then sent again with the new agent. Deferred a tick: stopping a navigation from inside
+  // its own event crashes Electron. Returns whether a restart was scheduled.
+  const restart = (url: string): boolean => {
+    if (isLocalPage(url) || userAgentFor(url, electronUa) === current) return false;
+    setImmediate(() => {
+      if (contents.isDestroyed()) return;
+      contents.stop();
+      follow(url);
+      // The stopped load rejects on its own; failures of this one reach did-fail-load like any other load.
+      contents.loadURL(url).catch(() => {});
+    });
+    return true;
+  };
+  // A link on a settled page has not started loading, so switching cancels nothing. While the tab still loads (an
+  // opener pointing its popup somewhere fires this only after the load began) a switch would race that load.
+  contents.on('will-navigate', (_event, url) => {
+    if (!contents.isLoading()) follow(url);
   });
+  // Cancelled before the redirect target is requested, so the restart is its only request.
+  contents.on('will-redirect', (details) => {
+    if (details.isMainFrame && restart(details.url)) details.preventDefault();
+  });
+  // Only a load the browser started (the address bar, loadURL, an agent's Page.navigate) restarts. A page's own load
+  // (`initiator` set) has already been sent: restarting would send it twice, which spends a one-time login link
+  // (ViziPlatform's site login), so it keeps the agent it has this once.
   contents.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument) follow(details.url);
+    if (details.isMainFrame && !details.isSameDocument && !details.initiator) restart(details.url);
   });
 }

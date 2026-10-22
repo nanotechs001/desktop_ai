@@ -320,6 +320,17 @@ describe('tabs navigate', () => {
     expect(reply.isError).toBe(true);
     expect(textOf(reply)).toBe('Could not load the page: net::ERR_NAME_NOT_RESOLVED');
   });
+
+  it('navigate does not call a load that was replaced by a newer one a failure', async () => {
+    const client = await connectClient(relay.env);
+    relay.on('Target.attachToTarget', () => ({ sessionId: 's1' }));
+    relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
+    relay.on('AionRelay.reportAction', () => ({}));
+    relay.on('Page.navigate', () => ({ frameId: 'TOP', errorText: 'net::ERR_ABORTED' }));
+    const reply = await callTabs(client, { action: 'navigate', url: 'https://gmail.com/', tab: 'wc-7' });
+    expect(reply.isError).toBeFalsy();
+    expect(textOf(reply)).toContain('observe');
+  });
 });
 
 // Each tab the agent moves to is reported (AionRelay.reportAction), so the pane brings that tab to the front.
