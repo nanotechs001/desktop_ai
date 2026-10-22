@@ -1,7 +1,7 @@
 ---
 name: page-builder
 description: >-
-  Build or restyle a page fast in a visual page builder (GoHighLevel, Elementor, WordPress block editor, others): plan first, use the builder's own features before CSS.
+  Build or restyle a page fast in a visual page builder (GoHighLevel, Elementor, Gutenberg, Salient WPBakery, others): plan first, use the builder's features before CSS.
 ---
 
 # Page builder
@@ -13,6 +13,7 @@ Goal: finish the page in as few browser steps as possible, using the builder's o
 |---|---|---|
 | `app.gohighlevel.com` or a white-label app, URL with `page-builder` / `funnel`, frame `funnel-builder` | GoHighLevel | `references/ghl.md` |
 | `wp-admin/post.php?…&action=elementor`, panel "Elements / Globals", `elementor-` classes | Elementor | `references/elementor.md` |
+| WPBakery on a Salient theme: "Backend Editor / Frontend Editor / Classic Mode" buttons, `vc_` classes, `nectar_` shortcodes, Salient Templates | Salient WPBakery | `references/salient-wpbakery.md`, then `references/salient-elements.md` for element settings and class fields |
 | `wp-admin/post.php` / `post-new.php` or the Site Editor, block inserter "+", "Patterns" | WordPress block editor (Gutenberg) | `references/gutenberg.md` |
 | anything else | unknown builder | section 2 |
 

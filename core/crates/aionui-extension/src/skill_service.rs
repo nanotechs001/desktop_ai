@@ -3250,7 +3250,13 @@ mod tests {
         let content = std::str::from_utf8(manifest.contents()).expect("UTF-8");
         let (name, _) = parse_frontmatter_fields(content).expect("valid frontmatter");
         assert_eq!(name, "page-builder");
-        for reference in ["ghl.md", "elementor.md", "gutenberg.md"] {
+        for reference in [
+            "ghl.md",
+            "elementor.md",
+            "gutenberg.md",
+            "salient-wpbakery.md",
+            "salient-elements.md",
+        ] {
             assert!(
                 BUILTIN_SKILLS
                     .get_file(base.join("references").join(reference))
