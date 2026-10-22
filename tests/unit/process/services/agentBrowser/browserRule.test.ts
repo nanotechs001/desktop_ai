@@ -66,6 +66,14 @@ describe('BROWSER_RULE_TEXT', () => {
     }
   });
 
+  it('names the click-by-id tool so an agent with deferred tools loads it instead of clicking by coordinates', () => {
+    expect(BROWSER_RULE_TEXT).toContain('`mcp__aionui-browser__observe`');
+    expect(BROWSER_RULE_TEXT).toContain('`mcp__aionui-browser__act`');
+    expect(BROWSER_RULE_TEXT).toMatch(/click_point[^\n]*only/);
+    const longest = browserRuleText('x'.repeat(BOT_NAME_MAX_CHARS));
+    expect(longest.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+  });
+
   it('tells the agent to show pages with the artifacts tool, not a file, and stays within the cap', () => {
     expect(BROWSER_RULE_TEXT).toContain(
       'To show the user a page, document or diagram you made, call `mcp__aionui-artifacts__create` (the `create` tool of `aionui-artifacts`; load it first if it is deferred), never a file or any other artifact or publishing tool.'
@@ -98,7 +106,7 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT).not.toContain('# Notebook');
     expect(BROWSER_RULE_TEXT.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
     // A self-imposed budget raised from 2000 for the bot's name (the backend takes far longer rules).
-    expect(BROWSER_RULE_MAX_CHARS).toBe(2200);
+    expect(BROWSER_RULE_MAX_CHARS).toBe(2400);
   });
 
   it('without a name, speaks as the personal assistant in the first person, never as "the agent"', () => {
