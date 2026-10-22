@@ -65,9 +65,13 @@ export function createNotesMcpServer(api: ArtifactsApi): McpServer {
       content: [
         {
           type: 'text',
+          // The whole draft rides in the result: every engine records it, so the app can show the card whatever
+          // shape the engine gives the call itself (a wrapper tool, a renamed tool).
           text: JSON.stringify({
             proposed: true,
             name: args.name,
+            description: args.description,
+            steps: args.steps,
             status: 'shown to the user for review; not saved unless they click Save. Wait for them.',
           }),
         },

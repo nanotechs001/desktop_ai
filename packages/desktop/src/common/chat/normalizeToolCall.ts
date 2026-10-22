@@ -1,9 +1,8 @@
 import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup } from './chatLib';
 import { getAcpImagePath } from './acpToolCallOutput';
 import {
-  parseArtifactToolCall,
-  parseNoteToolCall,
-  parseSkillProposalToolCall,
+  detectBuiltinToolCards,
+  type BuiltinToolCards,
   type ArtifactCardData,
   type NoteChipData,
 } from './artifactToolCall';
@@ -95,22 +94,12 @@ export function normalizeToolGroup(message: IMessageToolGroup): NormalizedToolCa
       description: desc,
       input,
       output: getResultDisplayText(result_display),
-      artifact: parseArtifactToolCall(
+      ...detectBuiltinToolCards(
         name,
         input,
         getResultDisplayText(result_display),
-        type === 'mcp' ? confirmationDetails.server_name : undefined
-      ),
-      note: parseNoteToolCall(
-        name,
-        getResultDisplayText(result_display),
-        type === 'mcp' ? confirmationDetails.server_name : undefined
-      ),
-      skill: parseSkillProposalToolCall(
-        name,
-        input,
-        getResultDisplayText(result_display),
-        type === 'mcp' ? confirmationDetails.server_name : undefined
+        type === 'mcp' ? confirmationDetails.server_name : undefined,
+        confirmationDetails
       ),
     };
   });
@@ -167,6 +156,41 @@ const buildParamSummary = (kind: string, rawInput?: Record<string, unknown>): st
 type AcpToolCallUpdateCompat = IMessageAcpToolCall['content']['update'] & {
   session_update?: string;
   raw_input?: Record<string, unknown>;
+  raw_output?: unknown;
+  rawOutput?: unknown;
+};
+
+type NestedToolCall = { tool: string; input: unknown };
+
+/**
+ * The MCP calls a code-mode tool made: OpenCode runs MCP tools inside its own `execute` tool and lists them in
+ * `raw_output.metadata.tool_calls` (`{ tool: 'aionui-notes.add', status, input }`). Completed ones only, last first.
+ */
+const nestedToolCalls = (rawOutput: unknown): NestedToolCall[] => {
+  const calls = (rawOutput as { metadata?: { tool_calls?: unknown } } | undefined)?.metadata?.tool_calls;
+  if (!Array.isArray(calls)) return [];
+  return calls
+    .filter(
+      (call): call is { tool: string; status?: unknown; input?: unknown } =>
+        typeof call === 'object' && call !== null && typeof (call as { tool?: unknown }).tool === 'string'
+    )
+    .filter((call) => call.status === undefined || call.status === 'completed')
+    .map((call) => ({ tool: call.tool, input: call.input }))
+    .toReversed();
+};
+
+/** `cards` filled in from the code-mode calls (last first): the script's return value is its last call's result. */
+const withNested = (cards: BuiltinToolCards, calls: NestedToolCall[], output: string | undefined): BuiltinToolCards => {
+  let filled = cards;
+  for (const call of calls) {
+    const found = detectBuiltinToolCards(call.tool, call.input, output);
+    filled = {
+      artifact: filled.artifact ?? found.artifact,
+      note: filled.note ?? found.note,
+      skill: filled.skill ?? found.skill,
+    };
+  }
+  return filled;
 };
 
 type AcpToolCallContentCompat = IMessageAcpToolCall['content'] & {
@@ -200,6 +224,7 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
   }
 
   const keyParam = buildParamSummary(update.kind, rawInput);
+  const nested = nestedToolCalls(update.rawOutput ?? update.raw_output);
 
   return {
     key: update.tool_call_id,
@@ -212,9 +237,7 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
     messageId: message.id,
     conversationId: message.conversation_id,
     imagePath: getAcpImagePath(update),
-    artifact: parseArtifactToolCall(update.title, rawInput, output),
-    note: parseNoteToolCall(update.title, output),
-    skill: parseSkillProposalToolCall(update.title, rawInput, output),
+    ...withNested(detectBuiltinToolCards(update.title, rawInput, output, undefined, update), nested, output),
   };
 }
 
@@ -252,9 +275,7 @@ export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall
     description: description || undefined,
     input: displayInput,
     output,
-    artifact: parseArtifactToolCall(name, hasKeys(input) ? input : args, output),
-    note: parseNoteToolCall(name, output),
-    skill: parseSkillProposalToolCall(name, hasKeys(input) ? input : args, output),
+    ...detectBuiltinToolCards(name, hasKeys(input) ? input : args, output, undefined, message.content),
   };
 }
 

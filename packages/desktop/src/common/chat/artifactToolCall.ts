@@ -86,3 +86,66 @@ export const parseSkillProposalToolCall = (
   if (!isSkillTool || parseResult(output)?.isError === true) return undefined;
   return parseSkillProposal(typeof input === 'string' ? parseResult(input) : input);
 };
+
+/** What a tool call row shows for the built-in MCPs: an artifact card, a "Saved to notebook" chip, a skill card. */
+export type BuiltinToolCards = { artifact?: ArtifactCardData; note?: NoteChipData; skill?: SkillProposal };
+
+/** Whether `record` (the whole call: names, input, wrapper metadata) mentions `word`, at any depth. */
+const mentions = (record: unknown, word: string): boolean => {
+  try {
+    return JSON.stringify(record ?? '').includes(word);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The built-in cards a tool call shows, for every engine. First by the tool's own name (Claude's `mcp__…`, Codex's
+ * `server.tool`, a separate server field). Then by its result alone, for engines that wrap or rename MCP calls (OpenCode
+ * runs them inside its `execute` tool): the result must be exactly the built-in's JSON, and the call must name the tool
+ * somewhere, so page text or another tool's output never makes a card.
+ */
+export const detectBuiltinToolCards = (
+  name: string,
+  input: unknown,
+  output: string | undefined,
+  server?: string,
+  record?: unknown
+): BuiltinToolCards => {
+  const call = { name, input, server, record };
+  const result = parseResult(output);
+  const fields = (typeof input === 'string' ? parseResult(input) : isRecord(input) ? input : undefined) ?? {};
+
+  const artifact =
+    parseArtifactToolCall(name, input, output, server) ??
+    (result &&
+    mentions(call, BUILTIN_ARTIFACTS_MCP_NAME) &&
+    asText(result.url) &&
+    asText(result.id) &&
+    typeof result.version === 'number'
+      ? {
+          title: asText(fields.title),
+          kind: asText(fields.kind),
+          version: result.version,
+          url: asText(result.url) as string,
+        }
+      : undefined);
+
+  const noteText = asText(result?.text);
+  const note =
+    parseNoteToolCall(name, output, server) ??
+    (result?.saved === true &&
+    noteText &&
+    (result.source === 'agent' || result.source === 'page') &&
+    mentions(call, BUILTIN_NOTES_MCP_NAME)
+      ? { text: noteText, source: result.source }
+      : undefined);
+
+  const skill =
+    parseSkillProposalToolCall(name, input, output, server) ??
+    (result?.proposed === true && mentions(call, 'propose_skill')
+      ? parseSkillProposal({ name: result.name, description: result.description, steps: result.steps })
+      : undefined);
+
+  return { artifact, note, skill };
+};

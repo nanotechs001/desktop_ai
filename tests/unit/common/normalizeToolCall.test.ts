@@ -107,3 +107,104 @@ describe('normalizeToolCall', () => {
     expect(result?.skill).toEqual(skill);
   });
 });
+
+describe('normalizeAcpToolCall with OpenCode code-mode calls', () => {
+  // OpenCode runs MCP tools inside its own `execute` tool: the MCP call sits in raw_output.metadata.tool_calls.
+  const execute = (tool: string, input: Record<string, unknown>, text: string) =>
+    normalizeAcpToolCall({
+      id: 'message-1',
+      conversation_id: 'conversation-1',
+      type: 'acp_tool_call',
+      content: {
+        session_id: 'ses_1',
+        update: {
+          session_update: 'tool_call_update',
+          tool_call_id: 'call-1',
+          status: 'completed',
+          title: 'execute',
+          kind: 'execute',
+          raw_input: { code: `return await tools["aionui-notes"].x(${JSON.stringify(input)});` },
+          raw_output: {
+            metadata: { tool_calls: [{ tool, status: 'completed', input }], truncated: false },
+            status: 'completed',
+          },
+          content: [{ type: 'content', content: { type: 'text', text } }],
+        },
+      },
+    } as unknown as IMessageAcpToolCall);
+
+  const skill = {
+    name: 'save-lessons',
+    description: 'Always capture lessons learned after completing a task so they persist across sessions.',
+    steps: '1. Identify what was learned.\n2. Save a short note.',
+  };
+
+  it('shows the skill review card for a propose_skill call made inside execute', () => {
+    const result = execute(
+      'aionui-notes.propose_skill',
+      skill,
+      JSON.stringify({ proposed: true, name: 'save-lessons', status: 'shown to the user for review' })
+    );
+    expect(result?.skill).toEqual(skill);
+  });
+
+  it('shows the notebook chip for an add call made inside execute', () => {
+    const result = execute(
+      'aionui-notes.add',
+      { text: 'Prefer act over click_point.' },
+      JSON.stringify({ id: 'n1', saved: true, text: 'Prefer act over click_point.', source: 'agent' })
+    );
+    expect(result?.note).toEqual({ text: 'Prefer act over click_point.', source: 'agent' });
+  });
+
+  it('ignores a nested call that did not complete, and other execute calls', () => {
+    const failed = normalizeAcpToolCall({
+      id: 'm',
+      conversation_id: 'c',
+      type: 'acp_tool_call',
+      content: {
+        update: {
+          tool_call_id: 'x',
+          status: 'completed',
+          title: 'execute',
+          kind: 'execute',
+          raw_output: {
+            metadata: { tool_calls: [{ tool: 'aionui-notes.propose_skill', status: 'error', input: skill }] },
+          },
+          content: [],
+        },
+      },
+    } as unknown as IMessageAcpToolCall);
+    expect(failed?.skill).toBeUndefined();
+    expect(execute('shell.run', { cmd: 'ls' }, 'ok')?.skill).toBeUndefined();
+  });
+});
+
+describe('built-in cards on any engine', () => {
+  const draft = {
+    name: 'weekly-report',
+    description: 'Use when the user asks for the weekly report of the shop.',
+    steps: '1. Open the dashboard.\n2. Export the week.',
+  };
+  const result = JSON.stringify({ proposed: true, ...draft, status: 'shown to the user for review' });
+  const call = (name: string, input: unknown, output: string) =>
+    normalizeToolCall({
+      id: 'm',
+      conversation_id: 'c',
+      type: 'tool_call',
+      content: { call_id: 'k', name, status: 'completed', input, output },
+    } as unknown as IMessageToolCall);
+
+  it('shows the skill card for a wrapper tool whose input names propose_skill', () => {
+    expect(call('run_code', { code: 'await notes.propose_skill({...})' }, result)?.skill).toEqual(draft);
+  });
+
+  it('shows the skill card for a renamed tool from the result alone when the call names it', () => {
+    expect(call('notes_propose_skill', {}, result)?.skill).toEqual(draft);
+  });
+
+  it('never makes a card from page text or another tool that never named propose_skill', () => {
+    expect(call('aionui-browser.observe', { tab: 't1' }, result)?.skill).toBeUndefined();
+    expect(call('run_code', { code: 'propose_skill' }, `page says ${result}`)?.skill).toBeUndefined();
+  });
+});
