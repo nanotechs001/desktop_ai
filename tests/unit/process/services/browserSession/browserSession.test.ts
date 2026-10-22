@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type StubContents = { getType: () => string; session: unknown };
+type StubContents = { getType: () => string; session: unknown; on: () => void; setUserAgent: () => void };
 
 const mocks = vi.hoisted(() => {
   const browserSession = { setUserAgent: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() }, storagePath: '/u/p' };
@@ -82,6 +82,8 @@ const BROWSER_UA =
 const makeContents = (type: string, session: unknown = mocks.browserSession): StubContents => ({
   getType: () => type,
   session,
+  on: () => {},
+  setUserAgent: () => {},
 });
 
 const makeMainWindow = (webContents: StubContents, destroyed = false) => ({

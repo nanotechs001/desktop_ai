@@ -19,7 +19,7 @@ import {
   rememberBrowserSession,
 } from './profiles/browserProfiles';
 import { installBrowserShortcuts } from './shortcuts';
-import { toBrowserUserAgent } from './userAgent';
+import { installSiteUserAgent, toBrowserUserAgent } from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
@@ -163,6 +163,8 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
     )
   );
   onBrowserContentsCreated((contents) => installBrowserShortcuts(contents));
+  // Plain Chrome on sites other than Google's: Electron-detecting sites (Firebase Auth apps) break on the token.
+  onBrowserContentsCreated((contents) => installSiteUserAgent(contents, app.userAgentFallback));
   onBrowserContentsCreated((contents) => installBeforeUnloadDialog(contents, deps.getMainWindow));
   // Tabs are webviews; popups stay windows of the page that opened them, not chrome.tabs entries.
   onBrowserContentsCreated((contents) => {
