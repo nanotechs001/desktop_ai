@@ -316,7 +316,13 @@ async function checkOwners(ctx: ActionContext, frames: FrameHandle[], frame: Fra
       return callIn(ctx.conn, root, OWNER_HIT, [{ objectId: object.objectId }, ...values(at.x, at.y)]);
     })();
     const shown = await withTimeout(check, FRAME_TIMEOUT_MS, 'The cover check').catch(staleUnlessStep);
-    if (shown !== true) throw new StepError('stale', 'the target is covered by another element');
+    if (shown === true) continue;
+    // OWNER_HIT names the cover when it can (a dialog over a builder's frame), else returns '' or false.
+    const cover = typeof shown === 'string' && shown ? shown : '';
+    throw new StepError(
+      'stale',
+      cover ? `the target is covered by ${cover}; close or move it first` : 'the target is covered by another element'
+    );
   }
 }
 

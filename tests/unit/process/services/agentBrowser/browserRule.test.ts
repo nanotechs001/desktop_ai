@@ -81,6 +81,16 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(longest.length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
   });
 
+  // A weak model on OpenCode code mode saw only a few tools, "typed" with drag and paged through 907 rows: the rule
+  // must show how to type with act, where deferred tools are found, and to use a site's search box.
+  it('shows how to type with act, how to find deferred tools in code mode, and to search rather than page', () => {
+    expect(BROWSER_RULE_TEXT).toContain("act({actions:[{op:'type',target:'f2:33',text:'x'}]})");
+    expect(BROWSER_RULE_TEXT).toContain('`tools.search`');
+    expect(BROWSER_RULE_TEXT).toContain("Use a site's search box, not paging.");
+    expect(BROWSER_RULE_TEXT).not.toContain('Do not assume a tool exists');
+    expect(browserRuleText('x'.repeat(BOT_NAME_MAX_CHARS)).length).toBeLessThanOrEqual(BROWSER_RULE_MAX_CHARS);
+  });
+
   it('tells the agent to show pages with the artifacts tool, not a file, and stays within the cap', () => {
     expect(BROWSER_RULE_TEXT).toContain(
       'To show the user a page, document or diagram you made, call `mcp__aionui-artifacts__create` (the `create` tool of `aionui-artifacts`; load it first if it is deferred), never a file or any other artifact or publishing tool.'
@@ -124,15 +134,14 @@ describe('BROWSER_RULE_TEXT', () => {
     expect(BROWSER_RULE_TEXT).not.toContain('Pixebot Browser agent');
   });
 
-  it('starts with tabs and only promises tools that are listed', () => {
+  // Every aionui-browser tool is always registered, so the rule may name observe and act.
+  it('starts with tabs', () => {
     expect(BROWSER_RULE_TEXT).toContain('Start with `tabs`: `open` gets you a tab, `list` shows tabs you can use.');
-    expect(BROWSER_RULE_TEXT).toContain('Do not assume a tool exists unless it is listed.');
-    expect(BROWSER_RULE_TEXT).not.toMatch(/`(observe|act|drag)`/);
   });
 
   it('keeps run_script for what act and observe cannot do, and says scripts that change the page ask first', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      'Prefer act/observe. Use run_script only when the task needs it (reading data, page state, or site APIs), with `frame` (e.g. f2) inside an iframe; scripts that change the page ask the user first.'
+      '- Use run_script only to read data, page state or site APIs (`frame`, e.g. f2, inside an iframe); scripts that change the page ask the user first.'
     );
     // No script level is presented as a sandbox.
     expect(BROWSER_RULE_TEXT).not.toMatch(/sandbox|page-world/i);
@@ -140,7 +149,7 @@ describe('BROWSER_RULE_TEXT', () => {
   });
 
   it('tells the model to report missing browser tools instead of opening another browser', () => {
-    expect(BROWSER_RULE_TEXT).toContain('tell the user instead of opening any other browser');
+    expect(BROWSER_RULE_TEXT).toContain('- If these tools fail, tell the user; never switch browsers.');
   });
 });
 

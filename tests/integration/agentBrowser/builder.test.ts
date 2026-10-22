@@ -281,6 +281,39 @@ describe.skipIf(!chromePath)('observe and act in a funnel builder on real Chrome
     expect(await evaluate(builder, 'window.clicks')).toEqual(['Headline']);
   });
 
+  // A VA bot clicked WPBakery's page under its open Add Element panel again and again: "covered by another element"
+  // never said what to close. The reason now names a dialog or panel that covers the target.
+  it('names the dialog that covers a target, in its own frame and over the frame it sits in', async () => {
+    const { session, obs, builder } = await openFunnel();
+    const ctx = contextFor(session);
+    const footer = rowIn(obs, CANVAS, 'Footer note');
+    const box = (await inCanvas(
+      builder,
+      `(() => { const e = [...document.querySelectorAll('*')].find((x) => !x.children.length && x.textContent.trim() === 'Footer note');
+        const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`
+    )) as { x: number; y: number; w: number; h: number };
+    // The canvas iframe sits at (0, 40) in the builder: put the builder's dialog over the footer.
+    await evaluate(
+      builder,
+      `Object.assign(document.getElementById('settings-dialog'), { hidden: false }).setAttribute('style',
+        'position:absolute;z-index:5;background:#fff;left:${box.x - 10}px;top:${box.y + 30}px;width:${box.w + 20}px;height:${box.h + 20}px')`
+    );
+    expect((await act(ctx, [{ op: 'click', target: footer.id }])).results[0]).toMatchObject({
+      result: 'stale',
+      reason: 'the target is covered by the dialog "Page settings"; close or move it first',
+    });
+
+    const widget = rowIn(obs, BUILDER, 'Widget 12');
+    await evaluate(
+      builder,
+      `(() => { const c = document.getElementById('cover'); c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'Add Element'); })()`
+    );
+    expect((await act(ctx, [{ op: 'click', target: widget.id }])).results[0]).toMatchObject({
+      result: 'stale',
+      reason: 'the target is covered by the dialog "Add Element"; close or move it first',
+    });
+  });
+
   it('scrolls the list a covered item sits in, without a hit test', async () => {
     const { session, obs, builder } = await openFunnel();
     const ctx = contextFor(session);

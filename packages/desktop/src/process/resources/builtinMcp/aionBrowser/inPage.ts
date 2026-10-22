@@ -11,6 +11,38 @@
  */
 
 /**
+ * In-page `coverName(hit)`: what covers a target, for the reason act gives: the dialog or panel `hit` sits in (a
+ * dialog role, aria-modal, <dialog>, or a modal/dialog/panel/popup/drawer/overlay class) by its label or heading, else
+ * `hit`'s own label or short text; '' when it has no name. A bot that kept clicking WPBakery's page under its open Add
+ * Element panel was only ever told "covered by another element".
+ */
+const COVER_NAME = `const coverName = (hit) => {
+    const clip = (s) => String(s || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
+    const ownLabel = (e) => clip(e.getAttribute('aria-label') || e.getAttribute('title'));
+    const panelClass = /(^|[\\s_-])(modal|dialog|panel|popup|popover|drawer|overlay)([\\s_-]|$)/i;
+    let inDialog = false;
+    for (let e = hit; e && e.nodeType === 1; e = e.parentElement) {
+      const role = e.getAttribute('role') || '';
+      const cls = typeof e.className === 'string' ? e.className : '';
+      if (!(e.tagName === 'DIALOG' || role === 'dialog' || role === 'alertdialog' || e.getAttribute('aria-modal') === 'true' || panelClass.test(cls))) continue;
+      inDialog = true;
+      let name = ownLabel(e);
+      const by = e.getAttribute('aria-labelledby');
+      if (!name && by) name = clip(by.split(/\\s+/).map((id) => (document.getElementById(id) || {}).textContent || '').join(' '));
+      if (!name) {
+        const heading = e.querySelector('h1,h2,h3,h4,[class*="heading"],[class*="title"]');
+        name = clip(heading && heading.textContent);
+      }
+      // An inner part of a panel (its body) is often unnamed: the panel around it carries the heading.
+      if (name) return 'the dialog "' + name + '"';
+    }
+    if (inDialog) return 'a dialog';
+    if (!hit || hit.nodeType !== 1) return '';
+    const own = ownLabel(hit) || clip(hit.innerText);
+    return own ? '"' + own + '"' : '';
+  };`;
+
+/**
  * (node, pageKey, guard, hitTest, reveal) → `{stale, hover?}` or `{rect, point, role, label, editable, options?}`,
  * frame-local; the point is where to click (snapshot.js `pointIn`: the center, or a builder item's own area).
  * Freshness is about the target: the frame's page key (document and url) and the target's guard (role, name, state,
@@ -22,6 +54,7 @@
  * pointer to before looking again, as such toolbars show only while their item is hovered.
  */
 export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest, reveal) {
+  ${COVER_NAME}
   const c = window.__aionFast;
   if (!c || c.hash(c.pageKey()) !== pageKey) return { stale: 'the page changed since observe' };
   const fresh = (x) => {
@@ -61,7 +94,8 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest, reveal) 
     }
     let up = hit;
     while (up && up !== e) up = up.parentNode || up.host;
-    const covered = 'the target is covered by another element';
+    const cover = coverName(hit);
+    const covered = cover ? 'the target is covered by ' + cover + '; close or move it first' : 'the target is covered by another element';
     if (!up) return owner && owner.contains(hit) ? unshown(covered) : { stale: covered };
   }
   return {
@@ -217,6 +251,7 @@ export const SELECT_OPTION = `function (node, label) {
  * this world can read). A cover in any document on the way makes it false.
  */
 export const OWNER_HIT = `function (owner, x, y) {
+  ${COVER_NAME}
   let doc = document;
   for (let depth = 0; depth < 10; depth++) {
     let hit = doc.elementFromPoint(x, y);
@@ -233,7 +268,7 @@ export const OWNER_HIT = `function (owner, x, y) {
     } catch {
       inner = null;
     }
-    if (!inner) return false;
+    if (!inner) return coverName(hit);
     const r = hit.getBoundingClientRect();
     const style = getComputedStyle(hit);
     x -= r.left + hit.clientLeft + parseFloat(style.paddingLeft);

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { builderHint } from './builderHint';
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
 import {
   FRAME_TIMEOUT_MS,
@@ -99,6 +100,8 @@ export type Observation = {
   failed: string[];
   /** A frame was still loading when observe stopped waiting. */
   loading?: boolean;
+  /** Every read frame's url, top first: tells which page builder the page is (see builderHint). */
+  urls?: string[];
 };
 
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -409,8 +412,10 @@ export function formatObservation(obs: Observation, options: { text?: boolean } 
     const label = JSON.stringify(sanitizePageText(f.label, MAX_FRAME_LABEL_LENGTH));
     return `${f.frameKey} ${label}${i === 0 ? ' (top)' : ''}`;
   });
+  const hint = builderHint(obs);
   const lines = [
     `Frames: ${frames.join(' · ')}`,
+    ...(hint ? [hint] : []),
     ...(obs.failed.length ? [`Could not read frames: ${obs.failed.join(', ')}; observe again.`] : []),
     ...(obs.rows.length ? obs.rows.map((row) => formatRow(row, topFrameKey)) : ['No controls found.']),
     ...(obs.omitted ? [`${obs.omitted} more controls omitted; pass scope to narrow.`] : []),
@@ -529,5 +534,6 @@ async function observeOnce(
   );
   // A scope without the top frame has no wrapper to tell apart: its first frame stands in for the top.
   const loading = loadingFrames(snapshots.map(({ snapshot }) => snapshot)).map((i) => snapshots[i].frame.frameKey);
-  return { observation: { frames, failed, ...mergeSnapshots(snapshots, frames[0]?.frameKey) }, loading };
+  const urls = snapshots.map(({ snapshot }) => snapshot.url).filter(Boolean);
+  return { observation: { frames, failed, urls, ...mergeSnapshots(snapshots, frames[0]?.frameKey) }, loading };
 }
