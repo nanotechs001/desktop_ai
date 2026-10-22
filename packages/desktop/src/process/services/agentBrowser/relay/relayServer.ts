@@ -15,13 +15,13 @@ import { webOriginOf } from '../confirmGate';
 import { isAgentNavigableUrl } from './agentUrl';
 import { createDebuggerSessions, type DebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
 import {
+  FRAME_GONE,
   MAX_SCRIPT_CHARS,
+  evaluateWriteScript,
   isScriptForm,
   isScriptWorld,
-  openScriptWorld,
   scriptAsk,
   withScriptTimeout,
-  writeScriptParams,
 } from './pageScript';
 import { POLICY_ERROR_CODE, decideRelayCommand, mayAct } from './relayPolicy';
 import {
@@ -543,14 +543,15 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
   /**
    * run_script in write mode on a tab the client may act on, once the user allowed scripts on its origin: in a fresh
    * isolated world of the top frame, or in the page's own JS world (the DevTools console's). Either can change
-   * anything on the site, so both ask. The approval is spent on this one `Runtime.evaluate`, which the relay builds
-   * itself (awaited, by value, timed, origin-checked in the page, never the command-line API) and sends on the tab's
-   * own session: main-world `Runtime` stays closed to the session (relayPolicy). Fails closed like requestConfirm:
-   * `{ allow: false }` unless the user allowed it and the tab, its sharing and the session are still as asked; else
-   * `{ allow: true, reply }` with the CDP reply.
+   * anything on the site, so both ask. With `frameId` it runs in that frame of the session (a frame session too), and
+   * the ask and the in-page check use that frame's origin, from the session's own frame tree. The approval is spent
+   * on this one run, which the relay builds itself (awaited, by value, timed, origin-checked in the page, never the
+   * command-line API) and sends on the client's own session: main-world `Runtime` stays closed to the session
+   * (relayPolicy). Fails closed like requestConfirm: `{ allow: false }` unless the user allowed it and the tab, its
+   * sharing and the session are still as asked; else `{ allow: true, reply }` with the CDP reply.
    */
   const runScript = async (conn: Connection, params: Params): Promise<Params> => {
-    const { webContentsId, sessionId, code, form, world } = params;
+    const { webContentsId, sessionId, code, form, world, frameId } = params;
     const valid =
       Number.isInteger(webContentsId) &&
       typeof sessionId === 'string' &&
@@ -558,17 +559,25 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       code.length > 0 &&
       code.length <= MAX_SCRIPT_CHARS &&
       isScriptForm(form) &&
-      isScriptWorld(world);
+      isScriptWorld(world) &&
+      (frameId === undefined || typeof frameId === 'string');
     if (!valid) throw new Error('Invalid AionRelay.runScript params');
+    const frame = typeof frameId === 'string' ? frameId : undefined;
     const id = webContentsId as number;
     const { contents, session } = askedTab(conn, id, sessionId);
-    if (session.cdpSessionId) throw new Error('A script runs on the tab session, not a frame session');
+    if (session.cdpSessionId && frame === undefined) {
+      throw new Error('A script runs on the tab session, not a frame session');
+    }
     return whileAsking(conn, id, contents, async (signal) => {
       const origin = webOriginOf(contents.mainFrame.url);
       if (!origin) return { allow: false };
+      const frameOrigin = frame === undefined ? origin : await frameOriginOf(sessionId, frame);
+      if (frameOrigin === null) throw new Error(FRAME_GONE);
+      // A sandboxed frame has no origin to allow, nor one the in-page check could hold it to.
+      if (frameOrigin === 'opaque') throw new Error('run_script mode write cannot run in a sandboxed frame.');
       const request = {
         origin,
-        frameOrigin: origin,
+        frameOrigin,
         ...scriptAsk(code),
         clientLabel: conn.client.label,
         kind: 'script' as const,
@@ -581,12 +590,12 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         mayAct(registry.ownership(id), conn.client) &&
         sessions.session(sessionId) !== null;
       if (!still) return { allow: false };
-      console.info(`[AgentBrowserRelay] run_script on ${origin} (world: ${world})`);
+      const inFrame = frameOrigin === origin ? '' : ` in a frame of ${frameOrigin}`;
+      console.info(`[AgentBrowserRelay] run_script on ${origin}${inFrame} (world: ${world})`);
       registry.touch(id, conn.conversationId);
       const send = (method: string, cdpParams: Params) => sessions.send(sessionId, method, cdpParams);
-      const inWorld = world === 'isolated' ? { contextId: (await openScriptWorld(send)).contextId } : {};
-      const evaluate = { ...writeScriptParams(code, form, origin), ...inWorld };
-      return { allow: true, reply: (await withScriptTimeout(send('Runtime.evaluate', evaluate))) ?? {} };
+      const script = { code, form, world, ...(frame === undefined ? {} : { frameId: frame }) };
+      return { allow: true, reply: (await withScriptTimeout(evaluateWriteScript(send, script, frameOrigin))) ?? {} };
     });
   };
 

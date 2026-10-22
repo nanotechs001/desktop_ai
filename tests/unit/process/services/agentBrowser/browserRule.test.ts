@@ -125,7 +125,7 @@ describe('BROWSER_RULE_TEXT', () => {
 
   it('keeps run_script for what act and observe cannot do, and says scripts that change the page ask first', () => {
     expect(BROWSER_RULE_TEXT).toContain(
-      'Prefer act/observe. Use run_script only when the task needs it (reading data, page state, or site APIs); scripts that change the page ask the user first.'
+      'Prefer act/observe. Use run_script only when the task needs it (reading data, page state, or site APIs), with `frame` (e.g. f2) inside an iframe; scripts that change the page ask the user first.'
     );
     // No script level is presented as a sandbox.
     expect(BROWSER_RULE_TEXT).not.toMatch(/sandbox|page-world/i);

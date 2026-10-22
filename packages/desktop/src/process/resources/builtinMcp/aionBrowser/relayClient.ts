@@ -217,14 +217,15 @@ export class RelayClient {
   }
 
   /**
-   * Runs a script that may change the page (AionRelay.runScript) on `targetId`'s tab session `sessionId`, in `world`.
+   * Runs a script that may change the page (AionRelay.runScript) on `targetId`'s tab session `sessionId`, in `world`;
+   * with `frameId`, in that frame of `sessionId` (then a frame's session too), asked for that frame's origin.
    * The relay asks the user first, per origin, and waits for their answer up to its timeout. Resolves with the CDP
    * evaluate reply, or null when the user did not allow it; throws when the relay refuses the tab or the script.
    */
   async runWriteScript(
     targetId: string,
     sessionId: string,
-    script: { code: string; form: ScriptForm; world: ScriptWorld }
+    script: { code: string; form: ScriptForm; world: ScriptWorld; frameId?: string }
   ): Promise<unknown> {
     const match = TARGET_ID.exec(targetId);
     if (!match) throw new Error(`No tab ${targetId} that you may use; call tabs list to see them.`);

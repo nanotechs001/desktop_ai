@@ -14,6 +14,7 @@ import {
 } from '@process/services/agentBrowser/relay/pageScript';
 import { sanitizePageText } from '@/common/utils/utils';
 import type { ActionContext } from './actions';
+import { frameByKey, frameUrl, type FrameHandle } from './frames';
 
 /** Characters of an exception message the agent gets. */
 const MAX_ERROR_CHARS = 500;
@@ -75,13 +76,31 @@ export const formatScriptReply = (reply: unknown, code?: string): ScriptOutcome 
 };
 
 /**
- * Runs `code` read-only in a fresh isolated world of the tab's top frame, the run that needs no approval:
- * `throwOnSideEffect` makes V8 refuse anything that would change the page, and an isolated world is no boundary of
- * its own (it shares the DOM, cookies and storage), so this is what keeps the run harmless.
+ * The frame `key` (`f<k>`) of the tab's latest observe, the way act finds its targets, while its document is still in
+ * its session. Throws a clear error for a key observe did not give or a frame that has gone since.
  */
-export async function runReadScript(ctx: ActionContext, code: string, form: ScriptForm): Promise<ScriptOutcome> {
-  const { conn, sessionId } = ctx;
-  const { contextId, origin } = await openScriptWorld((method, params) => conn.send(method, params, sessionId));
+export async function scriptFrame(ctx: ActionContext, key: string): Promise<FrameHandle> {
+  const frame = frameByKey(ctx.conn, ctx.sessionId, key);
+  const url = frame && (await frameUrl(ctx.conn, frame).catch((): undefined => undefined));
+  if (!frame || url === undefined) throw new Error(`Unknown frame ${key}; use a frame id from the latest observe.`);
+  return frame;
+}
+
+/**
+ * Runs `code` read-only in a fresh isolated world of `frame` (the tab's top frame when absent), the run that needs no
+ * approval: `throwOnSideEffect` makes V8 refuse anything that would change the page, and an isolated world is no
+ * boundary of its own (it shares the DOM, cookies and storage), so this is what keeps the run harmless.
+ */
+export async function runReadScript(
+  ctx: ActionContext,
+  code: string,
+  form: ScriptForm,
+  frame?: FrameHandle
+): Promise<ScriptOutcome> {
+  const { conn } = ctx;
+  const sessionId = frame?.sessionId ?? ctx.sessionId;
+  const send = (method: string, params: Record<string, unknown>) => conn.send(method, params, sessionId);
+  const { contextId, origin } = await openScriptWorld(send, frame?.frameId);
   // stdout is the MCP protocol channel; only the origin and the world are logged, never the code or the result.
   process.stderr.write(
     `[builtin-mcp-browser] run_script on ${origin ?? 'a non-web page'} (world: isolated, mode: read)\n`

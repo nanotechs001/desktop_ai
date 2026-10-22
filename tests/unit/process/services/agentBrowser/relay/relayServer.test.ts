@@ -2,6 +2,7 @@ import { connect as netConnect } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import type { RelayLimits } from '@process/services/agentBrowser/relay/relayTransport';
+import { allowKey } from '@process/services/agentBrowser/confirmGate';
 import { createDebuggerSessions, type DebuggerSessions } from '@process/services/agentBrowser/relay/debuggerSessions';
 import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import { startRelayServer, type ChatInfo, type RelayHandle } from '@process/services/agentBrowser/relay/relayServer';
@@ -1633,6 +1634,64 @@ describe('relay server: runScript (write mode)', () => {
     expect(requestConfirm).not.toHaveBeenCalled();
     expect(evaluates()).toHaveLength(0);
     expect(other.debugger.sendCommand.mock.calls.some(([method]) => method === 'Runtime.evaluate')).toBe(false);
+  });
+
+  /** A cross-origin builder frame (its own child session) holding a same-origin canvas and a sandboxed frame. */
+  const BUILDER_TREE = {
+    frameTree: {
+      frame: { id: 'BUILDER', url: 'https://builder.test/', securityOrigin: 'https://builder.test' },
+      childFrames: [
+        { frame: { id: 'CANVAS', url: 'https://builder.test/canvas', securityOrigin: 'https://builder.test' } },
+        { frame: { id: 'SANDBOX', url: 'https://builder.test/s', securityOrigin: '://' } },
+      ],
+    },
+  };
+
+  /** scriptTab plus the builder's child session. */
+  const builderTab = async () => {
+    const tab = await scriptTab();
+    tab.contents.debugger.handler = (method, _params, cdpSessionId) => {
+      if (method === 'Page.getFrameTree') return cdpSessionId === 'OOPIF-B' ? BUILDER_TREE : TOP_TREE;
+      if (method === 'Page.createIsolatedWorld') return { executionContextId: 89 };
+      if (method === 'Runtime.evaluate') return EVALUATED;
+      return {};
+    };
+    tab.contents.debugger.message('Target.attachedToTarget', {
+      sessionId: 'OOPIF-B',
+      targetInfo: { targetId: 'BUILDER', type: 'iframe', url: 'https://builder.test/' },
+      waitingForDebugger: false,
+    });
+    const child = String((await tab.client.waitForEvent('Target.attachedToTarget')).params?.sessionId);
+    return { ...tab, child };
+  };
+
+  it("in a frame, asks with that frame's origin (its own allow key) and runs only in that frame", async () => {
+    const { run, calls, evaluates, child } = await builderTab();
+    requestConfirm.mockResolvedValueOnce(true);
+    const reply = await run({ sessionId: child, frameId: 'CANVAS', world: 'isolated' });
+    expect(reply.result).toEqual({ allow: true, reply: EVALUATED });
+    const ask = requestConfirm.mock.calls[0][0];
+    expect(ask).toMatchObject({ origin: 'https://shop.test', frameOrigin: 'https://builder.test', kind: 'script' });
+    expect(allowKey(ask)).toBe('https://shop.test|https://builder.test');
+    expect(calls('Page.createIsolatedWorld')).toEqual([
+      ['Page.createIsolatedWorld', { frameId: 'CANVAS', worldName: 'aion-browser-script' }, 'OOPIF-B'],
+    ]);
+    const [, params, cdpSession] = evaluates()[0];
+    expect(cdpSession).toBe('OOPIF-B');
+    expect(params).toMatchObject({ contextId: 89 });
+    expect((params as { expression: string }).expression).toContain('location.origin !== "https://builder.test"');
+  });
+
+  it('a frame its session does not have, or a sandboxed one, is an error without asking', async () => {
+    const { run, evaluates, child } = await builderTab();
+    requestConfirm.mockResolvedValue(true);
+    expect((await run({ sessionId: child, frameId: 'GONE' })).error?.message).toBe(
+      'The frame is gone; observe the page again.'
+    );
+    expect((await run({ sessionId: child, frameId: 'SANDBOX' })).error?.message).toMatch(/sandboxed frame/);
+    expect((await run({ sessionId: child, frameId: 7 })).error?.message).toMatch(/Invalid/);
+    expect(requestConfirm).not.toHaveBeenCalled();
+    expect(evaluates()).toHaveLength(0);
   });
 
   it('refuses a user tab that is not shared, and malformed params, without asking', async () => {

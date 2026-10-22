@@ -16,6 +16,13 @@ import { MAX_RESULT_CHARS, PAGE_CHANGED } from '@process/services/agentBrowser/r
 import { createBrowserMcpServer } from '@process/resources/builtinMcp/aionBrowser/tools';
 import { FakeRelay } from './fakeRelay';
 
+/** Frames as the latest observe of the tab left them: f3 is a canvas frame inside a cross-origin builder session. */
+vi.mock('@process/resources/builtinMcp/aionBrowser/frames', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@process/resources/builtinMcp/aionBrowser/frames')>()),
+  frameByKey: (_conn: unknown, pageSessionId: string, key: string) =>
+    pageSessionId === 's1' && key === 'f3' ? { frameKey: 'f3', sessionId: 'oopif-1', frameId: 'CANVAS' } : undefined,
+}));
+
 type ToolReply = { isError?: boolean; content: Array<{ type: string; text?: string }> };
 
 let relay: FakeRelay;
@@ -23,13 +30,19 @@ let relayClient: RelayClient;
 let client: Client;
 
 const TREE = { frameTree: { frame: { id: 'TOP', url: 'https://shop.test/', securityOrigin: 'https://shop.test' } } };
+const BUILDER_TREE = {
+  frameTree: {
+    frame: { id: 'BUILDER', url: 'https://builder.test/', securityOrigin: 'https://builder.test' },
+    childFrames: [{ frame: { id: 'CANVAS', url: 'https://builder.test/c', securityOrigin: 'https://builder.test' } }],
+  },
+};
 
 beforeEach(async () => {
   relay = await FakeRelay.start();
   relay.on('Target.createTarget', () => ({ targetId: 'wc-7' }));
   relay.on('Target.attachToTarget', () => ({ sessionId: 's1' }));
   relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
-  relay.on('Page.getFrameTree', () => TREE);
+  relay.on('Page.getFrameTree', (_params, sessionId) => (sessionId === 'oopif-1' ? BUILDER_TREE : TREE));
   relay.on('Page.createIsolatedWorld', () => ({ executionContextId: 41 }));
   relay.on('Runtime.evaluate', () => ({ result: { type: 'object', value: { title: 'Shop' } } }));
   relayClient = new RelayClient(relay.env, () => 'test-agent');
@@ -70,6 +83,7 @@ describe('run_script description', () => {
     expect(description).toContain('mode read (default): read-only, no approval.');
     expect(description).toContain('Either can change anything on the site.');
     expect(description).toContain('a busy loop freezes its tab');
+    expect(description).toContain('frame: run inside an iframe from observe (e.g. f2)');
   });
 });
 
@@ -202,6 +216,46 @@ describe('run_script, write mode', () => {
     const reply = await runScript({ code: 'window.app', mode: 'write', world: 'page' });
     expect(reply.isError).toBe(true);
     expect(textOf(reply)).toBe('This tab is not shared with agents');
+  });
+});
+
+describe('run_script, frame', () => {
+  it('reads in the frame from the latest observe, in its own session and frame', async () => {
+    const reply = await runScript({ code: 'document.title', frame: 'f3' });
+    expect(reply.isError).toBeFalsy();
+    const worlds = relay.requests.filter((r) => r.method === 'Page.createIsolatedWorld');
+    expect(worlds).toEqual([
+      {
+        method: 'Page.createIsolatedWorld',
+        params: { frameId: 'CANVAS', worldName: 'aion-browser-script' },
+        sessionId: 'oopif-1',
+      },
+    ]);
+    const [evaluate] = relay.requests.filter((r) => r.method === 'Runtime.evaluate');
+    expect(evaluate).toMatchObject({ sessionId: 'oopif-1', params: { contextId: 41, throwOnSideEffect: true } });
+  });
+
+  it('asks through the relay for that frame, on its session', async () => {
+    relay.on('AionRelay.runScript', () => ({ allow: true, reply: { result: { type: 'number', value: 3 } } }));
+    expect(textOf(await runScript({ code: 'window.app.count', mode: 'write', world: 'page', frame: 'f3' }))).toBe('3');
+    expect(relay.callsTo('AionRelay.runScript')).toEqual([
+      {
+        webContentsId: 7,
+        sessionId: 'oopif-1',
+        frameId: 'CANVAS',
+        code: 'window.app.count',
+        form: 'expression',
+        world: 'page',
+      },
+    ]);
+  });
+
+  it.each(['read', 'write'])('refuses an unknown frame id in mode %s, before touching the page', async (mode) => {
+    const reply = await runScript({ code: 'document.title', mode, frame: 'f9' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toBe('Unknown frame f9; use a frame id from the latest observe.');
+    expect(relay.callsTo('Runtime.evaluate')).toEqual([]);
+    expect(relay.callsTo('AionRelay.runScript')).toEqual([]);
   });
 });
 

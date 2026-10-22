@@ -78,6 +78,13 @@ export const writeScriptParams = (code: string, form: ScriptForm, expectOrigin: 
   ...EVALUATE,
 });
 
+/**
+ * The write run as a function declaration, for `Runtime.callFunctionOn` on a frame's own JS world: the same origin
+ * check and wrapper as {@link writeScriptParams}, everything before the code on the first line.
+ */
+const writeScriptFunction = (code: string, form: ScriptForm, expectOrigin: string): string =>
+  `function () { if (location.origin !== ${JSON.stringify(expectOrigin)}) throw ${JSON.stringify(PAGE_CHANGED)}; return ${wrapScript(code, form, 'write')}; }`;
+
 /** Hidden characters (bidi, controls, line separators), but not newlines, tabs or emoji joiners. */
 const HIDDEN_IN_CODE = /(?![\n\t\u200C\u200D])[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
@@ -96,18 +103,64 @@ type Send = (method: string, params: Record<string, unknown>) => Promise<unknown
 const fieldsOf = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
+/** What a run_script that names a frame gets when the frame is no longer in its session. */
+export const FRAME_GONE = 'The frame is gone; observe the page again.';
+
+type FrameNode = { frame?: Record<string, unknown>; childFrames?: FrameNode[] };
+
+/** The frame `frameId` in `tree` (the tree's root frame when absent), as CDP describes it; null when not there. */
+const findFrame = (tree: FrameNode, frameId?: string): Record<string, unknown> | null => {
+  if (frameId === undefined || tree.frame?.id === frameId) return tree.frame ?? null;
+  return (tree.childFrames ?? []).reduce<Record<string, unknown> | null>(
+    (hit, c) => hit ?? findFrame(c, frameId),
+    null
+  );
+};
+
 /**
- * A fresh isolated world in the top frame of the session `send` talks to, and that frame's origin (null for a
- * non-web page). Throws when the page has no readable frame or world.
+ * A fresh isolated world in frame `frameId` of the session `send` talks to (its top frame when absent), and that
+ * frame's origin (null for a non-web page). Throws {@link FRAME_GONE} for a frame the session no longer has, and when
+ * the page has no readable frame or world.
  */
-export async function openScriptWorld(send: Send): Promise<{ contextId: number; origin: string | null }> {
-  const frame = fieldsOf(fieldsOf(fieldsOf(await send('Page.getFrameTree', {})).frameTree).frame);
-  if (typeof frame.id !== 'string') throw new Error('The page is not readable right now; try again.');
+export async function openScriptWorld(
+  send: Send,
+  frameId?: string
+): Promise<{ contextId: number; origin: string | null }> {
+  const frame = findFrame(fieldsOf(fieldsOf(await send('Page.getFrameTree', {})).frameTree), frameId);
+  if (typeof frame?.id !== 'string')
+    throw new Error(frameId ? FRAME_GONE : 'The page is not readable right now; try again.');
   // shortcut: a new world per run (they live until the document goes), cache one per document if runs pile up.
   const world = fieldsOf(await send('Page.createIsolatedWorld', { frameId: frame.id, worldName: SCRIPT_WORLD_NAME }));
   if (typeof world.executionContextId !== 'number') throw new Error('Could not prepare the page for a script.');
   const origin = typeof frame.securityOrigin === 'string' ? webOriginOf(frame.securityOrigin) : null;
   return { contextId: world.executionContextId, origin };
+}
+
+/** A write script and where it runs: `frameId` is a frame of the session (its top frame when absent). */
+export type WriteScript = { code: string; form: ScriptForm; world: ScriptWorld; frameId?: string };
+
+/**
+ * Runs a write script the user allowed on `expectOrigin` (the origin of the frame it runs in) and resolves with the
+ * CDP reply. Without a frame it runs in the session's top frame as always: the page's JS world, or a fresh isolated
+ * world. In a named frame the isolated world is that frame's; its own JS world has no context id without
+ * Runtime.enable, so the script is called on the frame's document resolved into that world.
+ */
+export async function evaluateWriteScript(send: Send, script: WriteScript, expectOrigin: string): Promise<unknown> {
+  const { code, form, world, frameId } = script;
+  const params = writeScriptParams(code, form, expectOrigin);
+  if (world === 'page' && frameId === undefined) return send('Runtime.evaluate', params);
+  const { contextId } = await openScriptWorld(send, frameId);
+  if (world === 'isolated') return send('Runtime.evaluate', { ...params, contextId });
+  const doc = fieldsOf(fieldsOf(await send('Runtime.evaluate', { expression: 'document', contextId })).result);
+  const node = fieldsOf(fieldsOf(await send('DOM.describeNode', { objectId: doc.objectId })).node);
+  const inPage = fieldsOf(fieldsOf(await send('DOM.resolveNode', { backendNodeId: node.backendNodeId })).object);
+  if (typeof inPage.objectId !== 'string') throw new Error('Could not prepare the page for a script.');
+  return send('Runtime.callFunctionOn', {
+    objectId: inPage.objectId,
+    functionDeclaration: writeScriptFunction(code, form, expectOrigin),
+    awaitPromise: true,
+    returnByValue: true,
+  });
 }
 
 /** `call`, or a rejection once the script had its time plus a grace; the late result is ignored. */
