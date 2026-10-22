@@ -52,21 +52,29 @@
   const MAX_EXTRA = 60;
   /** How far (document CSS px, each axis) an equivalent control may sit from where it was to count as the same. */
   const NEAR_PX = 32;
+  /** Gone controls whose identity stays known (a hover-only toolbar comes back under its old ids); oldest go first. */
+  const MAX_GONE = 200;
   const cut = (text) => String(text).slice(0, MAX_STRING);
   const cache = (window.__aionFast ||= { ids: new WeakMap(), nodes: new Map(), next: 1 });
-  // id -> {role, label, at}: what the latest snapshot saw under that id, at its center in document px.
+  // id -> {role, label, at, owner}: what a snapshot last saw under that id, at its center in document px, and the DOM
+  // id of the builder item it sits in ('' for none).
   cache.seen ||= new Map();
   cache.center = (e) => {
     const r = e.getBoundingClientRect();
     return [r.x + r.width / 2 + scrollX, r.y + r.height / 2 + scrollY];
   };
   cache.near = (a, b) => Math.abs(a[0] - b[0]) <= NEAR_PX && Math.abs(a[1] - b[1]) <= NEAR_PX;
-  /** An element keeps its id; a new node that is the same control as a gone one (role, label, place) takes its id. */
+  /**
+   * An element keeps its id; a new node that is the same control as a gone one (role, label, owner item, place) takes
+   * its id.
+   */
   const identity = (e, role, label, at) => {
     let id = cache.ids.get(e);
+    const owner = ownerId(e);
     if (id === undefined) {
       for (const [old, seen] of cache.seen) {
-        if (cache.nodes.has(old) || seen.role !== role || seen.label !== label || !cache.near(seen.at, at)) continue;
+        if (cache.nodes.has(old) || seen.role !== role || seen.label !== label || seen.owner !== owner) continue;
+        if (!cache.near(seen.at, at)) continue;
         id = old;
         break;
       }
@@ -74,7 +82,7 @@
       cache.ids.set(e, id);
     }
     cache.nodes.set(id, e);
-    cache.seen.set(id, { role, label, at });
+    cache.seen.set(id, { role, label, at, owner });
     return id;
   };
   for (const [id, e] of cache.nodes) if (!e.isConnected) cache.nodes.delete(id);
@@ -148,6 +156,18 @@
     return p;
   };
   const itemAt = (e) => (builderType(e) ? e : itemAbove(e));
+  /** The DOM id of the builder item a control (not an item itself) sits in, such as a toolbar icon's element; ''. */
+  const ownerId = (e) => (builderType(e) ? '' : itemAbove(e)?.id || '');
+  /**
+   * The builder item that shows control `e` (seen as `seen`), which may show it only while hovered: `e`'s item, or
+   * while `e` is gone the item it was last seen in. Null for none.
+   */
+  cache.ownerOf = (e, seen) => {
+    if (e?.isConnected) return builderType(e) ? null : itemAbove(e);
+    // shortcut: an item inside a shadow root is not found by id; GoHighLevel's are in the document.
+    const item = seen?.owner ? document.getElementById(seen.owner) : null;
+    return item && builderType(item) ? item : null;
+  };
   /** The builder items of `x`'s type whose nearest item above is the same as `x`'s, `x` too, in document order. */
   const siblingItems = (x) => {
     const [parent, type] = [itemAbove(x), builderType(x)];
@@ -393,7 +413,8 @@
   // Only a new document or url makes every id of the frame stale; anything else is checked per target.
   cache.pageKey = () => [performance.timeOrigin, location.href];
   // What makes a control that control: role, name, state, and the dialog or row it acts on (a Delete button means
-  // the row it is in). Not its node, so an equivalent node that replaced it is the same control.
+  // the row it is in, a toolbar icon the builder item it is in). Not its node, so an equivalent node that replaced it is
+  // the same control.
   cache.guard = (e) => {
     if (!e?.isConnected || !visible(e)) return null;
     const r = role(e);
@@ -412,6 +433,7 @@
       e.getAttribute('aria-selected'),
       e.getAttribute('href'),
       scope?.innerText?.slice(0, 6000) || '',
+      ownerId(e),
     ];
   };
   /** Every element that may be a control: for re-finding one whose node was replaced. */
@@ -573,7 +595,8 @@
       value: '',
     });
   }
-  for (const id of cache.seen.keys()) if (!cache.nodes.has(id)) cache.seen.delete(id);
+  const gone = [...cache.seen.keys()].filter((id) => !cache.nodes.has(id));
+  for (const id of gone.slice(0, Math.max(0, gone.length - MAX_GONE))) cache.seen.delete(id);
   // Open dialogs and menus, as act reports one that a step opened.
   const dialogs = all(
     'dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],[role="menu"],[role="listbox"]'

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, type ActionContext } from '@process/resources/builtinMcp/aionBrowser/actions';
 import {
   formatObservation,
@@ -23,18 +23,53 @@ const evaluate = async (sessionId: string, expression: string): Promise<unknown>
   (await chrome.conn.send<EvaluateReply>('Runtime.evaluate', { expression, returnByValue: true }, sessionId)).result
     .value;
 
-const contextFor = (sessionId: string): ActionContext => ({
+const contextFor = (sessionId: string, confirm: ActionContext['confirm'] = async () => true): ActionContext => ({
   conn: chrome.conn,
   sessionId,
   report: async () => undefined,
-  confirm: async () => true,
+  confirm,
 });
+
+/** Moves the test's pointer to top-viewport (x, y), as the user's own mouse would. */
+const pointerTo = (sessionId: string, x: number, y: number): Promise<unknown> =>
+  chrome.conn.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId);
+
+const centerOf = (r: ActionRow['rect']): [number, number] => [r.x + r.w / 2, r.y + r.h / 2];
+
+/** The Input.* calls (method and type) sent while `run` ran. */
+const inputDuring = async (run: () => Promise<unknown>): Promise<string[]> => {
+  const send = vi.spyOn(chrome.conn, 'send');
+  try {
+    await run();
+    return send.mock.calls
+      .filter(([method]) => method.startsWith('Input.'))
+      .map(([method, params]) => `${method} ${String((params as { type?: string } | undefined)?.type ?? '')}`);
+  } finally {
+    send.mockRestore();
+  }
+};
 
 const rowIn = (obs: Observation, frameLabel: string, label: string): ActionRow => {
   const found = obs.rows.find((r) => r.frameLabel === frameLabel && r.label === label);
   if (!found) throw new Error(`no row ${label} in ${frameLabel}:\n${formatObservation(obs, { text: false })}`);
   return found;
 };
+
+/**
+ * Waits until the frame of `sessionId` has seen itself on screen: headless Chrome routes input to a just-loaded OOPIF
+ * only once its parent has embedded it (see act.test.ts), and drops a click sent earlier.
+ */
+const untilEmbedded = (sessionId: string): Promise<unknown> =>
+  chrome.conn.send(
+    'Runtime.evaluate',
+    {
+      expression: `new Promise((resolve) => new IntersectionObserver((entries, observer) => {
+        if (entries[0].isIntersecting) { observer.disconnect(); requestAnimationFrame(() => requestAnimationFrame(resolve)); }
+      }).observe(document.body))`,
+      awaitPromise: true,
+    },
+    sessionId
+  );
 
 /** Opens the funnel builder (top page on A, builder on B, canvas inside the builder) once every frame lists. */
 const openFunnel = async (): Promise<{ session: string; obs: Observation; builder: string; canvas: string }> => {
@@ -46,6 +81,7 @@ const openFunnel = async (): Promise<{ session: string; obs: Observation; builde
     const key = obs.frames.find((f) => f.label === label)?.frameKey ?? '';
     return frameByKey(chrome.conn, session, key)?.sessionId ?? '';
   };
+  await untilEmbedded(sessionOf(BUILDER));
   return { session, obs, builder: sessionOf(BUILDER), canvas: sessionOf(CANVAS) };
 };
 
@@ -61,7 +97,9 @@ const openGhl = async (): Promise<{ session: string; obs: Observation; canvas: s
   const session = await chrome.openPage(`${servers.originA}/funnel.html?ghl`);
   const obs = await observeUntil(chrome.conn, session, (o) => o.rows.some((r) => r.frameLabel === BUILDER));
   const key = obs.frames.find((f) => f.label === BUILDER)?.frameKey ?? '';
-  return { session, obs, canvas: frameByKey(chrome.conn, session, key)?.sessionId ?? '' };
+  const canvas = frameByKey(chrome.conn, session, key)?.sessionId ?? '';
+  await untilEmbedded(canvas);
+  return { session, obs, canvas };
 };
 
 const GHL_TOOLBAR = ['Move Up', 'Move Down', 'Open Settings', 'Save Element', 'Drag', 'Clone', 'Delete'];
@@ -324,5 +362,119 @@ describe.skipIf(!chromePath)('observe and act in a funnel builder on real Chrome
 
     expect([column, section].map((a) => a.results[0]?.result)).toEqual(['done', 'done']);
     expect(await evaluate(canvas, 'window.ghl')).toEqual(['select col-Fv3', 'select section-rK2']);
+  });
+
+  /** Selects image 3 and observes while the pointer is on it: its hover-only toolbar is listed. */
+  const selectImage3 = async () => {
+    const { session, obs, canvas } = await openGhl();
+    const image = rowIn(obs, BUILDER, IMAGE_3);
+    expect((await act(contextFor(session), [{ op: 'click', target: image.id }])).results[0]).toMatchObject({
+      result: 'done',
+    });
+    const selected = await observePage(chrome.conn, session);
+    const away = centerOf(rowIn(selected, BUILDER, 'headline 1 · column 1 · row 1 · section 2 · Our story').rect);
+    return { session, canvas, image, selected, away, del: rowIn(selected, BUILDER, 'Delete') };
+  };
+
+  it("clicks a hover-only toolbar icon after the pointer left its item, hovering the item's own area first", async () => {
+    const { session, canvas, image, away, del } = await selectImage3();
+    await pointerTo(session, ...away);
+    expect(rowsLabels(await observePage(chrome.conn, session), BUILDER)).not.toContain('Delete');
+
+    const started = Date.now();
+    const input = await inputDuring(async () => {
+      const deleted = await act(contextFor(session), [{ op: 'click', target: del.id }]);
+      expect(deleted.results[0]).toMatchObject({ result: 'done' });
+    });
+
+    expect(Date.now() - started).toBeLessThan(1500);
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select image-i5', 'delete image-i5']);
+    // A hover of the item, then the click (whose own move goes to the icon from inside the item).
+    expect(input).toEqual([
+      'Input.dispatchMouseEvent mouseMoved',
+      'Input.dispatchMouseEvent mouseMoved',
+      'Input.dispatchMouseEvent mousePressed',
+      'Input.dispatchMouseEvent mouseReleased',
+    ]);
+    expect(image.id).not.toBe(del.id);
+  });
+
+  it('runs [click image, click Delete] in one act when the Delete id came from an earlier observe', async () => {
+    const { session, canvas, image, away, del } = await selectImage3();
+    await pointerTo(session, ...away);
+    // Observe while the toolbar is hidden: the agent's latest view has no Delete, its id is still known.
+    await observePage(chrome.conn, session);
+
+    const { results, stopped } = await act(contextFor(session), [
+      { op: 'click', target: image.id },
+      { op: 'click', target: del.id },
+    ]);
+
+    expect(results.map((r) => `${r.result} ${r.reason ?? ''}`.trim())).toEqual(['done', 'done']);
+    expect(stopped).toBeUndefined();
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select image-i5', 'select image-i5', 'delete image-i5']);
+  });
+
+  it('still asks before the hover-revealed Delete, and Deny deletes nothing', async () => {
+    const { session, canvas, away, del } = await selectImage3();
+    await pointerTo(session, ...away);
+    const asked: string[] = [];
+
+    const denied = await act(
+      contextFor(session, async (label) => {
+        asked.push(label);
+        return false;
+      }),
+      [{ op: 'click', target: del.id }]
+    );
+
+    expect(denied.results[0]).toMatchObject({ result: 'denied' });
+    expect(asked).toEqual(['Delete']);
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select image-i5']);
+  });
+
+  it('clicks Delete after a single Allow even though the pointer left the item while the user was asked', async () => {
+    const { session, canvas, away, del } = await selectImage3();
+    // The user's mouse crosses the canvas on its way to the app's Allow button.
+    const allowOnce: ActionContext['confirm'] = async () => {
+      await pointerTo(session, ...away);
+      await pointerTo(session, 5, 5);
+      return true;
+    };
+
+    const deleted = await act(contextFor(session, allowOnce), [{ op: 'click', target: del.id }]);
+
+    expect(deleted.results[0]).toMatchObject({ result: 'done' });
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select image-i5', 'delete image-i5']);
+  });
+
+  it('refuses the click after Allow when the control at the id became a different one, and says so', async () => {
+    const { session, canvas, del } = await selectImage3();
+    const relabel = async () => {
+      await evaluate(canvas, `document.querySelector('[title="Delete"]').title = 'Archive'`);
+      return true;
+    };
+
+    const changed = await act(contextFor(session, relabel), [{ op: 'click', target: del.id }]);
+
+    expect(changed.results[0]).toMatchObject({
+      result: 'stale',
+      reason: expect.stringContaining('the user allowed it, but the control changed'),
+    });
+    expect(await evaluate(canvas, 'window.ghl')).toEqual(['select image-i5']);
+  });
+
+  it('a hidden control outside any builder item stays stale, with no hover', async () => {
+    const { session, obs, builder } = await openFunnel();
+    const undo = rowIn(obs, BUILDER, 'Undo');
+    await evaluate(builder, `document.querySelector('[title="Undo"]').style.visibility = 'hidden'`);
+
+    const input = await inputDuring(async () => {
+      const hidden = await act(contextFor(session), [{ op: 'click', target: undo.id }]);
+      expect(hidden.results[0]).toMatchObject({ result: 'stale', reason: 'the target changed since observe' });
+    });
+
+    expect(input).toEqual([]);
+    expect(await evaluate(builder, 'window.clicks')).toEqual([]);
   });
 });

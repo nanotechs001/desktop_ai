@@ -168,7 +168,7 @@ const ACT_DESCRIPTION = `${PANE_SENTENCE} Act on controls from the latest observ
 - select {target, text}: picks the option with that label in a native dropdown. For other dropdowns click them open, observe, then click the option.
 - press {key, target?}: Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown or Space; clicks target first when given.
 - scroll {key?: up | down, target?}: scrolls about one screen; with a target, the list or panel it sits in (even when covered).
-- Stops at the first action that is not done; stop_on_change (default true) also stops once an action navigates or adds or removes controls near its target.
+- Stops at the first action that is not done; stop_on_change (default true) also stops once an action navigates or adds or removes controls near its target, unless the next action targets one it added (click an item, then its toolbar's Delete).
 - The result's changes say what the last action changed in its frame: added (new controls with ids you can act on right away), removed, the target's new state, opened dialogs, navigated, or a note ("No visible change", or "Page changed a lot; observe for the full view."). act's result lists what changed; observe when you need the whole page or after a navigation.
 ${UNTRUSTED_SENTENCE}`;
 

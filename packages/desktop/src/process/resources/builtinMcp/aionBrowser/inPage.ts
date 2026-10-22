@@ -11,14 +11,17 @@
  */
 
 /**
- * (node, pageKey, guard, hitTest) → `{stale}` or `{rect, point, role, label, editable, options?}`, frame-local; the
- * point is where to click (snapshot.js `pointIn`: the center, or a builder item's own area).
+ * (node, pageKey, guard, hitTest, reveal) → `{stale, hover?}` or `{rect, point, role, label, editable, options?}`,
+ * frame-local; the point is where to click (snapshot.js `pointIn`: the center, or a builder item's own area).
  * Freshness is about the target: the frame's page key (document and url) and the target's guard (role, name, state,
- * its dialog or row) must hash to what observe saw. A node that went or now shows another control is replaced by an
- * equivalent control near where it was, if there is one (snapshot.js `refind`). The point must be inside the
- * frame's viewport and, with hitTest, elementFromPoint at the point (through open shadow roots) is the target.
+ * its dialog, row or builder item) must hash to what observe saw. A node that went or now shows another control is
+ * replaced by an equivalent control near where it was, if there is one (snapshot.js `refind`). The point must be
+ * inside the frame's viewport and, with hitTest, elementFromPoint at the point (through open shadow roots) is the
+ * target. With reveal, a control inside a builder item (a toolbar icon) that is hidden, zero-size, covered by its own
+ * item, or whose item the pointer is not over yet, comes back with `hover`: a point of the item's own area to move the
+ * pointer to before looking again, as such toolbars show only while their item is hovered.
  */
-export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
+export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest, reveal) {
   const c = window.__aionFast;
   if (!c || c.hash(c.pageKey()) !== pageKey) return { stale: 'the page changed since observe' };
   const fresh = (x) => {
@@ -26,19 +29,29 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
     return g && c.hash(g) === guard ? g : null;
   };
   let e = c.nodes.get(node);
-  let now = e ? fresh(e) : null;
   const seen = c.seen && c.seen.get(node);
+  const owner = reveal ? c.ownerOf(e, seen) : null;
+  const hover = (() => {
+    if (!owner) return null;
+    const r = owner.getBoundingClientRect();
+    const [x, y] = c.pointIn(owner);
+    return r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight ? { x, y } : null;
+  })();
+  const unshown = (stale) => (hover ? { stale, hover } : { stale });
+  let now = e ? fresh(e) : null;
   if (!now && seen) {
     // The node went or shows another control now: an equivalent control where it was is the same one.
     e = c.refind(node, seen, fresh);
     now = e ? fresh(e) : null;
   }
-  if (!now) return { stale: 'the target changed since observe' };
+  if (!now) return unshown('the target changed since observe');
+  // The pointer reaches the control from inside its item, so a toolbar that hides when the item is left stays.
+  if (hover && !owner.matches(':hover')) return unshown('the target is shown only while its item is hovered');
   const r = e.getBoundingClientRect();
   const [x, y] = c.pointIn(e);
-  if (!(r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight)) {
-    return { stale: 'the target is off-screen; scroll it into view first' };
-  }
+  const offScreen = 'the target is off-screen; scroll it into view first';
+  if (!(r.width > 0 && r.height > 0)) return unshown(offScreen);
+  if (!(x >= 0 && y >= 0 && x < innerWidth && y < innerHeight)) return { stale: offScreen };
   if (hitTest) {
     let hit = document.elementFromPoint(x, y);
     while (hit && hit.shadowRoot) {
@@ -48,7 +61,8 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
     }
     let up = hit;
     while (up && up !== e) up = up.parentNode || up.host;
-    if (!up) return { stale: 'the target is covered by another element' };
+    const covered = 'the target is covered by another element';
+    if (!up) return owner && owner.contains(hit) ? unshown(covered) : { stale: covered };
   }
   return {
     rect: { x: r.x, y: r.y, w: r.width, h: r.height },

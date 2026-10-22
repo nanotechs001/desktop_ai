@@ -250,16 +250,23 @@
         const icons = ['Move Up', 'Move Down', 'Open Settings', 'Save Element', 'Drag', 'Clone', 'Delete'];
         const toolbar = document.createElement('div');
         toolbar.className = 'ui ui-element selected';
-        toolbar.innerHTML =
-          '<div class="element-options-container"><div class="element-options">' +
-          icons
-            .map(
-              (t) =>
-                `<div title="${t}" class="element-option element-${t.split(' ').pop().toLowerCase()}">` +
-                '<svg viewBox="0 0 10 10"><path d="M0 0h10v10z" /></svg></div>'
-            )
-            .join('') +
-          '</div></div>';
+        toolbar.innerHTML = '<div class="element-options-container"></div>';
+        const container = toolbar.firstChild;
+        // As in GoHighLevel, the selected item's icons show only while the pointer is over it, new nodes on each enter.
+        const show = () =>
+          (container.innerHTML =
+            '<div class="element-options">' +
+            icons
+              .map(
+                (t) =>
+                  `<div title="${t}" class="element-option element-${t.split(' ').pop().toLowerCase()}">` +
+                  '<svg viewBox="0 0 10 10"><path d="M0 0h10v10z" /></svg></div>'
+              )
+              .join('') +
+            '</div>');
+        const hovering = (e) => e.target === toolbar.parentElement;
+        document.addEventListener('mouseenter', (e) => hovering(e) && show(), true);
+        document.addEventListener('mouseleave', (e) => hovering(e) && container.replaceChildren(), true);
         window.ghl = [];
         document.addEventListener('click', (e) => {
           const item = e.target.closest('.c-wrapper[id]');
@@ -269,6 +276,8 @@
           } else if (item && !e.target.closest('.ui')) {
             window.ghl.push(`select ${item.id}`);
             item.append(toolbar);
+            if (item.matches(':hover')) show();
+            else container.replaceChildren();
           }
         });
       }

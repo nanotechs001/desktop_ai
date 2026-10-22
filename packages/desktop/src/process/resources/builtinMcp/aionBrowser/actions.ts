@@ -7,6 +7,7 @@
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
 import { isRiskyLabel } from '@process/services/agentBrowser/confirmGate';
 import {
+  BIG_CHANGE,
   MAX_OPTION_LENGTH,
   NO_CHANGE,
   baselineOf,
@@ -109,6 +110,9 @@ const LEFT = { button: 'left', clickCount: 1 } as const;
 // Select-all is Cmd+A on macOS and Ctrl+A elsewhere; the MCP runs on the same OS as AionUi.
 const SELECT_ALL_MODIFIER = process.platform === 'darwin' ? 4 : 2;
 const TARGET_ID = /^(f\d+):(\d+)$/;
+/** How long act looks for a control that hovering its builder item shows (a toolbar icon), and how often. */
+const REVEAL_MS = 300;
+const REVEAL_POLL_MS = 30;
 
 type Point = { x: number; y: number };
 type Box = Point & { w: number; h: number };
@@ -141,6 +145,16 @@ class StepError extends Error {
     message: string
   ) {
     super(message);
+  }
+}
+
+/** The target shows only while its builder item is hovered: move the pointer to `at` (the item's own area) first. */
+class HoverFirst extends StepError {
+  constructor(
+    message: string,
+    readonly at: Point
+  ) {
+    super('stale', message);
   }
 }
 
@@ -217,9 +231,29 @@ const parseResolved = (value: unknown): Omit<Target, 'id' | 'frame' | 'isTop' | 
  * Resolves an observed id to its element, the way jev guards an action: the frame's page key and the target's guard
  * must match the baseline, its click point (the center, or a builder item's own area) must hit the element itself (not
  * a cover), and the absolute point must lie in the part of its frame the top viewport shows. Geometry is read fresh.
+ * With hitTest, a control a builder item shows only while hovered (a GoHighLevel toolbar icon) is revealed first: the
+ * pointer moves onto the item's own area and act looks again, by the same identity, for up to {@link REVEAL_MS}.
  * Throws {@link StepError}.
  */
 async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Promise<Target> {
+  try {
+    return await resolveOnce(ctx, id, hitTest, hitTest);
+  } catch (error) {
+    if (!(error instanceof HoverFirst)) throw error;
+    await mouse(ctx, 'mouseMoved', error.at);
+    const deadline = Date.now() + REVEAL_MS;
+    for (;;) {
+      try {
+        return await resolveOnce(ctx, id, hitTest, false);
+      } catch (again) {
+        if (!(again instanceof StepError) || again.result !== 'stale' || Date.now() >= deadline) throw again;
+      }
+      await sleep(REVEAL_POLL_MS);
+    }
+  }
+}
+
+async function resolveOnce(ctx: ActionContext, id: string, hitTest: boolean, reveal: boolean): Promise<Target> {
   const match = TARGET_ID.exec(id);
   const baseline = match ? frameBaseline(ctx.conn, ctx.sessionId, match[1]) : undefined;
   const guard = match ? baseline?.guards[match[2]] : undefined;
@@ -231,10 +265,17 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   if (!frame) throw new StepError('stale', 'its frame changed or is off-screen');
   const node = Number(match[2]);
   const value = await withTimeout(
-    callIn(ctx.conn, frame, RESOLVE_TARGET, values(node, baseline.pageKey, guard, hitTest)),
+    callIn(ctx.conn, frame, RESOLVE_TARGET, values(node, baseline.pageKey, guard, hitTest, reveal)),
     FRAME_TIMEOUT_MS,
     'The target check'
   ).catch(staleUnlessStep);
+  const hover = (value as { hover?: Record<string, unknown> } | null)?.hover;
+  if (reveal && hover && isNumber(hover.x) && isNumber(hover.y)) {
+    const at = { x: hover.x + frame.offset.x, y: hover.y + frame.offset.y };
+    // An item this frame's viewport shows but the top one does not: look as without it.
+    if (!inside(at, frame.clip)) return resolveOnce(ctx, id, hitTest, false);
+    throw new HoverFirst(String((value as { stale?: unknown }).stale), at);
+  }
   const found = parseResolved(value);
   if (typeof found === 'string') throw new StepError('stale', found);
   const rect = { ...found.rect, x: found.rect.x + frame.offset.x, y: found.rect.y + frame.offset.y };
@@ -358,7 +399,17 @@ const ACTIVATING_KEYS = new Set([
   'PageDown',
 ]);
 const CHECK_FAILED = 'could not check what this input would activate; observe again';
-const CHANGED_WHILE_ASKING = 'the page changed while the user was asked; observe again';
+const CHANGED_WHILE_ASKING = 'the user allowed it, but the control changed while they were asked; observe again';
+
+/**
+ * The step's checks again after the user allowed it (a hover-only control is revealed again, as the user's mouse
+ * left the page to answer); any stale outcome says that the allowed control changed.
+ */
+const recheck = <T>(run: () => Promise<T>): Promise<T> =>
+  run().catch((error: unknown): never => {
+    if (error instanceof StepError && error.result === 'stale') throw new StepError('stale', CHANGED_WHILE_ASKING);
+    throw error;
+  });
 
 /**
  * Asks the user before input when any of `items` (what the step will click or activate) is risky; throws
@@ -471,8 +522,11 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<Acted | null>
   if (op === 'click') {
     const asked = await clickLabels(ctx, t);
     if (await confirmRisky(ctx, asked)) {
-      t = await resolveTarget(ctx, id);
-      if (signature(await clickLabels(ctx, t)) !== signature(asked)) throw new StepError('stale', CHANGED_WHILE_ASKING);
+      t = await recheck(async () => {
+        const again = await resolveTarget(ctx, id);
+        if (signature(await clickLabels(ctx, again)) !== signature(asked)) throw new StepError('stale', 'changed');
+        return again;
+      });
     }
   }
   if (op === 'hover') {
@@ -518,8 +572,11 @@ async function selectOption(ctx: ActionContext, first: Target, text: string): Pr
   let t = first;
   const asked = labelsFor(t);
   if (await confirmRisky(ctx, asked)) {
-    t = await resolveTarget(ctx, t.id);
-    if (signature(labelsFor(t)) !== signature(asked)) throw new StepError('stale', CHANGED_WHILE_ASKING);
+    t = await recheck(async () => {
+      const again = await resolveTarget(ctx, first.id);
+      if (signature(labelsFor(again)) !== signature(asked)) throw new StepError('stale', 'changed');
+      return again;
+    });
   }
   // The page picks the option by its full label again, so a list that changed since the check is never misread.
   const chose = await withTimeout(
@@ -540,9 +597,11 @@ async function press(ctx: ActionContext, step: ActStep): Promise<Acted | null> {
   // A target is clicked first; Enter and Space activate the focused control, and Enter submits its form.
   const asked = await pressLabels(ctx, t, key);
   if (await confirmRisky(ctx, asked)) {
-    if (step.target) t = await resolveTarget(ctx, step.target);
-    if (signature(await pressLabels(ctx, t, key)) !== signature(asked))
-      throw new StepError('stale', CHANGED_WHILE_ASKING);
+    t = await recheck(async () => {
+      const again = step.target ? await resolveTarget(ctx, step.target) : null;
+      if (signature(await pressLabels(ctx, again, key)) !== signature(asked)) throw new StepError('stale', 'changed');
+      return again;
+    });
   }
   if (t) await click(ctx, t.point);
   await pressKey(ctx, spec);
@@ -639,7 +698,8 @@ const stopNote = (outcome: Outcome, left: number): string => {
 /**
  * Runs `steps` in order on observed ids (spec §4 Action): every input goes to the page session at absolute
  * coordinates, after the per-target freshness checks. Stops at the first step that is not done, and, with
- * `stopOnChange` (default), when a step navigates its frame or adds or removes controls near its target. Never retries.
+ * `stopOnChange` (default), when a step navigates its frame or adds or removes controls near its target, unless the
+ * next step targets one of the controls it added. Never retries.
  * `changes` is what the last step that ran changed in its frame ({@link describeChanges}).
  */
 export async function act(
@@ -659,7 +719,13 @@ export async function act(
     try {
       const seen = await rebaseline(ctx, acted);
       changes = seen.changes;
-      if (left && seen.changed && stopOnChange) return reply(`The page changed; observe again.${notRun(left)}`);
+      // A step that showed controls (a toolbar after a select) may be followed by a click on one of them.
+      const next = steps[i + 1]?.target;
+      const expected =
+        seen.changes.note !== BIG_CHANGE && seen.changes.added?.some((row) => row.startsWith(`[${next}] `)) === true;
+      if (left && seen.changed && stopOnChange && !expected) {
+        return reply(`The page changed; observe again.${notRun(left)}`);
+      }
     } catch {
       // After the last step the input has run; only the change list is missing.
       if (left) return reply(stopNote({ result: 'error' }, left));
@@ -694,10 +760,11 @@ export async function drag(
     // A release on a control after a press near it is a click on it (or on their common parent): same gate.
     const asked = await pointLabels(ctx, drop);
     if (await confirmRisky(ctx, asked)) {
-      ({ from, to, drop } = await plan());
-      if (signature(await pointLabels(ctx, drop)) !== signature(asked)) {
-        throw new StepError('stale', CHANGED_WHILE_ASKING);
-      }
+      ({ from, to, drop } = await recheck(async () => {
+        const again = await plan();
+        if (signature(await pointLabels(ctx, again.drop)) !== signature(asked)) throw new StepError('stale', 'changed');
+        return again;
+      }));
     }
     await dragBetween(ctx, from.point, drop);
     await reportSafely(ctx, { op: 'drag', label: `${targetLabel(from)} → ${targetLabel(to)}`, rect: rectOf(to) });
