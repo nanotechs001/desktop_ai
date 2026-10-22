@@ -6,7 +6,9 @@
     <!--
       A GoHighLevel-like funnel builder. Opened with ?top it is the app shell (Back plus the builder iframe from the
       other origin); otherwise it is the builder: an icon toolbar that mutates on a timer (autosave label, a hidden
-      draft field) and a same-origin canvas iframe.
+      draft field), a same-origin canvas iframe, an elements panel that scrolls (part of it under a cover), a settings
+      dialog the "Page settings" button opens, and a link that loads the canvas page. ?lazy is a shell whose iframe
+      (?slow) shows a ticking "Loading" text for 1 s and only then its controls.
     -->
     <style>
       body {
@@ -22,6 +24,25 @@
         display: flex;
         gap: 4px;
         height: 32px;
+      }
+      #elements {
+        position: absolute;
+        left: 905px;
+        top: 40px;
+        bottom: 0;
+        width: 90px;
+        overflow: auto;
+      }
+      .el-item {
+        height: 30px;
+      }
+      #cover {
+        position: absolute;
+        left: 905px;
+        top: 400px;
+        width: 90px;
+        height: 60px;
+        background: #eee;
       }
       #toolbar button {
         min-width: 28px;
@@ -54,7 +75,7 @@
         <button type="button" data-tooltip="Redo">
           <svg viewBox="0 0 10 10"><path d="M0 0h10v10z" /></svg>
         </button>
-        <button type="button" data-original-title="Page settings">
+        <button type="button" data-original-title="Page settings" aria-expanded="false" id="settings">
           <svg viewBox="0 0 10 10"><path d="M0 0z" /></svg>
         </button>
         <button type="button" aria-describedby="tip-add">
@@ -83,16 +104,63 @@
       </div>
       <div id="tip-add" role="tooltip" hidden>Add element</div>
       <iframe title="canvas" src="funnel-canvas.html" style="left: 0; top: 40px; width: 900px; height: 600px"></iframe>
+      <div id="elements"></div>
+      <div id="cover"></div>
+      <div
+        role="dialog"
+        aria-label="Page settings"
+        id="settings-dialog"
+        style="position: absolute; left: 300px; top: 200px; z-index: 1; background: #fff"
+        hidden
+      >
+        <button type="button">Apply</button>
+        <button type="button">Close</button>
+      </div>
+      <a href="funnel-canvas.html" style="position: absolute; left: 0; top: 660px">Open canvas</a>
+    </template>
+    <template id="lazy">
+      <button>Back</button>
+      <iframe
+        title="lazy-builder"
+        src="funnel.html?slow"
+        style="left: 0; top: 40px; width: 600px; height: 400px"
+      ></iframe>
+    </template>
+    <template id="slow">
+      <p id="status">Loading</p>
     </template>
     <script>
-      const mode = location.search === '?top' ? 'top' : 'builder';
+      const mode = ['top', 'lazy', 'slow'].find((m) => location.search === `?${m}`) ?? 'builder';
       document.body.append(document.getElementById(mode).content.cloneNode(true));
       window.clicks = [];
       document.addEventListener('click', (e) => {
         const button = e.target.closest('button');
         if (button) window.clicks.push(button.getAttribute('title') || button.dataset.tooltip || button.id || '?');
+        const item = e.target.closest('.el-item');
+        if (item) window.clicks.push(item.textContent);
+        if (button?.id === 'settings') {
+          const open = button.getAttribute('aria-expanded') !== 'true';
+          button.setAttribute('aria-expanded', String(open));
+          document.getElementById('settings-dialog').hidden = !open;
+        }
       });
+      if (mode === 'slow') {
+        const started = Date.now();
+        const ticker = setInterval(() => {
+          document.getElementById('status').textContent = `Loading ${Date.now() - started} ms`;
+        }, 100);
+        setTimeout(() => {
+          clearInterval(ticker);
+          document.body.innerHTML = '<button>Add section</button><button>Add row</button>';
+        }, 1000);
+      }
       if (mode === 'builder') {
+        // Elements as the GHL panel lists them: focusable divs, more than fit, so the panel scrolls.
+        const names = ['Headline', 'Sub-Headline', 'Paragraph', 'Bullet list', 'Rich Text', 'Button', 'Form'];
+        const items = Array.from({ length: 30 }, (_, i) => names[i] ?? `Widget ${i}`);
+        document.getElementById('elements').innerHTML = items
+          .map((name) => `<div class="el-item" tabindex="0">${name}</div>`)
+          .join('');
         let tick = 0;
         setInterval(() => {
           tick++;

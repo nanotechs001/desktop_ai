@@ -53,6 +53,9 @@ const openFunnel = async (): Promise<{ session: string; obs: Observation; builde
 const inCanvas = (builder: string, expression: string): Promise<unknown> =>
   evaluate(builder, `document.querySelector('iframe').contentWindow.eval(${JSON.stringify(expression)})`);
 
+const rowsLabels = (obs: Observation, frameLabel: string): string[] =>
+  obs.rows.filter((r) => r.frameLabel === frameLabel).map((r) => r.label);
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe.skipIf(!chromePath)('observe and act in a funnel builder on real Chrome', () => {
@@ -176,5 +179,85 @@ describe.skipIf(!chromePath)('observe and act in a funnel builder on real Chrome
 
     expect(results.map((r) => r.result)).toEqual(['done', 'done']);
     expect(stopped).toBe('The page changed; observe again. 1 more action not run.');
+  });
+
+  it("act lists what its click changed: the dialog it opened, the target's new state and the new controls, with ids act can use", async () => {
+    const { session, obs, builder } = await openFunnel();
+    const ctx = contextFor(session);
+
+    const opened = await act(ctx, [{ op: 'click', target: rowIn(obs, BUILDER, 'Page settings').id }]);
+
+    expect(opened.results[0]).toMatchObject({ result: 'done' });
+    expect(opened.changes).toMatchObject({ opened: 'dialog "Page settings"', target: 'expanded=true' });
+    const apply = opened.changes?.added?.find((line) => line.includes('button "Apply"')) ?? '';
+    expect(apply).toMatch(/^\[f\d+:\d+\] button "Apply" · in: "funnel-builder"$/);
+    expect(opened.changes?.added).toHaveLength(2);
+    // The new id works without another observe.
+    const id = /^\[(f\d+:\d+)\]/.exec(apply)?.[1] ?? '';
+    expect((await act(ctx, [{ op: 'click', target: id }])).results[0]).toMatchObject({ result: 'done' });
+    expect(await evaluate(builder, 'window.clicks')).toEqual(['settings', '?']);
+  });
+
+  it('act says "No visible change" when only timer text changed, and a lot changed when the frame navigates', async () => {
+    const { session, obs } = await openFunnel();
+    const ctx = contextFor(session);
+
+    const undo = await act(ctx, [{ op: 'click', target: rowIn(obs, BUILDER, 'Undo').id }]);
+    expect(undo.changes).toEqual({ note: 'No visible change' });
+
+    const link = await act(ctx, [{ op: 'click', target: rowIn(obs, BUILDER, 'Open canvas').id }]);
+    expect(link.results[0]).toMatchObject({ result: 'done' });
+    expect(link.changes?.navigated).toMatch(/\/funnel-canvas\.html$/);
+    expect(link.changes?.note).toBe('Page changed a lot; observe for the full view.');
+  });
+
+  it('an id that a scroll took out of view is off-screen, not unknown, and works again once scrolled back', async () => {
+    const { session, obs, builder } = await openFunnel();
+    const ctx = contextFor(session);
+    const headline = rowIn(obs, BUILDER, 'Headline');
+
+    const down = await act(ctx, [{ op: 'scroll', key: 'down', target: rowIn(obs, BUILDER, 'Paragraph').id }]);
+    expect(down.results[0]).toMatchObject({ result: 'done' });
+    // The scroll lists what came into view, so no observe is needed to act on it.
+    expect(down.changes?.added?.some((line) => line.includes('clickable "Widget 29"'))).toBe(true);
+    const after = await observePage(chrome.conn, session);
+    expect(after.rows.map((r) => r.id)).not.toContain(headline.id);
+
+    const hidden = await act(ctx, [{ op: 'click', target: headline.id }]);
+    expect(hidden.results[0]).toMatchObject({ result: 'stale', reason: expect.stringContaining('off-screen') });
+
+    const up = await act(ctx, [{ op: 'scroll', key: 'up', target: rowIn(after, BUILDER, 'Widget 29').id }]);
+    expect(up.changes?.added?.some((line) => line.startsWith(`[${headline.id}] clickable "Headline"`))).toBe(true);
+    expect((await act(ctx, [{ op: 'click', target: headline.id }])).results[0]).toMatchObject({ result: 'done' });
+    expect(await evaluate(builder, 'window.clicks')).toEqual(['Headline']);
+  });
+
+  it('scrolls the list a covered item sits in, without a hit test', async () => {
+    const { session, obs, builder } = await openFunnel();
+    const ctx = contextFor(session);
+    // #cover lies over these items (y 400 to 460 in the builder).
+    const covered = obs.rows.find((r) => r.frameLabel === BUILDER && r.label === 'Widget 12');
+    expect(covered).toBeDefined();
+    expect((await act(ctx, [{ op: 'click', target: covered?.id ?? '' }])).results[0]).toMatchObject({
+      result: 'stale',
+      reason: 'the target is covered by another element',
+    });
+
+    const scrolled = await act(ctx, [{ op: 'scroll', key: 'down', target: covered?.id ?? '' }]);
+
+    expect(scrolled.results[0]).toMatchObject({ result: 'done' });
+    expect(await evaluate(builder, "document.getElementById('elements').scrollTop")).toBeGreaterThan(0);
+    expect(await evaluate(builder, 'scrollY')).toBe(0);
+  });
+
+  it('observe waits for a frame that fills in its controls after 1 s, then returns them in one call', async () => {
+    const session = await chrome.openPage(`${servers.originA}/funnel.html?lazy`);
+    const started = Date.now();
+
+    const obs = await observePage(chrome.conn, session);
+
+    expect(rowsLabels(obs, 'lazy-builder')).toEqual(['Add section', 'Add row']);
+    expect(Date.now() - started).toBeLessThan(4000);
+    expect(formatObservation(obs)).not.toContain('Still loading');
   });
 });

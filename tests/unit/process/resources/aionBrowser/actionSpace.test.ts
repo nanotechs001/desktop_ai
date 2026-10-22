@@ -5,7 +5,9 @@ import {
   MAX_ROWS,
   MAX_TEXT_LENGTH,
   controlsChanged,
+  describeChanges,
   formatObservation,
+  loadingFrames,
   mergeSnapshots,
   parseSnapshot,
   type FrameSnapshot,
@@ -129,7 +131,15 @@ describe('controlsChanged', () => {
     label,
     rect: { x, y, w: 80, h: 30 },
   });
-  const baseline = (...controls: ReturnType<typeof control>[]) => ({ pageKey: 'pk', guards: {}, controls });
+  const baseline = (...controls: ReturnType<typeof control>[]) => ({
+    pageKey: 'pk',
+    guards: {},
+    controls,
+    url: '',
+    title: '',
+    dialogs: [],
+    navigating: '',
+  });
   const target = { x: 10, y: 20, w: 80, h: 30 };
   const before = baseline(control(1, 'Undo', 10), control(2, 'Saved 1s ago', 900));
 
@@ -156,7 +166,125 @@ describe('controlsChanged', () => {
   });
 });
 
+describe('describeChanges', () => {
+  type Control = { node: number; role: string; label: string; rect: { x: number; y: number; w: number; h: number } };
+  const control = (node: number, label: string, y: number, extra: Record<string, string> = {}): Control => ({
+    node,
+    role: 'button',
+    label,
+    rect: { x: 10, y, w: 80, h: 30 },
+    ...extra,
+  });
+  const baseline = (controls: Control[], extra: Record<string, unknown> = {}) => ({
+    pageKey: 'pk',
+    guards: {},
+    controls,
+    url: 'https://app.example/a',
+    title: 'A',
+    dialogs: [],
+    navigating: '',
+    ...extra,
+  });
+  const at = (y: number) => ({ x: 10, y, w: 80, h: 30 });
+  const where = { frame: builder, isTop: false, near: at(100), node: 1 };
+  const before = baseline([control(1, 'Add', 100), control(2, 'Saved 1s ago', 900)]);
+
+  it('says "No visible change" when only text changed', () => {
+    const after = baseline([control(1, 'Add', 100), control(2, 'Saved 2s ago', 900)]);
+    expect(describeChanges(before, after, where)).toEqual({ note: 'No visible change' });
+  });
+
+  it('lists added controls as observe rows, nearest to the target first, with removed ones, state and dialogs', () => {
+    const after = baseline(
+      [
+        control(1, 'Add', 100, { expanded: 'true' }),
+        control(5, 'Far', 800),
+        control(6, 'Near', 140),
+        control(7, 'Title', 300, { role: 'textbox' }),
+      ],
+      { dialogs: ['dialog "Add element"'] }
+    );
+    expect(describeChanges({ ...before, dialogs: [] }, after, where)).toEqual({
+      added: [
+        '[f1:6] button "Near" · in: "GHL builder"',
+        '[f1:7] textbox "Title" · in: "GHL builder"',
+        '[f1:5] button "Far" · in: "GHL builder"',
+      ],
+      removed: '1 ("Saved 1s ago")',
+      target: 'expanded=true',
+      opened: 'dialog "Add element"',
+    });
+  });
+
+  it('counts many removed controls without labels, and leaves the frame suffix off the top frame', () => {
+    const many = baseline(Array.from({ length: 9 }, (_, i) => control(10 + i, `Item ${i}`, 300 + i * 40)));
+    const after = baseline([control(20, 'New', 100)]);
+    expect(describeChanges(many, after, { ...where, frame: top, isTop: true })).toEqual({
+      added: ['[f0:20] button "New"'],
+      removed: '9',
+    });
+  });
+
+  it('caps the list at 25 lines and says the page changed a lot', () => {
+    const after = baseline([
+      control(1, 'Add', 100),
+      control(2, 'Saved 1s ago', 900),
+      ...Array.from({ length: 40 }, (_, i) => control(100 + i, `New ${i}`, 100 + i)),
+    ]);
+    const changes = describeChanges(before, after, where);
+    expect(changes.added).toHaveLength(25);
+    expect(changes.added?.[0]).toBe('[f1:100] button "New 0" · in: "GHL builder"');
+    expect(changes.note).toBe('Page changed a lot; observe for the full view.');
+  });
+
+  it('reports a navigation by its new url and title, a pending one by its destination, and a gone document', () => {
+    const big = 'Page changed a lot; observe for the full view.';
+    const moved = baseline([], { pageKey: 'other', url: 'https://app.example/b', title: 'B' });
+    expect(describeChanges(before, moved, where)).toEqual({ navigated: 'https://app.example/b "B"', note: big });
+    const leaving = baseline(before.controls, { navigating: 'https://app.example/c' });
+    expect(describeChanges(before, leaving, where)).toEqual({ navigated: 'https://app.example/c', note: big });
+    expect(describeChanges(before, null, { ...where, url: 'https://app.example/d' })).toEqual({
+      navigated: 'https://app.example/d',
+      note: big,
+    });
+    expect(describeChanges(before, null, { ...where, url: before.url })).toEqual({ note: big });
+    expect(describeChanges(undefined, before, where)).toEqual({ note: big });
+  });
+
+  it('sanitizes page strings', () => {
+    const after = baseline([...before.controls, control(9, 'Evil\u202e\nline', 120)]);
+    expect(describeChanges(before, after, where).added?.[0]).not.toMatch(/[\u202e\n]/);
+  });
+});
+
+describe('loadingFrames', () => {
+  const frame = (actions: number, ready = 'complete', busy = false) => ({
+    ...snapshot(Array.from({ length: actions }, (_, i) => action(i + 1, `A${i}`))),
+    ready,
+    busy,
+  });
+
+  it('finds a document still parsing, an empty frame that is busy or not complete, or an empty page', () => {
+    expect(loadingFrames([frame(3), frame(2)])).toEqual([]);
+    expect(loadingFrames([frame(3, 'loading'), frame(2)])).toEqual([0]);
+    expect(loadingFrames([frame(3), frame(0, 'complete', true)])).toEqual([1]);
+    expect(loadingFrames([frame(3), frame(0, 'interactive')])).toEqual([1]);
+    expect(loadingFrames([frame(3), frame(0)])).toEqual([]);
+    // An empty top frame around a builder iframe is a wrapper, not a page that is loading.
+    expect(loadingFrames([frame(0, 'complete', true), frame(4)])).toEqual([]);
+    expect(loadingFrames([frame(0, 'complete', true)])).toEqual([0]);
+    expect(loadingFrames([frame(0, 'interactive')])).toEqual([0]);
+    expect(loadingFrames([frame(0)])).toEqual([]);
+  });
+});
+
 describe('formatObservation', () => {
+  it('says so in one line when the page was still loading', () => {
+    const merged = mergeSnapshots([{ frame: top, snapshot: snapshot([]) }]);
+    const text = formatObservation({ frames: [top], failed: [], ...merged, loading: true });
+    expect(text.split('\n')).toContain('Still loading; observe again in a moment.');
+  });
+
   it('prints one row per control, frame suffixes off the top frame, and the omitted count', () => {
     const merged = mergeSnapshots([
       { frame: top, snapshot: snapshot([action(3, 'Top action')], 'Welcome') },
@@ -233,6 +361,23 @@ describe('observe tool', () => {
     expect(relay.requests.some((r) => r.method === 'Page.captureScreenshot')).toBe(false);
     expect(relay.callsTo('Runtime.evaluate')[0]).toMatchObject({ contextId: 41, returnByValue: true });
   });
+
+  it('waits for a page that is still loading, says so after 5 s, and does not wait for that document again', async () => {
+    relay.on('Runtime.evaluate', () => ({
+      result: { type: 'object', value: { actions: [], text: '', omitted_actions: 0, ready: 'complete', busy: true } },
+    }));
+    await client.callTool({ name: 'tabs', arguments: { action: 'open' } });
+    const started = Date.now();
+    const first = await observe({});
+    expect(Date.now() - started).toBeGreaterThanOrEqual(4500);
+    expect(first.content[0].text?.split('\n')).toContain('Still loading; observe again in a moment.');
+    expect(relay.callsTo('Runtime.evaluate').length).toBeGreaterThan(10);
+
+    const again = Date.now();
+    const second = await observe({});
+    expect(Date.now() - again).toBeLessThan(1000);
+    expect(second.content[0].text).not.toContain('Still loading');
+  }, 15_000);
 
   it('marks page text as untrusted in its description', async () => {
     const { tools } = await client.listTools();

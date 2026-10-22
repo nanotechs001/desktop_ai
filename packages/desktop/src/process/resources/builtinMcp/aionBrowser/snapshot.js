@@ -13,7 +13,9 @@
  * place); builder-canvas elements (plain divs that are clickable or carry builder hints) are listed too, at most 60;
  * the page key is only the document and url; guards hold what makes a control that control (no node identity, no
  * surrounding text except a dialog's or a row's), so an equivalent node that replaced it is re-found where it was;
- * a new node that is the same control as a gone one keeps its id.
+ * a new node that is the same control as a gone one keeps its id. For act's change list and observe's load wait it also
+ * reports open dialogs and menus, a cross-document navigation the page started, the ready state, and whether the DOM
+ * or the network moved in the last half second.
  *
  * MIT License
  *
@@ -74,6 +76,25 @@
     return id;
   };
   for (const [id, e] of cache.nodes) if (!e.isConnected) cache.nodes.delete(id);
+  /** The DOM or the network moved this recently (ms): the document is busy. */
+  const BUSY_MS = 500;
+  if (!cache.observer) {
+    // First sight: no history yet, so the document counts as busy until the next look.
+    cache.changedAt = performance.now();
+    cache.observer = new MutationObserver(() => (cache.changedAt = performance.now()));
+    cache.observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+    // A click on a link starts a navigation before the old document goes: act reports it once.
+    window.navigation?.addEventListener('navigate', (e) => {
+      if (!e.destination.sameDocument && !e.downloadRequest) cache.navigating = e.destination.url;
+    });
+  }
+  const loadedAt = performance
+    .getEntriesByType('resource')
+    .slice(-20)
+    .reduce((last, entry) => Math.max(last, entry.responseEnd), 0);
+  const busy = performance.now() - Math.max(cache.changedAt, loadedAt) < BUSY_MS;
+  const navigating = cache.navigating || '';
+  cache.navigating = '';
   // cyrb53: a 53-bit string hash, enough to tell "changed" from "unchanged".
   cache.hash = (value) => {
     const text = JSON.stringify(value);
@@ -440,6 +461,19 @@
     });
   }
   for (const id of cache.seen.keys()) if (!cache.nodes.has(id)) cache.seen.delete(id);
+  // Open dialogs and menus, as act reports one that a step opened.
+  const dialogs = all(
+    'dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],[role="menu"],[role="listbox"]'
+  )
+    .filter((e) => visible(e) && inView(e.getBoundingClientRect()))
+    .slice(0, 10)
+    .map((e) => ({
+      role: e.getAttribute('role') || 'dialog',
+      label: (explicitName(e) || e.querySelector('h1,h2,h3,h4,h5,h6,[role="heading"]')?.textContent.trim() || '').slice(
+        0,
+        MAX_GUESS
+      ),
+    }));
   const text = lines.join('\n').slice(0, MAX_TEXT),
     height = document.documentElement.scrollHeight;
   const page_key = cache.pageKey(),
@@ -458,5 +492,9 @@
     page_key: cache.hash(page_key),
     guards,
     omitted_actions,
+    ready: document.readyState,
+    busy,
+    navigating: navigating.slice(0, 2000),
+    dialogs,
   };
 })();

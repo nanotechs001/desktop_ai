@@ -135,7 +135,10 @@ describe('act tool', () => {
   it('clicks at the absolute center on the page session and reports the action to the relay', async () => {
     const id = await openAndObserve();
     const reply = await call('act', { actions: [{ op: 'click', target: id }] });
-    expect(JSON.parse(textOf(reply))).toEqual({ results: [{ op: 'click', target: id, result: 'done' }] });
+    expect(JSON.parse(textOf(reply))).toEqual({
+      results: [{ op: 'click', target: id, result: 'done' }],
+      changes: { note: 'No visible change' },
+    });
     const presses = relay.requests.filter((r) => r.method === 'Input.dispatchMouseEvent');
     expect(presses.map((r) => r.params.type)).toEqual(['mouseMoved', 'mousePressed', 'mouseReleased']);
     expect(presses.every((r) => r.sessionId === 's1' && r.params.x === 50 && r.params.y === 35)).toBe(true);
@@ -269,7 +272,7 @@ describe('act tool', () => {
     expect(inputRequests().map((r) => r.params.type)).toEqual(['mouseMoved', 'mousePressed', 'mouseReleased']);
   });
 
-  it('re-reads the top frame after a press without target', async () => {
+  it('re-reads the top frame after a press without target, and the last frame for the change list', async () => {
     const id = await openAndObserve();
     relay.on('Input.dispatchKeyEvent', () => ({}));
     const snapshotsBefore = relay.callsTo('Runtime.evaluate').length;
@@ -279,7 +282,8 @@ describe('act tool', () => {
         { op: 'click', target: id },
       ],
     });
-    expect(relay.callsTo('Runtime.evaluate')).toHaveLength(snapshotsBefore + 1);
+    // Each step's frame is read once, and once more 100 ms later when it showed no change.
+    expect(relay.callsTo('Runtime.evaluate')).toHaveLength(snapshotsBefore + 4);
   });
 
   it('caps typed text at 10,000 characters', async () => {

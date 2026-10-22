@@ -331,6 +331,18 @@ export async function collectFramesReport(
   return { frames, failed };
 }
 
+/** The url `frame`'s document has now, read from its session's frame tree; undefined when it is gone. */
+export async function frameUrl(conn: CdpConnection, frame: FrameHandle): Promise<string | undefined> {
+  const { frameTree } = await withTimeout(
+    conn.send<{ frameTree: CdpFrameTree }>('Page.getFrameTree', {}, frame.sessionId),
+    FRAME_TIMEOUT_MS,
+    'The frame'
+  );
+  const find = (node: CdpFrameTree): string | undefined =>
+    node.frame.id === frame.frameId ? node.frame.url : node.childFrames?.map(find).find(Boolean);
+  return find(frameTree);
+}
+
 /**
  * Every visible frame of the tab behind `pageSessionId`: the top frame, same-origin iframes (same session) and
  * OOPIFs (child sessions), each with an isolated world and its offset in the top viewport. Frames whose owner

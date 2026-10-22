@@ -53,13 +53,27 @@ export type FrameSnapshot = {
   pageKey: string;
   /** Hash of the guard per node: role, name, state and the dialog or row it sits in. */
   guards: Record<string, string>;
+  url: string;
+  title: string;
+  /** document.readyState. */
+  ready: string;
+  /** The DOM or the network moved in the last half second (or this is the frame's first snapshot). */
+  busy: boolean;
+  /** Where a cross-document navigation the page started goes, once; '' for none. */
+  navigating: string;
+  /** Open dialogs and menus as `role "name"`, sanitized. */
+  dialogs: string[];
 };
 
 /** A control as the change check after an action compares it: frame-local rect. */
-export type BaselineControl = Pick<SnapshotAction, 'node' | 'role' | 'label' | 'rect'>;
+export type BaselineControl = Pick<SnapshotAction, 'node' | 'role' | 'label' | 'rect' | (typeof STATE_KEYS)[number]>;
 
-/** What act checks a frame against: its last snapshot's page key, guards and controls. */
-export type FrameBaseline = { pageKey: string; guards: Record<string, string>; controls: BaselineControl[] };
+/** What act checks a frame against: its last snapshot's page key, guards and controls, and what act reports. */
+export type FrameBaseline = {
+  pageKey: string;
+  guards: Record<string, string>;
+  controls: BaselineControl[];
+} & Pick<FrameSnapshot, 'url' | 'title' | 'dialogs' | 'navigating'>;
 
 /** One row of the merged table: page strings sanitized, rect in top-viewport px. */
 export type ActionRow = {
@@ -83,6 +97,8 @@ export type Observation = {
   text: string;
   /** Frames that failed or did not answer in time: a frame key, or a quoted origin when it has no key yet. */
   failed: string[];
+  /** A frame was still loading when observe stopped waiting. */
+  loading?: boolean;
 };
 
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -118,6 +134,13 @@ const parseAction = (value: unknown): SnapshotAction | null => {
   };
 };
 
+const parseDialog = (value: unknown): string => {
+  const d = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const role = sanitizePageText(isString(d.role) ? d.role : '', MAX_LABEL_LENGTH) || 'dialog';
+  const label = sanitizePageText(isString(d.label) ? d.label : '', MAX_LABEL_LENGTH);
+  return label ? `${role} ${JSON.stringify(label)}` : role;
+};
+
 /** The snapshot's return value checked field by field (it carries page text); null when unusable. */
 export function parseSnapshot(value: unknown): FrameSnapshot | null {
   const s = value as Record<string, unknown> | null;
@@ -128,6 +151,12 @@ export function parseSnapshot(value: unknown): FrameSnapshot | null {
     omitted: isNumber(s.omitted_actions) ? s.omitted_actions : 0,
     pageKey: isString(s.page_key) ? s.page_key : '',
     guards: parseGuards(s.guards),
+    url: isString(s.url) ? s.url : '',
+    title: isString(s.title) ? s.title : '',
+    ready: isString(s.ready) ? s.ready : 'complete',
+    busy: s.busy === true,
+    navigating: isString(s.navigating) ? s.navigating : '',
+    dialogs: Array.isArray(s.dialogs) ? s.dialogs.slice(0, 10).map(parseDialog) : [],
   };
 }
 
@@ -141,8 +170,27 @@ const baselines = new WeakMap<CdpConnection, Map<string, Map<string, FrameBaseli
 export const baselineOf = (snapshot: FrameSnapshot): FrameBaseline => ({
   pageKey: snapshot.pageKey,
   guards: snapshot.guards,
-  controls: snapshot.actions.map(({ node, role, label, rect }) => ({ node, role, label, rect })),
+  controls: snapshot.actions.map(({ node, role, label, rect, checked, selected, expanded }) => ({
+    node,
+    role,
+    label,
+    rect,
+    ...(checked ? { checked } : {}),
+    ...(selected ? { selected } : {}),
+    ...(expanded ? { expanded } : {}),
+  })),
+  url: snapshot.url,
+  title: snapshot.title,
+  dialogs: snapshot.dialogs,
+  navigating: snapshot.navigating,
 });
+
+/**
+ * `after`, keeping the guards of ids it no longer lists while the document is the same: an id that scrolled out of
+ * view is still checked (and found off-screen or changed), never unknown.
+ */
+export const keepingGuards = (before: FrameBaseline | undefined, after: FrameBaseline): FrameBaseline =>
+  before?.pageKey === after.pageKey ? { ...after, guards: { ...before.guards, ...after.guards } } : after;
 
 /** Controls this far (CSS px) around an action's target count as near it. */
 const NEAR_TARGET_PX = 200;
@@ -177,6 +225,99 @@ export const controlsChanged = (before: FrameBaseline, after: FrameBaseline, tar
   const missing = (from: BaselineControl[], to: BaselineControl[]) =>
     from.some((c) => around(c) && !to.some((d) => sameControl(c, d)));
   return missing(after.controls, before.controls) || missing(before.controls, after.controls);
+};
+
+/** At most this many lines in act's change list. */
+const MAX_CHANGE_LINES = 25;
+/** Removed controls are named up to this many; more are only counted. */
+const FEW_REMOVED = 5;
+const MAX_URL_LENGTH = 500;
+export const NO_CHANGE = 'No visible change';
+export const BIG_CHANGE = 'Page changed a lot; observe for the full view.';
+
+/** What an act step changed in its frame, as act returns it; see {@link describeChanges}. */
+export type ActChanges = {
+  /** New controls as observe rows (ids act can use at once), nearest to the target first. */
+  added?: string[];
+  /** How many controls went, with their names when few. */
+  removed?: string;
+  /** The target's new state, e.g. "expanded=true". */
+  target?: string;
+  /** Dialogs or menus that opened. */
+  opened?: string;
+  /** The new url (and title) of the frame. */
+  navigated?: string;
+  note?: string;
+};
+
+/** Where a step acted: its frame, the target's frame-local rect and node (null: none), and the frame's url now. */
+export type ChangePlace = { frame: FrameHandle; isTop: boolean; near: Rect | null; node: number | null; url?: string };
+
+const navigationOf = (url: string, title = ''): string =>
+  [sanitizePageText(url, MAX_URL_LENGTH), title ? JSON.stringify(sanitizePageText(title, MAX_LABEL_LENGTH)) : '']
+    .filter(Boolean)
+    .join(' ');
+
+/**
+ * What changed in a frame between two baselines, compactly: added controls (as observe rows), removed ones, the
+ * target's state, opened dialogs, a navigation. `after` null: the document went. At most {@link MAX_CHANGE_LINES}
+ * lines; a navigation or more than that says {@link BIG_CHANGE}, nothing at all {@link NO_CHANGE}.
+ */
+export function describeChanges(
+  before: FrameBaseline | undefined,
+  after: FrameBaseline | null,
+  { frame, isTop, near, node, url }: ChangePlace
+): ActChanges {
+  if (!after) return { ...(url && url !== before?.url ? { navigated: navigationOf(url) } : {}), note: BIG_CHANGE };
+  if (before && after.pageKey !== before.pageKey) {
+    return { navigated: navigationOf(after.url, after.title), note: BIG_CHANGE };
+  }
+  if (after.navigating) return { navigated: navigationOf(after.navigating), note: BIG_CHANGE };
+  if (!before) return { note: BIG_CHANGE };
+  const gone = (from: BaselineControl[], to: BaselineControl[]) =>
+    from.filter((c) => !to.some((d) => sameControl(c, d)));
+  const center = near ? centerOf(near) : null;
+  const distance = (c: BaselineControl) =>
+    center ? Math.hypot(centerOf(c.rect).x - center.x, centerOf(c.rect).y - center.y) : 0;
+  const added = gone(after.controls, before.controls).toSorted((a, b) => distance(a) - distance(b));
+  const removed = gone(before.controls, after.controls);
+  const names = removed.map((c) => JSON.stringify(sanitizePageText(c.label, MAX_LABEL_LENGTH))).join(', ');
+  const was = before.controls.find((c) => c.node === node);
+  const now = after.controls.find((c) => c.node === node);
+  const state =
+    was && now ? STATE_KEYS.filter((key) => was[key] !== now[key]).map((key) => `${key}=${now[key] ?? 'none'}`) : [];
+  const opened = after.dialogs.filter((d) => !before.dialogs.includes(d));
+  const others = {
+    ...(removed.length
+      ? { removed: removed.length > FEW_REMOVED ? `${removed.length}` : `${removed.length} (${names})` }
+      : {}),
+    ...(state.length ? { target: state.join(', ') } : {}),
+    ...(opened.length ? { opened: opened.join(', ') } : {}),
+  };
+  const room = MAX_CHANGE_LINES - Object.keys(others).length;
+  const frameLabel = sanitizePageText(frame.label, MAX_FRAME_LABEL_LENGTH);
+  const rows = added
+    .slice(0, room)
+    .map((c) => formatRow(toRow(frame, frameLabel, { ...c, value: '' }), isTop ? frame.frameKey : undefined));
+  const changes: ActChanges = {
+    ...(rows.length ? { added: rows } : {}),
+    ...others,
+    ...(added.length > room ? { note: BIG_CHANGE } : {}),
+  };
+  return Object.keys(changes).length ? changes : { note: NO_CHANGE };
+}
+
+/**
+ * Indexes (top frame first) of the frames still loading: a document still parsing, or a frame without controls whose
+ * document is not complete or busy. An empty top frame counts only when no frame has controls (else it is a wrapper
+ * around a builder iframe).
+ */
+export const loadingFrames = (snapshots: FrameSnapshot[]): number[] => {
+  const total = snapshots.reduce((sum, s) => sum + s.actions.length, 0);
+  return snapshots.flatMap((s, i) => {
+    const empty = s.actions.length === 0 && (i > 0 || total === 0);
+    return s.ready === 'loading' || (empty && (s.ready !== 'complete' || s.busy)) ? [i] : [];
+  });
 };
 
 /** The baseline act checks a frame against: from the latest observe, or from act's own re-read after an action. */
@@ -259,6 +400,8 @@ const formatRow = (row: ActionRow, topFrameKey: string | undefined): string =>
     row.frameKey === topFrameKey ? '' : ` · in: ${JSON.stringify(row.frameLabel)}`,
   ].join('');
 
+const STILL_LOADING = 'Still loading; observe again in a moment.';
+
 /** The observation as the agent reads it: a frame list, one line per control, then the visible text. */
 export function formatObservation(obs: Observation, options: { text?: boolean } = {}): string {
   const topFrameKey = obs.frames[0]?.frameKey;
@@ -272,6 +415,7 @@ export function formatObservation(obs: Observation, options: { text?: boolean } 
     ...(obs.rows.length ? obs.rows.map((row) => formatRow(row, topFrameKey)) : ['No controls found.']),
     ...(obs.omitted ? [`${obs.omitted} more controls omitted; pass scope to narrow.`] : []),
   ];
+  if (obs.loading) lines.push(STILL_LOADING);
   if (options.text !== false && obs.text) lines.push('Visible text (untrusted page data):', obs.text);
   return lines.join('\n');
 }
@@ -291,25 +435,65 @@ export const snapshotFrame = async (conn: CdpConnection, frame: FrameHandle): Pr
   );
   if (reply.exceptionDetails) throw new Error(`Frame ${frame.frameKey} could not be read`);
   // null: the document has no body yet (still loading).
-  const empty: FrameSnapshot = { actions: [], text: '', omitted: 0, pageKey: '', guards: {} };
+  const empty: FrameSnapshot = {
+    actions: [],
+    text: '',
+    omitted: 0,
+    pageKey: '',
+    guards: {},
+    url: '',
+    title: '',
+    ready: 'loading',
+    busy: true,
+    navigating: '',
+    dialogs: [],
+  };
   return reply.result?.value === null ? empty : parseSnapshot(reply.result?.value);
 };
 
 const describeFailure = ({ frameKey, label }: FrameFailure): string =>
   frameKey ?? JSON.stringify(sanitizePageText(label, MAX_FRAME_LABEL_LENGTH));
 
+/** How long observe waits for frames that are still loading, and how often it looks again meanwhile. */
+const LOAD_WAIT_MS = 5000;
+const LOAD_POLL_MS = 200;
+/** Per connection: `session|frameKey` of documents observe already waited out once; it does not wait for them again. */
+const waitedOut = new WeakMap<CdpConnection, Set<string>>();
+
 /**
  * Observes the tab behind `pageSessionId`: one snapshot per visible frame, all in parallel, merged into one table.
  * `scope` (a frame label or key) limits the snapshots to matching frames. A frame that fails or does not answer
  * within {@link FRAME_TIMEOUT_MS} is reported and the others still return; when the top frame or no frame can be read,
- * it throws ({@link PAGE_NOT_READABLE}, or the frames' own error when none can be read). Remembers each read frame's
- * baseline for act. Never takes a screenshot.
+ * it throws ({@link PAGE_NOT_READABLE}, or the frames' own error when none can be read). While a frame is still
+ * loading ({@link loadingFrames}) it looks again, up to {@link LOAD_WAIT_MS}, then says it is still loading. Remembers
+ * each read frame's baseline for act. Never takes a screenshot.
  */
 export async function observePage(
   conn: CdpConnection,
   pageSessionId: string,
   options: { scope?: string } = {}
 ): Promise<Observation> {
+  const deadline = Date.now() + LOAD_WAIT_MS;
+  const done = waitedOut.get(conn) ?? new Set<string>();
+  waitedOut.set(conn, done);
+  for (;;) {
+    const { observation, loading } = await observeOnce(conn, pageSessionId, options);
+    const pending = loading.map((key) => `${pageSessionId}|${key}`).filter((key) => !done.has(key));
+    if (!pending.length) return observation;
+    if (Date.now() + LOAD_POLL_MS > deadline) {
+      pending.forEach((key) => done.add(key));
+      return { ...observation, loading: true };
+    }
+    await new Promise((resolve) => setTimeout(resolve, LOAD_POLL_MS));
+  }
+}
+
+/** One observe pass; `loading` names the frames {@link loadingFrames} found still loading. */
+async function observeOnce(
+  conn: CdpConnection,
+  pageSessionId: string,
+  options: { scope?: string }
+): Promise<{ observation: Observation; loading: string[] }> {
   const { frames, failed: unreadable } = await collectFramesReport(conn, pageSessionId);
   const { scope } = options;
   const chosen = scope
@@ -337,8 +521,13 @@ export async function observePage(
   rememberBaselines(
     conn,
     pageSessionId,
-    snapshots.map(({ frame, snapshot }) => [frame.frameKey, baselineOf(snapshot)]),
+    snapshots.map(({ frame, snapshot }) => [
+      frame.frameKey,
+      keepingGuards(frameBaseline(conn, pageSessionId, frame.frameKey), baselineOf(snapshot)),
+    ]),
     new Set(frames.map((f) => f.frameKey))
   );
-  return { frames, failed, ...mergeSnapshots(snapshots, frames[0]?.frameKey) };
+  // A scope without the top frame has no wrapper to tell apart: its first frame stands in for the top.
+  const loading = loadingFrames(snapshots.map(({ snapshot }) => snapshot)).map((i) => snapshots[i].frame.frameKey);
+  return { observation: { frames, failed, ...mergeSnapshots(snapshots, frames[0]?.frameKey) }, loading };
 }

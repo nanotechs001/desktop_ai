@@ -37,7 +37,7 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   const x = r.x + r.width / 2;
   const y = r.y + r.height / 2;
   if (!(r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight)) {
-    return { stale: 'the target is off-screen' };
+    return { stale: 'the target is off-screen; scroll it into view first' };
   }
   if (hitTest) {
     let hit = document.elementFromPoint(x, y);
@@ -162,6 +162,26 @@ export const POINT_LABELS = `function (x, y) {
     total += label.length;
   }
   return { labels, framed: false };
+}`;
+
+/**
+ * (node, down, share) → true once the nearest element from `node` up (through shadow hosts) that can still scroll that
+ * way has moved by `share` of its height; the page itself when none can. No hit test: a covered list still scrolls.
+ */
+export const SCROLL_AT = `function (node, down, share) {
+  const e = window.__aionFast && window.__aionFast.nodes.get(node);
+  if (!e || !e.isConnected) return false;
+  const page = document.scrollingElement || document.documentElement;
+  const canMove = (x) =>
+    x !== page &&
+    /(auto|scroll|overlay)/.test(getComputedStyle(x).overflowY) &&
+    (down ? x.scrollTop + x.clientHeight < x.scrollHeight - 1 : x.scrollTop > 0);
+  let box = e;
+  while (box && !(box.nodeType === 1 && canMove(box))) box = box.parentNode && (box.parentNode.host || box.parentNode);
+  const scroller = box && box.nodeType === 1 ? box : page;
+  const height = scroller === page ? innerHeight : scroller.clientHeight;
+  scroller.scrollBy({ top: Math.round(height * share) * (down ? 1 : -1), behavior: 'instant' });
+  return true;
 }`;
 
 /** (node, label) → true once the first enabled option of a native select with exactly that label is chosen. */

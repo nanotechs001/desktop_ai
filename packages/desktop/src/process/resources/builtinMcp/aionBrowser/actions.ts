@@ -8,13 +8,17 @@ import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection
 import { isRiskyLabel } from '@process/services/agentBrowser/confirmGate';
 import {
   MAX_OPTION_LENGTH,
+  NO_CHANGE,
   baselineOf,
   controlsChanged,
+  describeChanges,
   frameBaseline,
+  keepingGuards,
   rememberBaselines,
   snapshotFrame,
+  type ActChanges,
 } from './actionSpace';
-import { FRAME_TIMEOUT_MS, collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
+import { FRAME_TIMEOUT_MS, collectFramesReport, frameUrl, intersect, withTimeout, type FrameHandle } from './frames';
 import { sanitizePageText } from '@/common/utils/utils';
 import {
   DEVICE_PIXEL_RATIO,
@@ -22,6 +26,7 @@ import {
   OWNER_HIT,
   POINT_LABELS,
   RESOLVE_TARGET,
+  SCROLL_AT,
   SELECT_OPTION,
   SETTLE,
 } from './inPage';
@@ -77,6 +82,8 @@ export type StepResult = { op: ActOp; target?: string } & Outcome;
 
 /** Wait after input when the page shows no frame (spec §4: two animation frames or 50 ms). */
 const SETTLE_MS = 50;
+/** How long act waits before it looks again at a frame that showed no change after an action. */
+const RELOOK_MS = 100;
 /** Upper bound for the in-page settle (comboboxes wait up to 200 ms for their options). */
 const SETTLE_TIMEOUT_MS = 500;
 /** Longest wait for one input, screenshot or report command; a page stuck in a dialog never answers. */
@@ -121,8 +128,11 @@ type Target = {
   local: Box;
 };
 
-/** The frame an action acted in, and where in it (frame-local; null: no target, the whole frame counts). */
-type Acted = { frame: FrameHandle; near: Box | null };
+/**
+ * The frame an action acted in (and whether it is the top one), and where in it: the target's frame-local rect and
+ * node, null without a target (the whole frame counts).
+ */
+type Acted = { frame: FrameHandle; isTop: boolean; near: Box | null; node: number | null };
 
 /** A step that did not run for a reason the agent can act on (observe again, fix the call). */
 class StepError extends Error {
@@ -227,7 +237,7 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   if (typeof found === 'string') throw new StepError('stale', found);
   const rect = { ...found.rect, x: found.rect.x + frame.offset.x, y: found.rect.y + frame.offset.y };
   const point = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
-  if (!inside(point, frame.clip)) throw new StepError('stale', 'the target is off-screen');
+  if (!inside(point, frame.clip)) throw new StepError('stale', 'the target is off-screen; scroll it into view first');
   if (hitTest) await checkOwners(ctx, frames, frame, point);
   return { ...found, id, frame, isTop: frame === frames[0], node, rect, point, local: found.rect };
 }
@@ -481,7 +491,7 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<Acted | null>
   }
   await reportSafely(ctx, { op, label: targetLabel(t), rect: rectOf(t) });
   await settle(ctx, t.frame, op === 'type' && t.role === 'combobox' ? t.node : null);
-  return { frame: t.frame, near: t.local };
+  return { frame: t.frame, isTop: t.isTop, near: t.local, node: t.node };
 }
 
 /** The option of native select `t` that `text` names, as the page labels it in full. */
@@ -539,17 +549,30 @@ async function press(ctx: ActionContext, step: ActStep): Promise<Acted | null> {
   // Without a target the key went to whatever has focus; the top frame is the one we can re-read for sure.
   const frame = t?.frame ?? (await collectFramesReport(ctx.conn, ctx.sessionId)).frames[0];
   await settle(ctx, frame);
-  return { frame, near: t?.local ?? null };
+  return { frame, isTop: t?.isTop ?? true, near: t?.local ?? null, node: t?.node ?? null };
 }
 
+/**
+ * Scrolls about one screen: at a target, its nearest container that can move that way (in its own frame, with no hit
+ * test, so a covered list still scrolls); without one, a wheel at the middle of the top frame.
+ */
 async function scroll(ctx: ActionContext, step: ActStep): Promise<Acted | null> {
   const direction = step.key ?? 'down';
   if (direction !== 'up' && direction !== 'down') throw new StepError('error', 'scroll takes key up or down.');
-  const t = step.target ? await resolveTarget(ctx, step.target) : null;
+  const t = step.target ? await resolveTarget(ctx, step.target, false) : null;
   const frame = t?.frame ?? (await collectFramesReport(ctx.conn, ctx.sessionId)).frames[0];
-  const at = t?.point ?? { x: frame.clip.x + frame.clip.w / 2, y: frame.clip.y + frame.clip.h / 2 };
-  const deltaY = Math.round(frame.clip.h * SCROLL_SHARE) * (direction === 'up' ? -1 : 1);
-  await mouse(ctx, 'mouseWheel', at, { deltaX: 0, deltaY });
+  if (t) {
+    const moved = await withTimeout(
+      callIn(ctx.conn, t.frame, SCROLL_AT, values(t.node, direction === 'down', SCROLL_SHARE)),
+      FRAME_TIMEOUT_MS,
+      'The scroll'
+    ).catch(staleUnlessStep);
+    if (moved !== true) throw new StepError('stale', 'the target changed since observe');
+  } else {
+    const at = { x: frame.clip.x + frame.clip.w / 2, y: frame.clip.y + frame.clip.h / 2 };
+    const deltaY = Math.round(frame.clip.h * SCROLL_SHARE) * (direction === 'up' ? -1 : 1);
+    await mouse(ctx, 'mouseWheel', at, { deltaX: 0, deltaY });
+  }
   await reportSafely(ctx, {
     op: 'scroll',
     label: t ? `${direction} at ${targetLabel(t)}` : direction,
@@ -557,7 +580,7 @@ async function scroll(ctx: ActionContext, step: ActStep): Promise<Acted | null> 
   });
   await settle(ctx, frame);
   // A scroll moves every control of the frame: the whole frame counts.
-  return { frame, near: null };
+  return { frame, isTop: t?.isTop ?? true, near: null, node: null };
 }
 
 /** Runs `run`, turning what it throws into an outcome. */
@@ -572,19 +595,33 @@ async function attempt<T>(run: () => Promise<T | null>): Promise<{ outcome: Outc
 }
 
 /**
- * Re-reads the frame after an action: the new baseline for the next one, and whether the action changed what matters
- * ({@link controlsChanged} near where it acted). Ids the frame no longer lists keep their guards: act still checks
- * each one, and a missing one is stale rather than unknown.
+ * Re-reads the frame after an action: the new baseline for the next one (its new ids join the registry), whether the
+ * action changed what matters ({@link controlsChanged} near where it acted), and what changed for the agent
+ * ({@link describeChanges}). Ids the frame no longer lists keep their guards: act still checks each one, and a
+ * missing one is stale rather than unknown.
  */
-async function rebaseline(ctx: ActionContext, { frame, near }: Acted): Promise<boolean> {
+async function rebaseline(
+  ctx: ActionContext,
+  acted: Acted,
+  relook = true
+): Promise<{ changed: boolean; changes: ActChanges }> {
+  const { frame, near } = acted;
   const before = frameBaseline(ctx.conn, ctx.sessionId, frame.frameKey);
   // null: the document went away (e.g. the click navigated), which is a change.
   const snapshot = await snapshotFrame(ctx.conn, frame).catch((): null => null);
-  if (!snapshot) return true;
+  if (!snapshot) {
+    const url = await frameUrl(ctx.conn, frame).catch((): undefined => undefined);
+    return { changed: true, changes: describeChanges(before, null, { ...acted, url }) };
+  }
   const after = baselineOf(snapshot);
-  const guards = before?.pageKey === after.pageKey ? { ...before.guards, ...after.guards } : after.guards;
-  rememberBaselines(ctx.conn, ctx.sessionId, [[frame.frameKey, { ...after, guards }]]);
-  return !before || controlsChanged(before, after, near);
+  const changes = describeChanges(before, after, acted);
+  // An OOPIF may handle the input, or a page render its answer, after the settle: look once more before saying none.
+  if (relook && changes.note === NO_CHANGE) {
+    await sleep(RELOOK_MS);
+    return rebaseline(ctx, acted, false);
+  }
+  rememberBaselines(ctx.conn, ctx.sessionId, [[frame.frameKey, keepingGuards(before, after)]]);
+  return { changed: !before || controlsChanged(before, after, near), changes };
 }
 
 const notRun = (left: number): string => (left ? ` ${left} more action${left === 1 ? '' : 's'} not run.` : '');
@@ -601,28 +638,32 @@ const stopNote = (outcome: Outcome, left: number): string => {
  * Runs `steps` in order on observed ids (spec §4 Action): every input goes to the page session at absolute
  * coordinates, after the per-target freshness checks. Stops at the first step that is not done, and, with
  * `stopOnChange` (default), when a step navigates its frame or adds or removes controls near its target. Never retries.
+ * `changes` is what the last step that ran changed in its frame ({@link describeChanges}).
  */
 export async function act(
   ctx: ActionContext,
   steps: ActStep[],
   { stopOnChange = true }: { stopOnChange?: boolean } = {}
-): Promise<{ results: StepResult[]; stopped?: string }> {
+): Promise<{ results: StepResult[]; stopped?: string; changes?: ActChanges }> {
   const results: StepResult[] = [];
+  let changes: ActChanges | undefined;
+  const reply = (stopped?: string) => ({ results, ...(stopped ? { stopped } : {}), ...(changes ? { changes } : {}) });
   for (const [i, step] of steps.entries()) {
     const { outcome, acted } = await attempt(() => perform(ctx, step));
     results.push({ op: step.op, ...(step.target ? { target: step.target } : {}), ...outcome });
     const left = steps.length - i - 1;
-    if (outcome.result !== 'done') return { results, stopped: stopNote(outcome, left) };
-    if (!left || !acted) continue;
+    if (outcome.result !== 'done') return reply(stopNote(outcome, left));
+    if (!acted) continue;
     try {
-      if ((await rebaseline(ctx, acted)) && stopOnChange) {
-        return { results, stopped: `The page changed; observe again.${notRun(left)}` };
-      }
+      const seen = await rebaseline(ctx, acted);
+      changes = seen.changes;
+      if (left && seen.changed && stopOnChange) return reply(`The page changed; observe again.${notRun(left)}`);
     } catch {
-      return { results, stopped: stopNote({ result: 'error' }, left) };
+      // After the last step the input has run; only the change list is missing.
+      if (left) return reply(stopNote({ result: 'error' }, left));
     }
   }
-  return { results };
+  return reply();
 }
 
 /**
