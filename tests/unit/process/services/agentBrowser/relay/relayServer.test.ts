@@ -457,6 +457,18 @@ describe('relay server: targets', () => {
     expect((await client.send('Target.closeTarget', { targetId: 'wc-2' })).error).toBeDefined();
     expect(closeTab).toHaveBeenCalledTimes(1);
   });
+  it('Target.closeTarget refuses a tab the user pinned, which the agent may still use', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    ownedTab(1, 'claude');
+    registry.setPinned(1, true);
+
+    const reply = await client.send('Target.closeTarget', { targetId: 'wc-1' });
+
+    expect(reply.error?.message).toMatch(/the user pinned this tab/i);
+    expect(closeTab).not.toHaveBeenCalled();
+    expect((await client.send('Target.attachToTarget', { targetId: 'wc-1', flatten: true })).error).toBeUndefined();
+  });
 });
 
 describe('relay server: sessions', () => {
@@ -677,6 +689,22 @@ describe('relay server: AionRelay methods', () => {
       { targetId: 'wc-30', title: 'Example', url: 'https://example.com/', owner: 'agent' },
       { targetId: 'wc-32', title: 'Example', url: 'https://example.com/', owner: 'shared' },
     ]);
+  });
+
+  it('AionRelay.listTabs marks the tabs the user pinned', async () => {
+    const handle = await start();
+    const client = await connect(handle);
+    ownedTab(30, 'claude');
+    ownedTab(31, 'claude');
+    registry.setPinned(31, true);
+
+    const tabs = (await client.send('AionRelay.listTabs')).result?.tabs as Array<{ targetId: string; pinned?: true }>;
+
+    expect(tabs.map(({ targetId, pinned }) => ({ targetId, pinned }))).toEqual([
+      { targetId: 'wc-30', pinned: undefined },
+      { targetId: 'wc-31', pinned: true },
+    ]);
+    expect(Object.keys(tabs[0])).not.toContain('pinned');
   });
 
   it('re-emits reportAction as an agent action, rate-limited per client', async () => {

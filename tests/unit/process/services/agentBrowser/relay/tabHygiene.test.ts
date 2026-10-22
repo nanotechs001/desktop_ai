@@ -308,3 +308,54 @@ describe(`a bot's shared browser keeps ${MAX_BOT_TABS} tabs`, () => {
     expect(closeTab).not.toHaveBeenCalled();
   });
 });
+
+/** A tab the user pinned in the pane is never closed by any rule here, and is left out of every count. */
+describe('pinned tabs', () => {
+  const BOT = { kind: 'agent', agentId: 'bot-b' } as const;
+
+  it('the idle sweep never closes a pinned agent tab', () => {
+    agentTab(1);
+    agentTab(2);
+    registry.setPinned(1, true);
+
+    vi.advanceTimersByTime(AGENT_TAB_IDLE_MS);
+
+    expect(closeTab.mock.calls).toEqual([[2]]);
+  });
+
+  it('the per-chat cap neither closes nor counts a pinned tab', () => {
+    agentTab(1);
+    registry.setPinned(1, true);
+    vi.advanceTimersByTime(1000);
+    agentTab(2);
+    vi.advanceTimersByTime(1000);
+    agentTab(3);
+    vi.advanceTimersByTime(1000);
+    agentTab(4); // 3 unpinned tabs and a pinned one: within the cap
+
+    expect(closeTab).not.toHaveBeenCalled();
+
+    agentTab(5);
+    expect(closeTab.mock.calls).toEqual([[2]]);
+  });
+
+  it(`the bot cap keeps ${MAX_BOT_TABS} unpinned tabs plus any pinned ones, and never closes a pinned tab`, async () => {
+    const tabs = [1, 2, 3, 4, 5, 6, 7, 8].map((id) => {
+      const contents = new FakeContents(id);
+      registry.track(contents, BOT);
+      vi.advanceTimersByTime(1000);
+      return contents;
+    });
+    closeTab.mockImplementation((id: number) => tabs.find((tab) => tab.id === id)?.destroy());
+    [1, 2, 3].forEach((id) => registry.setPinned(id, true)); // the three oldest
+
+    await vi.advanceTimersByTimeAsync(16 * MINUTE);
+
+    expect(closeTab).not.toHaveBeenCalled();
+
+    registry.setPinned(1, false);
+    await vi.advanceTimersByTimeAsync(MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[1]]);
+  });
+});

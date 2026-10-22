@@ -97,6 +97,9 @@ export type TargetRegistry = {
   clearTyped(webContentsId: number): void;
   /** The user typed on the tab's current document: an agent must not leave or close it unasked. */
   typedSinceLoad(webContentsId: number): boolean;
+  /** The user pinned (or unpinned) the tab in the pane: tab cleanup and agents' `tabs close` leave a pinned tab open. */
+  setPinned(webContentsId: number, pinned: boolean): void;
+  isPinned(webContentsId: number): boolean;
   onChange(cb: (all: TabOwnership[]) => void): () => void;
   onDestroyed(cb: (last: TabOwnership) => void): () => void;
 };
@@ -151,6 +154,7 @@ export function createTargetRegistry(): TargetRegistry {
   const uses = new Map<number, TabUse>();
   const agentKeys = new Map<number, KeyInput[]>();
   const typed = new Set<number>();
+  const pinned = new Set<number>();
   const isAgentKey = (webContentsId: number, { key, code }: KeyInput): boolean =>
     (agentKeys.get(webContentsId) ?? []).some((agent) => agent.key === key && agent.code === code);
   const changeListeners = new Set<(all: TabOwnership[]) => void>();
@@ -183,6 +187,7 @@ export function createTargetRegistry(): TargetRegistry {
         uses.delete(webContentsId);
         agentKeys.delete(webContentsId);
         typed.delete(webContentsId);
+        pinned.delete(webContentsId);
         callEach(destroyedListeners, tab.ownership);
         notify();
       });
@@ -272,6 +277,11 @@ export function createTargetRegistry(): TargetRegistry {
       typed.delete(webContentsId);
     },
     typedSinceLoad: (webContentsId) => typed.has(webContentsId),
+    setPinned(webContentsId, on) {
+      if (on && tabs.has(webContentsId)) pinned.add(webContentsId);
+      else pinned.delete(webContentsId);
+    },
+    isPinned: (webContentsId) => pinned.has(webContentsId),
     onChange(cb) {
       changeListeners.add(cb);
       return () => changeListeners.delete(cb);

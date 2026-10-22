@@ -245,6 +245,28 @@ describe('tabs list, close and switch', () => {
     expect(jsonOf(await callTabs(client, { action: 'list' })).current).toBeNull();
   });
 
+  it('list marks a tab the user pinned', async () => {
+    relay.on('AionRelay.listTabs', () => ({
+      tabs: [{ targetId: 'wc-7', title: 'Blank', url: 'about:blank', owner: 'agent', pinned: true }],
+    }));
+    const client = await connectClient(relay.env);
+    expect(jsonOf(await callTabs(client, { action: 'list' })).tabs).toEqual([
+      { tab: 'wc-7', title: 'Blank', url: 'about:blank', owner: 'agent', pinned: true },
+    ]);
+  });
+
+  it("close of a pinned tab fails with the relay's reason and keeps it current", async () => {
+    relay.on('Target.closeTarget', () => {
+      throw new Error('The user pinned this tab, so it stays open. You may still navigate and act in it.');
+    });
+    const client = await connectClient(relay.env);
+    await callTabs(client, { action: 'open' });
+    const reply = await callTabs(client, { action: 'close', tab: 'wc-7' });
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toContain('The user pinned this tab');
+    expect(jsonOf(await callTabs(client, { action: 'list' })).current).toBe('wc-7');
+  });
+
   it('rejects an unknown action', async () => {
     const client = await connectClient(relay.env);
     await expect(callTabs(client, { action: 'burn' })).resolves.toMatchObject({ isError: true });

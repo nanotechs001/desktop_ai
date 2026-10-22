@@ -53,7 +53,7 @@ export type TabHygiene = {
 /**
  * Keeps agents from piling up tabs: a per-chat cap and an idle sweep every minute, plus a cap of {@link MAX_BOT_TABS}
  * on each VA Bot's whole browser (see `trimBotTabs`). Only a closable tab is ever
- * closed: agent-owned, not shared, not on screen, not typed in since its page loaded, not watched by a phone, no
+ * closed: agent-owned, not shared, not pinned, not on screen, not typed in since its page loaded, not watched by a phone, no
  * risky ask open. "Used" is the registry's last use (an agent command or user input on the tab).
  */
 export function startTabHygiene({
@@ -72,7 +72,7 @@ export function startTabHygiene({
 
   const closable = (webContentsId: number): boolean => {
     const tab = registry.ownership(webContentsId);
-    if (!tab || tab.owner === 'user' || tab.sharedWith !== null) return false;
+    if (!tab || tab.owner === 'user' || tab.sharedWith !== null || registry.isPinned(webContentsId)) return false;
     if (registry.typedSinceLoad(webContentsId) || isStreamed?.(webContentsId) || isConfirming?.(webContentsId)) {
       return false;
     }
@@ -97,6 +97,7 @@ export function startTabHygiene({
   /** The bot cap may close any tab of the bot's browser, the user's too, but never one still in use or worth keeping. */
   const botCapClosable = (webContentsId: number, now: number): boolean =>
     !closing.has(webContentsId) &&
+    !registry.isPinned(webContentsId) &&
     webContentsId !== shownTab() &&
     !registry.typedSinceLoad(webContentsId) &&
     !isStreamed?.(webContentsId) &&
@@ -126,7 +127,10 @@ export function startTabHygiene({
     const byBot = new Map<string, number[]>();
     for (const { webContentsId, profile } of registry.all()) {
       if (profile.kind !== 'agent' || profile.agentId === DEFAULT_AGENT_ID) continue;
-      if (closing.has(webContentsId) || isPaneTab?.(webContentsId) === false) continue;
+      // A pinned tab is neither counted nor closed: the cap is on the tabs the user did not pin.
+      if (closing.has(webContentsId) || isPaneTab?.(webContentsId) === false || registry.isPinned(webContentsId)) {
+        continue;
+      }
       byBot.set(profile.agentId, [...(byBot.get(profile.agentId) ?? []), webContentsId]);
     }
     return [...byBot.values()];

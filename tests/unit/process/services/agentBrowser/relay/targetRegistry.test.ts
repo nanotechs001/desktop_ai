@@ -193,3 +193,24 @@ describe('targetRegistry: typed since load', () => {
     }
   });
 });
+
+describe('pinned tabs', () => {
+  it('remembers a pin until it is lifted or the tab is gone, and ignores unknown tabs', () => {
+    const registry = createTargetRegistry();
+    const contents = new FakeContents(7);
+    registry.track(contents);
+
+    expect(registry.isPinned(7)).toBe(false);
+    registry.setPinned(7, true);
+    expect(registry.isPinned(7)).toBe(true);
+    registry.setPinned(7, false);
+    expect(registry.isPinned(7)).toBe(false);
+
+    registry.setPinned(7, true);
+    contents.destroy();
+    expect(registry.isPinned(7)).toBe(false);
+
+    registry.setPinned(8, true);
+    expect(registry.isPinned(8)).toBe(false);
+  });
+});

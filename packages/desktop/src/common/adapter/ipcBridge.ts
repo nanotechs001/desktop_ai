@@ -1458,6 +1458,10 @@ export const agentBrowser = {
   userInput: bridge.buildEmitter<{ webContentsId: number; at: number }>('agent-browser.user-input'),
   // "Share with agent" toggle: on lets every agent client drive this user tab
   share: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; on: boolean }>('agent-browser.share'),
+  // the user pinned or unpinned this tab in the pane: tab cleanup never closes a pinned tab, nor may an agent
+  setTabPinned: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; pinned: boolean }>(
+    'agent-browser.set-tab-pinned'
+  ),
   getOwnership: bridge.buildProvider<IBridgeResponse<TabOwnership[]>, void>('agent-browser.get-ownership'),
   // main → renderer: every risky agent action waiting for Allow or Deny, on every change
   confirmRequested: bridge.buildEmitter<ConfirmRequest[]>('agent-browser.confirm-requested'),

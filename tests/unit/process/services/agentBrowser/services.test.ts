@@ -21,6 +21,7 @@ const h = vi.hoisted(() => {
         agentAction: emitter(),
         userInput: emitter(),
         share: provider('share'),
+        setTabPinned: provider('setTabPinned'),
         getOwnership: provider('getOwnership'),
         confirmRequested: emitter(),
         getConfirmRequests: provider('getConfirmRequests'),
@@ -182,6 +183,28 @@ describe('agent browser services: IPC', () => {
     });
     expect(await call('share', { webContentsId: 5, on: true })).toEqual({ success: true });
     expect((await ownership(5))?.sharedWith).toBe('all');
+  });
+
+  it('validates a pin like a share, and answers with an error while agent control is off', async () => {
+    expect(await startAgentBrowserServices({ enabled: false, blockedPorts: () => [] })).toBeNull();
+    expect((await call('setTabPinned', { webContentsId: 1, pinned: true })).success).toBe(false);
+
+    await start();
+    newTab(5);
+    for (const args of [
+      { webContentsId: '5', pinned: true },
+      { webContentsId: 5.5, pinned: true },
+      { webContentsId: 5, pinned: 'yes' },
+      { webContentsId: 5 },
+    ]) {
+      expect(await call('setTabPinned', args)).toMatchObject({ success: false, msg: 'Invalid arguments' });
+    }
+    expect(await call('setTabPinned', { webContentsId: 6, pinned: true })).toMatchObject({
+      success: false,
+      msg: 'No such browser tab',
+    });
+    expect(await call('setTabPinned', { webContentsId: 5, pinned: true })).toEqual({ success: true });
+    expect(await call('setTabPinned', { webContentsId: 5, pinned: false })).toEqual({ success: true });
   });
 });
 
@@ -652,6 +675,22 @@ describe('agent browser services: tab hygiene', () => {
     }
 
     expect(h.ipcBridge.browser.closeTabRequested.emit.mock.calls).toEqual([[{ webContentsId: 80 }]]);
+  });
+
+  it('leaves a pinned agent tab out of the cap, and refuses its agent closing it', async () => {
+    const relay = await start();
+    const send = await connect(relay, 'claude', { 'X-Aion-Conversation': 'conv-a' });
+    for (const id of [80, 81, 82, 83]) {
+      const created = send('Target.createTarget', { url: `https://site${id}.test/` });
+      await vi.waitFor(() => expect(h.ipcBridge.browser.openTabRequested.emit).toHaveBeenCalledTimes(id - 79));
+      newTab(id, temporarySessionA).navigate(`https://site${id}.test/`);
+      expect((await created).result).toEqual({ targetId: `wc-${id}` });
+      if (id === 80) expect(await call('setTabPinned', { webContentsId: 80, pinned: true })).toEqual({ success: true });
+    }
+
+    expect(h.ipcBridge.browser.closeTabRequested.emit).not.toHaveBeenCalled();
+    expect((await send('Target.closeTarget', { targetId: 'wc-80' })).error?.message).toMatch(/user pinned this tab/);
+    expect(h.ipcBridge.browser.closeTabRequested.emit).not.toHaveBeenCalled();
   });
 });
 

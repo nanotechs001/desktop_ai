@@ -23,8 +23,11 @@ export class RelayConnectError extends Error {
   }
 }
 
-/** One tab the agent may use. `owner` is 'agent' for tabs it opened and 'shared' for tabs the user shared. */
-export type TabSummary = { tab: string; title: string; url: string; owner: 'agent' | 'shared' };
+/**
+ * One tab the agent may use. `owner` is 'agent' for tabs it opened and 'shared' for tabs the user shared; `pinned` is
+ * set when the user pinned the tab, which then never closes unless the user closes it.
+ */
+export type TabSummary = { tab: string; title: string; url: string; owner: 'agent' | 'shared'; pinned?: true };
 
 const MAX_BACKOFF_MS = 5000;
 const BASE_BACKOFF_MS = 250;
@@ -76,7 +79,7 @@ const openSocket = (url: URL, token: string, conversationId: string | undefined)
     ws.once('error', reject);
   });
 
-type RelayTab = { targetId: string; title: string; url: string; owner: TabSummary['owner'] };
+type RelayTab = { targetId: string; title: string; url: string; owner: TabSummary['owner']; pinned?: unknown };
 
 const isRelayTab = (value: unknown): value is RelayTab => {
   const tab = value as Record<string, unknown> | null;
@@ -144,11 +147,12 @@ export class RelayClient {
     const conn = await this.ensureConnected();
     const { tabs } = await conn.send<{ tabs?: unknown }>('AionRelay.listTabs');
     const list = Array.isArray(tabs) ? tabs.filter(isRelayTab) : [];
-    return list.map(({ targetId, title, url, owner }) => ({
+    return list.map(({ targetId, title, url, owner, pinned }) => ({
       tab: targetId,
       title,
       url,
       owner,
+      ...(pinned === true ? { pinned: true as const } : {}),
     }));
   }
 

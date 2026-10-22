@@ -122,6 +122,8 @@ const ACTION_LIMIT = 20;
 const ACTION_WINDOW_MS = 1000;
 const MAX_OP_LENGTH = 40;
 const MAX_ACTION_LABEL_LENGTH = 120;
+/** What an agent is told when it tries to close a tab the user pinned. */
+const PINNED_TAB_CLOSE = 'The user pinned this tab, so it stays open. You may still navigate and act in it.';
 const AUTO_ATTACH_METHOD = 'Target.setAutoAttach';
 const DIALOG_METHOD = 'Page.handleJavaScriptDialog';
 const MAX_DIALOGS_IN_FLIGHT = 2;
@@ -599,7 +601,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       const tab = registry.ownership(webContentsIdFromTargetId(targetId) ?? -1);
       if (!mayAct(tab, conn.client)) return [];
       const own = tab?.owner !== 'user' && tab?.owner.clientId === conn.client.clientId;
-      return [{ targetId, title, url, owner: own ? 'agent' : 'shared' }];
+      const pinned = registry.isPinned(webContentsIdFromTargetId(targetId) ?? -1);
+      return [{ targetId, title, url, owner: own ? 'agent' : 'shared', ...(pinned ? { pinned: true } : {}) }];
     }),
   });
 
@@ -626,6 +629,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         const owner = registry.ownership(webContentsId)?.owner;
         if (owner === 'user' || owner?.clientId !== conn.client.clientId)
           throw new Error('Agents may close only tabs they opened');
+        if (registry.isPinned(webContentsId)) throw new Error(PINNED_TAB_CLOSE);
         deps.closeTab(webContentsId);
         return { success: true };
       }

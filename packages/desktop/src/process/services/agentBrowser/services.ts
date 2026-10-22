@@ -283,6 +283,16 @@ const registerProviders = (
       return { success: true };
     })
   );
+  ipcBridge.agentBrowser.setTabPinned.provider(({ webContentsId, pinned }) =>
+    guard(() => {
+      if (!Number.isInteger(webContentsId) || typeof pinned !== 'boolean') return INVALID;
+      const registry = getRegistry();
+      if (!registry) return OFF;
+      if (!registry.ownership(webContentsId)) return UNKNOWN_TAB;
+      registry.setPinned(webContentsId, pinned);
+      return { success: true };
+    })
+  );
   ipcBridge.agentBrowser.getConfirmRequests.provider(() => guard(() => ({ success: true, data: confirms.list() })));
   ipcBridge.agentBrowser.replyConfirm.provider(({ id, allow, alwaysForSite }) =>
     guard(() => {
