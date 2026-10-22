@@ -36,6 +36,10 @@ const agentTab = (id: number, chat = 'conv-1'): FakeContents => {
   return contents;
 };
 
+/** The pane closes what it is asked to, as the real one does. */
+const paneCloses = (tabs: FakeContents[]) =>
+  closeTab.mockImplementation((id: number) => tabs.find((tab) => tab.id === id)?.destroy());
+
 beforeEach(() => {
   vi.useFakeTimers();
   registry = createTargetRegistry();
@@ -137,28 +141,66 @@ describe('per-chat agent tab cap', () => {
 });
 
 describe('idle sweep', () => {
-  it('closes an agent tab after 15 minutes without use, not before', () => {
-    agentTab(1);
+  it("closes an agent tab after 15 minutes without use, not before, but keeps its chat's last-used tab", () => {
+    paneCloses([agentTab(1), agentTab(2)]); // tab 2, opened last, is the chat's last-used tab
     vi.advanceTimersByTime(AGENT_TAB_IDLE_MS - MINUTE);
     expect(closeTab).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(MINUTE);
+    vi.advanceTimersByTime(2 * MINUTE);
 
     expect(closeTab.mock.calls).toEqual([[1]]);
   });
 
   it('keeps a tab the agent used at 14 minutes, and one the user clicked in', () => {
-    agentTab(1);
-    agentTab(2);
+    paneCloses([agentTab(1), agentTab(2), agentTab(3)]);
     vi.advanceTimersByTime(14 * MINUTE);
     registry.touch(1, 'conv-1'); // an agent command
-    registry.touch(2); // user input
+    registry.touch(2); // user input: now the chat's last-used tab
 
     vi.advanceTimersByTime(2 * MINUTE);
-    expect(closeTab).not.toHaveBeenCalled();
+    expect(closeTab.mock.calls).toEqual([[3]]);
 
     vi.advanceTimersByTime(13 * MINUTE);
-    expect(closeTab.mock.calls).toEqual([[1], [2]]);
+    expect(closeTab.mock.calls).toEqual([[3], [1]]);
+  });
+
+  it("a chat's last-used tab survives 16 minutes idle while its other idle tab closes", () => {
+    paneCloses([agentTab(1), agentTab(2)]);
+    registry.touch(1, 'conv-1');
+
+    vi.advanceTimersByTime(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[2]]);
+  });
+
+  it('two chats each keep their own last-used tab', () => {
+    paneCloses([agentTab(1, 'conv-1'), agentTab(2, 'conv-1'), agentTab(3, 'conv-2'), agentTab(4, 'conv-2')]);
+    registry.touch(1, 'conv-1');
+    registry.touch(3, 'conv-2');
+
+    vi.advanceTimersByTime(16 * MINUTE);
+
+    expect(closeTab.mock.calls.toSorted()).toEqual([[2], [4]]);
+  });
+
+  it('using another tab moves the protection to it', () => {
+    paneCloses([agentTab(1), agentTab(2)]);
+    vi.advanceTimersByTime(MINUTE);
+    registry.touch(1, 'conv-1');
+
+    vi.advanceTimersByTime(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[2]]);
+  });
+
+  it('an explicit close of the last-used tab does not move the protection to another tab', () => {
+    const tabs = [agentTab(1), agentTab(2)];
+    paneCloses(tabs);
+    tabs[1].destroy(); // the user or the agent closed the last-used tab
+
+    vi.advanceTimersByTime(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[1]]);
   });
 
   it('never sweeps a shared or on-screen tab, nor a user tab', () => {
@@ -196,6 +238,7 @@ describe('tabs the user may still need', () => {
     confirming.add(3);
 
     agentTab(4); // the cap spares 1, 2 and 3
+    registry.touch(1, 'conv-1'); // so 4 is not the chat's last-used tab
     expect(closeTab).not.toHaveBeenCalled();
     vi.advanceTimersByTime(AGENT_TAB_IDLE_MS);
 
@@ -204,6 +247,7 @@ describe('tabs the user may still need', () => {
 
   it('asks again after 10 s when the pane never closed the tab', () => {
     agentTab(1);
+    agentTab(2); // the chat's last-used tab
     vi.advanceTimersByTime(AGENT_TAB_IDLE_MS);
     expect(closeTab.mock.calls).toEqual([[1]]);
 
@@ -227,9 +271,6 @@ describe(`a bot's shared browser keeps ${MAX_BOT_TABS} tabs`, () => {
       vi.advanceTimersByTime(1000);
       return contents;
     });
-  /** The pane closes what it is asked to, as the real one does. */
-  const paneCloses = (tabs: FakeContents[]) =>
-    closeTab.mockImplementation((id: number) => tabs.find((tab) => tab.id === id)?.destroy());
 
   it('closes the oldest of 6 tabs idle for 16 minutes, and 5 remain', async () => {
     const tabs = botTabs([1, 2, 3, 4, 5, 6]);
@@ -239,6 +280,31 @@ describe(`a bot's shared browser keeps ${MAX_BOT_TABS} tabs`, () => {
 
     expect(closeTab.mock.calls).toEqual([[1]]);
     expect(registry.all()).toHaveLength(5);
+  });
+
+  it("keeps a chat's last-used tab among 6 idle ones, counted, and closes the oldest other one", async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6]);
+    paneCloses(tabs);
+    registry.touch(1, 'conv-a'); // the agent's last action: tab 1, used longest ago of all
+    vi.advanceTimersByTime(1000);
+    [2, 3, 4, 5, 6].forEach((id) => registry.touch(id));
+
+    await vi.advanceTimersByTimeAsync(16 * MINUTE);
+
+    expect(closeTab.mock.calls).toEqual([[2]]);
+    expect(registry.all().map((t) => t.webContentsId)).toContain(1);
+  });
+
+  it('closes nothing when only protected tabs could go', async () => {
+    const tabs = botTabs([1, 2, 3, 4, 5, 6, 7]);
+    paneCloses(tabs);
+    registry.setPinned(1, true);
+    // Tabs 2 to 7 are each the last-used tab of a chat: 6 counted, over the cap, but none may go.
+    [2, 3, 4, 5, 6, 7].forEach((id) => registry.touch(id, `conv-${id}`));
+
+    await vi.advanceTimersByTimeAsync(16 * MINUTE);
+
+    expect(closeTab).not.toHaveBeenCalled();
   });
 
   it('closes the oldest idle tab when only 4 of 6 are idle', async () => {
@@ -316,6 +382,7 @@ describe('pinned tabs', () => {
   it('the idle sweep never closes a pinned agent tab', () => {
     agentTab(1);
     agentTab(2);
+    agentTab(3); // the chat's last-used tab
     registry.setPinned(1, true);
 
     vi.advanceTimersByTime(AGENT_TAB_IDLE_MS);

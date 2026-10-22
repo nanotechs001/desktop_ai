@@ -12,7 +12,7 @@ import type { TargetRegistry } from './targetRegistry';
  * are shared by its chats instead, and only the bot cap ({@link MAX_BOT_TABS}) trims them.
  */
 export const MAX_AGENT_TABS_PER_CHAT = 3;
-/** An agent tab nobody (agent or user) used for this long is closed. */
+/** An agent tab nobody (agent or user) used for this long is closed, unless it is its chat's last-used tab. */
 export const AGENT_TAB_IDLE_MS = 15 * 60_000;
 /** A VA Bot's one browser (its profile) keeps at most this many tabs, user and agent tabs together. */
 export const MAX_BOT_TABS = 5;
@@ -42,8 +42,9 @@ export type TabHygieneDeps = {
 
 export type TabHygiene = {
   /**
-   * An agent tab (never a popup window) was claimed or inherited: it is tracked from now on, and its chat's least
-   * recently used closable tabs are closed down to the cap. The adopted tab itself is never closed here.
+   * An agent tab (never a popup window) was claimed or inherited: it is tracked from now on, it is its chat's last-used
+   * tab unless another was used later, and its chat's least recently used closable tabs are closed down to the cap.
+   * The adopted tab itself is never closed here.
    */
   adopt(webContentsId: number): void;
   /** Stops the idle sweep. */
@@ -54,7 +55,9 @@ export type TabHygiene = {
  * Keeps agents from piling up tabs: a per-chat cap and an idle sweep every minute, plus a cap of {@link MAX_BOT_TABS}
  * on each VA Bot's whole browser (see `trimBotTabs`). Only a closable tab is ever
  * closed: agent-owned, not shared, not pinned, not on screen, not typed in since its page loaded, not watched by a phone, no
- * risky ask open. "Used" is the registry's last use (an agent command or user input on the tab).
+ * risky ask open. "Used" is the registry's last use (an agent command, user input or time on screen). Each chat's
+ * last-used tab (the one an agent of the chat opened or a use touched last) is kept through the idle sweep and the bot
+ * cap, though it still counts toward the cap; when it closes, no other tab takes its place until one is used.
  */
 export function startTabHygiene({
   registry,
@@ -89,9 +92,24 @@ export function startTabHygiene({
     closeTab(webContentsId);
   };
 
+  /** Per chat, its last-used tab. */
+  const lastTabOf = new Map<string, number>();
+  const isLastUsed = (webContentsId: number): boolean => [...lastTabOf.values()].includes(webContentsId);
+  /** `webContentsId` was used: it becomes its chat's last-used tab unless that one was used later (a takeover). */
+  const noteUse = (webContentsId: number): void => {
+    const chat = drivingChat(webContentsId);
+    const kept = chat === undefined ? undefined : lastTabOf.get(chat);
+    if (chat !== undefined && (kept === undefined || lastUsedAt(webContentsId) >= lastUsedAt(kept))) {
+      lastTabOf.set(chat, webContentsId);
+    }
+  };
+  const offTouch = registry.onTouch(noteUse);
+
   const offDestroyed = registry.onDestroyed(({ webContentsId }) => {
     agentTabs.delete(webContentsId);
     closing.delete(webContentsId);
+    // An explicit close: the protection goes with the tab, to no other one.
+    for (const [chat, id] of lastTabOf) if (id === webContentsId) lastTabOf.delete(chat);
   });
 
   /** The bot cap may close any tab of the bot's browser, the user's too, but never one still in use or worth keeping. */
@@ -103,6 +121,7 @@ export function startTabHygiene({
     !isStreamed?.(webContentsId) &&
     !isConfirming?.(webContentsId) &&
     !isLeaving?.(webContentsId) &&
+    !isLastUsed(webContentsId) &&
     now - lastUsedAt(webContentsId) >= BOT_TAB_IDLE_MS;
   /** The chat whose agent drives the tab: its owner's, else (a user tab) the last agent's that used it. */
   const drivingChat = (webContentsId: number): string | undefined =>
@@ -156,7 +175,8 @@ export function startTabHygiene({
     const shown = shownTab();
     if (shown !== null) registry.touch(shown);
     for (const webContentsId of agentTabs) {
-      if (closable(webContentsId) && now - lastUsedAt(webContentsId) >= AGENT_TAB_IDLE_MS) closeNow(webContentsId);
+      const idle = now - lastUsedAt(webContentsId) >= AGENT_TAB_IDLE_MS;
+      if (idle && closable(webContentsId) && !isLastUsed(webContentsId)) closeNow(webContentsId);
     }
     if (trimming) return;
     trimming = true;
@@ -174,6 +194,7 @@ export function startTabHygiene({
       const owner = registry.ownership(webContentsId)?.owner;
       if (!owner || owner === 'user') return;
       agentTabs.add(webContentsId);
+      noteUse(webContentsId);
       // Already being closed (an earlier adopt of the same takeover chose it): it must not count the others again.
       if (closing.has(webContentsId)) return;
       const chat = owner.conversationId;
@@ -188,6 +209,7 @@ export function startTabHygiene({
     close() {
       clearInterval(timer);
       offDestroyed();
+      offTouch();
     },
   };
 }

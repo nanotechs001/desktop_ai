@@ -102,6 +102,8 @@ export type TargetRegistry = {
   isPinned(webContentsId: number): boolean;
   onChange(cb: (all: TabOwnership[]) => void): () => void;
   onDestroyed(cb: (last: TabOwnership) => void): () => void;
+  /** Called after each {@link touch} that recorded a use, with the tab's id. */
+  onTouch(cb: (webContentsId: number) => void): () => void;
 };
 
 /** Kept apart from ownership: a use changes nothing the pane draws, so it notifies nobody. */
@@ -159,6 +161,7 @@ export function createTargetRegistry(): TargetRegistry {
     (agentKeys.get(webContentsId) ?? []).some((agent) => agent.key === key && agent.code === code);
   const changeListeners = new Set<(all: TabOwnership[]) => void>();
   const destroyedListeners = new Set<(last: TabOwnership) => void>();
+  const touchListeners = new Set<(webContentsId: number) => void>();
 
   const all = (): TabOwnership[] => Array.from(tabs.values(), (tab) => tab.ownership);
   const notify = (): void => {
@@ -251,6 +254,7 @@ export function createTargetRegistry(): TargetRegistry {
       if (!previous) return;
       const chat = conversationId ?? previous.conversationId;
       uses.set(webContentsId, { at: Date.now(), ...(chat ? { conversationId: chat } : {}) });
+      callEach(touchListeners, webContentsId);
     },
     lastUse: (webContentsId) => uses.get(webContentsId) ?? null,
     beginAgentKey(webContentsId, key) {
@@ -289,6 +293,10 @@ export function createTargetRegistry(): TargetRegistry {
     onDestroyed(cb) {
       destroyedListeners.add(cb);
       return () => destroyedListeners.delete(cb);
+    },
+    onTouch(cb) {
+      touchListeners.add(cb);
+      return () => touchListeners.delete(cb);
     },
   };
 }
