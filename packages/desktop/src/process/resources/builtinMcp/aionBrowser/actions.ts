@@ -6,7 +6,14 @@
 
 import type { CdpConnection } from '@process/services/agentBrowser/cdpConnection';
 import { isRiskyLabel } from '@process/services/agentBrowser/confirmGate';
-import { MAX_OPTION_LENGTH, baselineOf, frameBaseline, rememberBaselines, snapshotFrame } from './actionSpace';
+import {
+  MAX_OPTION_LENGTH,
+  baselineOf,
+  controlsChanged,
+  frameBaseline,
+  rememberBaselines,
+  snapshotFrame,
+} from './actionSpace';
 import { FRAME_TIMEOUT_MS, collectFramesReport, intersect, withTimeout, type FrameHandle } from './frames';
 import { sanitizePageText } from '@/common/utils/utils';
 import {
@@ -110,7 +117,12 @@ type Target = {
   label: string;
   editable: boolean;
   options?: string[];
+  /** The rect in its frame's own coordinates, as snapshots report rects. */
+  local: Box;
 };
+
+/** The frame an action acted in, and where in it (frame-local; null: no target, the whole frame counts). */
+type Acted = { frame: FrameHandle; near: Box | null };
 
 /** A step that did not run for a reason the agent can act on (observe again, fix the call). */
 class StepError extends Error {
@@ -173,7 +185,9 @@ const callIn = async (
   return reply.result?.value;
 };
 
-const parseResolved = (value: unknown): Omit<Target, 'id' | 'frame' | 'isTop' | 'node' | 'point'> | string => {
+const parseResolved = (
+  value: unknown
+): Omit<Target, 'id' | 'frame' | 'isTop' | 'node' | 'point' | 'local'> | string => {
   const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   if (typeof v.stale === 'string') return v.stale;
   const r = (v.rect && typeof v.rect === 'object' ? v.rect : {}) as Record<string, unknown>;
@@ -215,7 +229,7 @@ async function resolveTarget(ctx: ActionContext, id: string, hitTest = true): Pr
   const point = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
   if (!inside(point, frame.clip)) throw new StepError('stale', 'the target is off-screen');
   if (hitTest) await checkOwners(ctx, frames, frame, point);
-  return { ...found, id, frame, isTop: frame === frames[0], node, rect, point };
+  return { ...found, id, frame, isTop: frame === frames[0], node, rect, point, local: found.rect };
 }
 
 /** A failed freshness call means the document changed (e.g. went away mid-call). */
@@ -436,8 +450,8 @@ async function pointLabels(ctx: ActionContext, at: Point): Promise<Labeled[]> {
   return found.flat();
 }
 
-/** Runs one step's input; returns the frame whose baseline the step may have changed. */
-async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle | null> {
+/** Runs one step's input; returns the frame (and the place in it) whose baseline the step may have changed. */
+async function perform(ctx: ActionContext, step: ActStep): Promise<Acted | null> {
   const { op } = step;
   if (op === 'press' || op === 'scroll') return op === 'press' ? press(ctx, step) : scroll(ctx, step);
   const id = need(step.target, `target: a control id from observe, as in {op: '${op}', target: 'f1:12'}`, op);
@@ -467,7 +481,7 @@ async function perform(ctx: ActionContext, step: ActStep): Promise<FrameHandle |
   }
   await reportSafely(ctx, { op, label: targetLabel(t), rect: rectOf(t) });
   await settle(ctx, t.frame, op === 'type' && t.role === 'combobox' ? t.node : null);
-  return t.frame;
+  return { frame: t.frame, near: t.local };
 }
 
 /** The option of native select `t` that `text` names, as the page labels it in full. */
@@ -506,7 +520,7 @@ async function selectOption(ctx: ActionContext, first: Target, text: string): Pr
   }
 }
 
-async function press(ctx: ActionContext, step: ActStep): Promise<FrameHandle | null> {
+async function press(ctx: ActionContext, step: ActStep): Promise<Acted | null> {
   const key = need(step.key, 'a key', 'press');
   if (!Object.hasOwn(PRESS_KEYS, key)) throw new StepError('error', `press cannot send ${key}.`);
   const spec = PRESS_KEYS[key];
@@ -525,10 +539,10 @@ async function press(ctx: ActionContext, step: ActStep): Promise<FrameHandle | n
   // Without a target the key went to whatever has focus; the top frame is the one we can re-read for sure.
   const frame = t?.frame ?? (await collectFramesReport(ctx.conn, ctx.sessionId)).frames[0];
   await settle(ctx, frame);
-  return frame;
+  return { frame, near: t?.local ?? null };
 }
 
-async function scroll(ctx: ActionContext, step: ActStep): Promise<FrameHandle | null> {
+async function scroll(ctx: ActionContext, step: ActStep): Promise<Acted | null> {
   const direction = step.key ?? 'down';
   if (direction !== 'up' && direction !== 'down') throw new StepError('error', 'scroll takes key up or down.');
   const t = step.target ? await resolveTarget(ctx, step.target) : null;
@@ -542,31 +556,35 @@ async function scroll(ctx: ActionContext, step: ActStep): Promise<FrameHandle | 
     rect: t ? rectOf(t) : null,
   });
   await settle(ctx, frame);
-  return frame;
+  // A scroll moves every control of the frame: the whole frame counts.
+  return { frame, near: null };
 }
 
 /** Runs `run`, turning what it throws into an outcome. */
-async function attempt(
-  run: () => Promise<FrameHandle | null>
-): Promise<{ outcome: Outcome; frame: FrameHandle | null }> {
+async function attempt<T>(run: () => Promise<T | null>): Promise<{ outcome: Outcome; acted: T | null }> {
   try {
-    return { outcome: { result: 'done' }, frame: await run() };
+    return { outcome: { result: 'done' }, acted: await run() };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     const result = error instanceof StepError ? error.result : 'error';
-    return { outcome: { result, reason }, frame: null };
+    return { outcome: { result, reason }, acted: null };
   }
 }
 
-/** Re-reads `frame` after an action: the new baseline for the next one, and whether its controls changed. */
-async function rebaseline(ctx: ActionContext, frame: FrameHandle): Promise<boolean> {
+/**
+ * Re-reads the frame after an action: the new baseline for the next one, and whether the action changed what matters
+ * ({@link controlsChanged} near where it acted). Ids the frame no longer lists keep their guards: act still checks
+ * each one, and a missing one is stale rather than unknown.
+ */
+async function rebaseline(ctx: ActionContext, { frame, near }: Acted): Promise<boolean> {
   const before = frameBaseline(ctx.conn, ctx.sessionId, frame.frameKey);
   // null: the document went away (e.g. the click navigated), which is a change.
   const snapshot = await snapshotFrame(ctx.conn, frame).catch((): null => null);
   if (!snapshot) return true;
   const after = baselineOf(snapshot);
-  rememberBaselines(ctx.conn, ctx.sessionId, [[frame.frameKey, after]]);
-  return after.controls !== before?.controls;
+  const guards = before?.pageKey === after.pageKey ? { ...before.guards, ...after.guards } : after.guards;
+  rememberBaselines(ctx.conn, ctx.sessionId, [[frame.frameKey, { ...after, guards }]]);
+  return !before || controlsChanged(before, after, near);
 }
 
 const notRun = (left: number): string => (left ? ` ${left} more action${left === 1 ? '' : 's'} not run.` : '');
@@ -581,8 +599,8 @@ const stopNote = (outcome: Outcome, left: number): string => {
 
 /**
  * Runs `steps` in order on observed ids (spec §4 Action): every input goes to the page session at absolute
- * coordinates, after jev's freshness checks. Stops at the first step that is not done, and, with `stopOnChange`
- * (default), when a step adds, removes or renames controls in its frame. Never retries.
+ * coordinates, after the per-target freshness checks. Stops at the first step that is not done, and, with
+ * `stopOnChange` (default), when a step navigates its frame or adds or removes controls near its target. Never retries.
  */
 export async function act(
   ctx: ActionContext,
@@ -591,13 +609,13 @@ export async function act(
 ): Promise<{ results: StepResult[]; stopped?: string }> {
   const results: StepResult[] = [];
   for (const [i, step] of steps.entries()) {
-    const { outcome, frame } = await attempt(() => perform(ctx, step));
+    const { outcome, acted } = await attempt(() => perform(ctx, step));
     results.push({ op: step.op, ...(step.target ? { target: step.target } : {}), ...outcome });
     const left = steps.length - i - 1;
     if (outcome.result !== 'done') return { results, stopped: stopNote(outcome, left) };
-    if (!left || !frame) continue;
+    if (!left || !acted) continue;
     try {
-      if ((await rebaseline(ctx, frame)) && stopOnChange) {
+      if ((await rebaseline(ctx, acted)) && stopOnChange) {
         return { results, stopped: `The page changed; observe again.${notRun(left)}` };
       }
     } catch {

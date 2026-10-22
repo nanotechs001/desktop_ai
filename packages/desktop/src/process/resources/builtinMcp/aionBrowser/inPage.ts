@@ -12,15 +12,27 @@
 
 /**
  * (node, pageKey, guard, hitTest) → `{stale}` or `{rect, role, label, editable, options?}`, rect frame-local.
- * jev's freshness: the frame's page key and the target's guard must hash to what observe saw; the center must be
- * inside the frame's viewport and, with hitTest, elementFromPoint there (through open shadow roots) is the target.
+ * Freshness is about the target: the frame's page key (document and url) and the target's guard (role, name, state,
+ * its dialog or row) must hash to what observe saw. A node that went or now shows another control is replaced by an
+ * equivalent control near where it was, if there is one (snapshot.js `refind`). The center must be inside the
+ * frame's viewport and, with hitTest, elementFromPoint there (through open shadow roots) is the target.
  */
 export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   const c = window.__aionFast;
   if (!c || c.hash(c.pageKey()) !== pageKey) return { stale: 'the page changed since observe' };
-  const e = c.nodes.get(node);
-  const now = e ? c.guard(e) : null;
-  if (!now || c.hash(now) !== guard) return { stale: 'the target changed since observe' };
+  const fresh = (x) => {
+    const g = c.guard(x);
+    return g && c.hash(g) === guard ? g : null;
+  };
+  let e = c.nodes.get(node);
+  let now = e ? fresh(e) : null;
+  const seen = c.seen && c.seen.get(node);
+  if (!now && seen) {
+    // The node went or shows another control now: an equivalent control where it was is the same one.
+    e = c.refind(node, seen, fresh);
+    now = e ? fresh(e) : null;
+  }
+  if (!now) return { stale: 'the target changed since observe' };
   const r = e.getBoundingClientRect();
   const x = r.x + r.width / 2;
   const y = r.y + r.height / 2;
@@ -40,8 +52,8 @@ export const RESOLVE_TARGET = `function (node, pageKey, guard, hitTest) {
   }
   return {
     rect: { x: r.x, y: r.y, w: r.width, h: r.height },
-    role: now[1],
-    label: String(now[2]).slice(0, 200),
+    role: now[0],
+    label: String(now[1] || now[0]).slice(0, 200),
     editable: !e.readOnly && e.getAttribute('aria-readonly') !== 'true',
     options:
       e.tagName === 'SELECT'
@@ -65,7 +77,7 @@ const LABELS_OF = `const buttonLike = ['button', 'submit', 'reset', 'image'];
     try {
       const c = window.__aionFast;
       const g = c && c.guard ? c.guard(e) : null;
-      named = g && g[2] ? String(g[2]) : '';
+      named = g && g[1] ? String(g[1]) : '';
     } catch {
       named = '';
     }

@@ -49,14 +49,17 @@ export type FrameSnapshot = {
   actions: SnapshotAction[];
   text: string;
   omitted: number;
-  /** Hash of jev's page key (url, scroll, viewport, form values); '' when the snapshot had none. */
+  /** Hash of the page key (the document and url); '' when the snapshot had none. */
   pageKey: string;
-  /** Hash of jev's guard per node: identity, role, name, state and surrounding text. */
+  /** Hash of the guard per node: role, name, state and the dialog or row it sits in. */
   guards: Record<string, string>;
 };
 
-/** What act checks a frame against: its last snapshot's page key, guards and set of controls. */
-export type FrameBaseline = { pageKey: string; guards: Record<string, string>; controls: string };
+/** A control as the change check after an action compares it: frame-local rect. */
+export type BaselineControl = Pick<SnapshotAction, 'node' | 'role' | 'label' | 'rect'>;
+
+/** What act checks a frame against: its last snapshot's page key, guards and controls. */
+export type FrameBaseline = { pageKey: string; guards: Record<string, string>; controls: BaselineControl[] };
 
 /** One row of the merged table: page strings sanitized, rect in top-viewport px. */
 export type ActionRow = {
@@ -132,14 +135,49 @@ export function parseSnapshot(value: unknown): FrameSnapshot | null {
 const baselines = new WeakMap<CdpConnection, Map<string, Map<string, FrameBaseline>>>();
 
 /**
- * The baseline of a snapshot; `controls` changes when controls appear, go or are renamed, not when values do.
- * jev's marker is not checked: the page key and guards before input, plus this controls comparison after it, replace it.
+ * The baseline of a snapshot. jev's marker is not checked: the page key and guards before input, plus
+ * {@link controlsChanged} after it, replace it.
  */
 export const baselineOf = (snapshot: FrameSnapshot): FrameBaseline => ({
   pageKey: snapshot.pageKey,
   guards: snapshot.guards,
-  controls: JSON.stringify(snapshot.actions.map((a) => [a.node, a.role, a.label])),
+  controls: snapshot.actions.map(({ node, role, label, rect }) => ({ node, role, label, rect })),
 });
+
+/** Controls this far (CSS px) around an action's target count as near it. */
+const NEAR_TARGET_PX = 200;
+/** An equivalent control (same role and label) that moved at most this far (CSS px, each axis) is the same one. */
+const SAME_PLACE_PX = 32;
+
+const centerOf = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+const sameControl = (a: BaselineControl, b: BaselineControl): boolean => {
+  if (a.node === b.node) return true;
+  const [p, q] = [centerOf(a.rect), centerOf(b.rect)];
+  return (
+    a.role === b.role &&
+    a.label === b.label &&
+    Math.abs(p.x - q.x) <= SAME_PLACE_PX &&
+    Math.abs(p.y - q.y) <= SAME_PLACE_PX
+  );
+};
+const nearBox = (r: Rect, box: Rect): boolean =>
+  r.x < box.x + box.w + NEAR_TARGET_PX &&
+  r.x + r.w > box.x - NEAR_TARGET_PX &&
+  r.y < box.y + box.h + NEAR_TARGET_PX &&
+  r.y + r.h > box.y - NEAR_TARGET_PX;
+
+/**
+ * Whether an action changed what matters for the next one: a new document or url, or controls added or removed
+ * near `target` (frame-local; null: anywhere in the frame). A control that only changed its text (a timer, an
+ * autosave label) is the same node, and a node replaced by an equivalent one is the same control.
+ */
+export const controlsChanged = (before: FrameBaseline, after: FrameBaseline, target: Rect | null): boolean => {
+  if (before.pageKey !== after.pageKey) return true;
+  const around = (c: BaselineControl) => !target || nearBox(c.rect, target);
+  const missing = (from: BaselineControl[], to: BaselineControl[]) =>
+    from.some((c) => around(c) && !to.some((d) => sameControl(c, d)));
+  return missing(after.controls, before.controls) || missing(before.controls, after.controls);
+};
 
 /** The baseline act checks a frame against: from the latest observe, or from act's own re-read after an action. */
 export const frameBaseline = (

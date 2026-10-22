@@ -6,10 +6,14 @@
  * Changes: walks open shadow roots; reports every contenteditable (and a designMode body) as textbox, and
  * other draggable="true" elements (builder widgets, sortable items) as draggable, for the drag tool; one
  * entry per element (a select lists its options instead of one action per option; no "Open" duplicates,
- * no scroll/wait pseudo-actions); state lives in window.__aionFast; marker, page key and guards are returned
+ * no scroll/wait pseudo-actions); state lives in window.__aionFast; the page key and guards are returned
  * as short hashes, and page strings are cut (labels, values and options to 200 chars, 50 options per select,
  * 6000 chars of text) so a 250-row snapshot stays small; aria states are kept only as true/false/mixed.
- * Rects stay frame-local, as in jev.
+ * Rects stay frame-local, as in jev. Also: an unnamed control gets a guessed name (tooltip, id, icon class or its
+ * place); builder-canvas elements (plain divs that are clickable or carry builder hints) are listed too, at most 60;
+ * the page key is only the document and url; guards hold what makes a control that control (no node identity, no
+ * surrounding text except a dialog's or a row's), so an equivalent node that replaced it is re-found where it was;
+ * a new node that is the same control as a gone one keeps its id.
  *
  * MIT License
  *
@@ -38,12 +42,35 @@
   const MAX_STRING = 200;
   const MAX_OPTIONS = 50;
   const MAX_TEXT = 6000;
+  /** Guessed names and canvas element names stay short. */
+  const MAX_GUESS = 60;
+  /** Canvas elements (clickable divs, builder hints) listed per frame, after the real controls. */
+  const MAX_EXTRA = 60;
+  /** How far (document CSS px, each axis) an equivalent control may sit from where it was to count as the same. */
+  const NEAR_PX = 32;
   const cut = (text) => String(text).slice(0, MAX_STRING);
   const cache = (window.__aionFast ||= { ids: new WeakMap(), nodes: new Map(), next: 1 });
-  const identity = (e) => {
-    if (!cache.ids.has(e)) cache.ids.set(e, cache.next++);
-    const id = cache.ids.get(e);
+  // id -> {role, label, at}: what the latest snapshot saw under that id, at its center in document px.
+  cache.seen ||= new Map();
+  cache.center = (e) => {
+    const r = e.getBoundingClientRect();
+    return [r.x + r.width / 2 + scrollX, r.y + r.height / 2 + scrollY];
+  };
+  cache.near = (a, b) => Math.abs(a[0] - b[0]) <= NEAR_PX && Math.abs(a[1] - b[1]) <= NEAR_PX;
+  /** An element keeps its id; a new node that is the same control as a gone one (role, label, place) takes its id. */
+  const identity = (e, role, label, at) => {
+    let id = cache.ids.get(e);
+    if (id === undefined) {
+      for (const [old, seen] of cache.seen) {
+        if (cache.nodes.has(old) || seen.role !== role || seen.label !== label || !cache.near(seen.at, at)) continue;
+        id = old;
+        break;
+      }
+      id ??= cache.next++;
+      cache.ids.set(e, id);
+    }
     cache.nodes.set(id, e);
+    cache.seen.set(id, { role, label, at });
     return id;
   };
   for (const [id, e] of cache.nodes) if (!e.isConnected) cache.nodes.delete(id);
@@ -61,17 +88,57 @@
     h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
     return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
   };
-  // The document plus every open shadow root under it (closed roots are unreachable by design).
-  const roots = [];
-  const addRoot = (root) => {
-    roots.push(root);
-    for (const e of root.querySelectorAll('*')) if (e.shadowRoot) addRoot(e.shadowRoot);
+  // Builder hints: a data-* name or a class with one of these words (whole words, so "color" is not "col").
+  const KINDS = new Map([
+    ['section', 'section'],
+    ['row', 'row'],
+    ['col', 'column'],
+    ['column', 'column'],
+    ['block', 'block'],
+    ['widget', 'widget'],
+    ['element', 'element'],
+    ['el', 'element'],
+  ]);
+  const kindOf = (text, isData) => {
+    const words = text.toLowerCase().split(/[^a-z0-9]+/);
+    if (isData && words.some((w) => w === 'test' || w === 'qa' || w === 'cy')) return null; // test ids
+    const kind = words.map((w) => KINDS.get(w)).find(Boolean);
+    return kind || (isData && words.includes('id') ? 'element' : null);
   };
-  addRoot(document);
+  /**
+   * The role of a canvas element: clickable but not a control (a data-* builder hint, onclick, tabindex >= 0, or a
+   * builder class with a pointer cursor). `styled` false skips the computed style, to pick candidates cheaply.
+   */
+  const hintRole = (e, styled = true) => {
+    for (const a of e.attributes) {
+      const kind = a.name.startsWith('data-') && kindOf(a.name.slice(5), true);
+      if (kind) return kind;
+    }
+    if (e.hasAttribute('onclick') || (e.hasAttribute('tabindex') && e.tabIndex >= 0)) return 'clickable';
+    const kind = kindOf(e.getAttribute('class') || '', false);
+    return kind && (!styled || getComputedStyle(e).cursor === 'pointer') ? kind : null;
+  };
+  // The document plus every open shadow root under it (closed roots are unreachable by design), and in the same
+  // pass the elements with a builder hint (canvas candidates).
+  const rootsAndHinted = () => {
+    const found = { roots: [], hinted: [] };
+    const addRoot = (root) => {
+      found.roots.push(root);
+      for (const e of root.querySelectorAll('*')) {
+        if (hintRole(e, false)) found.hinted.push(e);
+        if (e.shadowRoot) addRoot(e.shadowRoot);
+      }
+    };
+    addRoot(document);
+    return found;
+  };
+  const { roots, hinted } = rootsAndHinted();
   const all = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
   const safe = (e) => !['password', 'file', 'hidden'].includes(e.type);
   const visible = (e) =>
     !e.closest('[aria-hidden="true"],[inert]') && e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+  // Material icon fonts spell the icon as text ("add"); that text is an icon name, not a label.
+  const isLigature = (e) => /\bmaterial-(icons|symbols)/.test(e.getAttribute('class') || '');
   const name = (e, seen = new Set()) => {
     if (!e || seen.has(e)) return '';
     seen.add(e);
@@ -96,7 +163,7 @@
             .map((n) =>
               n.nodeType === 3
                 ? n.textContent
-                : n.nodeType === 1 && n.getAttribute('aria-hidden') !== 'true'
+                : n.nodeType === 1 && n.getAttribute('aria-hidden') !== 'true' && !isLigature(n)
                   ? name(n, seen)
                   : ''
             )
@@ -141,26 +208,89 @@
       if (['text', 'email', 'url', 'tel'].includes(e.type)) return 'textbox';
     }
     if (e.getAttribute('draggable') === 'true') return 'draggable';
-    return null;
+    return hintRole(e);
   };
-  cache.pageKey = () => [
-    performance.timeOrigin,
-    location.href,
-    scrollX,
-    scrollY,
-    innerWidth,
-    innerHeight,
-    all('input,textarea,select')
-      .filter(safe)
-      .map((e) => [identity(e), e.value, e.checked, e.selectedIndex, e.disabled, e.readOnly]),
-  ];
+  const TOOLTIPS = ['data-tooltip', 'data-original-title', 'data-title', 'data-tip', 'tooltip'];
+  // Words that say nothing about what an icon or id does.
+  const NOISE = new Set(
+    (
+      'btn button icon icons ico svg img fa fas far fal fab fad solid regular light thin duotone brands sharp fw lg ' +
+      'sm xs xl line fill filled outline outlined round rounded mdi ri bi material symbols el js wrapper container'
+    ).split(' ')
+  );
+  const words = (text) =>
+    text
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w && !NOISE.has(w) && !/\d/.test(w))
+      .slice(0, 4)
+      .join(' ');
+  const ICON = /^(?:fa|mdi|icon|ri|bi)-(.+)$/;
+  /** An icon name from an icon-font class, a ligature or an svg sprite, on the control or inside it. */
+  const iconOf = (e) => {
+    for (const x of [e, ...[...e.querySelectorAll('[class],use')].slice(0, 20)]) {
+      const cls = x.getAttribute('class') || '';
+      if (isLigature(x) && words(x.textContent)) return words(x.textContent);
+      for (const c of cls.split(/\s+/)) {
+        const icon = ICON.exec(c);
+        if (icon && words(icon[1])) return words(icon[1]);
+      }
+      const sprite = x.tagName === 'use' && /#(.+)$/.exec(x.getAttribute('href') || x.getAttribute('xlink:href') || '');
+      if (sprite && words(sprite[1])) return words(sprite[1]);
+    }
+    return '';
+  };
+  const attrText = (e, keys) =>
+    keys
+      .map((key) => e.getAttribute(key))
+      .find((v) => v && v.trim())
+      ?.trim() || '';
+  /** An explicit name: aria-labelledby, aria-label, title, a tooltip attribute, or the text aria-describedby names. */
+  const explicitName = (e) =>
+    (e.getAttribute('aria-labelledby') && name(e)) ||
+    attrText(e, ['aria-label', 'title', ...TOOLTIPS]) ||
+    (e.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .map((id) => e.getRootNode().getElementById?.(id)?.textContent.trim())
+      .filter(Boolean)
+      .join(' ');
+  /** A name for a control without one: a tooltip, else marked guesses from its test id, name or id, or its icon. */
+  const guessed = (e) => {
+    const tip = explicitName(e);
+    const id = !tip && words(attrText(e, ['data-testid', 'data-test', 'data-qa', 'name', 'id']));
+    const icon = !tip && !id && iconOf(e);
+    return (tip || (id && '(id: ' + id + ')') || (icon && '(icon: ' + icon + ')') || '').slice(0, MAX_GUESS);
+  };
+  /** What the control is called: a canvas element by its explicit name or text, a control by its name or a guess. */
+  const label = (e, r) =>
+    (roles.includes(r) || !hintRole(e, false) ? name(e) || guessed(e) : explicitName(e) || name(e)).slice(
+      0,
+      MAX_STRING
+    );
+  const PLACES =
+    '[role="toolbar"],[role="menubar"],[role="menu"],[role="tablist"],[role="group"],header,nav,aside,footer,form';
+  const places = new Map();
+  /** Last resort for a control with no name at all: its kind and place, like "icon button 3 in toolbar". */
+  const place = (e, r) => {
+    const box = e.parentElement?.closest(PLACES) || e.getRootNode();
+    const where = box.nodeType === 1 ? box.getAttribute('role') || box.tagName.toLowerCase() : 'page';
+    if (!places.has(box)) places.set(box, [...box.querySelectorAll(selector)]);
+    const n = places.get(box).indexOf(e) + 1;
+    const icon = e.querySelector('svg,img,i,[class*="icon"]') ? 'icon ' : '';
+    return '(' + icon + r + (n ? ' ' + n : '') + ' in ' + where + ')';
+  };
+  // Only a new document or url makes every id of the frame stale; anything else is checked per target.
+  cache.pageKey = () => [performance.timeOrigin, location.href];
+  // What makes a control that control: role, name, state, and the dialog or row it acts on (a Delete button means
+  // the row it is in). Not its node, so an equivalent node that replaced it is the same control.
   cache.guard = (e) => {
     if (!e?.isConnected || !visible(e)) return null;
-    const scope = e.closest('form,dialog,[role="dialog"],article,li,tr,[role="row"]') || e.parentElement;
+    const r = role(e);
+    const scope = e.closest('dialog,[role="dialog"],[role="alertdialog"],article,li,tr,[role="row"]');
     return [
-      identity(e),
-      role(e),
-      name(e),
+      r,
+      label(e, r),
       e.value ?? null,
       e.checked ?? null,
       e.selectedIndex ?? null,
@@ -174,24 +304,49 @@
       scope?.innerText?.slice(0, 6000) || '',
     ];
   };
+  /** Every element that may be a control: for re-finding one whose node was replaced. */
+  cache.collect = () => {
+    const now = rootsAndHinted();
+    return [...now.roots.flatMap((root) => [...root.querySelectorAll(selector)]), ...now.hinted];
+  };
+  /**
+   * The element now showing the control observed as `node` (seen there as `seen`): the nearest one, with no id of its
+   * own, of the same role where it was whose guard `fresh` accepts. It takes over the id. Null when there is none.
+   */
+  cache.refind = (node, seen, fresh) => {
+    let best = null;
+    let distance = Infinity;
+    for (const x of new Set(cache.collect())) {
+      if ((cache.ids.has(x) && cache.ids.get(x) !== node) || role(x) !== seen.role) continue;
+      const at = cache.center(x);
+      const d = Math.hypot(at[0] - seen.at[0], at[1] - seen.at[1]);
+      if (d < distance && cache.near(at, seen.at) && fresh(x)) [best, distance] = [x, d];
+    }
+    if (best) {
+      cache.ids.set(best, node);
+      cache.nodes.set(node, best);
+    }
+    return best;
+  };
   // A designMode document (a rich-text iframe) is one big textbox with no contenteditable attribute.
   const candidates = new Set(all(selector));
   if (document.body.isContentEditable) candidates.add(document.body);
   const actions = [];
+  const inView = (r) => {
+    const x = r.x + r.width / 2;
+    const y = r.y + r.height / 2;
+    return r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
+  };
+  const rectOf = (r) => ({ x: r.x, y: r.y, w: r.width, h: r.height });
+  const at = (r) => [r.x + r.width / 2 + scrollX, r.y + r.height / 2 + scrollY];
   for (const e of candidates) {
     if (!safe(e) || !visible(e) || e.matches(':disabled') || e.closest('[aria-disabled="true"]')) continue;
     const r = e.getBoundingClientRect(),
-      x = r.x + r.width / 2,
-      y = r.y + r.height / 2,
       rname = role(e);
-    if (!rname || r.width <= 0 || r.height <= 0 || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    if (!rname || !inView(r)) continue;
     if (rname === 'gridcell' && e.querySelector('button,[role="button"]')) continue;
-    const base = {
-      node: identity(e),
-      role: rname,
-      label: cut(name(e) || rname),
-      rect: { x: r.x, y: r.y, w: r.width, h: r.height },
-    };
+    const named = cut(label(e, rname) || place(e, rname));
+    const base = { node: identity(e, rname, named, at(r)), role: rname, label: named, rect: rectOf(r) };
     for (const key of ['checked', 'selected', 'expanded']) {
       const value = e.getAttribute('aria-' + key);
       if (['true', 'false', 'mixed'].includes(value)) base[key] = value;
@@ -217,7 +372,17 @@
       actions.push({ ...base, kind: editable ? 'fill' : 'click', value: cut(value) });
     }
   }
-  const words = [],
+  // Who owns each visible text node: its nearest control or canvas element (for "has its own text" below).
+  const hintedSet = new Set(hinted);
+  const roleOf = new Map();
+  const ownsText = (p) => {
+    if (candidates.has(p)) return true;
+    if (!hintedSet.has(p)) return false;
+    if (!roleOf.has(p)) roleOf.set(p, hintRole(p));
+    return Boolean(roleOf.get(p));
+  };
+  const owned = new Set();
+  const lines = [],
     range = document.createRange();
   let length = 0;
   for (const root of roots) {
@@ -230,30 +395,56 @@
       range.selectNodeContents(node);
       const r = range.getBoundingClientRect();
       if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth) {
-        words.push(value);
+        lines.push(value);
         length += value.length;
+        // shortcut: only text within the first MAX_TEXT chars marks its owner; a canvas past that needs scope.
+        for (let p = parent; p; p = p.parentElement) {
+          if (!ownsText(p)) continue;
+          owned.add(p);
+          break;
+        }
       }
     }
   }
-  const text = words.join('\n').slice(0, MAX_TEXT),
+  // Canvas elements: hinted, visible, centered in the viewport, not a control or inside one, smaller than half the
+  // viewport (a page wrapper is not something to select). Of nested ones the outermost, plus inner ones with their
+  // own name or text; a wrapper exactly around a control is that control.
+  const kept = new Set();
+  let extra = 0;
+  for (const e of hinted) {
+    if (extra >= MAX_EXTRA) break;
+    const r = e.getBoundingClientRect();
+    if (!inView(r) || r.width * r.height * 2 > innerWidth * innerHeight || e.closest(selector)) continue;
+    const kind = roleOf.get(e) ?? hintRole(e);
+    if (!kind || !visible(e)) continue;
+    let outer = e.parentElement;
+    while (outer && !kept.has(outer)) outer = outer.parentElement;
+    if (outer && !owned.has(e) && !explicitName(e)) continue;
+    const inner = e.querySelector(selector)?.getBoundingClientRect();
+    if (
+      inner &&
+      [r.x - inner.x, r.y - inner.y, r.right - inner.right, r.bottom - inner.bottom].every((d) => Math.abs(d) <= 4)
+    ) {
+      continue;
+    }
+    const named = cut(label(e, kind).slice(0, MAX_GUESS) || place(e, kind));
+    kept.add(e);
+    extra++;
+    actions.push({
+      node: identity(e, kind, named, at(r)),
+      role: kind,
+      label: named,
+      rect: rectOf(r),
+      kind: 'click',
+      value: '',
+    });
+  }
+  for (const id of cache.seen.keys()) if (!cache.nodes.has(id)) cache.seen.delete(id);
+  const text = lines.join('\n').slice(0, MAX_TEXT),
     height = document.documentElement.scrollHeight;
   const page_key = cache.pageKey(),
     guards = {};
   for (const a of actions) if (!(a.node in guards)) guards[a.node] = cache.hash(cache.guard(cache.nodes.get(a.node)));
-  // Compare meaning and identity. Geometry is always resolved and hit-tested just before input.
-  const semantics = actions.map(({ rect: _rect, ...action }) => action);
-  const marker = [
-    performance.timeOrigin,
-    location.href,
-    scrollX,
-    scrollY,
-    innerWidth,
-    innerHeight,
-    document.title,
-    text,
-    semantics,
-    page_key[6],
-  ];
   const omitted_actions = Math.max(0, actions.length - 250);
   actions.splice(250);
   return {
@@ -264,7 +455,6 @@
     text,
     scroll: { y: scrollY, height },
     actions,
-    marker: cache.hash(marker),
     page_key: cache.hash(page_key),
     guards,
     omitted_actions,

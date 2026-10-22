@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Funnel builder</title>
+    <!--
+      A GoHighLevel-like funnel builder. Opened with ?top it is the app shell (Back plus the builder iframe from the
+      other origin); otherwise it is the builder: an icon toolbar that mutates on a timer (autosave label, a hidden
+      draft field) and a same-origin canvas iframe.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font: 14px sans-serif;
+      }
+      iframe {
+        position: absolute;
+        border: 0;
+        padding: 0;
+      }
+      #toolbar {
+        display: flex;
+        gap: 4px;
+        height: 32px;
+      }
+      #toolbar button {
+        min-width: 28px;
+        height: 28px;
+        padding: 0;
+      }
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <template id="top">
+      <button id="back">Back</button>
+      <iframe
+        title="funnel-builder"
+        src="{{OTHER}}/funnel.html"
+        style="left: 0; top: 40px; width: 1000px; height: 760px"
+      ></iframe>
+    </template>
+    <template id="builder">
+      <div id="toolbar" role="toolbar">
+        <button type="button" aria-label="Desktop preview">
+          <svg viewBox="0 0 10 10"><path d="M0 0h10v10z" /></svg>
+        </button>
+        <button type="button" title="Undo">
+          <svg viewBox="0 0 10 10"><path d="M0 0h10v10z" /></svg>
+        </button>
+        <button type="button" data-tooltip="Redo">
+          <svg viewBox="0 0 10 10"><path d="M0 0h10v10z" /></svg>
+        </button>
+        <button type="button" data-original-title="Page settings">
+          <svg viewBox="0 0 10 10"><path d="M0 0z" /></svg>
+        </button>
+        <button type="button" aria-describedby="tip-add">
+          <svg viewBox="0 0 10 10"><path d="M0 0z" /></svg>
+        </button>
+        <button type="button">
+          <svg viewBox="0 0 10 10">
+            <title>Mobile preview</title>
+            <path d="M0 0z" />
+          </svg>
+        </button>
+        <button type="button" data-testid="history-btn">
+          <svg viewBox="0 0 10 10"><path d="M0 0z" /></svg>
+        </button>
+        <button type="button"><i class="fa-solid fa-plus"></i></button>
+        <button type="button"><span class="mdi mdi-content-copy"></span></button>
+        <button type="button"><span class="material-icons">layers</span></button>
+        <button type="button"><i class="icon-eye"></i></button>
+        <button type="button"><i class="ri-code-s-slash-line"></i></button>
+        <button type="button"><i class="bi bi-gear-fill"></i></button>
+        <button type="button">
+          <svg viewBox="0 0 10 10"><path d="M0 0z" /></svg>
+        </button>
+        <button type="button" id="saved">Saved 0s ago</button>
+        <input id="draft" style="display: none" />
+      </div>
+      <div id="tip-add" role="tooltip" hidden>Add element</div>
+      <iframe title="canvas" src="funnel-canvas.html" style="left: 0; top: 40px; width: 900px; height: 600px"></iframe>
+    </template>
+    <script>
+      const mode = location.search === '?top' ? 'top' : 'builder';
+      document.body.append(document.getElementById(mode).content.cloneNode(true));
+      window.clicks = [];
+      document.addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        if (button) window.clicks.push(button.getAttribute('title') || button.dataset.tooltip || button.id || '?');
+      });
+      if (mode === 'builder') {
+        let tick = 0;
+        setInterval(() => {
+          tick++;
+          document.getElementById('saved').textContent = `Saved ${tick}s ago`;
+          document.getElementById('draft').value = String(tick);
+        }, 30);
+      }
+    </script>
+  </body>
+</html>

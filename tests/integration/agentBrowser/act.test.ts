@@ -481,10 +481,16 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     expect(await evaluate(child, 'window.clicks')).toBe(0);
   });
 
-  it('a stale page (DOM replaced between observe and act) returns stale and performs no input', async () => {
+  it('a stale page (DOM replaced by other controls between observe and act) returns stale and performs no input', async () => {
     const session = await chrome.openPage(`${servers.originA}/child.html`);
     const obs = await observePage(chrome.conn, session);
-    await evaluate(session, 'document.body.replaceWith(document.body.cloneNode(true))');
+    // Same places, other controls: an equivalent replacement would be re-found, a renamed one never is.
+    await evaluate(
+      session,
+      `const body = document.body.cloneNode(true);
+      body.querySelector('#publish').textContent = 'Unpublish';
+      document.body.replaceWith(body)`
+    );
     const { ctx, reported } = contextFor(session);
 
     let outcome: Awaited<ReturnType<typeof act>> | undefined;

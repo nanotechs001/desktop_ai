@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   MAX_ROWS,
   MAX_TEXT_LENGTH,
+  controlsChanged,
   formatObservation,
   mergeSnapshots,
   parseSnapshot,
@@ -118,6 +119,40 @@ describe('mergeSnapshots', () => {
     expect(parseSnapshot({ actions: 'nope' })).toBeNull();
     const parsed = snapshot([action(1, 'ok'), { node: 'x', role: 'button' }, action(2, 'also ok', { rect: null })]);
     expect(parsed.actions.map((a) => a.node)).toEqual([1]);
+  });
+});
+
+describe('controlsChanged', () => {
+  const control = (node: number, label: string, x: number, y = 20) => ({
+    node,
+    role: 'button',
+    label,
+    rect: { x, y, w: 80, h: 30 },
+  });
+  const baseline = (...controls: ReturnType<typeof control>[]) => ({ pageKey: 'pk', guards: {}, controls });
+  const target = { x: 10, y: 20, w: 80, h: 30 };
+  const before = baseline(control(1, 'Undo', 10), control(2, 'Saved 1s ago', 900));
+
+  it('ignores text changes and equivalent replacements, near the target or not', () => {
+    expect(controlsChanged(before, baseline(control(1, 'Undo', 10), control(2, 'Saved 2s ago', 900)), target)).toBe(
+      false
+    );
+    expect(controlsChanged(before, baseline(control(7, 'Undo', 14), control(2, 'Saved 1s ago', 900)), null)).toBe(
+      false
+    );
+  });
+
+  it('counts controls added or removed near the target, or anywhere when there is none', () => {
+    const added = (x: number) =>
+      baseline(control(1, 'Undo', 10), control(2, 'Saved 1s ago', 900), control(3, 'New', x));
+    expect(controlsChanged(before, added(100), target)).toBe(true);
+    expect(controlsChanged(before, added(600), target)).toBe(false);
+    expect(controlsChanged(before, added(600), null)).toBe(true);
+    expect(controlsChanged(before, baseline(control(2, 'Saved 1s ago', 900)), target)).toBe(true);
+  });
+
+  it('counts a new document or url', () => {
+    expect(controlsChanged(before, { ...before, pageKey: 'other' }, target)).toBe(true);
   });
 });
 

@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Canvas</title>
+    <!-- The page being edited: plain divs selected with a click (delegated handler), as in a funnel builder canvas. -->
+    <style>
+      body {
+        margin: 0;
+        font: 14px sans-serif;
+      }
+      .c-section {
+        margin: 8px;
+        padding: 16px;
+        border: 1px dashed #999;
+        cursor: pointer;
+      }
+      .c-row {
+        display: flex;
+        gap: 8px;
+      }
+      .c-column {
+        flex: 1;
+        padding: 4px;
+      }
+      .c-element {
+        padding: 4px;
+      }
+      .c-element.hover {
+        outline: 2px solid blue;
+      }
+      h1,
+      p {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="c-section" data-section-id="hero" data-title="Hero">
+      <div class="c-row" data-row-id="r1">
+        <div class="c-column" data-column-id="c1">
+          <div class="c-element" data-element-id="headline"><h1>TEST</h1></div>
+          <div class="c-element" data-element-id="sub"><p>Welcome to TEST</p></div>
+          <div class="c-element" data-element-id="cta"><button type="button">Buy now</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="c-section" data-section-id="footer">
+      <div class="c-row" data-row-id="r2">
+        <div class="c-column" data-column-id="c2">
+          <div class="c-element" data-element-id="note"><p>Footer note</p></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.selected = [];
+      document.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-element-id],[data-section-id]');
+        if (el) window.selected.push(el.dataset.elementId || el.dataset.sectionId);
+      });
+      document.addEventListener('mouseover', (e) => {
+        for (const old of document.querySelectorAll('.hover')) old.classList.remove('hover');
+        e.target.closest('.c-element')?.classList.add('hover');
+      });
+    </script>
+  </body>
+</html>
