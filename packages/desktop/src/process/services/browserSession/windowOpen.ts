@@ -14,7 +14,8 @@ import { isSafeUrl } from './urlSafety';
 /** What to do with a page's `window.open` / `target=_blank` request. */
 export type WindowOpenDecision =
   | { kind: 'tab'; url: string; background: boolean }
-  | { kind: 'popup'; url: string; width: number; height: number }
+  /** `tabOnceLanded`: a page's empty window that would have been a tab; it moves into one once it lands (see {@link handOffOnceLanded}). */
+  | { kind: 'popup'; url: string; width: number; height: number; tabOnceLanded?: true }
   | { kind: 'deny' };
 
 type WindowOpenDetails = { url: string; disposition: string; features: string; frameName: string };
@@ -145,6 +146,9 @@ export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecisi
   if (!isSafeUrl(url)) return { kind: 'deny' };
   if (disposition === 'foreground-tab' || disposition === 'background-tab') {
     const named = details.frameName !== '' && !RESERVED_TARGETS.has(details.frameName.toLowerCase());
+    // An unnamed empty window.open: the page writes into it or points it somewhere next (ViziPlatform's site login),
+    // so it needs the window back, which a tab (denied) never gives it. It becomes a tab once it lands.
+    if (!named && url === 'about:blank') return { kind: 'popup', url, ...DEFAULT_POPUP_SIZE, tabOnceLanded: true };
     if (!named) return { kind: 'tab', url, background: disposition === 'background-tab' };
     return { kind: 'popup', url, ...DEFAULT_POPUP_SIZE };
   }
@@ -158,7 +162,8 @@ export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecisi
     requestedWidth !== undefined ||
     requestedHeight !== undefined ||
     (popupFlag !== undefined && !POPUP_OFF_VALUES.has(popupFlag));
-  if (!wantsPopup) return { kind: 'tab', url, background: false };
+  if (!wantsPopup && url !== 'about:blank') return { kind: 'tab', url, background: false };
+  if (!wantsPopup) return { kind: 'popup', url, ...DEFAULT_POPUP_SIZE, tabOnceLanded: true };
 
   return {
     kind: 'popup',
@@ -166,6 +171,33 @@ export function classifyWindowOpen(details: WindowOpenDetails): WindowOpenDecisi
     width: requestedWidth ?? DEFAULT_POPUP_SIZE.width,
     height: requestedHeight ?? DEFAULT_POPUP_SIZE.height,
   };
+}
+
+/**
+ * Moves a page's empty popup into a tab once it lands on a page other than the first it was pointed at: ViziPlatform's
+ * site login opens one, points it at a one-time login link, and the link redirects to the site's admin. The tab opens
+ * the landing page in the same profile, so the cookies the login set come along, and the one-time link itself is
+ * never requested again. A popup whose first page is where it stays remains a popup.
+ */
+export function handOffOnceLanded(
+  popup: Pick<Electron.WebContents, 'on' | 'getURL'>,
+  openTab: (url: string) => void,
+  close: () => void
+): void {
+  let first: string | null = null;
+  let handedOff = false;
+  popup.on('did-start-navigation', (details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>) => {
+    if (first === null && details.isMainFrame && !details.isSameDocument && /^https?:/i.test(details.url)) {
+      first = details.url;
+    }
+  });
+  popup.on('did-finish-load', () => {
+    const url = popup.getURL();
+    if (handedOff || first === null || url === first || !/^https?:/i.test(url) || !isSafeUrl(url)) return;
+    handedOff = true;
+    openTab(url);
+    close();
+  });
 }
 
 /** A popup's window title: the page title, then the page origin, so a sign-in popup shows where it is. */
@@ -237,21 +269,25 @@ export function installWindowOpenHandler(
   const openerId = contents.id;
   const partition = partitionOfSession(contents.session);
   const profile = profileOfSession(contents.session) ?? undefined;
+  /** Asks the renderer for a tab in this profile, as opened by `fromId` (its agent owner, if any, owns the tab too). */
+  const requestTab = (fromId: number, url: string, background: boolean): void => {
+    if (!limiter.tryOpenTab(fromId, Date.now())) {
+      console.warn(`[BrowserSession] blocked a tab: too many opened by webContents ${fromId}`);
+      return;
+    }
+    const extra = runHook('tabRequested', () => hooks.tabRequested?.(fromId, url, partition));
+    const conversationId = extra?.conversationId;
+    ipcBridge.browser.openTabRequested.emit({
+      url,
+      background,
+      profile,
+      ...(conversationId ? { conversationId } : {}),
+    });
+  };
   contents.setWindowOpenHandler((details) => {
     const decision = classifyWindowOpen(details);
     if (decision.kind === 'tab') {
-      if (limiter.tryOpenTab(openerId, Date.now())) {
-        const extra = runHook('tabRequested', () => hooks.tabRequested?.(openerId, decision.url, partition));
-        const conversationId = extra?.conversationId;
-        ipcBridge.browser.openTabRequested.emit({
-          url: decision.url,
-          background: decision.background,
-          profile,
-          ...(conversationId ? { conversationId } : {}),
-        });
-      } else {
-        console.warn(`[BrowserSession] blocked a tab: too many opened by webContents ${openerId}`);
-      }
+      requestTab(openerId, decision.url, decision.background);
       return { action: 'deny' };
     }
     if (decision.kind === 'popup') {
@@ -284,6 +320,14 @@ export function installWindowOpenHandler(
             popup.setTitle(popupTitle(title, popup.webContents.getURL()));
           });
           runHook('popupCreated', () => hooks.popupCreated?.(openerId, popup.webContents));
+          if (decision.tabOnceLanded) {
+            const popupId = popup.webContents.id;
+            handOffOnceLanded(
+              popup.webContents,
+              (url) => requestTab(popupId, url, false),
+              () => popup.close()
+            );
+          }
           return popup.webContents;
         },
       };

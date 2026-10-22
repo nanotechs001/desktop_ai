@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 /**
  * @license
  * Copyright 2025 AionUi (aionui.com)
@@ -58,6 +59,7 @@ import {
   classifyWindowOpen,
   installBeforeUnloadDialog,
   popupTitle,
+  handOffOnceLanded,
   installWindowOpenHandler,
   popupWindowOptions,
   setWindowOpenHooks,
@@ -68,6 +70,9 @@ const PERSONAL = 'persist:aionui-browser';
 /** Browser contents always live in a set-up browser session; this one is Personal's. */
 const personalSession = {} as Electron.Session;
 rememberBrowserSession(PERSONAL, personalSession);
+
+/** The size a popup gets when the page asks for none. */
+const DEFAULT_SIZE = { width: 600, height: 700 };
 
 const classify = (url: string, disposition: string, features = '', frameName = '') =>
   classifyWindowOpen({ url, disposition, features, frameName });
@@ -199,6 +204,20 @@ describe('classifyWindowOpen', () => {
 
   it.each(['width=abc', 'width=0,height=-5', 'width='])('ignores unusable size "%s"', (features) => {
     expect(classify('https://a.test/', 'default', features)).toMatchObject({ kind: 'tab' });
+  });
+
+  // ViziPlatform's site login runs window.open("", "_blank"), writes a loading page into it, then points it at a
+  // one-time login link; as a tab the page got null ("Popup blocked!") and the new tab stayed blank.
+  it('an empty window.open (about:blank, no name or features) is a popup the page can script, not a tab', () => {
+    const handedOff = { kind: 'popup', url: 'about:blank', ...DEFAULT_SIZE, tabOnceLanded: true };
+    expect(classify('about:blank', 'foreground-tab')).toEqual(handedOff);
+    expect(classify('about:blank', 'background-tab')).toEqual(handedOff);
+    expect(classify('about:blank', 'default')).toEqual(handedOff);
+  });
+
+  it('a sized or named about:blank stays a plain popup (sign-in popups talk to their opener)', () => {
+    expect(classify('about:blank', 'new-window', 'width=500,height=600')).not.toHaveProperty('tabOnceLanded');
+    expect(classify('about:blank', 'foreground-tab', '', 'oauth')).not.toHaveProperty('tabOnceLanded');
   });
 
   it('about:blank with features is a popup (OAuth flows open about:blank then navigate)', () => {
@@ -957,5 +976,40 @@ describe('popup window title', () => {
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(popup.setTitle).toHaveBeenCalledWith('Your bank — https://bank.test — https://login.example.com');
+  });
+});
+
+describe('handOffOnceLanded', () => {
+  const popupAt = () => {
+    const popup = Object.assign(new EventEmitter(), { url: 'about:blank', getURL: () => popup.url });
+    return popup;
+  };
+  const start = (popup: ReturnType<typeof popupAt>, url: string) => {
+    popup.url = url;
+    popup.emit('did-start-navigation', { url, isMainFrame: true, isSameDocument: false });
+  };
+
+  it('opens the landing page in a tab and closes the popup once a one-time link has redirected', () => {
+    const popup = popupAt();
+    const openTab = vi.fn();
+    const close = vi.fn();
+    handOffOnceLanded(popup as never, openTab, close);
+    start(popup, 'https://site.test/login?token=one-time');
+    popup.url = 'https://site.test/wp-admin/';
+    popup.emit('did-finish-load');
+    popup.emit('did-finish-load');
+    expect(openTab).toHaveBeenCalledTimes(1);
+    expect(openTab).toHaveBeenCalledWith('https://site.test/wp-admin/');
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a popup that stays on the first page it was pointed at, so that link is never loaded again', () => {
+    const popup = popupAt();
+    const openTab = vi.fn();
+    handOffOnceLanded(popup as never, openTab, vi.fn());
+    popup.emit('did-finish-load');
+    start(popup, 'https://site.test/login?token=one-time');
+    popup.emit('did-finish-load');
+    expect(openTab).not.toHaveBeenCalled();
   });
 });
