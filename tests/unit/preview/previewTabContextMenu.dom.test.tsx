@@ -391,11 +391,11 @@ describe('preview tab context menu — pinning', () => {
     expect(screen.queryByText('preview.unpinTab')).toBeNull();
   });
 
-  it('shows a pin icon in a pinned tab only', () => {
+  const renderStrip = (tabs: PreviewTab[]) =>
     render(
       <PreviewTabs
-        tabs={BROWSER_TABS}
-        activeTabId='p'
+        tabs={tabs}
+        activeTabId={tabs[0].id}
         tabFadeState={{ left: false, right: false }}
         tabsContainerRef={React.createRef<HTMLDivElement>() as never}
         onSwitchTab={vi.fn()}
@@ -404,10 +404,33 @@ describe('preview tab context menu — pinning', () => {
       />
     );
 
-    expect(screen.getAllByTitle('preview.browser.pinnedTooltip')).toHaveLength(1);
-    expect(
-      screen.getByText('Pinned page').parentElement?.querySelector('[title="preview.browser.pinnedTooltip"]')
-    ).toBeTruthy();
+  it('draws a pinned tab small, like Chrome: icon only, full title on hover, no close button', () => {
+    renderStrip(BROWSER_TABS);
+
+    const pinned = screen.getByTestId('preview-tab-p');
+    expect(pinned.getAttribute('title')).toBe('Pinned page');
+    expect(screen.queryByText('Pinned page')).toBeNull();
+    expect(pinned.style.width).toBe('36px');
+    expect(pinned.querySelector('[data-testid="preview-tab-close"]')).toBeNull();
+    // Without a site icon the pin stands in, so the tab is never blank.
+    expect(pinned.querySelector('[title="preview.browser.pinnedTooltip"]')).toBeTruthy();
+    expect(screen.getByTestId('preview-tab-u').querySelector('[data-testid="preview-tab-close"]')).toBeTruthy();
+  });
+
+  it('shares the strip between unpinned tabs: they shrink together between a minimum and a maximum width', () => {
+    renderStrip(BROWSER_TABS);
+
+    const tab = screen.getByTestId('preview-tab-u');
+    expect([tab.style.flexGrow, tab.style.flexShrink, tab.style.flexBasis]).toEqual(['1', '1', '0px']);
+    expect(tab.style.minWidth).toBe('56px');
+    expect(tab.style.maxWidth).toBe('180px');
+  });
+
+  it('shows no profile robot badge on tabs', () => {
+    renderStrip([{ id: 'b', title: 'Bot page', canPin: true, profile: { kind: 'agent', agentId: 'bot-1' } }]);
+
+    expect(screen.getByText('Bot page')).toBeTruthy();
+    expect(screen.queryByTestId('browser-profile-badge')).toBeNull();
   });
 });
 

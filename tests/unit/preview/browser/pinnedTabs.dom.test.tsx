@@ -185,3 +185,20 @@ describe('the pin is stored with the tab', () => {
     expect(stored().find((t) => t.id === id)?.metadata?.pinned).toBe(false);
   });
 });
+
+describe('pinned tabs sit at the start of the strip, like Chrome', () => {
+  it('pinning moves a tab to the end of the pinned group; unpinning moves it just after it', () => {
+    mount();
+    enter('/s/order');
+    open('https://a.test/');
+    const b = open('https://b.test/');
+    const c = open('https://c.test/');
+
+    pin(c);
+    expect(browserUrls()).toEqual(['https://c.test/', 'https://a.test/', 'https://b.test/']);
+    pin(b);
+    expect(browserUrls()).toEqual(['https://c.test/', 'https://b.test/', 'https://a.test/']);
+    pin(c, false);
+    expect(browserUrls()).toEqual(['https://b.test/', 'https://c.test/', 'https://a.test/']);
+  });
+});

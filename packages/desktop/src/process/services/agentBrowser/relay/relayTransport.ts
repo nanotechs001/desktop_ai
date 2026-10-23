@@ -36,7 +36,7 @@ export const DEFAULT_RELAY_LIMITS: RelayLimits = {
   maxQueuedBytesPerSocket: 32 * 1024 * 1024,
   maxBufferedBytes: 16 * 1024 * 1024,
   bufferedGraceMs: 5000,
-  maxTabsPerClient: 10,
+  maxTabsPerClient: 15,
   createTargetsPerWindow: 5,
   createTargetWindowMs: 10_000,
   maxPayloadBytes: 4 * 1024 * 1024,

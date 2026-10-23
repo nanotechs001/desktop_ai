@@ -12,7 +12,6 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import type { TabFadeState } from '../../hooks/useTabOverflow';
-import ProfileBadge from '../../browser/BrowserProfiles/ProfileBadge';
 
 /**
  * 单个 tab 的最大宽度。
@@ -29,6 +28,10 @@ import ProfileBadge from '../../browser/BrowserProfiles/ProfileBadge';
  * more tabs are there.
  */
 const MAX_TAB_WIDTH_PX = 180;
+/** Unpinned tabs shrink together down to this width (icon, a few letters, close) before the strip scrolls, like Chrome. */
+const MIN_TAB_WIDTH_PX = 56;
+/** A pinned tab is icon-only, like Chrome's. */
+const PINNED_TAB_WIDTH_PX = 36;
 
 /**
  * Tab 信息
@@ -231,8 +234,20 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
             tabs.map((tab) => (
               <div
                 key={tab.id}
-                className={`flex items-center gap-6px px-10px h-full cursor-pointer transition-colors flex-shrink-0 ${tab.id === activeTabId ? 'bg-bg-1 text-t-primary' : 'text-t-secondary hover:bg-bg-3'}`}
-                style={{ maxWidth: `${MAX_TAB_WIDTH_PX}px` }}
+                data-testid={`preview-tab-${tab.id}`}
+                title={tab.pinned ? tab.title : undefined}
+                className={`flex items-center gap-6px h-full cursor-pointer transition-colors ${tab.pinned ? 'justify-center flex-shrink-0' : 'px-10px'} ${tab.id === activeTabId ? 'bg-bg-1 text-t-primary' : 'text-t-secondary hover:bg-bg-3'}`}
+                style={
+                  tab.pinned
+                    ? { width: `${PINNED_TAB_WIDTH_PX}px` }
+                    : {
+                        flexGrow: 1,
+                        flexShrink: 1,
+                        flexBasis: 0,
+                        minWidth: `${MIN_TAB_WIDTH_PX}px`,
+                        maxWidth: `${MAX_TAB_WIDTH_PX}px`,
+                      }
+                }
                 onClick={() => onSwitchTab(tab.id)}
                 onContextMenu={(e) => onContextMenu(e, tab.id)}
                 // 中键关闭 / Middle-click to close.
@@ -261,12 +276,12 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                     min-w-0 is what makes truncation possible: a flex child defaults
                     to its content width and refuses to shrink below it. */}
                 <span className='text-12px flex items-center gap-4px min-w-0'>
-                  {tab.pinned && (
+                  {/* A pinned tab without a site icon shows the pin, so it is never blank. */}
+                  {tab.pinned && !tab.favicon && (
                     <span className='flex flex-shrink-0' title={t('preview.browser.pinnedTooltip')}>
                       <Pin theme='outline' size='12' fill={iconColors.secondary} />
                     </span>
                   )}
-                  {tab.profile && <ProfileBadge profile={tab.profile} size={12} />}
                   {/* 站点图标（浏览器 tab）/ Site icon (browser tabs) */}
                   {tab.favicon && (
                     <img
@@ -284,9 +299,11 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                       Only the title text shrinks and ellipsizes; icons and indicators
                       stay fully visible. The title attribute exposes the full text so
                       truncation never hides information. */}
-                  <span className='truncate' title={tab.title}>
-                    {tab.title}
-                  </span>
+                  {!tab.pinned && (
+                    <span className='truncate' title={tab.title}>
+                      {tab.title}
+                    </span>
+                  )}
                   {/* Agent 操作中指示器 / Agent activity indicator */}
                   {tab.agentActive && (
                     <span
@@ -310,15 +327,19 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                     24px hover box while the close icon was bare. Giving it the same kind
                     of box (16px — one step down from the plus's 24px since it lives inside
                     a tab) and trimming the glyph to 12px evens out their visual weight. */}
-                <span
-                  className='flex items-center justify-center w-16px h-16px rd-4px flex-shrink-0 hover:bg-bg-3 transition-colors'
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseTab(tab.id);
-                  }}
-                >
-                  <Close theme='outline' size='12' fill={iconColors.secondary} className='hover:fill-primary' />
-                </span>
+                {/* Like Chrome, a pinned tab has no close button (middle-click or the menu still close it). */}
+                {!tab.pinned && (
+                  <span
+                    data-testid='preview-tab-close'
+                    className='flex items-center justify-center w-16px h-16px rd-4px flex-shrink-0 hover:bg-bg-3 transition-colors'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseTab(tab.id);
+                    }}
+                  >
+                    <Close theme='outline' size='12' fill={iconColors.secondary} className='hover:fill-primary' />
+                  </span>
+                )}
               </div>
             ))
           ) : (

@@ -25,7 +25,7 @@ export const BROWSER_TAB_FALLBACK_TITLE = 'New Tab';
  * Cap on browser tabs: each tab is a separate webview process, so an unbounded
  * count would exhaust memory. Beyond this the user is asked to close old tabs.
  */
-export const MAX_BROWSER_TABS = 10;
+export const MAX_BROWSER_TABS = 15;
 
 /** 默认搜索引擎，地址栏输入非 URL 时使用 / Default search engine for non-URL input. */
 const SEARCH_URL_TEMPLATE = 'https://www.bing.com/search?q={query}';

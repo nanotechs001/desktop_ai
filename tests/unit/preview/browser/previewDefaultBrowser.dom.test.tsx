@@ -699,7 +699,7 @@ describe("the bot scope takes over its chats' stored tabs once", () => {
     expect(ctx.tabs.slice(0, 2).map((tab) => tab.id)).toEqual(['browser-new-0', 'browser-new-1']);
     // Not taken (over the cap, or the same address as a newer one): still stored where they were, never lost.
     expect(storedIdsOf('/ws/new')).toEqual([]);
-    expect(storedIdsOf('/ws/old')).toEqual(['browser-old-0', 'browser-old-9']);
+    expect(storedIdsOf('/ws/old')).toEqual(['browser-old-0', `browser-old-${MAX_BROWSER_TABS - 1}`]);
   });
 
   it('moves a live tab it takes into the bot scope: shown once, the same webview, and no longer stored in its old scope', () => {

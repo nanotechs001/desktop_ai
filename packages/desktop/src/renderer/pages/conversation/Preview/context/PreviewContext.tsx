@@ -646,6 +646,15 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
  * A browser tab's metadata for `profile`; none for Personal, the default, which is not stored. A regular
  * chat's temporary profile must be kept: dropping it would reopen the tab in the user's Personal session.
  */
+/** Like Chrome: a tab whose pin changed moves to the end of the pinned group, which is also just after it once unpinned. */
+const movePinChanged = (tabs: PreviewTab[], tabId: string): PreviewTab[] => {
+  const moved = tabs.find((tab) => tab.id === tabId);
+  if (!moved) return tabs;
+  const rest = tabs.filter((tab) => tab.id !== tabId);
+  const pinnedCount = rest.filter((tab) => tab.metadata?.pinned === true).length;
+  return [...rest.slice(0, pinnedCount), moved, ...rest.slice(pinnedCount)];
+};
+
 const profileMetadata = (profile?: BrowserTabProfile): PreviewMetadata | undefined =>
   profile?.kind === 'agent'
     ? { profile: { kind: 'agent', agentId: profile.agentId } }
@@ -1755,7 +1764,10 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         const entry = backgroundRef.current[parked];
         setBackground(backgroundRef.current.with(parked, { ...entry, tab: patchTab(entry.tab, patch) }));
       }
-      setTabs((prevTabs) => prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab)));
+      setTabs((prevTabs) => {
+        const patched = prevTabs.map((tab) => (tab.id === tabId ? patchTab(tab, patch) : tab));
+        return patch.metadata && 'pinned' in patch.metadata ? movePinChanged(patched, tabId) : patched;
+      });
     },
     [setBackground]
   );

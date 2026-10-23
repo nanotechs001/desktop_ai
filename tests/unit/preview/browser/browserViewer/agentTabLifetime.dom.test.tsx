@@ -85,6 +85,7 @@ vi.mock('@/renderer/pages/conversation/Preview/browser/BrowserViewer', async () 
 
 import BrowserTabLayer, { BrowserSlot } from '@/renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import { MAX_BROWSER_TABS } from '@/renderer/pages/conversation/Preview/browser/constants';
+import { MAX_LIVE_BROWSER_TABS } from '@/renderer/pages/conversation/Preview/context/backgroundTabs';
 import {
   PreviewProvider,
   usePreviewContext,
@@ -320,7 +321,10 @@ describe('agent browser tabs outlive the panel', () => {
     const agentTab = tabIdOf('https://agent.test/') as string;
     const oldestUserTab = tabIdOf('https://a.test/1') as string;
     enterScope('proj-b');
-    for (let i = 0; i < MAX_BROWSER_TABS; i += 1) act(() => ctx.openBrowserTab(`https://b.test/${i}`));
+    // Fill up to exactly the live-webview cap across both scopes.
+    for (let i = 0; i < MAX_LIVE_BROWSER_TABS - MAX_BROWSER_TABS; i += 1) {
+      act(() => ctx.openBrowserTab(`https://b.test/${i}`));
+    }
     enterScope('proj-c');
     expect(h.unmounted).toEqual([]); // 20 live: at the cap, not over it
 
