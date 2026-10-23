@@ -649,7 +649,7 @@ describe("the bot scope takes over its chats' stored tabs once", () => {
     );
   const storedIdsOf = (scope: string) => storedScope(scope).tabs.map((tab: { id: string }) => tab.id);
 
-  it('merges the bot-profile tabs of every stored scope, de-duplicated, and leaves the rest where they are', () => {
+  it('merges the bot-profile tabs of every stored scope, de-duplicated, and leaves the rest where they are (a Personal tab is dropped)', () => {
     store(
       '/ws/c1',
       [
@@ -674,7 +674,8 @@ describe("the bot scope takes over its chats' stored tabs once", () => {
 
     expect(ctx.tabs.map((tab) => tab.content)).toEqual(['https://a.test/', 'https://b.test/']);
     expect(ctx.isOpen).toBe(true);
-    expect(storedIdsOf('/ws/c1')).toEqual(['browser-2-p', 'markdown-3']);
+    // The Personal tab is gone (there is no Personal profile any more); the document stays.
+    expect(storedIdsOf('/ws/c1')).toEqual(['markdown-3']);
     // The older copy of the same address is not taken, so it stays where it was.
     expect(storedIdsOf('/ws/c2')).toEqual(['browser-4-a', 'browser-6-x']);
   });

@@ -21,6 +21,7 @@
     "watchTab": "見る",
     "chatWithRobot": "デスクトップでチャット",
     "showAllRobots": "すべて表示",
+    "manageBots": "VA ボットを管理",
     "state": {
       "idle": "待機中",
       "listening": "聞き取り中…",

@@ -3,9 +3,9 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * The titlebar VA Bots button: a click opens the Agents dashboard; hovering (or focusing) it lists every VA Bot robot,
- * with Watch (its chat and browser in the main window) and Chat (its popup on the desktop). Hidden robots can also be
- * shown again by opening the bot's chat.
+ * The titlebar VA Bots button: it names the bot whose browser is on screen, and a click opens its list: every VA Bot
+ * robot, with Watch (its chat and browser in the main window) and Chat (its popup on the desktop), then Manage VA Bots
+ * (the Agents dashboard). Hidden robots can also be shown again by opening the bot's chat.
  */
 
 import React from 'react';
@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   openPopup: vi.fn((_payload: unknown) => Promise.resolve(true)),
   setChatLocation: vi.fn((_payload: unknown) => Promise.resolve()),
   navigate: vi.fn(),
+  activeBotId: null as string | null,
+  assistants: [] as Array<{ id: string; name: string; source: string }>,
   openDashboard: vi.fn(),
   revealBrowserFor: vi.fn(),
   conversations: {} as Record<
@@ -33,6 +35,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    assistants: { list: { invoke: () => Promise.resolve(h.assistants) } },
     agentWidget: {
       getSettings: { invoke: () => Promise.resolve({ enabled: true }) },
       settingsChanged: { on: () => () => {} },
@@ -63,7 +66,7 @@ vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
 }));
 
 vi.mock('@renderer/pages/conversation/Preview', () => ({
-  usePreviewContext: () => ({ revealBrowserFor: h.revealBrowserFor }),
+  usePreviewContext: () => ({ revealBrowserFor: h.revealBrowserFor, activeBotId: h.activeBotId }),
 }));
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => h.navigate }));
@@ -83,15 +86,17 @@ const renderButton = () =>
     </SWRConfig>
   );
 
-/** Hover the VA Bots button and wait for the robot rows. */
+/** Click the VA Bots button and wait for the robot rows. */
 const openList = async () => {
-  fireEvent.mouseEnter(await screen.findByTestId('titlebar-assistants'));
+  fireEvent.click(await screen.findByTestId('titlebar-assistants'));
   await screen.findAllByTestId(/^robot-row-/);
 };
 
 beforeEach(() => {
   h.robots = [];
   h.hidden = [];
+  h.activeBotId = null;
+  h.assistants = [{ id: 'bot-1', name: 'Research Bot', source: 'user' }];
   for (const fn of [h.ensure, h.openPopup, h.setChatLocation, h.navigate, h.revealBrowserFor, h.openDashboard])
     fn.mockClear();
   h.conversations = {
@@ -104,23 +109,32 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('RobotListButton', () => {
-  it('is the plain VA Bots button while there is no robot: a click opens the dashboard, hover lists nothing', async () => {
+  it('a click opens the list, not the dashboard; Manage VA Bots opens the dashboard, with or without robots', async () => {
     renderButton();
-    const button = await screen.findByLabelText('settings.assistants');
-    fireEvent.mouseEnter(button);
-    fireEvent.click(button);
-    await act(async () => {});
+    fireEvent.click(await screen.findByTestId('titlebar-assistants'));
+    fireEvent.click(await screen.findByTestId('robots-manage'));
     expect(h.openDashboard).toHaveBeenCalledTimes(1);
     expect(screen.queryAllByTestId(/^robot-row-/)).toHaveLength(0);
   });
 
-  it('clicking the button opens the dashboard even while robots are listed', async () => {
+  it('clicking the button lists the robots and does not open the dashboard', async () => {
     h.robots = [{ conversation_id: 'c1', agent_id: 'bot-1', hidden: false }];
     renderButton();
     await openList();
-    fireEvent.click(screen.getByTestId('titlebar-assistants'));
-    expect(h.openDashboard).toHaveBeenCalledTimes(1);
+    expect(h.openDashboard).not.toHaveBeenCalled();
     expect(h.navigate).not.toHaveBeenCalled();
+  });
+
+  it('names the bot whose browser is on screen beside the icon, and nothing outside bot views', async () => {
+    h.activeBotId = 'bot-1';
+    const { unmount } = renderButton();
+    expect((await screen.findByTestId('titlebar-active-bot')).textContent).toBe('Research Bot');
+    unmount();
+    h.activeBotId = null;
+    renderButton();
+    await screen.findByTestId('titlebar-assistants');
+    await act(async () => {});
+    expect(screen.queryByTestId('titlebar-active-bot')).toBeNull();
   });
 
   it('shows no hidden badge while every robot is on the desktop', async () => {
@@ -195,13 +209,6 @@ describe('RobotListButton', () => {
     expect(h.navigate).not.toHaveBeenCalled();
   });
 
-  it('opens on keyboard focus too, since a click navigates', async () => {
-    h.robots = [{ conversation_id: 'c1', agent_id: 'bot-1', hidden: false }];
-    renderButton();
-    fireEvent.focus(await screen.findByTestId('titlebar-assistants'));
-    expect(await screen.findByTestId('robot-row-c1')).toBeTruthy();
-  });
-
   it('Enter on a row button acts only through that button, never as a row click', async () => {
     h.robots = [{ conversation_id: 'c1', agent_id: 'bot-1', hidden: false }];
     renderButton();
@@ -235,8 +242,8 @@ describe('RobotListButton', () => {
     await screen.findByTestId('titlebar-assistants');
     act(() => h.robotsListener?.([]));
     await waitFor(() => expect(screen.queryAllByTestId(/^robot-row-/)).toHaveLength(0));
-    fireEvent.mouseEnter(screen.getByLabelText('settings.assistants'));
-    await act(async () => {});
+    fireEvent.click(screen.getByTestId('titlebar-assistants'));
+    expect(await screen.findByTestId('robots-manage')).toBeTruthy();
     expect(screen.queryAllByTestId(/^robot-row-/)).toHaveLength(0);
   });
 });

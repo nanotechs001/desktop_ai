@@ -21,6 +21,7 @@
     "watchTab": "İzle",
     "chatWithRobot": "Masaüstünde sohbet et",
     "showAllRobots": "Tümünü göster",
+    "manageBots": "VA botlarını yönet",
     "state": {
       "idle": "Hazır",
       "listening": "Dinliyor…",

@@ -189,11 +189,6 @@ interface PreviewTabsProps {
    * the plus button never appears in a document-only panel.
    */
   onNewBrowserTab?: () => void;
-
-  /**
-   * Shown next to the new-tab plus: the menu that opens a new tab in a chosen browser profile
-   */
-  newTabMenu?: React.ReactNode;
 }
 
 /**
@@ -216,7 +211,6 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   onContextMenu,
   onClosePanel,
   onNewBrowserTab,
-  newTabMenu,
   isMaximized,
   chatToggle,
   isMobile,
@@ -341,7 +335,6 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
               <Plus theme='outline' size='14' fill={iconColors.secondary} />
             </div>
           )}
-          {onNewBrowserTab && newTabMenu}
         </div>
 
         {/* 面板操作按钮：最大化 / 收起 / Panel actions: maximize / collapse */}

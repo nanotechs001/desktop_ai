@@ -172,6 +172,7 @@ describe('only the main window owns browser tab state', () => {
       content_type: 'browser',
       title: url,
       isDirty: false,
+      metadata: { profile: { kind: 'agent', agentId: 'aion-default-agent' } },
     });
     const user = tab(`browser-${at - 9000}-user`, 'https://user.test/');
     const copies = [0, 4, 7].map((offset) => tab(`browser-${at + offset}-c${offset}`, URL_A));

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import { ipcBridge } from '@/common';
 import { downloadFileFromPath, downloadFileFromRef, downloadTextContent } from '@/renderer/utils/file/download';
 import { formatFileSize } from '@/renderer/services/FileService';
@@ -44,7 +45,6 @@ import PptViewer from '../viewers/PptViewer';
 import CodeEditor from '../editors/CodeEditor';
 import URLViewer from '../viewers/URLViewer';
 import { BrowserSlot } from '../../browser/BrowserTabLayer';
-import ProfileSwitcher from '../../browser/BrowserProfiles/ProfileSwitcher';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import { MAX_BROWSER_TABS } from '../../browser/constants';
 import {
@@ -69,7 +69,8 @@ import { useTranslation } from 'react-i18next';
 import './preview.css';
 
 /** A browser tab with no profile in its metadata lives in Personal. */
-const PERSONAL_PROFILE: BrowserTabProfile = { kind: 'personal' };
+/** A browser tab's profile when none is stored: the default Agent's (there is no Personal profile). */
+const FALLBACK_PROFILE: BrowserTabProfile = { kind: 'agent', agentId: DEFAULT_AGENT_ID };
 
 /**
  * 预览面板主组件
@@ -118,7 +119,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
     tabsWithUpdate,
     clearTabUpdate,
     addDomSnippet,
-    openBrowserTab,
+    openNewBrowserTab,
     browserTabLimitHitAt,
     persistQuotaExceededAt,
   } = usePreviewContext();
@@ -279,7 +280,8 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
   }, []);
 
   // 新建浏览器 tab（tab 栏加号）/ New browser tab (plus button in the tab bar)
-  const handleNewBrowserTab = useCallback(() => openBrowserTab(), [openBrowserTab]);
+  // + opens a tab for the browser on screen: its bot's profile, else the default Agent's (no profile menu).
+  const handleNewBrowserTab = useCallback(() => openNewBrowserTab(), [openNewBrowserTab]);
 
   /**
    * 浏览器 tab 达上限时提示用户。上限触达会复用最旧的 tab，如果不说一声，
@@ -1226,7 +1228,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
       isDirty: tab.isDirty,
       favicon: tab.content_type === 'browser' ? tab.metadata?.favicon : undefined,
       agentActive: tab.content_type === 'browser' ? tab.metadata?.agentActive : undefined,
-      profile: tab.content_type === 'browser' ? (tab.metadata?.profile ?? PERSONAL_PROFILE) : undefined,
+      profile: tab.content_type === 'browser' ? (tab.metadata?.profile ?? FALLBACK_PROFILE) : undefined,
       canPin: tab.content_type === 'browser',
       pinned: tab.content_type === 'browser' && tab.metadata?.pinned === true,
       canCopyPath: canCopyAbsolutePath(paths.absolute, isElectronDesktop()),
@@ -1283,7 +1285,6 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
           // hidden only while the panel is empty, so the plus never appears alone.
           // Only the Electron desktop can show a new <webview> tab; the WebUI's browser tab is the live view.
           onNewBrowserTab={isElectronDesktop() && previewTabs.length > 0 ? handleNewBrowserTab : undefined}
-          newTabMenu={<ProfileSwitcher onOpen={(profile) => openBrowserTab(undefined, profile)} />}
         />
 
         {/* 工具栏（URL / 浏览器 类型不显示工具栏，因为不需要下载/编辑等功能）

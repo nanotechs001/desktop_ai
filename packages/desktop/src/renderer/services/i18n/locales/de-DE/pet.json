@@ -21,6 +21,7 @@
     "watchTab": "Ansehen",
     "chatWithRobot": "Auf dem Desktop chatten",
     "showAllRobots": "Alle anzeigen",
+    "manageBots": "VA-Bots verwalten",
     "state": {
       "idle": "Bereit",
       "listening": "Hört zu…",

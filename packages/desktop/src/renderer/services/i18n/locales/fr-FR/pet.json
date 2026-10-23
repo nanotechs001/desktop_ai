@@ -21,6 +21,7 @@
     "watchTab": "Regarder",
     "chatWithRobot": "Discuter sur le bureau",
     "showAllRobots": "Tout afficher",
+    "manageBots": "Gérer les bots VA",
     "state": {
       "idle": "Prêt",
       "listening": "À l’écoute…",

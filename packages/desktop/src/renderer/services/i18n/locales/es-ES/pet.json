@@ -21,6 +21,7 @@
     "watchTab": "Ver",
     "chatWithRobot": "Chatear en el escritorio",
     "showAllRobots": "Mostrar todos",
+    "manageBots": "Gestionar bots VA",
     "state": {
       "idle": "Listo",
       "listening": "Escuchando…",

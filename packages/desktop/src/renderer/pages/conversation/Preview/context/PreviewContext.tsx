@@ -32,7 +32,7 @@ import {
   type PreviewScopeKey,
 } from './previewScope';
 import { configService } from '@/common/config/configService';
-import { DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
+import { DEFAULT_AGENT_ID, DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
 import { dropOpenBurstDuplicates } from './openBurstDuplicates';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import {
@@ -183,6 +183,10 @@ export interface PreviewContextValue {
    * In a robot's widget window (no visible browser pane) an address opens in the main window's pane instead.
    */
   openBrowserTab: (url?: string, profile?: BrowserTabProfile) => void;
+  /** The tab bar's +: a blank tab for the browser on screen, in its bot's profile, else the default Agent's. */
+  openNewBrowserTab: () => void;
+  /** The bot whose browser view is on screen (a VA Bot scope); null in any other view. */
+  activeBotId: string | null;
   /** Hide the panel without recording a user choice (route changes, "new chat"). */
   closePreview: () => void;
   /** Hide the panel because the user closed it: the scope then stays closed until a tab is opened again. */
@@ -527,7 +531,10 @@ const loadScopeState = (scope: string): PersistedScopeState => {
       userClosed?: unknown;
     };
     let activeTabId = typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null;
-    const tabs = dropOpenBurstDuplicates(parsePersistedTabs(parsed.tabs), activeTabId);
+    // Personal tabs saved before Personal was removed are dropped, not restored.
+    const tabs = dropOpenBurstDuplicates(parsePersistedTabs(parsed.tabs), activeTabId).filter(
+      (tab) => !isPersonalTab(tab)
+    );
     if (activeTabId && !tabs.some((tab) => tab.id === activeTabId)) activeTabId = tabs[0]?.id || null;
     return {
       isOpen: parsed.isOpen === true && tabs.length > 0,
@@ -650,6 +657,15 @@ const profileMetadata = (profile?: BrowserTabProfile): PreviewMetadata | undefin
 const botProfile = (agentId?: string): BrowserTabProfile | undefined =>
   agentId ? { kind: 'agent', agentId } : undefined;
 
+/** The profile a view's tabs use: its bot's in a VA Bot scope, else the default Agent's. */
+const viewProfileOf = (scope: PreviewScopeKey): { kind: 'agent'; agentId: string } => ({
+  kind: 'agent',
+  agentId: botOfScope(scope) ?? DEFAULT_AGENT_ID,
+});
+
+/** A browser tab saved without a profile: a Personal tab, from before Personal was removed. */
+const isPersonalTab = (tab: PreviewTab): boolean => tab.content_type === 'browser' && !tab.metadata?.profile;
+
 /** True for a browser tab in the given Agent's profile. */
 const isAgentProfileTab = (tab: PreviewTab, agentId: string): boolean =>
   tab.content_type === 'browser' && tab.metadata?.profile?.kind === 'agent' && tab.metadata.profile.agentId === agentId;
@@ -760,6 +776,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // The preview scope currently loaded into state (project id / workspace / null).
   const currentScopeRef = useRef<PreviewScopeKey>(null);
+  /** The bot of `currentScopeRef`, as state so the titlebar can name it. */
+  const [activeBotId, setActiveBotId] = useState<string | null>(null);
   // Other scopes' browser tabs, kept mounted (hidden); the ref is always the latest value.
   const [backgroundTabs, setBackgroundTabs] = useState<BackgroundTab[]>([]);
   const backgroundRef = useRef<BackgroundTab[]>([]);
@@ -989,6 +1007,9 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
        * does not focus it". The updater must also stay pure, since StrictMode
        * invokes it twice.
        */
+      // Every browser tab belongs to a bot or the Agent (there is no Personal profile): one opened without a profile
+      // (a link from chat, a reveal, a view's first tab) takes the profile of the view on screen.
+      if (type === 'browser' && !meta?.profile) meta = { ...meta, profile: viewProfileOf(currentScopeRef.current) };
       // A robot window has no preview pane: what its chat opens is shown in the main window, on that chat. A file
       // goes by its path; a diff (of a file or not), a diagram and other text with no file go by their content.
       const robotChat = readOnly ? getWidgetConversationId() : null;
@@ -1224,7 +1245,11 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
         content: url,
         content_type: 'browser',
         title: BROWSER_TAB_FALLBACK_TITLE,
-        metadata: { agentOwned: true, ...profileMetadata(profile) },
+        // No Personal profile: a tab requested without one takes the profile of the view it lands in.
+        metadata: {
+          agentOwned: true,
+          ...profileMetadata(profile?.kind === 'personal' ? undefined : (profile ?? viewProfileOf(scope))),
+        },
         isDirty: false,
         originalContent: url,
       };
@@ -1432,6 +1457,11 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     [openBrowserTab]
   );
 
+  // Every tab belongs to a bot or the Agent: + uses the bot whose view is on screen, else the default Agent.
+  const openNewBrowserTab = useCallback((): void => {
+    openBrowserTabOrForward(undefined, viewProfileOf(currentScopeRef.current));
+  }, [openBrowserTabOrForward]);
+
   /**
    * Discard this scope's tabs outright — the panel closes and nothing is restored.
    *
@@ -1530,6 +1560,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       if (prev != null && prev === options?.carryFromScope && scopeKey != null) {
         // Same conversation, new scope key: merge the live tabs into the project's saved ones, never over them.
         currentScopeRef.current = scopeKey;
+        setActiveBotId(botOfScope(scopeKey) ?? null);
         const { state: saved, adopted } = loadEnteredScope(scopeKey);
         // The tabs parked under the old key move with the conversation, and so do the ones a bot scope adopted.
         const carried = moveIntoScope(
@@ -1595,6 +1626,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       // would drop the subscriptions the restore had just created.
       resetPreviewWatch();
       currentScopeRef.current = scopeKey;
+      setActiveBotId(botOfScope(scopeKey) ?? null);
       const { state: loaded, adopted } =
         scopeKey != null ? loadEnteredScope(scopeKey) : { state: EMPTY_SCOPE_STATE, adopted: NONE_TAKEN };
       // The leaving scope's browser tabs stay mounted in the background; the entering scope's live ones return, the
@@ -2065,6 +2097,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       updateContent,
       updateTab,
       openBrowserTab: openBrowserTabOrForward,
+      openNewBrowserTab,
+      activeBotId,
       browserTabLimitHitAt,
       persistQuotaExceededAt,
       saveContent,
@@ -2105,6 +2139,8 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     updateContent,
     updateTab,
     openBrowserTabOrForward,
+    openNewBrowserTab,
+    activeBotId,
     browserTabLimitHitAt,
     persistQuotaExceededAt,
     saveContent,

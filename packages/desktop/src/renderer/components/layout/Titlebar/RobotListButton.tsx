@@ -16,10 +16,11 @@ import type { AgentWidgetRobot } from '@/common/types/agent/agentWidget';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { useAgentWidgetSettings, useRobots } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
+import { useProfileAgents } from '@renderer/pages/conversation/Preview/browser/BrowserProfiles/useBrowserProfiles';
 
 type RobotListButtonProps = {
   buttonClassName?: string;
-  /** The VA Bots button's own label, icon and click (open the Agents dashboard). */
+  /** The VA Bots button's own label and icon; `onClick` opens the Agents dashboard (the list's Manage row). */
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
@@ -29,6 +30,7 @@ type RobotListButtonProps = {
 type NamedRobot = AgentWidgetRobot & { name: string; assistant: TConversationAssistantIdentity | undefined };
 
 const SHOW_ALL_KEY = '__all__';
+const MANAGE_KEY = '__manage__';
 const ROW_ICON_SIZE = 14;
 
 // Arco's Menu.Item treats Enter as a row click (Watch): a row button's own Enter must not reach it.
@@ -40,14 +42,17 @@ const showRobot = (robot: AgentWidgetRobot): Promise<unknown> =>
     .catch(() => {});
 
 /**
- * The titlebar VA Bots button. A click opens the Agents dashboard; while any VA Bot has a robot, hovering (or focusing)
- * it lists them by bot name. Watch (or the row) opens the chat here with its browser pane; Chat opens the robot's popup
- * on the desktop. Hidden robots are tagged and counted in the badge. Robots whose chat no longer exists are left out.
+ * The titlebar VA Bots button: it names the bot whose browser is on screen, and a click opens its list. The list has
+ * every VA Bot robot by bot name: Watch (or the row) opens the chat here with its browser pane, Chat opens the robot's
+ * popup on the desktop. Hidden robots are tagged and counted in the badge; robots whose chat no longer exists are left
+ * out. Manage VA Bots, last, opens the Agents dashboard.
  */
 const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, label, icon, onClick }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { revealBrowserFor } = usePreviewContext();
+  const { revealBrowserFor, activeBotId } = usePreviewContext();
+  const agents = useProfileAgents();
+  const activeBotName = activeBotId ? agents.find((agent) => agent.id === activeBotId)?.name?.trim() : undefined;
   const settings = useAgentWidgetSettings();
   const listed = useRobots();
   const [robots, setRobots] = useState<NamedRobot[]>([]);
@@ -74,20 +79,9 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
     // Only the robot list drives the lookup (a changing `t` must not re-run it).
   }, [listed]);
 
-  const plainButton = (
-    <Button
-      type='text'
-      size='mini'
-      className={buttonClassName}
-      icon={icon}
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-    />
-  );
-  if (!settings?.enabled || robots.length === 0) return plainButton;
-
-  const hidden = robots.filter((robot) => robot.hidden);
+  // Robots are listed only while the floating widgets are on; Manage is always there.
+  const shown = settings?.enabled ? robots : [];
+  const hidden = shown.filter((robot) => robot.hidden);
   const watchLabel = t('pet.widget.watchRobot');
   const chatLabel = t('pet.widget.chatWithRobot');
 
@@ -111,11 +105,13 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
   const menu = (
     <Menu
       onClickMenuItem={(key) => {
-        if (key === SHOW_ALL_KEY) for (const robot of hidden) void showRobot(robot);
+        setOpen(false);
+        if (key === MANAGE_KEY) onClick();
+        else if (key === SHOW_ALL_KEY) for (const robot of hidden) void showRobot(robot);
         else watch(key);
       }}
     >
-      {robots.map((robot) => (
+      {shown.map((robot) => (
         <Menu.Item key={robot.conversation_id} data-testid={`robot-row-${robot.conversation_id}`}>
           <div className='flex items-center gap-6px'>
             <VaBotColorDot assistant={robot.assistant} />
@@ -149,12 +145,14 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
           {t('pet.widget.showAllRobots')}
         </Menu.Item>
       )}
+      <Menu.Item key={MANAGE_KEY} data-testid='robots-manage'>
+        {t('pet.widget.manageBots')}
+      </Menu.Item>
     </Menu>
   );
 
   return (
-    // Focus too, for keyboard users: a click opens the dashboard, so it cannot also open the list.
-    <Dropdown droplist={menu} trigger={['hover', 'focus']} position='br' popupVisible={open} onVisibleChange={setOpen}>
+    <Dropdown droplist={menu} trigger='click' position='br' popupVisible={open} onVisibleChange={setOpen}>
       <Button
         type='text'
         size='mini'
@@ -162,16 +160,18 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
         aria-label={label}
         title={label}
         data-testid='titlebar-assistants'
-        onClick={() => {
-          setOpen(false);
-          onClick();
-        }}
         icon={
           <Badge count={hidden.length} dotStyle={{ fontSize: 9, minWidth: 14, height: 14, lineHeight: '14px' }}>
             {icon}
           </Badge>
         }
-      />
+      >
+        {activeBotName && (
+          <span data-testid='titlebar-active-bot' className='max-w-140px truncate text-12px'>
+            {activeBotName}
+          </span>
+        )}
+      </Button>
     </Dropdown>
   );
 };

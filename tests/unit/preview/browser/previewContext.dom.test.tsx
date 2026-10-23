@@ -249,7 +249,7 @@ describe('PreviewContext browser tab requests from the main process', () => {
     expect(ctx.browserTabLimitHitAt).toBeTypeOf('number');
   });
 
-  it('opens a requested tab in the profile main names; a tab without one is Personal', () => {
+  it("opens a requested tab in the profile main names; one without (or Personal) takes the view's (the default Agent's here)", () => {
     renderProvider();
 
     requestTab({ url: 'https://a.test/', background: false, profile: { kind: 'agent', agentId: 'bare:1' } });
@@ -258,8 +258,8 @@ describe('PreviewContext browser tab requests from the main process', () => {
 
     expect(browserTabs().map((tab) => tab.metadata?.profile)).toEqual([
       { kind: 'agent', agentId: 'bare:1' },
-      undefined,
-      undefined,
+      { kind: 'agent', agentId: 'aion-default-agent' },
+      { kind: 'agent', agentId: 'aion-default-agent' },
     ]);
   });
 
@@ -373,7 +373,7 @@ describe('PreviewContext browser tab persistence', () => {
 
     expect(browserTabs().map((tab) => tab.metadata?.profile)).toEqual([
       { kind: 'agent', agentId: 'bare:2' },
-      undefined,
+      { kind: 'agent', agentId: 'aion-default-agent' },
     ]);
   });
 

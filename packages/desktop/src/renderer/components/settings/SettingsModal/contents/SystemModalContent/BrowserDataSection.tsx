@@ -6,7 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { notifyManualRestartRequired } from '@/renderer/utils/appRestart';
-import { Alert, Button, Message, Modal, Switch } from '@arco-design/web-react';
+import { Alert, Button, Message, Modal, Select, Switch } from '@arco-design/web-react';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR, { mutate } from 'swr';
@@ -14,6 +14,9 @@ import CookieImportModal, {
   isCookieImportSupported,
 } from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/CookieImportModal';
 import PreferenceRow from './PreferenceRow';
+import { useProfileAgents } from '@/renderer/pages/conversation/Preview/browser/BrowserProfiles/useBrowserProfiles';
+import { pickableAgents } from '@/renderer/utils/ui/agentPresentation';
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 
 /**
  * 应用内浏览器设置 / In-app browser settings.
@@ -37,6 +40,9 @@ const BrowserDataSection: React.FC = () => {
   const { t } = useTranslation();
   const [clearing, setClearing] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Sign-ins go into a bot's or the Agent's profile (there is no Personal profile); the Agent's by default.
+  const profileAgents = pickableAgents(useProfileAgents());
+  const [importAgentId, setImportAgentId] = useState(DEFAULT_AGENT_ID);
   const { data: cdpStatus, isLoading } = useSWR('cdp.status', () => ipcBridge.application.getCdpStatus.invoke());
   const [switchLoading, setSwitchLoading] = useState(false);
 
@@ -140,11 +146,30 @@ const BrowserDataSection: React.FC = () => {
             label={t('preview.browserChrome.cookieImport.title')}
             description={t('settings.browserData.importDesc')}
           >
-            <Button size='small' onClick={() => setImporting(true)}>
-              {t('preview.browserChrome.cookieImport.menu')}
-            </Button>
+            <div className='flex items-center gap-8px'>
+              <Select
+                size='small'
+                className='w-160px'
+                aria-label={t('settings.browserData.importProfile')}
+                value={importAgentId}
+                onChange={(value: string) => setImportAgentId(value)}
+              >
+                {profileAgents.map((agent) => (
+                  <Select.Option key={agent.id} value={agent.id}>
+                    {agent.name?.trim() || t('agent.displayName')}
+                  </Select.Option>
+                ))}
+              </Select>
+              <Button size='small' onClick={() => setImporting(true)}>
+                {t('preview.browserChrome.cookieImport.menu')}
+              </Button>
+            </div>
           </PreferenceRow>
-          <CookieImportModal visible={importing} target={{ kind: 'personal' }} onClose={() => setImporting(false)} />
+          <CookieImportModal
+            visible={importing}
+            target={{ kind: 'agent', agentId: importAgentId }}
+            onClose={() => setImporting(false)}
+          />
         </>
       )}
 

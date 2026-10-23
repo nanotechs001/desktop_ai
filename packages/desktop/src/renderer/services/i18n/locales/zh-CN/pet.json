@@ -21,6 +21,7 @@
     "watchTab": "查看",
     "chatWithRobot": "在桌面上聊天",
     "showAllRobots": "全部显示",
+    "manageBots": "管理 VA 机器人",
     "state": {
       "idle": "就绪",
       "listening": "正在聆听…",

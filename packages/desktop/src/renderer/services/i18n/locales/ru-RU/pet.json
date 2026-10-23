@@ -21,6 +21,7 @@
     "watchTab": "Смотреть",
     "chatWithRobot": "Чат на рабочем столе",
     "showAllRobots": "Показать всех",
+    "manageBots": "Управление VA-ботами",
     "state": {
       "idle": "Готов",
       "listening": "Слушает…",

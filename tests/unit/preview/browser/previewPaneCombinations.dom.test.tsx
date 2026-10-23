@@ -208,6 +208,64 @@ describe('the chat under an agent that opens the pane', () => {
   });
 });
 
+// The tab bar's + opens a tab for the browser on screen: a bot's view gets that bot's profile, any other view the
+// default Agent's (no Personal tabs, no profile menu). The titlebar names the bot whose browser is on screen.
+describe('the browser on screen belongs to a bot or the Agent', () => {
+  it('names the bot whose view is on screen, and none outside bot views', () => {
+    mount();
+    enter(BOT_SCOPE, botChat('c1'));
+    expect(ctx.activeBotId).toBe('bot-b');
+    enter('/s/other', { conversationId: 'c9' });
+    expect(ctx.activeBotId).toBeNull();
+  });
+
+  it("opens + tabs in the viewed bot's profile, else in the default Agent's", () => {
+    mount();
+    enter(BOT_SCOPE, botChat('c1'));
+    act(() => ctx.openNewBrowserTab());
+    expect(ctx.activeTab?.metadata?.profile).toEqual(BOT);
+    enter('/s/other', { conversationId: 'c9' });
+    act(() => ctx.openNewBrowserTab());
+    expect(ctx.activeTab?.metadata?.profile).toEqual({ kind: 'agent', agentId: 'aion-default-agent' });
+  });
+});
+
+// Personal is gone: a tab opened without a profile (a link from chat, a reveal) takes the view's, and Personal tabs
+// saved before are dropped when their view loads.
+describe('no Personal tabs', () => {
+  it("opens a tab given no profile in the view's bot profile, else the default Agent's", () => {
+    mount();
+    enter(BOT_SCOPE, botChat('c1'));
+    act(() => ctx.openBrowserTab('https://link.test/'));
+    expect(ctx.activeTab?.metadata?.profile).toEqual(BOT);
+    enter('/s/other', { conversationId: 'c9' });
+    act(() => ctx.openBrowserTab('https://link.test/'));
+    expect(ctx.activeTab?.metadata?.profile).toEqual({ kind: 'agent', agentId: 'aion-default-agent' });
+  });
+
+  it('drops a saved Personal tab when its view loads, and keeps the others', () => {
+    const saved = (id: string, profile?: object) => ({
+      id,
+      title: id,
+      content: `https://${id}.test/`,
+      content_type: 'browser',
+      ...(profile ? { metadata: { profile } } : {}),
+    });
+    localStorage.setItem(
+      previewScopeStorageKey('/s/saved'),
+      JSON.stringify({
+        isOpen: true,
+        activeTabId: 'browser-1-personal',
+        tabs: [saved('browser-1-personal'), saved('browser-2-bot', BOT)],
+      })
+    );
+    mount();
+    enter('/s/saved', { ...OPEN, conversationId: 'c7' });
+    expect(ctx.tabs.map((tab) => tab.id)).toEqual(['browser-2-bot']);
+    expect(ctx.activeTabId).toBe('browser-2-bot');
+  });
+});
+
 describe('the browser tab cap never takes an agent tab', () => {
   /** Fills the pane to the cap: `agentTabs` agent tabs first (the oldest), then Personal user tabs. */
   const fillToCap = (agentTabs: number, profile?: BrowserTabProfile): string[] =>

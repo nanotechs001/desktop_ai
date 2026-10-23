@@ -21,6 +21,7 @@
     "watchTab": "Assistir",
     "chatWithRobot": "Conversar na área de trabalho",
     "showAllRobots": "Mostrar todos",
+    "manageBots": "Gerenciar bots VA",
     "state": {
       "idle": "Pronto",
       "listening": "Ouvindo…",

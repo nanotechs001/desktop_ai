@@ -21,6 +21,7 @@
     "watchTab": "Дивитися",
     "chatWithRobot": "Чат на робочому столі",
     "showAllRobots": "Показати всіх",
+    "manageBots": "Керування VA-ботами",
     "state": {
       "idle": "Готовий",
       "listening": "Слухає…",

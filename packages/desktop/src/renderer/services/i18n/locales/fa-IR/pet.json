@@ -21,6 +21,7 @@
     "watchTab": "تماشا",
     "chatWithRobot": "گفتگو روی دسکتاپ",
     "showAllRobots": "نمایش همه",
+    "manageBots": "مدیریت ربات‌های VA",
     "state": {
       "idle": "آماده",
       "listening": "در حال شنیدن…",

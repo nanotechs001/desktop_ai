@@ -21,6 +21,7 @@
     "watchTab": "보기",
     "chatWithRobot": "데스크톱에서 채팅",
     "showAllRobots": "모두 표시",
+    "manageBots": "VA 봇 관리",
     "state": {
       "idle": "준비됨",
       "listening": "듣는 중…",

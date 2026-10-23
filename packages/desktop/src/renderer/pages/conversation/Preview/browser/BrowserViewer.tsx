@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
 import type { BrowserShortcutAction, BrowserTabProfile } from '@/common/types/browser';
@@ -384,7 +385,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
               )}
               <ExtensionActions partition={partition} profile={profile} />
               <DownloadsButton />
-              <CookieImportMenu profile={profile ?? { kind: 'personal' }} />
+              <CookieImportMenu profile={profile ?? { kind: 'agent', agentId: DEFAULT_AGENT_ID }} />
             </>
           }
           className='bg-bg-1'
