@@ -73,7 +73,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
           <span className='truncate'>
             {t('settings.officialAssistantsHintShort', {
               defaultValue:
-                'Built-in agents that ship with Pixebot Browser; duplicate one as your own VA Bot to customize it.',
+                'Built-in agents that ship with Pixebot Browser; duplicate one as your own Pixebot to customize it.',
             })}
           </span>
         </span>

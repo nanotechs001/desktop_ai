@@ -223,7 +223,7 @@ describe('the UI says Agent, not Assistant', () => {
       </ConfigProvider>
     );
 
-    expect(screen.getByText('VA Bots')).toBeInTheDocument();
+    expect(screen.getByText('Pixebots')).toBeInTheDocument();
     expect(screen.getByText('Delete "Researcher"?')).toBeInTheDocument();
     expect(`${container.textContent}${document.body.textContent}`).not.toMatch(/assistant/i);
   });

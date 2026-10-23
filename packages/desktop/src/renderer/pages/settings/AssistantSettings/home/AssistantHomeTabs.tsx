@@ -136,7 +136,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
             tabs={[
               {
                 key: 'mine',
-                label: t('settings.assistantTabMine', { defaultValue: 'My VA Bots' }),
+                label: t('settings.assistantTabMine', { defaultValue: 'My Pixebots' }),
                 count: counts.mine,
               },
               {

@@ -123,7 +123,7 @@
     "title": "{{count}} chats from deleted bots",
     "title_one": "{{count}} chat from a deleted bot",
     "title_other": "{{count}} chats from deleted bots",
-    "intro": "These chats belong to VA Bots that no longer exist. Delete them, or keep them and you won't be asked again.",
+    "intro": "These chats belong to Pixebots that no longer exist. Delete them, or keep them and you won't be asked again.",
     "more": "and {{count}} more",
     "keep": "Keep",
     "deleteFailed": "Couldn't delete {{failed}} of {{count}} chats.",
