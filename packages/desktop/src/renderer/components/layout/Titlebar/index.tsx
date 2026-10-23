@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { Button } from '@arco-design/web-react';
-import { ArrowCircleLeft, ArrowLeft, ArrowRight, ExpandLeft, ExpandRight, Search } from '@icon-park/react';
+import { ArrowCircleLeft, ExpandLeft, ExpandRight, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -58,7 +58,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
   const [mobileCenterOffset, setMobileCenterOffset] = useState(0);
   const layout = useLayoutContext();
-  const chatNav = useChatNavHistory();
+  // No Back/Forward buttons any more; the hook still records chat visits for Cmd+[ and Cmd+].
+  useChatNavHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const location = useLocation();
@@ -108,10 +109,6 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })
     : t('common.collapse', { defaultValue: 'Collapse sidebar' });
-  // Show back/forward on desktop only; mobile keeps the existing back-to-chat button.
-  const showHistoryNav = !layout?.isMobile;
-  const historyBackTooltip = t('common.historyBack', { defaultValue: 'Back' });
-  const historyForwardTooltip = t('common.forward', { defaultValue: 'Forward' });
   // The chat list lives in the history panel opened from here, on every platform.
   const searchTooltip = t('conversation.history.searchChats');
 
@@ -272,30 +269,6 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         aria-label={searchTooltip}
         title={searchTooltip}
       />
-      {showHistoryNav && (
-        <>
-          <Button
-            type='text'
-            size='mini'
-            className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
-            icon={<ArrowLeft theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
-            onClick={() => chatNav.back()}
-            disabled={!chatNav.canBack}
-            aria-label={historyBackTooltip}
-            title={historyBackTooltip}
-          />
-          <Button
-            type='text'
-            size='mini'
-            className={classNames(titlebarButtonClass, 'app-titlebar__button--nav')}
-            icon={<ArrowRight theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />}
-            onClick={() => chatNav.forward()}
-            disabled={!chatNav.canForward}
-            aria-label={historyForwardTooltip}
-            title={historyForwardTooltip}
-          />
-        </>
-      )}
     </>
   );
 

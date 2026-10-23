@@ -206,6 +206,14 @@
   color: var(--text-primary);
 }
 
+/* A button that also shows text (the active VA bot's name) grows to fit it instead of staying square. Same
+   specificity as the rule above and after it, so it wins. */
+.app-titlebar__button--labeled.arco-btn.arco-btn-size-mini {
+  width: auto;
+  padding: 0 8px;
+  gap: 4px;
+}
+
 .app-titlebar__button.arco-btn.arco-btn-text:not(.arco-btn-disabled):hover {
   background-color: rgba(0, 0, 0, 0.08);
   color: var(--text-primary);

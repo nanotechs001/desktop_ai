@@ -129,12 +129,15 @@ describe('RobotListButton', () => {
     h.activeBotId = 'bot-1';
     const { unmount } = renderButton();
     expect((await screen.findByTestId('titlebar-active-bot')).textContent).toBe('Research Bot');
+    // The square titlebar button would clip the name to a letter or two.
+    expect(screen.getByTestId('titlebar-assistants').className).toContain('app-titlebar__button--labeled');
     unmount();
     h.activeBotId = null;
     renderButton();
     await screen.findByTestId('titlebar-assistants');
     await act(async () => {});
     expect(screen.queryByTestId('titlebar-active-bot')).toBeNull();
+    expect(screen.getByTestId('titlebar-assistants').className).not.toContain('app-titlebar__button--labeled');
   });
 
   it('shows no hidden badge while every robot is on the desktop', async () => {

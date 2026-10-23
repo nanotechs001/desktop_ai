@@ -156,7 +156,7 @@ const RobotListButton: React.FC<RobotListButtonProps> = ({ buttonClassName, labe
       <Button
         type='text'
         size='mini'
-        className={buttonClassName}
+        className={activeBotName ? `${buttonClassName ?? ''} app-titlebar__button--labeled` : buttonClassName}
         aria-label={label}
         title={label}
         data-testid='titlebar-assistants'

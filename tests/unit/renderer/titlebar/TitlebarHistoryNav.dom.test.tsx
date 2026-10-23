@@ -60,16 +60,13 @@ describe('Titlebar chat history controls', () => {
     nav.forward.mockClear();
   });
 
-  it('shows Search, Back and Forward in that order, without a sidebar toggle outside Settings', () => {
+  it('shows Search without Back and Forward buttons, and no sidebar toggle outside Settings', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
     expect(screen.queryByRole('button', { name: 'common.collapse' })).not.toBeInTheDocument();
-    const search = screen.getByRole('button', { name: 'conversation.history.searchChats' });
-    const back = screen.getByRole('button', { name: 'common.historyBack' });
-    const forward = screen.getByRole('button', { name: 'common.forward' });
-
-    expect(search.nextElementSibling).toBe(back);
-    expect(back.nextElementSibling).toBe(forward);
+    expect(screen.getByRole('button', { name: 'conversation.history.searchChats' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'common.historyBack' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'common.forward' })).not.toBeInTheDocument();
   });
 
   it('opens the history panel from Search', () => {
@@ -81,25 +78,13 @@ describe('Titlebar chat history controls', () => {
     expect(screen.getByTestId('history-panel')).toBeInTheDocument();
   });
 
-  it('drives Back and Forward from the chat history and disables them at the ends', () => {
-    render(<Titlebar workspaceAvailable={false} />);
-    const back = screen.getByRole('button', { name: 'common.historyBack' });
-    const forward = screen.getByRole('button', { name: 'common.forward' });
-
-    expect(back).toBeEnabled();
-    expect(forward).toBeDisabled();
-
-    fireEvent.click(back);
-    expect(nav.back).toHaveBeenCalledTimes(1);
-    expect(nav.forward).not.toHaveBeenCalled();
-  });
-
   it('renders the titlebar controls as Arco buttons', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
-    for (const name of ['conversation.history.searchChats', 'common.historyBack', 'common.forward']) {
-      expect(screen.getByRole('button', { name })).toHaveClass('arco-btn', 'app-titlebar__button');
-    }
+    expect(screen.getByRole('button', { name: 'conversation.history.searchChats' })).toHaveClass(
+      'arco-btn',
+      'app-titlebar__button'
+    );
   });
 
   it('keeps one message-search popover mounted for Cmd+Shift+F on desktop', () => {
