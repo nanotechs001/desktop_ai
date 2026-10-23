@@ -47,6 +47,18 @@ export type RelayContents = {
   once(event: 'destroyed', listener: () => void): unknown;
   on(event: 'did-start-navigation', listener: NavigationListener): unknown;
   removeListener(event: 'did-start-navigation', listener: NavigationListener): unknown;
+  /** Electron's capturePage: an image of the page, also while it is not on screen (stayHidden). */
+  capturePage?(rect: CaptureRect, opts: { stayHidden: boolean }): Promise<CapturedImage>;
+};
+
+/** A part of the page's viewport, in CSS px. */
+export type CaptureRect = { x: number; y: number; width: number; height: number };
+/** The parts of Electron's NativeImage a screenshot needs. */
+export type CapturedImage = {
+  isEmpty(): boolean;
+  getSize(): { width: number; height: number };
+  resize(opts: { width: number; quality: 'good' }): { toJPEG(quality: number): Buffer };
+  toJPEG(quality: number): Buffer;
 };
 
 /** A navigation starting in the tab; `isSameDocument` is a fragment or history-API change. */

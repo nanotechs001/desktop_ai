@@ -158,6 +158,17 @@ export class RelayClient {
     }));
   }
 
+  /** A JPEG (base64) of part of a tab's viewport in CSS px, taken by the app (works while the tab is off screen). */
+  async captureScreenshot(
+    targetId: string,
+    rect: { x: number; y: number; width: number; height: number }
+  ): Promise<string> {
+    const conn = await this.ensureConnected();
+    const { data } = await conn.send<{ data?: unknown }>('AionRelay.captureScreenshot', { targetId, rect });
+    if (typeof data !== 'string' || !data) throw new Error('The screenshot came back empty');
+    return data;
+  }
+
   /** The user's bookmarks (title and address), read-only. */
   async listBookmarks(): Promise<Array<{ title: string; url: string }>> {
     const conn = await this.ensureConnected();

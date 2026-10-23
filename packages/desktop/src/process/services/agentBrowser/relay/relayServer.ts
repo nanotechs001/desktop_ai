@@ -39,6 +39,7 @@ import {
 import {
   targetIdFor,
   webContentsIdFromTargetId,
+  type CaptureRect,
   type KeyInput,
   type RelayClient,
   type RelayContents,
@@ -125,6 +126,21 @@ const ACTION_WINDOW_MS = 1000;
 const MAX_OP_LENGTH = 40;
 const MAX_ACTION_LABEL_LENGTH = 120;
 /** What an agent is told when it tries to close a tab the user pinned. */
+/** JPEG quality of agent screenshots (the same the CDP capture used). */
+const SCREENSHOT_JPEG_QUALITY = 70;
+/** A screenshot side past this is refused (CSS px). */
+const MAX_SCREENSHOT_SIDE = 8192;
+
+/** A capture rect of whole, non-negative CSS px with a real size, or null. */
+const captureRectOf = (value: unknown): CaptureRect | null => {
+  const rect = asParams(value);
+  if (!rect) return null;
+  const [x, y, width, height] = [rect.x, rect.y, rect.width, rect.height];
+  const whole = (n: unknown, min: number): n is number =>
+    typeof n === 'number' && Number.isInteger(n) && n >= min && n <= MAX_SCREENSHOT_SIDE;
+  return whole(x, 0) && whole(y, 0) && whole(width, 1) && whole(height, 1) ? { x, y, width, height } : null;
+};
+
 const PINNED_TAB_CLOSE = 'The user pinned this tab, so it stays open. You may still navigate and act in it.';
 const AUTO_ATTACH_METHOD = 'Target.setAutoAttach';
 const DIALOG_METHOD = 'Page.handleJavaScriptDialog';
@@ -320,6 +336,24 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       return [{ id, shared: tab?.owner === 'user' || tab?.owner.clientId !== conn.client.clientId }];
     });
     return (found.find((tab) => tab.shared) ?? found[0])?.id ?? null;
+  };
+
+  /**
+   * A screenshot of part of a tab's viewport, taken by Electron (capturePage) rather than CDP: a clipped, scaled
+   * Page.captureScreenshot emulates the page at the capture size and could leave a webview drawn small with empty
+   * bands, and it waits for a frame a tab off screen never draws. The image is scaled to CSS px (click_point's units).
+   */
+  const captureScreenshot = async (conn: Connection, params: Params): Promise<Params> => {
+    const { webContentsId, contents } = tabFor(params.targetId);
+    if (!mayAct(registry.ownership(webContentsId), conn.client)) throw new Error('This tab is not shared with agents');
+    const rect = captureRectOf(params.rect);
+    if (!rect) throw new Error('AionRelay.captureScreenshot needs a rect of whole CSS px inside the viewport');
+    if (!contents.capturePage) throw new Error('Screenshots are not available for this tab');
+    const image = await contents.capturePage(rect, { stayHidden: true });
+    if (image.isEmpty()) throw new Error('The tab showed nothing to capture; try again once it has loaded');
+    const scaled = image.getSize().width > rect.width ? image.resize({ width: rect.width, quality: 'good' }) : image;
+    registry.touch(webContentsId, conn.conversationId);
+    return { data: scaled.toJPEG(SCREENSHOT_JPEG_QUALITY).toString('base64') };
   };
 
   const createTarget = async (conn: Connection, params: Params): Promise<Params> => {
@@ -677,6 +711,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         return {}; // The relay always auto-attaches OOPIFs itself.
       case 'AionRelay.listTabs':
         return listTabs(conn);
+      case 'AionRelay.captureScreenshot':
+        return captureScreenshot(conn, params);
       case 'AionRelay.listBookmarks':
         return { bookmarks: (deps.listBookmarks?.() ?? []).map(({ title, url }) => ({ title, url })) };
       case 'AionRelay.reportAction':

@@ -717,27 +717,29 @@ describe('fallback tools', () => {
     }
   });
 
-  it('screenshot returns a JPEG image item', async () => {
-    relay.on('Page.captureScreenshot', () => ({ data: '/9j/AAAA' }));
+  // Screenshots go through the app (Electron capturePage), not CDP's Page.captureScreenshot: a clipped, scaled CDP
+  // capture emulates the page at the capture size and could leave a webview drawn small with empty bands, and it hangs
+  // on a tab that is not on screen.
+  it('screenshot returns a JPEG of the visible area, taken by the app in CSS px', async () => {
+    relay.on('AionRelay.captureScreenshot', () => ({ data: '/9j/AAAA' }));
     await call('tabs', { action: 'open' });
     const reply = await call('screenshot', {});
     expect(reply.content).toEqual([{ type: 'image', data: '/9j/AAAA', mimeType: 'image/jpeg' }]);
-    expect(relay.callsTo('Page.captureScreenshot')[0]).toMatchObject({ format: 'jpeg' });
+    expect(relay.callsTo('AionRelay.captureScreenshot')[0]).toMatchObject({
+      targetId: 'wc-7',
+      rect: { x: 0, y: 0, width: expect.any(Number), height: expect.any(Number) },
+    });
+    expect(relay.callsTo('Page.captureScreenshot')).toEqual([]);
   });
 
-  it('screenshot still works when the page does not answer, measuring the pixel ratio from the image', async () => {
-    // A frozen page, or one behind a dialog: no in-page call ever returns.
+  it('screenshot works when the page does not answer (a dialog, a busy page, a tab off screen)', async () => {
     relay.on('Runtime.callFunctionOn', () => new Promise(() => {}));
     relay.on('Runtime.evaluate', () => new Promise(() => {}));
-    // Device px at scale 1 (2x display), CSS px once scaled down.
-    relay.on('Page.captureScreenshot', (params) => ({
-      data: jpegOfWidth((params.clip as { scale: number }).scale === 1 ? 2400 : 1200),
-    }));
+    relay.on('AionRelay.captureScreenshot', () => ({ data: jpegOfWidth(1200) }));
     await call('tabs', { action: 'open' });
     const reply = await call('screenshot', {});
     expect(reply.isError).toBeFalsy();
     expect(reply.content).toEqual([{ type: 'image', data: jpegOfWidth(1200), mimeType: 'image/jpeg' }]);
-    expect(relay.callsTo('Page.captureScreenshot').map((p) => (p.clip as { scale: number }).scale)).toEqual([1, 0.5]);
   }, 10_000);
 
   it('click_point passes a relay refusal of its input on as an error', async () => {

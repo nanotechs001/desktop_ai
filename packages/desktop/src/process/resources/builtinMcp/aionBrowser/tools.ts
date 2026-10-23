@@ -419,6 +419,7 @@ const onTab = async (
         sessionId,
         report: (action) => relay.reportAction(target, action),
         confirm: (label, frame) => relay.requestConfirm(target, label, frame),
+        capture: (rect) => relay.captureScreenshot(target, rect),
       },
       target
     );

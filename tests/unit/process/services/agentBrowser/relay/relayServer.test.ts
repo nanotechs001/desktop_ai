@@ -266,6 +266,47 @@ describe('relay server: targets', () => {
     expect(openTab).toHaveBeenCalledTimes(1);
   });
 
+  it('AionRelay.captureScreenshot captures with capturePage, even off screen, scaled to CSS px, for usable tabs only', async () => {
+    const handle = await start();
+    const client = await connect(handle, 'claude');
+    const tab = ownedTab(80, 'claude');
+    const resized = { toJPEG: vi.fn(() => Buffer.from('jpeg-bytes')) };
+    const image = {
+      isEmpty: () => false,
+      getSize: () => ({ width: 1600, height: 1000 }),
+      resize: vi.fn(() => resized),
+    };
+    const capturePage = vi.fn(async () => image);
+    Object.assign(tab, { capturePage });
+
+    const reply = await client.send('AionRelay.captureScreenshot', {
+      targetId: 'wc-80',
+      rect: { x: 0, y: 0, width: 800, height: 500 },
+    });
+
+    expect(reply.result).toEqual({ data: Buffer.from('jpeg-bytes').toString('base64') });
+    expect(capturePage).toHaveBeenCalledWith({ x: 0, y: 0, width: 800, height: 500 }, { stayHidden: true });
+    expect(image.resize).toHaveBeenCalledWith({ width: 800, quality: 'good' });
+
+    registry.track(new FakeContents(81)); // the user's own tab, not shared
+    expect(
+      (
+        await client.send('AionRelay.captureScreenshot', {
+          targetId: 'wc-81',
+          rect: { x: 0, y: 0, width: 8, height: 8 },
+        })
+      ).error?.message
+    ).toMatch(/not shared/i);
+    expect(
+      (
+        await client.send('AionRelay.captureScreenshot', {
+          targetId: 'wc-80',
+          rect: { x: 0, y: 0, width: 0, height: 9 },
+        })
+      ).error
+    ).toBeDefined();
+  });
+
   it("Target.createTarget opens a new tab over the user's own unshared tab, or one now on another site", async () => {
     const handle = await start();
     const client = await connect(handle, 'bot');

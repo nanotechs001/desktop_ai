@@ -49,6 +49,8 @@ export type ActionContext = {
   sessionId: string;
   report(action: ReportedAction): Promise<void>;
   confirm(label: string, frame: Pick<FrameHandle, 'sessionId' | 'frameId'>): Promise<boolean>;
+  /** The app's screenshot of a viewport rect (CSS px), when the relay offers it; else CDP's capture is used. */
+  capture?(rect: { x: number; y: number; width: number; height: number }): Promise<string>;
 };
 
 export const ACT_OPS = ['click', 'type', 'select', 'press', 'scroll', 'hover'] as const;
@@ -843,6 +845,15 @@ export async function screenshot(ctx: ActionContext, targetId?: string): Promise
   const viewport = { x: 0, y: 0, w: css.clientWidth, h: css.clientHeight };
   // A target shows only where its frame is visible (resolve checked its center, so this is never empty).
   const area = (t ? intersect(t.rect, t.frame.clip) : viewport) ?? viewport;
+  // The app's capture: no device emulation, works off screen, already in CSS px. Viewport coordinates, whole px.
+  if (ctx.capture) {
+    return ctx.capture({
+      x: Math.max(0, Math.round(area.x)),
+      y: Math.max(0, Math.round(area.y)),
+      width: Math.max(1, Math.round(Math.min(area.w, MAX_SCREENSHOT_SIDE))),
+      height: Math.max(1, Math.round(Math.min(area.h, MAX_SCREENSHOT_SIDE))),
+    });
+  }
   // Clip coordinates are document coordinates.
   const clip = {
     x: area.x + css.pageX,
