@@ -184,15 +184,15 @@ const ScheduledTasksPage: React.FC = () => {
           </div>
 
           {loading ? (
-            <div className='flex min-h-220px items-center justify-center rounded-16px border border-dashed border-border-2 bg-fill-1'>
+            <div className='flex min-h-220px items-center justify-center rounded-16px border border-dashed border-arco-2 bg-fill-1'>
               <Spin />
             </div>
           ) : jobs.length === 0 ? (
-            <div className='flex min-h-220px items-center justify-center rounded-16px border border-dashed border-border-2 bg-fill-1'>
+            <div className='flex min-h-220px items-center justify-center rounded-16px border border-dashed border-arco-2 bg-fill-1'>
               <Empty description={t('cron.noTasks')} />
             </div>
           ) : filteredJobs.length === 0 ? (
-            <div className='flex min-h-220px items-center justify-center rounded-16px border border-dashed border-border-2 bg-fill-1'>
+            <div className='flex min-h-220px items-center justify-center rounded-16px border border-dashed border-arco-2 bg-fill-1'>
               <Empty description={t('cron.page.noSearchResults', { defaultValue: 'No matching scheduled tasks.' })} />
             </div>
           ) : (

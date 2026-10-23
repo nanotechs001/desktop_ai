@@ -102,7 +102,7 @@ const AssistantSettings: React.FC = () => {
   }, [assistants, editor, navigationState]);
 
   return (
-    <div className='h-full w-full overflow-hidden bg-bg-0'>
+    <div className='h-full w-full overflow-hidden bg-1'>
       <div className='flex flex-col h-full w-full'>
         {messageContext}
         <div className='flex-1 min-h-0'>

@@ -80,7 +80,7 @@ const RulesSection: React.FC<RulesSectionProps> = ({
       testId='assistant-card-rules'
     >
       <div
-        className='overflow-hidden rounded-12px border border-border-2 bg-fill-1'
+        className='overflow-hidden rounded-12px border border-arco-2 bg-fill-1'
         style={{ height: rulesContainerHeight }}
       >
         {promptViewMode === 'edit' && isRuleEditable ? (

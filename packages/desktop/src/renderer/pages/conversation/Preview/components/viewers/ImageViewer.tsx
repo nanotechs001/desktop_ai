@@ -96,7 +96,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ fileRef, file_path, content
     );
   };
 
-  return <div className='flex-1 flex items-center justify-center bg-bg-1 p-24px overflow-auto'>{renderStatus()}</div>;
+  return <div className='flex-1 flex items-center justify-center bg-1 p-24px overflow-auto'>{renderStatus()}</div>;
 };
 
 export default ImagePreview;

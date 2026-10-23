@@ -825,7 +825,7 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
       {/* Navigation bar (optional) */}
       {showNavBar && (
         <div
-          className='aion-url-viewer-toolbar flex items-center gap-6px h-40px px-10px bg-bg-2 border-b border-border-1 flex-shrink-0'
+          className='aion-url-viewer-toolbar flex items-center gap-6px h-40px px-10px bg-2 border-b border-arco-1 flex-shrink-0'
           inert={chromeInert}
         >
           <button

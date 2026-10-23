@@ -95,7 +95,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
 
       <div className='grid grid-cols-1 gap-14px sm:grid-cols-2 lg:grid-cols-3'>
         {officialAssistants.length === 0 ? (
-          <div className='col-span-full rounded-14px border border-dashed border-border-2 bg-fill-1/40 px-20px py-28px text-center text-13px text-t-secondary'>
+          <div className='col-span-full rounded-14px border border-dashed border-arco-2 bg-fill-1/40 px-20px py-28px text-center text-13px text-t-secondary'>
             {searchActive
               ? t('settings.assistantNoMatch', { defaultValue: 'No Agents match the current filters.' })
               : t('settings.assistantsEmpty', { defaultValue: 'No Agents configured.' })}
@@ -127,7 +127,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
             <div
               key={assistant.id}
               data-testid={`official-card-${assistant.id}`}
-              className='group flex cursor-pointer flex-col rounded-14px border border-solid border-transparent bg-base p-16px transition-all duration-180 hover:border-border-2'
+              className='group flex cursor-pointer flex-col rounded-14px border border-solid border-transparent bg-base p-16px transition-all duration-180 hover:border-arco-2'
               onClick={() => onOpenSettings(assistant)}
             >
               {/* Header row: avatar on the left, enable switch on the right. */}

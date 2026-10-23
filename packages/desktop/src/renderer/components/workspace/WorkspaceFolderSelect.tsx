@@ -146,7 +146,7 @@ const WorkspaceFolderSelect: React.FC<WorkspaceFolderSelectProps> = ({
         className={`flex items-center gap-10px rounded-10px border px-12px py-10px transition-all ${
           menuVisible
             ? 'border-primary-5 bg-fill-2 shadow-sm'
-            : 'border-border-2 bg-fill-1 hover:border-border-1 hover:bg-fill-2'
+            : 'border-arco-2 bg-fill-1 hover:border-arco-1 hover:bg-fill-2'
         }`}
       >
         <FolderOpen
@@ -194,7 +194,7 @@ const WorkspaceFolderSelect: React.FC<WorkspaceFolderSelectProps> = ({
             WebkitBackdropFilter: 'none',
             isolation: 'isolate',
           }}
-          className='overflow-x-hidden overflow-y-auto rounded-12px border border-border-1 p-6px shadow-[0_18px_48px_rgba(0,0,0,0.42)]'
+          className='overflow-x-hidden overflow-y-auto rounded-12px border border-arco-1 p-6px shadow-[0_18px_48px_rgba(0,0,0,0.42)]'
         >
           {recentWorkspaces.length > 0 && (
             <>

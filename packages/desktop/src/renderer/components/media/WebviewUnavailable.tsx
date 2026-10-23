@@ -23,7 +23,7 @@ const WebviewUnavailable: React.FC<WebviewUnavailableProps> = ({ className, styl
   const preview = useOptionalPreviewContext();
 
   return (
-    <div className={`h-full w-full flex items-center justify-center bg-bg-1 ${className ?? ''}`} style={style}>
+    <div className={`h-full w-full flex items-center justify-center bg-1 ${className ?? ''}`} style={style}>
       <div className='text-center max-w-400px px-16px'>
         <div className='text-14px text-t-secondary mb-12px'>{t('preview.browser.desktopOnly')}</div>
         {preview && (

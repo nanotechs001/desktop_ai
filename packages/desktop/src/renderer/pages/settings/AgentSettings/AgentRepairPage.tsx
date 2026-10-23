@@ -104,7 +104,7 @@ const AgentRepairPage: React.FC = () => {
     <div data-testid='agent-repair-page' className='flex h-full min-h-0 flex-col overflow-hidden bg-transparent'>
       <div
         data-testid='agent-repair-bar'
-        className='sticky top-0 z-10 flex h-48px flex-shrink-0 items-center gap-12px border-b border-border-2 bg-bg-0 px-18px'
+        className='sticky top-0 z-10 flex h-48px flex-shrink-0 items-center gap-12px border-b border-arco-2 bg-1 px-18px'
       >
         <div className='flex min-w-0 flex-1 items-center gap-10px'>
           <Button
@@ -125,7 +125,7 @@ const AgentRepairPage: React.FC = () => {
           icon={<Connection theme='outline' size='14' />}
           onClick={() => void handleTestConnection()}
           data-testid='btn-test-connection-agent-repair'
-          className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+          className='!h-30px !rounded-8px !border-arco-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-arco-1 hover:!bg-fill-1'
         >
           {t('settings.agentManagement.testConnection')}
         </Button>

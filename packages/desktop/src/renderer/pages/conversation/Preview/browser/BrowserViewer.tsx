@@ -388,7 +388,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
               <CookieImportMenu profile={profile ?? { kind: 'agent', agentId: DEFAULT_AGENT_ID }} />
             </>
           }
-          className='bg-bg-1'
+          className='bg-1'
           resolveUrlInput={resolveAddressBarInput}
           onUrlChange={handleUrlChange}
           onTitleChange={handleTitleChange}

@@ -123,7 +123,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
   return (
     <div
       data-testid={`agent-row-${agent.id}`}
-      className='group flex cursor-pointer items-center justify-between gap-12px rounded-12px border border-solid border-transparent bg-base px-14px py-10px transition-all duration-180 hover:border-border-1 hover:bg-fill-1'
+      className='group flex cursor-pointer items-center justify-between gap-12px rounded-12px border border-solid border-transparent bg-base px-14px py-10px transition-all duration-180 hover:border-arco-1 hover:bg-fill-1'
       onClick={onConfigure}
     >
       <div className={`flex min-w-0 flex-1 items-center gap-12px ${isDisabled ? 'opacity-50' : ''}`}>
@@ -184,7 +184,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
             size='small'
             type='outline'
             onClick={onSetDefault}
-            className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+            className='!h-30px !rounded-8px !border-arco-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-arco-1 hover:!bg-fill-1'
           >
             {t('agent.engine.setDefault', { defaultValue: 'Set as default' })}
           </Button>
@@ -195,7 +195,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
           type='outline'
           loading={isTesting}
           onClick={onTestConnection}
-          className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+          className='!h-30px !rounded-8px !border-arco-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-arco-1 hover:!bg-fill-1'
         >
           {t('settings.agentManagement.testConnection')}
         </Button>
@@ -207,7 +207,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
           size='small'
           type='outline'
           onClick={onConfigure}
-          className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+          className='!h-30px !rounded-8px !border-arco-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-arco-1 hover:!bg-fill-1'
         >
           {t('common.edit', { defaultValue: 'Edit' })}
         </Button>
@@ -221,7 +221,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
               type='outline'
               icon={<EditTwo theme='outline' size='14' />}
               onClick={props.onEdit}
-              className='!h-30px !rounded-8px !border-border-2 !bg-base !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+              className='!h-30px !rounded-8px !border-arco-2 !bg-base !text-t-primary hover:!border-arco-1 hover:!bg-fill-1'
             />
             <Button
               size='small'

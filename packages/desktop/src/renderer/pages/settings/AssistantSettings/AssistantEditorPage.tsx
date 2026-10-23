@@ -38,7 +38,7 @@ const AssistantEditorPage: React.FC<AssistantEditorPageProps> = ({
     <div data-testid='assistant-editor-page' className='flex h-full min-h-0 flex-col overflow-hidden bg-transparent'>
       <div
         data-testid='assistant-editor-bar'
-        className='sticky top-0 z-10 flex h-48px flex-shrink-0 items-center gap-12px border-b border-border-2 bg-bg-0 px-18px'
+        className='sticky top-0 z-10 flex h-48px flex-shrink-0 items-center gap-12px border-b border-arco-2 bg-1 px-18px'
       >
         <div className='flex min-w-0 items-center gap-10px'>
           <Button

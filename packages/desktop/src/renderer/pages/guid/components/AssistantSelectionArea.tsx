@@ -269,7 +269,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
     <div
       data-testid='assistant-overflow-panel'
       data-overflow-columns={overflowColumns}
-      className={`absolute start-0 top-[calc(100%+8px)] z-100 w-full rounded-12px border border-border-2 p-8px shadow-lg ${styles.assistantOverflowPanel}`}
+      className={`absolute start-0 top-[calc(100%+8px)] z-100 w-full rounded-12px border border-arco-2 p-8px shadow-lg ${styles.assistantOverflowPanel}`}
       style={{ background: 'var(--bg-base, #fff)' }}
     >
       {showOverflowSearch ? (

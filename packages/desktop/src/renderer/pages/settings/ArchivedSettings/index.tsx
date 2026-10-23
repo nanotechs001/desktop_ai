@@ -524,7 +524,7 @@ const ArchivedSettings: React.FC = () => {
                       {t('settings.archived.chatCount', { count: block.rows.length })}
                     </span>
                   </div>
-                  <div className='overflow-hidden rd-12px border border-solid border-[var(--color-border-2)] bg-bg-1'>
+                  <div className='overflow-hidden rd-12px border border-solid border-[var(--color-border-2)] bg-1'>
                     {block.rows.map((row, index) => renderRow(row, index === block.rows.length - 1))}
                   </div>
                   {block.hasMore ? (

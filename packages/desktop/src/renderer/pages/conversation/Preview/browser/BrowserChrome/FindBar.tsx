@@ -77,7 +77,7 @@ const FindBar: React.FC<FindBarProps> = ({ webview, onClose, focusToken }) => {
         : t(`${KEY}.noMatches`);
 
   return (
-    <div className='flex items-center gap-4px p-6px rd-8px bg-bg-3 b-1 b-solid b-border-2 shadow-md'>
+    <div className='flex items-center gap-4px p-6px rd-8px bg-3 b-1 b-solid b-border-2 shadow-md'>
       <Input
         ref={inputRef}
         size='small'

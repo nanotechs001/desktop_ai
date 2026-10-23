@@ -23,7 +23,7 @@ const ProfileErrorOverlay: React.FC<ProfileErrorOverlayProps> = ({ error, onRetr
   return (
     <div
       role='alert'
-      className='absolute inset-0 z-10 flex flex-col items-center justify-center gap-16px bg-bg-1 text-t-primary'
+      className='absolute inset-0 z-10 flex flex-col items-center justify-center gap-16px bg-1 text-t-primary'
     >
       <Caution theme='outline' size='48' />
       <div className='text-16px'>{t(`${KEY}.unavailable`)}</div>

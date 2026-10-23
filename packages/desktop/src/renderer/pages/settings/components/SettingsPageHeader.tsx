@@ -63,7 +63,7 @@ const SettingsPageHeader: React.FC<SettingsPageHeaderProps> = ({
       {description ? <p className='m-0 mt-8px text-13px leading-relaxed text-t-secondary'>{description}</p> : null}
 
       {tabs && tabs.length > 0 ? (
-        <div className='mt-18px flex gap-26px border-b border-border-2' role='tablist'>
+        <div className='mt-18px flex gap-26px border-b border-arco-2' role='tablist'>
           {tabs.map((tab) => {
             const isActive = tab.key === activeTab;
             return (

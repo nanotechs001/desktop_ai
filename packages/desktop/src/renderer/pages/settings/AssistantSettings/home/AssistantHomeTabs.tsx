@@ -103,7 +103,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
   return (
     <div data-testid='assistant-home-shell' className='flex h-full min-h-0 flex-col overflow-hidden bg-transparent'>
       <div
-        className={`border-b border-border-2 bg-bg-0 ${isMobile ? 'px-16px pt-14px' : 'px-12px pt-24px md:px-40px md:pt-32px'}`}
+        className={`border-b border-arco-2 bg-1 ${isMobile ? 'px-16px pt-14px' : 'px-12px pt-24px md:px-40px md:pt-32px'}`}
       >
         <div className='mx-auto w-full max-w-800px'>
           <SettingsPageHeader

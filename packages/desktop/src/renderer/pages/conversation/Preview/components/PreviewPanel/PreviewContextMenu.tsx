@@ -149,7 +149,7 @@ const MenuItem: React.FC<{
 }> = ({ label, shortcut, disabled, onSelect }) => (
   <div
     className={`flex items-center justify-between gap-24px px-12px py-8px text-12px transition-colors ${
-      disabled ? 'opacity-50 cursor-not-allowed text-t-tertiary' : 'cursor-pointer text-t-primary hover:bg-bg-3'
+      disabled ? 'opacity-50 cursor-not-allowed text-t-tertiary' : 'cursor-pointer text-t-primary hover:bg-3'
     }`}
     onClick={() => {
       if (disabled) return;

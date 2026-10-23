@@ -73,7 +73,7 @@ const MyAssistantCard: React.FC<MyAssistantCardProps> = ({
   return (
     <div
       data-testid={`assistant-card-${assistant.id}`}
-      className='group flex cursor-pointer flex-col rounded-14px border border-solid border-transparent bg-base p-16px transition-all duration-180 hover:border-border-2'
+      className='group flex cursor-pointer flex-col rounded-14px border border-solid border-transparent bg-base p-16px transition-all duration-180 hover:border-arco-2'
       onClick={() => onOpenDetail(assistant)}
     >
       {/* Header row: avatar on the left, enable switch on the right. */}

@@ -281,7 +281,7 @@ const LocalAgents: React.FC = () => {
 
       {/* Detected Agents section */}
       <div data-testid='agent-management-official-section'>
-        <div className='flex flex-col gap-8px rounded-12px border border-border-2 bg-2 p-8px md:rounded-16px md:p-10px'>
+        <div className='flex flex-col gap-8px rounded-12px border border-arco-2 bg-2 p-8px md:rounded-16px md:p-10px'>
           {visibleOfficialAgents.map((agent) => (
             <AgentCard
               key={agent.id}
@@ -354,7 +354,7 @@ const LocalAgents: React.FC = () => {
       </AionModal>
 
       <div data-testid='agent-management-custom-section'>
-        <div className='flex flex-col gap-8px rounded-12px border border-border-2 bg-2 p-8px md:rounded-16px md:p-10px'>
+        <div className='flex flex-col gap-8px rounded-12px border border-arco-2 bg-2 p-8px md:rounded-16px md:p-10px'>
           {visibleCustomAgents?.map((agent) => (
             <AgentCard
               key={agent.id}

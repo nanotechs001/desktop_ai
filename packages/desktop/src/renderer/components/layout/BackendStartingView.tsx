@@ -25,7 +25,7 @@ const BackendStartingView: React.FC = () => {
 
   return (
     <div
-      className='min-h-screen bg-bg-1 flex flex-col items-center justify-center gap-16px'
+      className='min-h-screen bg-1 flex flex-col items-center justify-center gap-16px'
       data-testid='backend-starting-view'
     >
       <Spin size={28} />

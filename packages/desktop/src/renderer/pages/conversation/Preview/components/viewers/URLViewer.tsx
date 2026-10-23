@@ -25,10 +25,10 @@ interface URLViewerProps {
  */
 const URLViewer: React.FC<URLViewerProps> = ({ url }) => {
   const { t } = useTranslation();
-  if (isElectronDesktop()) return <WebviewHost url={url} showNavBar className='bg-bg-1' />;
+  if (isElectronDesktop()) return <WebviewHost url={url} showNavBar className='bg-1' />;
   // The WebUI has no <webview>: offer the page in a new tab of the phone's own browser.
   return (
-    <div className='flex flex-col items-center justify-center gap-12px h-full p-16px bg-bg-1'>
+    <div className='flex flex-col items-center justify-center gap-12px h-full p-16px bg-1'>
       <span className='text-13px text-t-secondary break-all text-center'>{url}</span>
       {/^https?:\/\//i.test(url) && (
         <Button type='primary' onClick={() => void openExternalUrl(url)}>

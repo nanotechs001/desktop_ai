@@ -106,7 +106,7 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
   const zoomed = viewport.scale > MIN_ZOOM;
 
   return (
-    <div className={`h-full w-full flex flex-col bg-bg-1 ${className ?? ''}`} style={style}>
+    <div className={`h-full w-full flex flex-col bg-1 ${className ?? ''}`} style={style}>
       <div className='flex items-center gap-8px px-8px py-6px border-0 border-b border-solid border-b-base'>
         <Button size='small' onClick={preview?.closePreview}>
           {t('common.back')}
