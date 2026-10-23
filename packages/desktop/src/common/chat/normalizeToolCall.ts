@@ -23,7 +23,7 @@ export interface NormalizedToolCall {
   imagePath?: string;
   /** Set for a finished create/update call of the artifacts MCP; the summary renders a card for it. */
   artifact?: ArtifactCardData;
-  /** Set for a finished add call of the notes MCP; the summary renders a "Saved to notebook" chip for it. */
+  /** Set for a finished save of the notes MCP: an old notebook add ("Saved to notebook" chip) or a memory_save (memory chip). */
   note?: NoteChipData;
   /** Set for a finished propose_skill call of the notes MCP; the summary renders a review card for it. */
   skill?: SkillProposal;

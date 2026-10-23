@@ -109,6 +109,13 @@
     "fromPage": "From a web page · unverified",
     "open": "Open notebook"
   },
+  "memoryChip": {
+    "created": "Remembered",
+    "updated": "Updated",
+    "superseded": "Replaced an outdated fact",
+    "aboutYou": "About you",
+    "open": "Open memory"
+  },
   "skillCard": {
     "title": "Save as a skill?",
     "appliesWhen": "Applies when: {{description}}",

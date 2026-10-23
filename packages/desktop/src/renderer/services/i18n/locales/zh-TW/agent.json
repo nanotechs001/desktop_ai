@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "預設 Agent 無法刪除。",
   "ruleMarkersBroken": "請修正此 Agent 指令中的 Pixebot Browser 區塊標記。",
   "ruleTooLong": "這些指令太長了",
-  "notebook": {
-    "title": "筆記本",
-    "hint": "此智慧體學到的內容與你的指示。新對話中會加入它的指令。",
-    "addInstruction": "新增指示",
-    "placeholder": "給此智慧體的一條指示",
-    "empty": "還沒有筆記。",
-    "loadFailed": "無法載入筆記本。",
+  "memory": {
+    "title": "記憶",
+    "hint": "這個智慧體在多次對話間記住的內容。固定事實與指令會在每個新對話中提供給它；其餘內容它會在工作時搜尋。",
+    "tabs": {
+      "agent": "此智慧體",
+      "shared": "關於你"
+    },
+    "sharedHint": "你的智慧體對你的了解。所有智慧體都會讀取這份記憶。",
+    "core": {
+      "title": "固定事實",
+      "hint": "在新對話中一律提供給智慧體。請保持簡短。",
+      "placeholder": "- 喜歡簡短的回答\n- 依里斯本時間工作",
+      "saveFailed": "無法儲存固定事實。",
+      "full": "固定事實已滿，請先精簡。"
+    },
+    "pinned": "已固定。",
+    "search": "搜尋記憶",
+    "allTypes": "所有類型",
+    "addNote": "新增筆記",
+    "openFolder": "開啟資料夾",
+    "openFolderFailed": "無法開啟資料夾。",
+    "empty": "還沒有記住任何內容。",
+    "noMatch": "沒有符合的筆記。",
+    "loadFailed": "無法載入記憶。",
+    "loadNoteFailed": "無法開啟筆記。",
     "saveFailed": "無法儲存筆記。",
-    "deleteFailed": "無法刪除筆記。",
+    "superseded": "已取代",
+    "retire": "停用",
+    "retireConfirm": "停用這則筆記？智慧體將不再看到它，它會保留在記憶資源回收筒中。",
+    "retireFailed": "無法停用筆記。",
+    "pin": "固定到事實",
+    "confirm": "確認",
+    "confirmHint": "這是智慧體寫的。確認後它就歸你所有，所有智慧體都會在新對話中取得它。",
+    "confirmed": "已確認。所有智慧體都會在新對話中取得這則筆記。",
     "source": {
+      "user": "你",
       "agent": "已學到",
-      "user": "指示",
-      "page": "來自網頁"
+      "page": "來自網頁",
+      "sharedAgent": "由智慧體撰寫"
+    },
+    "types": {
+      "instructions": "給智慧體的指令",
+      "fact": "事實",
+      "preference": "偏好",
+      "person": "人物",
+      "project": "專案",
+      "decision": "決定",
+      "procedure": "操作方法",
+      "source": "網頁來源"
+    },
+    "dialog": {
+      "newTitle": "新筆記",
+      "editTitle": "筆記",
+      "type": "類型",
+      "title": "標題",
+      "summary": "摘要",
+      "body": "詳細內容",
+      "tags": "標籤",
+      "tagsPlaceholder": "輸入標籤後按 Enter"
+    },
+    "errors": {
+      "invalid": "請檢查筆記：有欄位為空或過長。",
+      "notFound": "這則筆記已不存在。",
+      "stale": "這則筆記在你開啟後已在別處被修改，現已顯示最新版本。",
+      "limitReached": "這份記憶已滿，請先停用一些筆記。",
+      "conflict": "記憶資料夾處於異常狀態，因此未做任何變更。",
+      "io": "無法讀取或寫入記憶檔案。",
+      "forbidden": "這份記憶不允許此操作。"
+    },
+    "health": {
+      "title": "記憶狀況",
+      "count": "{{notes}} / {{max}} 則筆記",
+      "trash": "資源回收筒：{{trash}} 則",
+      "allClear": "沒有需要整理的內容。",
+      "loadFailed": "無法檢查記憶。",
+      "duplicates": "可能重複",
+      "duplicatesHint": "這些筆記看起來說的是同一件事。保留最新的一則，停用其餘的。",
+      "orphanLinks": "指向不存在筆記的連結",
+      "orphanLinksHint": "這些筆記連結到一則不存在的筆記。",
+      "stale": "可能已過時",
+      "staleHint": "已有 {{days}} 天或更久未更新。請確認它們是否仍然正確。",
+      "open": "開啟",
+      "stillTrue": "仍然正確",
+      "retireDuplicateConfirm": "停用這則副本？最新的一則會保留。停用的筆記會保留在記憶資源回收筒中。"
+    },
+    "tidy": {
+      "button": "整理記憶",
+      "hint": "開啟一個新對話，並填入整理請求，由你檢查後送出。和其他對話一樣，整理會使用智慧體的模型。",
+      "prompt": "請使用你的記憶工具整理你的長期記憶：\n1. 用 memory_search 瀏覽你的記憶，用 memory_read 閱讀完整筆記。\n2. 合併重複：保留最好的一則筆記並用 memory_save 更新它，然後取代（supersede）或停用（memory_retire）多餘的副本。\n3. 修正矛盾：用 memory_save 加 supersede 儲存正確的版本，讓舊筆記作為歷史保留。\n4. 如果不確定某件事是否仍然正確、或哪個版本才對，修改前先問我。\n5. 絕對不要修改我自己寫的筆記。\n6. 完成後，總結你做了哪些修改。",
+      "promptShared": "請使用你的記憶工具整理關於我的共享記憶（scope \"shared\"）：\n1. 用 memory_search 瀏覽它，用 memory_read（scope \"shared\"）閱讀完整筆記。\n2. 合併重複：保留最好的一則筆記並用 memory_save（scope \"shared\"）更新它，然後取代（supersede）或停用（memory_retire，scope \"shared\"）多餘的副本。\n3. 修正矛盾：用 memory_save 加 supersede 儲存正確的版本，讓舊筆記作為歷史保留。\n4. 如果不確定某件事是否仍然正確、或哪個版本才對，修改前先問我。\n5. 絕對不要修改我自己寫的筆記。\n6. 只修改共享記憶。完成後，總結你做了哪些修改。"
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "它的 {{count}} 個聊天，包括訊息、檔案和歷史記錄",
     "chats_other": "它的 {{count}} 個聊天，包括訊息、檔案和歷史記錄",
     "browserProfile": "它的瀏覽器設定檔：Cookie、登入狀態、網站資料和擴充功能",
-    "notebook": "它的筆記本（它學到的內容）和規則",
+    "notebook": "它的記憶和筆記本（它學到的內容）以及規則",
     "tasks": "它的 {{count}} 個排程任務",
     "tasks_one": "它的 {{count}} 個排程任務",
     "tasks_other": "它的 {{count}} 個排程任務",

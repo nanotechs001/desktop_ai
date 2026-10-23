@@ -153,6 +153,47 @@ describe('ensureBrowserRuleForAssistant', () => {
     expect(readRule).toHaveBeenCalledWith('solo', '');
     expect(listAssistants).not.toHaveBeenCalled();
   });
+
+  it("adds the agent's memory block after the other blocks", async () => {
+    let rule = 'my text';
+    const readMemory = vi.fn(async () => '# Memory\nKnows the client is Jane.');
+    await ensureBrowserRuleForAssistant(
+      {
+        listAssistants: async () => [],
+        readRule: async () => rule,
+        writeRule: async (_id, _locale, content) => {
+          rule = content;
+        },
+        readMemory,
+      },
+      'agent-1'
+    );
+
+    expect(readMemory).toHaveBeenCalledWith('agent-1');
+    expect(rule).toContain('<!-- aion-memory:start -->\n# Memory\nKnows the client is Jane.\n<!-- aion-memory:end -->');
+    expect(rule.indexOf(BROWSER_RULE_MARKERS.start)).toBeLessThan(rule.indexOf('<!-- aion-memory:start -->'));
+  });
+
+  it('still updates the rest of the rule when the memory cannot be read', async () => {
+    let rule = '';
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await ensureBrowserRuleForAssistant(
+      {
+        listAssistants: async () => [],
+        readRule: async () => rule,
+        writeRule: async (_id, _locale, content) => {
+          rule = content;
+        },
+        readMemory: async () => {
+          throw new Error('disk gone');
+        },
+      },
+      'agent-1'
+    );
+
+    expect(result.updated).toBe(1);
+    expect(rule).toBe(withBlock(''));
+  });
 });
 
 describe('handleEnsureAgentRule', () => {

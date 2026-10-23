@@ -109,6 +109,13 @@
     "fromPage": "De una página web · sin verificar",
     "open": "Abrir cuaderno"
   },
+  "memoryChip": {
+    "created": "Recordado",
+    "updated": "Actualizado",
+    "superseded": "Reemplazó un dato obsoleto",
+    "aboutYou": "Sobre ti",
+    "open": "Abrir memoria"
+  },
   "skillCard": {
     "title": "¿Guardar como habilidad?",
     "appliesWhen": "Se aplica cuando: {{description}}",

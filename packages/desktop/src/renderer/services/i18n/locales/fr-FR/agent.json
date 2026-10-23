@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "L'agent par défaut ne peut pas être supprimé.",
   "ruleMarkersBroken": "Corrigez les marqueurs de bloc Pixebot Browser dans les instructions de cet agent.",
   "ruleTooLong": "Ces instructions sont trop longues",
-  "notebook": {
-    "title": "Carnet",
-    "hint": "Ce que cet Agent a appris, et vos instructions. Elles sont ajoutées à ses instructions dans les nouvelles discussions.",
-    "addInstruction": "Ajouter une instruction",
-    "placeholder": "Une instruction pour cet Agent",
-    "empty": "Aucune note pour l'instant.",
-    "loadFailed": "Impossible de charger le carnet.",
-    "saveFailed": "Impossible d'enregistrer la note.",
-    "deleteFailed": "Impossible de supprimer la note.",
+  "memory": {
+    "title": "Mémoire",
+    "hint": "Ce que cet Agent retient d’une discussion à l’autre. Les faits épinglés et les instructions lui parviennent à chaque nouvelle discussion ; il recherche le reste en travaillant.",
+    "tabs": {
+      "agent": "Cet Agent",
+      "shared": "À propos de vous"
+    },
+    "sharedHint": "Ce que vos Agents savent de vous. Tous les Agents lisent cette mémoire.",
+    "core": {
+      "title": "Faits épinglés",
+      "hint": "Toujours donnés à l’Agent dans les nouvelles discussions. Restez concis.",
+      "placeholder": "- Préfère les réponses courtes\n- Travaille à l’heure de Lisbonne",
+      "saveFailed": "Impossible d’enregistrer les faits épinglés.",
+      "full": "Les faits épinglés sont pleins. Raccourcissez-les d’abord."
+    },
+    "pinned": "Épinglé.",
+    "search": "Rechercher dans la mémoire",
+    "allTypes": "Tous les types",
+    "addNote": "Ajouter une note",
+    "openFolder": "Ouvrir le dossier",
+    "openFolderFailed": "Impossible d’ouvrir le dossier.",
+    "empty": "Rien n’a encore été retenu.",
+    "noMatch": "Aucune note ne correspond.",
+    "loadFailed": "Impossible de charger la mémoire.",
+    "loadNoteFailed": "Impossible d’ouvrir la note.",
+    "saveFailed": "Impossible d’enregistrer la note.",
+    "superseded": "Remplacée",
+    "retire": "Retirer",
+    "retireConfirm": "Retirer cette note ? Les Agents ne la verront plus. Elle est conservée dans la corbeille de la mémoire.",
+    "retireFailed": "Impossible de retirer la note.",
+    "pin": "Épingler aux faits",
+    "confirm": "Confirmer",
+    "confirmHint": "Un Agent a écrit ceci. Confirmez-le pour le faire vôtre : tous les Agents le recevront alors dans les nouvelles discussions.",
+    "confirmed": "Confirmée. Tous les Agents reçoivent cette note dans les nouvelles discussions.",
     "source": {
+      "user": "Vous",
       "agent": "Appris",
-      "user": "Instruction",
-      "page": "D'une page web"
+      "page": "Depuis une page web",
+      "sharedAgent": "Écrit par un Agent"
+    },
+    "types": {
+      "instructions": "Instruction pour l’Agent",
+      "fact": "Fait",
+      "preference": "Préférence",
+      "person": "Personne",
+      "project": "Projet",
+      "decision": "Décision",
+      "procedure": "Procédure",
+      "source": "Source web"
+    },
+    "dialog": {
+      "newTitle": "Nouvelle note",
+      "editTitle": "Note",
+      "type": "Type",
+      "title": "Titre",
+      "summary": "Résumé",
+      "body": "Détails",
+      "tags": "Étiquettes",
+      "tagsPlaceholder": "Saisissez une étiquette puis appuyez sur Entrée"
+    },
+    "errors": {
+      "invalid": "Vérifiez la note : un champ est vide ou trop long.",
+      "notFound": "Cette note n’existe plus.",
+      "stale": "Cette note a été modifiée ailleurs depuis que vous l’avez ouverte. La dernière version est affichée.",
+      "limitReached": "Cette mémoire est pleine. Retirez d’abord quelques notes.",
+      "conflict": "Le dossier de mémoire est dans un état inattendu, rien n’a donc été modifié.",
+      "io": "Impossible de lire ou d’écrire les fichiers de mémoire.",
+      "forbidden": "Ce n’est pas autorisé pour cette mémoire."
+    },
+    "health": {
+      "title": "État de la mémoire",
+      "count": "{{notes}} notes sur {{max}}",
+      "trash": "Dans la corbeille : {{trash}}",
+      "allClear": "Rien à ranger.",
+      "loadFailed": "Impossible de vérifier la mémoire.",
+      "duplicates": "Doublons possibles",
+      "duplicatesHint": "Ces notes semblent dire la même chose. Gardez la plus récente et retirez les autres.",
+      "orphanLinks": "Liens vers des notes absentes",
+      "orphanLinksHint": "Ces notes renvoient vers une note qui n’existe pas.",
+      "stale": "Peut-être obsolète",
+      "staleHint": "Pas mises à jour depuis {{days}} jours ou plus. Vérifiez qu’elles sont toujours vraies.",
+      "open": "Ouvrir",
+      "stillTrue": "Toujours vrai",
+      "retireDuplicateConfirm": "Retirer cette copie ? La plus récente est conservée. Les notes retirées restent dans la corbeille de la mémoire."
+    },
+    "tidy": {
+      "button": "Ranger la mémoire",
+      "hint": "Ouvre une nouvelle discussion avec une demande de rangement que vous relisez et envoyez. Comme toute discussion, elle utilise le modèle de l’Agent.",
+      "prompt": "Range ta mémoire à long terme avec tes outils de mémoire :\n1. Parcours ta mémoire avec memory_search et lis les notes en entier avec memory_read.\n2. Fusionne les doublons : garde la meilleure note et mets-la à jour avec memory_save, puis remplace (supersede) ou retire (memory_retire) les copies en trop.\n3. Corrige les contradictions : enregistre la bonne version avec memory_save et supersede, pour que l’ancienne note reste dans l’historique.\n4. Si tu n’es pas sûr qu’une information soit toujours vraie ou de la bonne version, demande-moi avant de la modifier.\n5. Ne modifie jamais les notes que j’ai écrites moi-même.\n6. À la fin, résume ce que tu as modifié.",
+      "promptShared": "Range la mémoire partagée à mon sujet (scope \"shared\") avec tes outils de mémoire :\n1. Parcours-la avec memory_search et lis les notes en entier avec memory_read (scope \"shared\").\n2. Fusionne les doublons : garde la meilleure note et mets-la à jour avec memory_save (scope \"shared\"), puis remplace (supersede) ou retire (memory_retire, scope \"shared\") les copies en trop.\n3. Corrige les contradictions : enregistre la bonne version avec memory_save et supersede, pour que l’ancienne note reste dans l’historique.\n4. Si tu n’es pas sûr qu’une information soit toujours vraie ou de la bonne version, demande-moi avant de la modifier.\n5. Ne modifie jamais les notes que j’ai écrites moi-même.\n6. Ne modifie que la mémoire partagée. À la fin, résume ce que tu as modifié."
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "sa {{count}} conversation, avec ses messages, fichiers et son historique",
     "chats_other": "ses {{count}} conversations, avec leurs messages, fichiers et historique",
     "browserProfile": "son profil de navigateur : cookies, connexions, données de sites et extensions",
-    "notebook": "son carnet (ce qu’il a appris) et ses règles",
+    "notebook": "sa mémoire et son carnet (ce qu’il a appris) et ses règles",
     "tasks": "ses {{count}} tâches planifiées",
     "tasks_one": "sa {{count}} tâche planifiée",
     "tasks_other": "ses {{count}} tâches planifiées",

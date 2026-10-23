@@ -120,18 +120,25 @@ const clearBinding = async (platform: string): Promise<void> => {
   await ipcBridge.channel.syncChannelSettings.invoke({ platform });
 };
 
+/** Runs a desktop-only removal; a refusal or a failure is only logged. */
+const removeOnDesktop = async (
+  remove: () => Promise<{ success: boolean; msg?: string }>,
+  what: string
+): Promise<void> => {
+  // shortcut: on the WebUI the notebook and memory stay on the desktop's disk, upgrade with an HTTP path or a desktop sweep.
+  if (!isElectronDesktop()) return;
+  const reply = await remove().catch((error: unknown) => ({ success: false, msg: errorMessage(error) }));
+  if (!reply.success) console.warn(`[deleteVaBot] could not remove the deleted Agent ${what}:`, reply.msg);
+};
+
 /**
- * After a bot is deleted: drop its notebook (and main's cached chats of it), its engine pin, its color and
- * the "last picked" memory. Failures are logged only: the bot is already gone, and these are never read again.
+ * After a bot is deleted: drop its notebook (and main's cached chats of it), its memory vault (moved to the memory
+ * trash), its engine pin, its color and the "last picked" memory. Failures are logged only: the bot is already gone,
+ * and these are never read again.
  */
 const forgetDeletedAgent = async (agentId: string): Promise<void> => {
-  // shortcut: on the WebUI the notebook stays on the desktop's disk, upgrade with an HTTP path or a desktop sweep.
-  const reply = isElectronDesktop()
-    ? await ipcBridge.agentNotes.removeAgent
-        .invoke({ agentId })
-        .catch((error: unknown) => ({ success: false, msg: errorMessage(error) }))
-    : { success: true };
-  if (!reply.success) console.warn('[deleteVaBot] could not remove the deleted Agent notebook:', reply.msg);
+  await removeOnDesktop(() => ipcBridge.agentNotes.removeAgent.invoke({ agentId }), 'notebook');
+  await removeOnDesktop(() => ipcBridge.agentMemory.removeAgent.invoke({ agentId }), 'memory');
   // Only when pinned: writing an empty record would skip the first-run pin seeding.
   await reloadEnginePins();
   if (configService.get('agent.enginePins')?.[agentId]) {

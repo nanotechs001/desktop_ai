@@ -93,8 +93,9 @@ vi.mock('@/common', () => ({
         invoke: (...args: unknown[]) => getImageBase64InvokeMock(...args),
       },
     },
-    agentNotes: {
+    agentMemory: {
       list: { invoke: async () => ({ success: true, data: [] }) },
+      getCore: { invoke: async () => ({ success: true, data: '' }) },
     },
   },
 }));
@@ -875,8 +876,8 @@ describe('AssistantEditorSections', () => {
     const defaultsCard = screen.getByTestId('assistant-card-defaults');
     expect(within(defaultsCard).getByText('Model')).toBeInTheDocument();
     expect(within(defaultsCard).getByText('Permission')).toBeInTheDocument();
-    // Built-ins reject rule writes, so they get no notebook.
-    expect(screen.queryByTestId('assistant-card-notebook')).not.toBeInTheDocument();
+    // Built-ins reject rule writes, so they get no memory.
+    expect(screen.queryByTestId('assistant-card-memory')).not.toBeInTheDocument();
 
     const modelSelect = container.querySelector('[data-testid="select-assistant-default-model"]');
     const permissionSelect = container.querySelector('[data-testid="select-assistant-default-permission"]');
@@ -953,8 +954,8 @@ describe('AssistantEditorSections', () => {
     );
 
     expect(screen.getByTestId('assistant-cli-readonly-banner')).toBeInTheDocument();
-    // A generated Agent accepts rule writes, so it gets a notebook.
-    expect(screen.getByTestId('assistant-card-notebook')).toBeInTheDocument();
+    // A generated Agent accepts rule writes, so it gets a memory.
+    expect(screen.getByTestId('assistant-card-memory')).toBeInTheDocument();
 
     expect(screen.getByTestId('input-assistant-name')).toBeDisabled();
     expect(screen.getByTestId('input-assistant-desc')).not.toBeDisabled();

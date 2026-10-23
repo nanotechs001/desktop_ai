@@ -107,6 +107,7 @@ vi.mock('@/common', () => ({
     // Deleting a bot also deletes what it owns; here it owns nothing.
     browser: { deleteProfileData: { invoke: vi.fn(async () => ({ success: true })) } },
     agentNotes: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
+    agentMemory: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
     database: { getUserConversations: { invoke: vi.fn(async () => ({ items: [], total: 0, has_more: false })) } },
     sidebar: {
       get: { invoke: vi.fn(async () => ({ groups: [], has_more_groups: false })) },

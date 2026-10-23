@@ -109,6 +109,13 @@
     "fromPage": "웹 페이지에서 · 확인되지 않음",
     "open": "노트북 열기"
   },
+  "memoryChip": {
+    "created": "기억함",
+    "updated": "업데이트함",
+    "superseded": "오래된 사실을 대체함",
+    "aboutYou": "나에 대해",
+    "open": "메모리 열기"
+  },
   "skillCard": {
     "title": "스킬로 저장할까요?",
     "appliesWhen": "적용 시점: {{description}}",

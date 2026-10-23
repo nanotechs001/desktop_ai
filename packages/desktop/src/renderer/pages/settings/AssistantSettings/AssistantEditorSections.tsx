@@ -22,7 +22,7 @@ import IdentitySection from './editor/IdentitySection';
 import PromptsSection from './editor/PromptsSection';
 import DefaultsSection from './editor/DefaultsSection';
 import RulesSection from './editor/RulesSection';
-import AgentNotebook from './editor/AgentNotebook';
+import MemoryPanel from './editor/memory/MemoryPanel';
 import BrowserProfileSection from './editor/BrowserProfileSection';
 
 /** Select value for "follow the default engine"; never a real engine id. */
@@ -591,8 +591,8 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
         readOnlyLabel={readOnlyLabel}
       />
 
-      {/* Built-ins reject rule writes, so their notes could never reach the agent. */}
-      {activeAssistant && !isCreating && !isBuiltin ? <AgentNotebook agentId={activeAssistant.id} /> : null}
+      {/* Built-ins reject rule writes, so their memory could never reach the agent. */}
+      {activeAssistant && !isCreating && !isBuiltin ? <MemoryPanel agentId={activeAssistant.id} /> : null}
       {/* Built-in chats use the default Agent's profile, so only user-made Agents (the default one included) have a
           profile here. It offers clear and import; deleting a profile is part of deleting its Agent. */}
       {activeAssistant && !isCreating && !isBuiltin ? <BrowserProfileSection agentId={activeAssistant.id} /> : null}

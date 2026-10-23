@@ -517,7 +517,7 @@ describe('notes API on the artifact server', () => {
       getConversation: async (id) => ({ assistant: { id: id === 'chatA' ? 'agentA' : 'agentB', source: 'user' } }),
       getDefaultAgentId: async () => null,
     });
-    const started = await startArtifacts({ rootDir: root, notes: { store, resolveAgent } });
+    const started = await startArtifacts({ rootDir: root, notes: { add: store.add, resolveAgent } });
     if (!started) throw new Error('server did not start');
     try {
       const reply = await post(started.server.origin, started.token, 'add', {
@@ -541,7 +541,7 @@ describe('notes API on the artifact server', () => {
   it('allows at most 10 adds per conversation per app run', async () => {
     const store = createNotesStore(path.join(root, 'notes'));
     const resolveAgent = async () => ({ ok: true as const, agentId: 'agentA' });
-    const started = await startArtifacts({ rootDir: root, notes: { store, resolveAgent } });
+    const started = await startArtifacts({ rootDir: root, notes: { add: store.add, resolveAgent } });
     if (!started) throw new Error('server did not start');
     try {
       const add = async (conversationId: string, text: string): Promise<{ ok: boolean; error?: string }> =>
@@ -564,7 +564,7 @@ describe('notes API on the artifact server', () => {
     const added = await store.add('agentA', 'keep me', 'user');
     if (!added.ok) throw new Error('add failed');
     const resolveAgent = async () => ({ ok: true as const, agentId: 'agentA' });
-    const started = await startArtifacts({ rootDir: root, notes: { store, resolveAgent } });
+    const started = await startArtifacts({ rootDir: root, notes: { add: store.add, resolveAgent } });
     if (!started) throw new Error('server did not start');
     try {
       for (const route of ['list', 'update', 'delete']) {

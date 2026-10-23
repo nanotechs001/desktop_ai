@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "Varsayılan Agent silinemez.",
   "ruleMarkersBroken": "Bu Agent'ın yönergelerindeki Pixebot Browser blok işaretlerini düzeltin.",
   "ruleTooLong": "Bu talimatlar çok uzun",
-  "notebook": {
-    "title": "Not defteri",
-    "hint": "Bu Ajanın öğrendikleri ve talimatlarınız. Yeni sohbetlerde talimatlarına eklenir.",
-    "addInstruction": "Talimat ekle",
-    "placeholder": "Bu Ajan için bir talimat",
-    "empty": "Henüz not yok.",
-    "loadFailed": "Not defteri yüklenemedi.",
+  "memory": {
+    "title": "Bellek",
+    "hint": "Bu Agent'ın sohbetler arasında hatırladıkları. Sabitlenmiş bilgiler ve talimatlar her yeni sohbette ona ulaşır; gerisini çalışırken arar.",
+    "tabs": {
+      "agent": "Bu Agent",
+      "shared": "Hakkınızda"
+    },
+    "sharedHint": "Agent'larınızın sizin hakkınızda bildikleri. Her Agent bu belleği okur.",
+    "core": {
+      "title": "Sabitlenmiş bilgiler",
+      "hint": "Yeni sohbetlerde Agent'a her zaman verilir. Kısa tutun.",
+      "placeholder": "- Kısa yanıtları tercih eder\n- Lizbon saatine göre çalışır",
+      "saveFailed": "Sabitlenmiş bilgiler kaydedilemedi.",
+      "full": "Sabitlenmiş bilgiler dolu. Önce kısaltın."
+    },
+    "pinned": "Sabitlendi.",
+    "search": "Bellekte ara",
+    "allTypes": "Tüm türler",
+    "addNote": "Not ekle",
+    "openFolder": "Klasörü aç",
+    "openFolderFailed": "Klasör açılamadı.",
+    "empty": "Henüz hatırlanan bir şey yok.",
+    "noMatch": "Eşleşen not yok.",
+    "loadFailed": "Bellek yüklenemedi.",
+    "loadNoteFailed": "Not açılamadı.",
     "saveFailed": "Not kaydedilemedi.",
-    "deleteFailed": "Not silinemedi.",
+    "superseded": "Değiştirildi",
+    "retire": "Kaldır",
+    "retireConfirm": "Bu not kaldırılsın mı? Agent'lar artık görmez. Bellek çöp kutusunda saklanır.",
+    "retireFailed": "Not kaldırılamadı.",
+    "pin": "Bilgilere sabitle",
+    "confirm": "Onayla",
+    "confirmHint": "Bunu bir Agent yazdı. Sizin olması için onaylayın: o zaman her Agent yeni sohbetlerde onu alır.",
+    "confirmed": "Onaylandı. Her Agent bu notu yeni sohbetlerde alır.",
     "source": {
+      "user": "Siz",
       "agent": "Öğrenildi",
-      "user": "Talimat",
-      "page": "Bir web sayfasından"
+      "page": "Bir web sayfasından",
+      "sharedAgent": "Bir Agent tarafından yazıldı"
+    },
+    "types": {
+      "instructions": "Agent'a talimat",
+      "fact": "Bilgi",
+      "preference": "Tercih",
+      "person": "Kişi",
+      "project": "Proje",
+      "decision": "Karar",
+      "procedure": "Nasıl yapılır",
+      "source": "Web kaynağı"
+    },
+    "dialog": {
+      "newTitle": "Yeni not",
+      "editTitle": "Not",
+      "type": "Tür",
+      "title": "Başlık",
+      "summary": "Özet",
+      "body": "Ayrıntılar",
+      "tags": "Etiketler",
+      "tagsPlaceholder": "Bir etiket yazıp Enter'a basın"
+    },
+    "errors": {
+      "invalid": "Notu kontrol edin: bir alan boş ya da çok uzun.",
+      "notFound": "Bu not artık yok.",
+      "stale": "Bu not, siz açtıktan sonra başka bir yerde değişti. En son sürüm gösteriliyor.",
+      "limitReached": "Bu bellek dolu. Önce bazı notları kaldırın.",
+      "conflict": "Bellek klasörü beklenmeyen bir durumda, bu yüzden hiçbir şey değiştirilmedi.",
+      "io": "Bellek dosyaları okunamadı veya yazılamadı.",
+      "forbidden": "Bu bellek için buna izin verilmiyor."
+    },
+    "health": {
+      "title": "Bellek durumu",
+      "count": "{{max}} nottan {{notes}}",
+      "trash": "Çöp kutusunda: {{trash}}",
+      "allClear": "Düzenlenecek bir şey yok.",
+      "loadFailed": "Bellek kontrol edilemedi.",
+      "duplicates": "Olası kopyalar",
+      "duplicatesHint": "Bu notlar aynı şeyi anlatıyor gibi. En yenisini tutun, diğerlerini kaldırın.",
+      "orphanLinks": "Olmayan notlara bağlantılar",
+      "orphanLinksHint": "Bu notlar var olmayan bir nota bağlantı veriyor.",
+      "stale": "Güncel olmayabilir",
+      "staleHint": "{{days}} gün veya daha uzun süredir güncellenmedi. Hâlâ doğru olup olmadıklarını kontrol edin.",
+      "open": "Aç",
+      "stillTrue": "Hâlâ doğru",
+      "retireDuplicateConfirm": "Bu kopya kaldırılsın mı? En yenisi kalır. Kaldırılan notlar bellek çöp kutusunda saklanır."
+    },
+    "tidy": {
+      "button": "Belleği düzenle",
+      "hint": "Gözden geçirip göndermeniz için düzenleme isteği içeren yeni bir sohbet açar. Her sohbet gibi Agent'ın modelini kullanır.",
+      "prompt": "Lütfen uzun süreli belleğini bellek araçlarınla düzenle:\n1. Belleğini memory_search ile gözden geçir, notların tamamını memory_read ile oku.\n2. Kopyaları birleştir: en iyi notu tut ve memory_save ile güncelle, fazla kopyaların yerine yenisini koy (supersede) ya da onları kaldır (memory_retire).\n3. Çelişkileri düzelt: doğru sürümü memory_save ve supersede ile kaydet, böylece eski not geçmiş olarak kalır.\n4. Bir şeyin hâlâ doğru olup olmadığından ya da hangi sürümün doğru olduğundan emin değilsen, değiştirmeden önce bana sor.\n5. Benim yazdığım notları asla değiştirme.\n6. Bitirince neleri değiştirdiğini özetle.",
+      "promptShared": "Lütfen benimle ilgili ortak belleği (scope \"shared\") bellek araçlarınla düzenle:\n1. Onu memory_search ile gözden geçir, notların tamamını memory_read (scope \"shared\") ile oku.\n2. Kopyaları birleştir: en iyi notu tut ve memory_save (scope \"shared\") ile güncelle, fazla kopyaların yerine yenisini koy (supersede) ya da onları kaldır (memory_retire, scope \"shared\").\n3. Çelişkileri düzelt: doğru sürümü memory_save ve supersede ile kaydet, böylece eski not geçmiş olarak kalır.\n4. Bir şeyin hâlâ doğru olup olmadığından ya da hangi sürümün doğru olduğundan emin değilsen, değiştirmeden önce bana sor.\n5. Benim yazdığım notları asla değiştirme.\n6. Yalnızca ortak belleği değiştir. Bitirince neleri değiştirdiğini özetle."
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "{{count}} sohbeti; mesajları, dosyaları ve geçmişiyle birlikte",
     "chats_other": "{{count}} sohbeti; mesajları, dosyaları ve geçmişiyle birlikte",
     "browserProfile": "tarayıcı profili: çerezler, oturum açma bilgileri, site verileri ve uzantılar",
-    "notebook": "defteri (öğrendikleri) ve kuralları",
+    "notebook": "belleği ve defteri (öğrendikleri) ve kuralları",
     "tasks": "{{count}} zamanlanmış görevi",
     "tasks_one": "{{count}} zamanlanmış görevi",
     "tasks_other": "{{count}} zamanlanmış görevi",

@@ -45,6 +45,7 @@ vi.mock('@/common', () => ({
       syncChannelSettings: { invoke: vi.fn(async () => undefined) },
     },
     agentNotes: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
+    agentMemory: { removeAgent: { invoke: vi.fn(async () => ({ success: true })) } },
     // The rule is saved through main, which adds the managed blocks.
     agentBrowser: {
       ensureAgentRule: { invoke: vi.fn(async () => ({ success: true })) },
@@ -257,6 +258,7 @@ describe('useAssistantEditor', () => {
       await deleteAgent();
 
       expect(ipcBridge.agentNotes.removeAgent.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
+      expect(ipcBridge.agentMemory.removeAgent.invoke).toHaveBeenCalledWith({ agentId: 'bare:gone' });
       expect(engineConfig.store.get('agent.enginePins')).toEqual({ other: 'engine-y' });
       expect(mockMessage.success).toHaveBeenCalled();
     });
@@ -283,6 +285,7 @@ describe('useAssistantEditor', () => {
       (ipcBridge.assistants.delete.invoke as any).mockRejectedValueOnce(new Error('backend down'));
       await deleteAgent();
       expect(ipcBridge.agentNotes.removeAgent.invoke).not.toHaveBeenCalled();
+      expect(ipcBridge.agentMemory.removeAgent.invoke).not.toHaveBeenCalled();
     });
 
     it('keeps the Agent, and says so, when its browser data could not be removed', async () => {
@@ -1363,6 +1366,7 @@ describe('useAssistantEditor', () => {
       ipcBridge.agentWidget.listRobots.invoke,
       ipcBridge.agentWidget.remove.invoke,
       ipcBridge.agentNotes.removeAgent.invoke,
+      ipcBridge.agentMemory.removeAgent.invoke,
     ];
 
     beforeEach(() => {
@@ -1378,6 +1382,7 @@ describe('useAssistantEditor', () => {
       (ipcBridge.agentWidget.listRobots.invoke as any).mockResolvedValue([]);
       (ipcBridge.agentWidget.remove.invoke as any).mockResolvedValue(undefined);
       (ipcBridge.agentNotes.removeAgent.invoke as any).mockResolvedValue({ success: true });
+      (ipcBridge.agentMemory.removeAgent.invoke as any).mockResolvedValue({ success: true });
     });
 
     it('saves a bot, writing its text over HTTP and keeping the AionUi blocks already stored', async () => {

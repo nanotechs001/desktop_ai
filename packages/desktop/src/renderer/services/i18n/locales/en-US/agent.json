@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "The default Agent can't be deleted.",
   "ruleMarkersBroken": "Fix the Pixebot Browser block markers in this Agent's instructions.",
   "ruleTooLong": "These instructions are too long",
-  "notebook": {
-    "title": "Notebook",
-    "hint": "What this Agent learned, and your instructions. They are added to its instructions in new chats.",
-    "addInstruction": "Add instruction",
-    "placeholder": "An instruction for this Agent",
-    "empty": "No notes yet.",
-    "loadFailed": "Couldn't load the notebook.",
+  "memory": {
+    "title": "Memory",
+    "hint": "What this Agent remembers across chats. Pinned facts and instructions reach it in every new chat; it searches the rest while it works.",
+    "tabs": {
+      "agent": "This Agent",
+      "shared": "About you"
+    },
+    "sharedHint": "What your Agents know about you. Every Agent reads this memory.",
+    "core": {
+      "title": "Pinned facts",
+      "hint": "Always given to the Agent in new chats. Keep them short.",
+      "placeholder": "- Prefers short answers\n- Works on Lisbon time",
+      "saveFailed": "Couldn't save the pinned facts.",
+      "full": "Pinned facts are full. Shorten them first."
+    },
+    "pinned": "Pinned.",
+    "search": "Search memory",
+    "allTypes": "All types",
+    "addNote": "Add note",
+    "openFolder": "Open folder",
+    "openFolderFailed": "Couldn't open the folder.",
+    "empty": "Nothing remembered yet.",
+    "noMatch": "No notes match.",
+    "loadFailed": "Couldn't load the memory.",
+    "loadNoteFailed": "Couldn't open the note.",
     "saveFailed": "Couldn't save the note.",
-    "deleteFailed": "Couldn't delete the note.",
+    "superseded": "Replaced",
+    "retire": "Retire",
+    "retireConfirm": "Retire this note? Agents stop seeing it. It is kept in the memory trash folder.",
+    "retireFailed": "Couldn't retire the note.",
+    "pin": "Pin to facts",
+    "confirm": "Confirm",
+    "confirmHint": "An Agent wrote this. Confirm it to make it yours: every Agent then gets it in new chats.",
+    "confirmed": "Confirmed. Every Agent gets this note in new chats.",
     "source": {
+      "user": "You",
       "agent": "Learned",
-      "user": "Instruction",
-      "page": "From a web page"
+      "page": "From a web page",
+      "sharedAgent": "Written by an Agent"
+    },
+    "types": {
+      "instructions": "Instruction to the Agent",
+      "fact": "Fact",
+      "preference": "Preference",
+      "person": "Person",
+      "project": "Project",
+      "decision": "Decision",
+      "procedure": "How-to",
+      "source": "Web source"
+    },
+    "dialog": {
+      "newTitle": "New note",
+      "editTitle": "Note",
+      "type": "Type",
+      "title": "Title",
+      "summary": "Summary",
+      "body": "Details",
+      "tags": "Tags",
+      "tagsPlaceholder": "Type a tag and press Enter"
+    },
+    "errors": {
+      "invalid": "Check the note: a field is empty or too long.",
+      "notFound": "This note no longer exists.",
+      "stale": "This note changed elsewhere since you opened it. Showing the latest version.",
+      "limitReached": "This memory is full. Retire some notes first.",
+      "conflict": "The memory folder is in an unexpected state, so nothing was changed.",
+      "io": "Couldn't read or write the memory files.",
+      "forbidden": "That isn't allowed for this memory."
+    },
+    "health": {
+      "title": "Memory health",
+      "count": "{{notes}} of {{max}} notes",
+      "trash": "In the trash: {{trash}}",
+      "allClear": "Nothing to tidy.",
+      "loadFailed": "Couldn't check the memory.",
+      "duplicates": "Possible duplicates",
+      "duplicatesHint": "These notes look like the same thing. Keep the newest and retire the rest.",
+      "orphanLinks": "Links to missing notes",
+      "orphanLinksHint": "These notes link to a note that doesn't exist.",
+      "stale": "May be out of date",
+      "staleHint": "Not updated for {{days}} days or more. Check they're still true.",
+      "open": "Open",
+      "stillTrue": "Still true",
+      "retireDuplicateConfirm": "Retire this copy? The newest one stays. Retired notes are kept in the memory trash folder."
+    },
+    "tidy": {
+      "button": "Tidy memory",
+      "hint": "Opens a new chat with a tidy-up request for you to review and send. Tidying runs on the Agent's model, like any chat.",
+      "prompt": "Please tidy up your long-term memory using your memory tools:\n1. Look through your memory with memory_search, and read notes in full with memory_read.\n2. Merge duplicates: keep the best note and update it with memory_save, then supersede or retire (memory_retire) the extra copies.\n3. Fix contradictions: save the correct version with memory_save and supersede, so the old note stays as history.\n4. If you're unsure whether something is still true or which version is right, ask me before changing it.\n5. Never change notes I wrote myself.\n6. When you're done, summarise what you changed.",
+      "promptShared": "Please tidy up the shared memory about me (scope \"shared\") using your memory tools:\n1. Look through it with memory_search, and read notes in full with memory_read (scope \"shared\").\n2. Merge duplicates: keep the best note and update it with memory_save (scope \"shared\"), then supersede or retire (memory_retire, scope \"shared\") the extra copies.\n3. Fix contradictions: save the correct version with memory_save and supersede, so the old note stays as history.\n4. If you're unsure whether something is still true or which version is right, ask me before changing it.\n5. Never change notes I wrote myself.\n6. Only change the shared memory. When you're done, summarise what you changed."
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "its {{count}} chat, with its messages, files and history",
     "chats_other": "its {{count}} chats, with their messages, files and history",
     "browserProfile": "its browser profile: cookies, sign-ins, site data and extensions",
-    "notebook": "its notebook (what it learned) and its rules",
+    "notebook": "its memory and notebook (what it learned) and its rules",
     "tasks": "its {{count}} scheduled tasks",
     "tasks_one": "its {{count}} scheduled task",
     "tasks_other": "its {{count}} scheduled tasks",

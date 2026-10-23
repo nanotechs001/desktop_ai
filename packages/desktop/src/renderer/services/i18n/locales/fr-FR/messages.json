@@ -109,6 +109,13 @@
     "fromPage": "D’une page web · non vérifié",
     "open": "Ouvrir le carnet"
   },
+  "memoryChip": {
+    "created": "Retenu",
+    "updated": "Mis à jour",
+    "superseded": "A remplacé un fait obsolète",
+    "aboutYou": "À propos de vous",
+    "open": "Ouvrir la mémoire"
+  },
   "skillCard": {
     "title": "Enregistrer comme compétence ?",
     "appliesWhen": "S'applique quand : {{description}}",

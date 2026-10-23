@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "El agente predeterminado no se puede eliminar.",
   "ruleMarkersBroken": "Corrige los marcadores de bloque de Pixebot Browser en las instrucciones de este agente.",
   "ruleTooLong": "Estas instrucciones son demasiado largas",
-  "notebook": {
-    "title": "Cuaderno",
-    "hint": "Lo que este Agente aprendió y tus instrucciones. Se añaden a sus instrucciones en los chats nuevos.",
-    "addInstruction": "Añadir instrucción",
-    "placeholder": "Una instrucción para este Agente",
-    "empty": "Aún no hay notas.",
-    "loadFailed": "No se pudo cargar el cuaderno.",
+  "memory": {
+    "title": "Memoria",
+    "hint": "Lo que este Agente recuerda entre chats. Los datos fijados y las instrucciones le llegan en cada chat nuevo; el resto lo busca mientras trabaja.",
+    "tabs": {
+      "agent": "Este Agente",
+      "shared": "Sobre ti"
+    },
+    "sharedHint": "Lo que tus Agentes saben de ti. Todos los Agentes leen esta memoria.",
+    "core": {
+      "title": "Datos fijados",
+      "hint": "Siempre se dan al Agente en los chats nuevos. Que sean breves.",
+      "placeholder": "- Prefiere respuestas cortas\n- Trabaja con la hora de Lisboa",
+      "saveFailed": "No se pudieron guardar los datos fijados.",
+      "full": "Los datos fijados están llenos. Acórtalos primero."
+    },
+    "pinned": "Fijado.",
+    "search": "Buscar en la memoria",
+    "allTypes": "Todos los tipos",
+    "addNote": "Añadir nota",
+    "openFolder": "Abrir carpeta",
+    "openFolderFailed": "No se pudo abrir la carpeta.",
+    "empty": "Aún no recuerda nada.",
+    "noMatch": "Ninguna nota coincide.",
+    "loadFailed": "No se pudo cargar la memoria.",
+    "loadNoteFailed": "No se pudo abrir la nota.",
     "saveFailed": "No se pudo guardar la nota.",
-    "deleteFailed": "No se pudo eliminar la nota.",
+    "superseded": "Reemplazada",
+    "retire": "Retirar",
+    "retireConfirm": "¿Retirar esta nota? Los Agentes dejarán de verla. Se conserva en la papelera de la memoria.",
+    "retireFailed": "No se pudo retirar la nota.",
+    "pin": "Fijar en datos",
+    "confirm": "Confirmar",
+    "confirmHint": "Esto lo escribió un Agente. Confírmalo para hacerlo tuyo: así todos los Agentes lo recibirán en los chats nuevos.",
+    "confirmed": "Confirmada. Todos los Agentes recibirán esta nota en los chats nuevos.",
     "source": {
+      "user": "Tú",
       "agent": "Aprendido",
-      "user": "Instrucción",
-      "page": "De una página web"
+      "page": "De una página web",
+      "sharedAgent": "Escrito por un Agente"
+    },
+    "types": {
+      "instructions": "Instrucción para el Agente",
+      "fact": "Dato",
+      "preference": "Preferencia",
+      "person": "Persona",
+      "project": "Proyecto",
+      "decision": "Decisión",
+      "procedure": "Procedimiento",
+      "source": "Fuente web"
+    },
+    "dialog": {
+      "newTitle": "Nueva nota",
+      "editTitle": "Nota",
+      "type": "Tipo",
+      "title": "Título",
+      "summary": "Resumen",
+      "body": "Detalles",
+      "tags": "Etiquetas",
+      "tagsPlaceholder": "Escribe una etiqueta y pulsa Intro"
+    },
+    "errors": {
+      "invalid": "Revisa la nota: un campo está vacío o es demasiado largo.",
+      "notFound": "Esta nota ya no existe.",
+      "stale": "Esta nota cambió en otro lugar desde que la abriste. Se muestra la versión más reciente.",
+      "limitReached": "Esta memoria está llena. Retira algunas notas primero.",
+      "conflict": "La carpeta de memoria está en un estado inesperado, así que no se cambió nada.",
+      "io": "No se pudieron leer ni escribir los archivos de memoria.",
+      "forbidden": "Eso no está permitido para esta memoria."
+    },
+    "health": {
+      "title": "Estado de la memoria",
+      "count": "{{notes}} de {{max}} notas",
+      "trash": "En la papelera: {{trash}}",
+      "allClear": "No hay nada que ordenar.",
+      "loadFailed": "No se pudo revisar la memoria.",
+      "duplicates": "Posibles duplicados",
+      "duplicatesHint": "Estas notas parecen decir lo mismo. Conserva la más reciente y retira las demás.",
+      "orphanLinks": "Enlaces a notas que no existen",
+      "orphanLinksHint": "Estas notas enlazan a una nota que no existe.",
+      "stale": "Puede estar desactualizado",
+      "staleHint": "Sin actualizar desde hace {{days}} días o más. Comprueba que siguen siendo ciertas.",
+      "open": "Abrir",
+      "stillTrue": "Sigue siendo cierto",
+      "retireDuplicateConfirm": "¿Retirar esta copia? Se conserva la más reciente. Las notas retiradas se guardan en la papelera de la memoria."
+    },
+    "tidy": {
+      "button": "Ordenar la memoria",
+      "hint": "Abre un chat nuevo con una petición de orden que revisas y envías tú. Como cualquier chat, usa el modelo del Agente.",
+      "prompt": "Ordena tu memoria a largo plazo con tus herramientas de memoria:\n1. Revisa tu memoria con memory_search y lee las notas completas con memory_read.\n2. Une los duplicados: conserva la mejor nota y actualízala con memory_save; después sustituye (supersede) o retira (memory_retire) las copias sobrantes.\n3. Corrige las contradicciones: guarda la versión correcta con memory_save y supersede, para que la nota antigua quede como historial.\n4. Si no estás seguro de si algo sigue siendo cierto o de qué versión es la correcta, pregúntame antes de cambiarlo.\n5. Nunca cambies notas que haya escrito yo.\n6. Al terminar, resume lo que has cambiado.",
+      "promptShared": "Ordena la memoria compartida sobre mí (scope \"shared\") con tus herramientas de memoria:\n1. Revísala con memory_search y lee las notas completas con memory_read (scope \"shared\").\n2. Une los duplicados: conserva la mejor nota y actualízala con memory_save (scope \"shared\"); después sustituye (supersede) o retira (memory_retire, scope \"shared\") las copias sobrantes.\n3. Corrige las contradicciones: guarda la versión correcta con memory_save y supersede, para que la nota antigua quede como historial.\n4. Si no estás seguro de si algo sigue siendo cierto o de qué versión es la correcta, pregúntame antes de cambiarlo.\n5. Nunca cambies notas que haya escrito yo.\n6. Cambia solo la memoria compartida. Al terminar, resume lo que has cambiado."
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "su {{count}} chat, con sus mensajes, archivos e historial",
     "chats_other": "sus {{count}} chats, con sus mensajes, archivos e historial",
     "browserProfile": "su perfil de navegador: cookies, inicios de sesión, datos de sitios y extensiones",
-    "notebook": "su cuaderno (lo que aprendió) y sus reglas",
+    "notebook": "su memoria y su cuaderno (lo que aprendió) y sus reglas",
     "tasks": "sus {{count}} tareas programadas",
     "tasks_one": "su {{count}} tarea programada",
     "tasks_other": "sus {{count}} tareas programadas",

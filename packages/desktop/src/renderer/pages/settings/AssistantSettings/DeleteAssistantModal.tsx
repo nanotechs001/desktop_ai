@@ -92,7 +92,11 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
                 defaultValue: 'its browser profile: cookies, sign-ins, site data and extensions',
               })}
             </li>
-            <li>{t('agent.deleteBot.notebook', { defaultValue: 'its notebook (what it learned) and its rules' })}</li>
+            <li>
+              {t('agent.deleteBot.notebook', {
+                defaultValue: 'its memory and notebook (what it learned) and its rules',
+              })}
+            </li>
             {preview.tasks > 0 && (
               <li>
                 {t('agent.deleteBot.tasks', { count: preview.tasks, defaultValue: 'its {{count}} scheduled tasks' })}

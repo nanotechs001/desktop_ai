@@ -5,7 +5,10 @@
  */
 
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { notesRoot, readNotes, upsertNotesBlock } from '@process/artifacts/notes';
+import { notesRoot, upsertNotesBlock } from '@process/artifacts/notes';
+import { notebookForRule } from '@process/artifacts/memory/memoryNotebook';
+import { getMemoryStore } from '@process/artifacts/memory/memoryApi';
+import { readMemoryBlock, upsertMemoryBlock } from '@process/artifacts/memory/memoryRule';
 import { createSerialiser } from '@process/artifacts/store';
 import type { UpsertManagedBlockResult } from '@/common/types/agent/managedRuleBlock';
 import { ruleBotName, upsertBrowserRule } from './browserRule';
@@ -24,6 +27,8 @@ export type AssistantRuleDeps = {
   deleteRule?(id: string): Promise<void>;
   /** The Agent's notebook; without it the notes block is left as it is. */
   listNotes?(id: string): Promise<Note[]>;
+  /** The Agent's rendered memory block (its own and the shared memory); without it the block is left as it is. */
+  readMemory?(id: string): Promise<string>;
   /** The app's UI locale, the other rule the editor writes besides the default; none means the default only. */
   currentLocale?(): Promise<string | undefined>;
 };
@@ -75,7 +80,9 @@ export const backendAssistantRuleDeps: AssistantRuleDeps = {
   async deleteRule(id) {
     await httpRequest<boolean>('DELETE', `/api/skills/assistant-rule/${encodeURIComponent(id)}`);
   },
-  listNotes: (id) => readNotes(notesRoot(), id),
+  // Empty once the Agent's notebook is in its memory, which removes the old `# Notebook` block.
+  listNotes: (id) => notebookForRule(getMemoryStore(), notesRoot(), id),
+  readMemory: (id) => readMemoryBlock(getMemoryStore(), id),
   async currentLocale() {
     // Loaded on use: initStorage pulls in the whole storage layer, which unit tests of these rules don't need.
     const [{ ProcessConfig }, { normalizeLanguageCode }] = await Promise.all([
@@ -117,9 +124,24 @@ const ruleQueue = <T>(id: string, task: () => Promise<T>): Promise<T> =>
       })
   );
 
+/** Adds one managed block; a source that can't be read leaves that block as it is and keeps the rest. */
+async function withBlock(
+  previous: UpsertManagedBlockResult,
+  read: (() => Promise<UpsertManagedBlockResult>) | null,
+  what: string
+): Promise<UpsertManagedBlockResult> {
+  if (!previous.ok || !read) return previous;
+  try {
+    return await read();
+  } catch (error) {
+    console.warn(`[AionUi] ${what} unreadable; the rest of the rule was updated:`, error);
+    return previous;
+  }
+}
+
 /**
- * The user's text plus the browser block (naming the bot `name`) plus the notes block. A notebook that can't be read
- * is left as it is.
+ * The user's text plus the browser block (naming the bot `name`), the notes block and the memory block. A notebook
+ * or a memory that can't be read is left as it is.
  */
 async function composeRule(
   deps: AssistantRuleDeps,
@@ -128,13 +150,17 @@ async function composeRule(
   name: string | undefined
 ): Promise<UpsertManagedBlockResult> {
   const browser = upsertBrowserRule(text, name);
-  if (!browser.ok || !deps.listNotes) return browser;
-  try {
-    return upsertNotesBlock(browser.content, await deps.listNotes(id));
-  } catch (error) {
-    console.warn(`[AionUi] Notebook of assistant '${id}' unreadable; only the browser block was updated:`, error);
-    return browser;
-  }
+  const { listNotes, readMemory } = deps;
+  const notes = await withBlock(
+    browser,
+    listNotes && browser.ok ? async () => upsertNotesBlock(browser.content, await listNotes(id)) : null,
+    `Notebook of assistant '${id}'`
+  );
+  return withBlock(
+    notes,
+    readMemory && notes.ok ? async () => upsertMemoryBlock(notes.content, await readMemory(id)) : null,
+    `Memory of assistant '${id}'`
+  );
 }
 
 /**

@@ -109,6 +109,13 @@
     "fromPage": "Von einer Webseite · ungeprüft",
     "open": "Notizbuch öffnen"
   },
+  "memoryChip": {
+    "created": "Gemerkt",
+    "updated": "Aktualisiert",
+    "superseded": "Veralteten Fakt ersetzt",
+    "aboutYou": "Über Sie",
+    "open": "Gedächtnis öffnen"
+  },
   "skillCard": {
     "title": "Als Skill speichern?",
     "appliesWhen": "Gilt, wenn: {{description}}",

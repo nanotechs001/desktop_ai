@@ -8,13 +8,11 @@ import { Button } from '@arco-design/web-react';
 import { BookOne } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
-import type { NoteChipData } from '@/common/chat/artifactToolCall';
-import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
+import type { NotebookChipData } from '@/common/chat/artifactToolCall';
 import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
-import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
+import { useChatAgent } from './useChatAgent';
 
-export type NoteSavedChipProps = NoteChipData & { conversationId?: string };
+export type NoteSavedChipProps = NotebookChipData & { conversationId?: string };
 
 /**
  * Chat chip for a note an agent saved to its notebook: the note (plain text), where it came from, and a link to the
@@ -24,12 +22,7 @@ export type NoteSavedChipProps = NoteChipData & { conversationId?: string };
 const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversationId }) => {
   const { t } = useTranslation();
   const { openBotSettings } = useChatNavigation();
-  // Shares the chat page's cache entry, so this is no extra request.
-  const { data: conversation } = useSWR(conversationId ? `conversation/${conversationId}` : null, () =>
-    getConversationOrNull(conversationId!)
-  );
-  const agentId = conversation?.assistant?.id ?? DEFAULT_AGENT_ID;
-  const agentUnresolved = conversationId !== undefined && conversation === null;
+  const { agentId, unresolved: agentUnresolved, loading } = useChatAgent(conversationId);
 
   return (
     <div className='flex flex-col gap-4px rounded-8px border bg-1 p-12px max-w-420px' data-testid='note-saved-chip'>
@@ -43,13 +36,7 @@ const NoteSavedChip: React.FC<NoteSavedChipProps> = ({ text, source, conversatio
       <div className='text-13px text-t-primary break-words'>{text}</div>
       {agentUnresolved ? null : (
         <div>
-          <Button
-            size='mini'
-            type='text'
-            className='!px-0'
-            disabled={conversationId !== undefined && conversation === undefined}
-            onClick={() => openBotSettings(agentId)}
-          >
+          <Button size='mini' type='text' className='!px-0' disabled={loading} onClick={() => openBotSettings(agentId)}>
             {t('messages.noteChip.open')}
           </Button>
         </div>

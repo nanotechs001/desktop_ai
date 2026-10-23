@@ -109,6 +109,13 @@
     "fromPage": "Web ページから · 未確認",
     "open": "ノートブックを開く"
   },
+  "memoryChip": {
+    "created": "記憶しました",
+    "updated": "更新しました",
+    "superseded": "古い事実を置き換えました",
+    "aboutYou": "あなたについて",
+    "open": "メモリーを開く"
+  },
   "skillCard": {
     "title": "スキルとして保存しますか？",
     "appliesWhen": "適用条件：{{description}}",

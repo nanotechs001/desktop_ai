@@ -306,8 +306,8 @@ export function createAgentResolver(deps: AgentLookupDeps): AgentResolver {
   return Object.assign(resolve, { forgetAgent });
 }
 
-/** What the artifact server needs to serve `POST /api/notes/add`. */
+/** What the artifact server needs to serve `POST /api/notes/add` (the old tool; it now saves into memory). */
 export type NotesApi = {
-  store: NotesStore;
+  add: (agentId: string, text: string, source: NoteSource) => Promise<ArtifactResult<Note>>;
   resolveAgent: (conversationId: string) => Promise<AgentResolution>;
 };

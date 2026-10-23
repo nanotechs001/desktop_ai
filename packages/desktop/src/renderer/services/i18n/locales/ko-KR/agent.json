@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "기본 에이전트는 삭제할 수 없습니다.",
   "ruleMarkersBroken": "이 에이전트 지침의 Pixebot Browser 블록 마커를 수정하세요.",
   "ruleTooLong": "이 지시가 너무 깁니다",
-  "notebook": {
-    "title": "노트",
-    "hint": "이 에이전트가 배운 내용과 사용자의 지시입니다. 새 채팅에서 지시에 추가됩니다.",
-    "addInstruction": "지시 추가",
-    "placeholder": "이 에이전트에 대한 지시",
-    "empty": "아직 노트가 없습니다.",
-    "loadFailed": "노트를 불러올 수 없습니다.",
-    "saveFailed": "노트를 저장할 수 없습니다.",
-    "deleteFailed": "노트를 삭제할 수 없습니다.",
+  "memory": {
+    "title": "메모리",
+    "hint": "이 에이전트가 채팅 간에 기억하는 내용입니다. 고정된 사실과 지침은 새 채팅마다 전달되고, 나머지는 작업 중에 검색합니다.",
+    "tabs": {
+      "agent": "이 에이전트",
+      "shared": "나에 대해"
+    },
+    "sharedHint": "에이전트들이 나에 대해 알고 있는 내용입니다. 모든 에이전트가 이 메모리를 읽습니다.",
+    "core": {
+      "title": "고정된 사실",
+      "hint": "새 채팅에서 항상 에이전트에게 전달됩니다. 짧게 유지하세요.",
+      "placeholder": "- 짧은 답변을 선호함\n- 리스본 시간 기준으로 일함",
+      "saveFailed": "고정된 사실을 저장하지 못했습니다.",
+      "full": "고정된 사실이 가득 찼습니다. 먼저 줄여 주세요."
+    },
+    "pinned": "고정했습니다.",
+    "search": "메모리 검색",
+    "allTypes": "모든 유형",
+    "addNote": "메모 추가",
+    "openFolder": "폴더 열기",
+    "openFolderFailed": "폴더를 열지 못했습니다.",
+    "empty": "아직 기억한 내용이 없습니다.",
+    "noMatch": "일치하는 메모가 없습니다.",
+    "loadFailed": "메모리를 불러오지 못했습니다.",
+    "loadNoteFailed": "메모를 열지 못했습니다.",
+    "saveFailed": "메모를 저장하지 못했습니다.",
+    "superseded": "대체됨",
+    "retire": "폐기",
+    "retireConfirm": "이 메모를 폐기할까요? 에이전트가 더 이상 보지 않습니다. 메모리 휴지통에 보관됩니다.",
+    "retireFailed": "메모를 폐기하지 못했습니다.",
+    "pin": "사실에 고정",
+    "confirm": "확인",
+    "confirmHint": "에이전트가 작성한 내용입니다. 확인하면 내 메모가 되어 모든 에이전트가 새 채팅에서 받게 됩니다.",
+    "confirmed": "확인했습니다. 모든 에이전트가 새 채팅에서 이 메모를 받습니다.",
     "source": {
+      "user": "나",
       "agent": "학습함",
-      "user": "지시",
-      "page": "웹 페이지에서"
+      "page": "웹 페이지에서",
+      "sharedAgent": "에이전트가 작성"
+    },
+    "types": {
+      "instructions": "에이전트에 대한 지침",
+      "fact": "사실",
+      "preference": "선호",
+      "person": "인물",
+      "project": "프로젝트",
+      "decision": "결정",
+      "procedure": "방법",
+      "source": "웹 출처"
+    },
+    "dialog": {
+      "newTitle": "새 메모",
+      "editTitle": "메모",
+      "type": "유형",
+      "title": "제목",
+      "summary": "요약",
+      "body": "세부 정보",
+      "tags": "태그",
+      "tagsPlaceholder": "태그를 입력하고 Enter를 누르세요"
+    },
+    "errors": {
+      "invalid": "메모를 확인하세요. 비어 있거나 너무 긴 항목이 있습니다.",
+      "notFound": "이 메모는 더 이상 존재하지 않습니다.",
+      "stale": "메모를 연 이후 다른 곳에서 변경되었습니다. 최신 버전을 표시합니다.",
+      "limitReached": "이 메모리가 가득 찼습니다. 먼저 일부 메모를 폐기하세요.",
+      "conflict": "메모리 폴더가 예상치 못한 상태여서 아무것도 변경하지 않았습니다.",
+      "io": "메모리 파일을 읽거나 쓰지 못했습니다.",
+      "forbidden": "이 메모리에서는 허용되지 않는 작업입니다."
+    },
+    "health": {
+      "title": "메모리 상태",
+      "count": "메모 {{notes}} / {{max}}개",
+      "trash": "휴지통: {{trash}}개",
+      "allClear": "정리할 것이 없습니다.",
+      "loadFailed": "메모리를 확인하지 못했습니다.",
+      "duplicates": "중복 가능성",
+      "duplicatesHint": "이 메모들은 같은 내용으로 보입니다. 가장 최신 메모를 남기고 나머지는 폐기하세요.",
+      "orphanLinks": "없는 메모로 향하는 링크",
+      "orphanLinksHint": "이 메모들은 존재하지 않는 메모에 링크되어 있습니다.",
+      "stale": "오래되었을 수 있음",
+      "staleHint": "{{days}}일 이상 업데이트되지 않았습니다. 아직 맞는지 확인하세요.",
+      "open": "열기",
+      "stillTrue": "여전히 맞음",
+      "retireDuplicateConfirm": "이 사본을 폐기할까요? 가장 최신 메모는 남습니다. 폐기한 메모는 메모리 휴지통에 보관됩니다."
+    },
+    "tidy": {
+      "button": "메모리 정리",
+      "hint": "정리 요청이 입력된 새 채팅을 엽니다. 검토한 뒤 직접 보내세요. 다른 채팅과 마찬가지로 에이전트의 모델을 사용합니다.",
+      "prompt": "메모리 도구를 사용해 장기 메모리를 정리해 주세요:\n1. memory_search로 메모리를 살펴보고, memory_read로 메모 전체를 읽으세요.\n2. 중복 합치기: 가장 좋은 메모를 남겨 memory_save로 업데이트하고, 남는 사본은 대체(supersede)하거나 폐기(memory_retire)하세요.\n3. 모순 바로잡기: 올바른 내용을 memory_save와 supersede로 저장해 이전 메모가 기록으로 남게 하세요.\n4. 아직 맞는지, 어느 쪽이 맞는지 확실하지 않으면 바꾸기 전에 저에게 물어보세요.\n5. 제가 직접 쓴 메모는 절대 바꾸지 마세요.\n6. 끝나면 무엇을 바꿨는지 요약해 주세요.",
+      "promptShared": "메모리 도구를 사용해 저에 대한 공유 메모리(scope \"shared\")를 정리해 주세요:\n1. memory_search로 살펴보고, memory_read(scope \"shared\")로 메모 전체를 읽으세요.\n2. 중복 합치기: 가장 좋은 메모를 남겨 memory_save(scope \"shared\")로 업데이트하고, 남는 사본은 대체(supersede)하거나 폐기(memory_retire, scope \"shared\")하세요.\n3. 모순 바로잡기: 올바른 내용을 memory_save와 supersede로 저장해 이전 메모가 기록으로 남게 하세요.\n4. 아직 맞는지, 어느 쪽이 맞는지 확실하지 않으면 바꾸기 전에 저에게 물어보세요.\n5. 제가 직접 쓴 메모는 절대 바꾸지 마세요.\n6. 공유 메모리만 바꾸세요. 끝나면 무엇을 바꿨는지 요약해 주세요."
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "채팅 {{count}}개(메시지, 파일, 기록 포함)",
     "chats_other": "채팅 {{count}}개(메시지, 파일, 기록 포함)",
     "browserProfile": "브라우저 프로필: 쿠키, 로그인 정보, 사이트 데이터, 확장 프로그램",
-    "notebook": "노트북(학습한 내용)과 규칙",
+    "notebook": "메모리와 노트북(학습한 내용)과 규칙",
     "tasks": "예약된 작업 {{count}}개",
     "tasks_one": "예약된 작업 {{count}}개",
     "tasks_other": "예약된 작업 {{count}}개",

@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "Der Standard-Agent kann nicht gelöscht werden.",
   "ruleMarkersBroken": "Korrigiere die Pixebot Browser-Blockmarkierungen in den Anweisungen dieses Agents.",
   "ruleTooLong": "Diese Anweisungen sind zu lang",
-  "notebook": {
-    "title": "Notizbuch",
-    "hint": "Was dieser Agent gelernt hat, und Ihre Anweisungen. Sie werden in neuen Chats zu seinen Anweisungen hinzugefügt.",
-    "addInstruction": "Anweisung hinzufügen",
-    "placeholder": "Eine Anweisung für diesen Agenten",
-    "empty": "Noch keine Notizen.",
-    "loadFailed": "Das Notizbuch konnte nicht geladen werden.",
+  "memory": {
+    "title": "Gedächtnis",
+    "hint": "Was sich dieser Agent über Chats hinweg merkt. Feste Fakten und Anweisungen erhält er in jedem neuen Chat; den Rest durchsucht er bei der Arbeit.",
+    "tabs": {
+      "agent": "Dieser Agent",
+      "shared": "Über Sie"
+    },
+    "sharedHint": "Was Ihre Agenten über Sie wissen. Jeder Agent liest dieses Gedächtnis.",
+    "core": {
+      "title": "Feste Fakten",
+      "hint": "Werden dem Agenten in neuen Chats immer mitgegeben. Halten Sie sie kurz.",
+      "placeholder": "- Bevorzugt kurze Antworten\n- Arbeitet nach Lissabonner Zeit",
+      "saveFailed": "Die festen Fakten konnten nicht gespeichert werden.",
+      "full": "Die festen Fakten sind voll. Kürzen Sie sie zuerst."
+    },
+    "pinned": "Angeheftet.",
+    "search": "Gedächtnis durchsuchen",
+    "allTypes": "Alle Typen",
+    "addNote": "Notiz hinzufügen",
+    "openFolder": "Ordner öffnen",
+    "openFolderFailed": "Der Ordner konnte nicht geöffnet werden.",
+    "empty": "Noch nichts gemerkt.",
+    "noMatch": "Keine passenden Notizen.",
+    "loadFailed": "Das Gedächtnis konnte nicht geladen werden.",
+    "loadNoteFailed": "Die Notiz konnte nicht geöffnet werden.",
     "saveFailed": "Die Notiz konnte nicht gespeichert werden.",
-    "deleteFailed": "Die Notiz konnte nicht gelöscht werden.",
+    "superseded": "Ersetzt",
+    "retire": "Ausmustern",
+    "retireConfirm": "Diese Notiz ausmustern? Agenten sehen sie dann nicht mehr. Sie bleibt im Papierkorb des Gedächtnisses.",
+    "retireFailed": "Die Notiz konnte nicht ausgemustert werden.",
+    "pin": "An Fakten anheften",
+    "confirm": "Bestätigen",
+    "confirmHint": "Ein Agent hat das geschrieben. Bestätigen Sie es, um es zu Ihrem zu machen: Dann erhält es jeder Agent in neuen Chats.",
+    "confirmed": "Bestätigt. Jeder Agent erhält diese Notiz in neuen Chats.",
     "source": {
+      "user": "Sie",
       "agent": "Gelernt",
-      "user": "Anweisung",
-      "page": "Von einer Webseite"
+      "page": "Von einer Webseite",
+      "sharedAgent": "Von einem Agenten geschrieben"
+    },
+    "types": {
+      "instructions": "Anweisung an den Agenten",
+      "fact": "Fakt",
+      "preference": "Vorliebe",
+      "person": "Person",
+      "project": "Projekt",
+      "decision": "Entscheidung",
+      "procedure": "Anleitung",
+      "source": "Webquelle"
+    },
+    "dialog": {
+      "newTitle": "Neue Notiz",
+      "editTitle": "Notiz",
+      "type": "Typ",
+      "title": "Titel",
+      "summary": "Zusammenfassung",
+      "body": "Details",
+      "tags": "Tags",
+      "tagsPlaceholder": "Tag eingeben und Enter drücken"
+    },
+    "errors": {
+      "invalid": "Prüfen Sie die Notiz: Ein Feld ist leer oder zu lang.",
+      "notFound": "Diese Notiz existiert nicht mehr.",
+      "stale": "Diese Notiz wurde an anderer Stelle geändert, seit Sie sie geöffnet haben. Die neueste Version wird angezeigt.",
+      "limitReached": "Dieses Gedächtnis ist voll. Mustern Sie zuerst einige Notizen aus.",
+      "conflict": "Der Gedächtnisordner ist in einem unerwarteten Zustand, daher wurde nichts geändert.",
+      "io": "Die Gedächtnisdateien konnten nicht gelesen oder geschrieben werden.",
+      "forbidden": "Das ist für dieses Gedächtnis nicht erlaubt."
+    },
+    "health": {
+      "title": "Zustand des Gedächtnisses",
+      "count": "{{notes}} von {{max}} Notizen",
+      "trash": "Im Papierkorb: {{trash}}",
+      "allClear": "Nichts aufzuräumen.",
+      "loadFailed": "Das Gedächtnis konnte nicht geprüft werden.",
+      "duplicates": "Mögliche Duplikate",
+      "duplicatesHint": "Diese Notizen scheinen dasselbe zu beschreiben. Behalten Sie die neueste und mustern Sie die übrigen aus.",
+      "orphanLinks": "Links auf fehlende Notizen",
+      "orphanLinksHint": "Diese Notizen verlinken auf eine Notiz, die es nicht gibt.",
+      "stale": "Möglicherweise veraltet",
+      "staleHint": "Seit {{days}} Tagen oder länger nicht aktualisiert. Prüfen Sie, ob sie noch stimmen.",
+      "open": "Öffnen",
+      "stillTrue": "Stimmt noch",
+      "retireDuplicateConfirm": "Diese Kopie ausmustern? Die neueste bleibt erhalten. Ausgemusterte Notizen bleiben im Papierkorb des Gedächtnisses."
+    },
+    "tidy": {
+      "button": "Gedächtnis aufräumen",
+      "hint": "Öffnet einen neuen Chat mit einer Aufräum-Anfrage, die Sie prüfen und absenden. Das Aufräumen läuft wie jeder Chat über das Modell des Agenten.",
+      "prompt": "Bitte räume dein Langzeitgedächtnis mit deinen Gedächtnis-Tools auf:\n1. Sieh dein Gedächtnis mit memory_search durch und lies Notizen vollständig mit memory_read.\n2. Führe Duplikate zusammen: Behalte die beste Notiz und aktualisiere sie mit memory_save, dann ersetze (supersede) oder mustere die überzähligen Kopien aus (memory_retire).\n3. Behebe Widersprüche: Speichere die richtige Fassung mit memory_save und supersede, damit die alte Notiz als Verlauf erhalten bleibt.\n4. Wenn du unsicher bist, ob etwas noch stimmt oder welche Fassung richtig ist, frag mich, bevor du etwas änderst.\n5. Ändere niemals Notizen, die ich selbst geschrieben habe.\n6. Fasse am Ende zusammen, was du geändert hast.",
+      "promptShared": "Bitte räume das gemeinsame Gedächtnis über mich (scope \"shared\") mit deinen Gedächtnis-Tools auf:\n1. Sieh es mit memory_search durch und lies Notizen vollständig mit memory_read (scope \"shared\").\n2. Führe Duplikate zusammen: Behalte die beste Notiz und aktualisiere sie mit memory_save (scope \"shared\"), dann ersetze (supersede) oder mustere die überzähligen Kopien aus (memory_retire, scope \"shared\").\n3. Behebe Widersprüche: Speichere die richtige Fassung mit memory_save und supersede, damit die alte Notiz als Verlauf erhalten bleibt.\n4. Wenn du unsicher bist, ob etwas noch stimmt oder welche Fassung richtig ist, frag mich, bevor du etwas änderst.\n5. Ändere niemals Notizen, die ich selbst geschrieben habe.\n6. Ändere nur das gemeinsame Gedächtnis. Fasse am Ende zusammen, was du geändert hast."
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "sein {{count}} Chat mit Nachrichten, Dateien und Verlauf",
     "chats_other": "seine {{count}} Chats mit Nachrichten, Dateien und Verlauf",
     "browserProfile": "sein Browserprofil: Cookies, Anmeldungen, Websitedaten und Erweiterungen",
-    "notebook": "sein Notizbuch (was er gelernt hat) und seine Regeln",
+    "notebook": "sein Gedächtnis und Notizbuch (was er gelernt hat) und seine Regeln",
     "tasks": "seine {{count}} geplanten Aufgaben",
     "tasks_one": "seine {{count}} geplante Aufgabe",
     "tasks_other": "seine {{count}} geplanten Aufgaben",

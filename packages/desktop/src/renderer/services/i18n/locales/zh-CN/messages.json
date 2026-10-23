@@ -109,6 +109,13 @@
     "fromPage": "来自网页 · 未经核实",
     "open": "打开笔记本"
   },
+  "memoryChip": {
+    "created": "已记住",
+    "updated": "已更新",
+    "superseded": "已替换过时的事实",
+    "aboutYou": "关于你",
+    "open": "打开记忆"
+  },
   "skillCard": {
     "title": "保存为技能？",
     "appliesWhen": "适用场景：{{description}}",

@@ -1506,6 +1506,41 @@ export const agentNotes = {
   removeAgent: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('agent-notes.remove-agent'),
 };
 
+// Long-term memory as the user sees it (Memory panel in the agent editor): an agent's own vault, or the shared one about
+// the user. Notes the user writes here are `source: 'user'` (agents can read them but never change them). Every change
+// re-syncs the memory block in the agents' rules. Desktop only, like the notebook.
+export const agentMemory = {
+  list: bridge.buildProvider<IBridgeResponse<MemoryNoteMeta[]>, { vault: MemoryVaultRef }>('agent-memory.list'),
+  get: bridge.buildProvider<IBridgeResponse<MemoryNote>, { vault: MemoryVaultRef; id: string }>('agent-memory.get'),
+  // a note the user writes (source 'user'; may be type 'instructions')
+  create: bridge.buildProvider<
+    IBridgeResponse<MemoryNote>,
+    { vault: MemoryVaultRef; input: Omit<MemoryNoteInput, 'source' | 'fromChat'> }
+  >('agent-memory.create'),
+  update: bridge.buildProvider<
+    IBridgeResponse<MemoryNote>,
+    { vault: MemoryVaultRef; id: string; patch: Omit<MemoryNotePatch, 'fromChat'>; version: string }
+  >('agent-memory.update'),
+  retire: bridge.buildProvider<IBridgeResponse<void>, { vault: MemoryVaultRef; id: string; reason: string }>(
+    'agent-memory.retire'
+  ),
+  // the user vouches for a note an agent wrote: it becomes theirs (source 'user'), so it reaches every agent's rule
+  confirm: bridge.buildProvider<IBridgeResponse<MemoryNote>, { vault: MemoryVaultRef; id: string; version: string }>(
+    'agent-memory.confirm'
+  ),
+  getCore: bridge.buildProvider<IBridgeResponse<string>, { vault: MemoryVaultRef }>('agent-memory.get-core'),
+  setCore: bridge.buildProvider<IBridgeResponse<void>, { vault: MemoryVaultRef; text: string }>(
+    'agent-memory.set-core'
+  ),
+  openFolder: bridge.buildProvider<IBridgeResponse<void>, { vault: MemoryVaultRef }>('agent-memory.open-folder'),
+  // what needs tidying: duplicates, links to missing notes, stale facts, and how full the vault and its trash are
+  hygiene: bridge.buildProvider<IBridgeResponse<MemoryHygieneReport>, { vault: MemoryVaultRef }>(
+    'agent-memory.hygiene'
+  ),
+  // a deleted Pixebot: its vault moves to the memory trash (the main agent's can't be removed)
+  removeAgent: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('agent-memory.remove-agent'),
+};
+
 /** Skills an agent proposed and the user saves from the review card. */
 export const agentSkills = {
   save: bridge.buildProvider<SaveSkillResult, SaveSkillRequest>('agent-skills.save'),
@@ -2423,6 +2458,14 @@ export const channel = {
 };
 
 import type { ArtifactMeta, Note } from '@/common/types/agent/artifacts';
+import type {
+  MemoryHygieneReport,
+  MemoryNote,
+  MemoryNoteInput,
+  MemoryNoteMeta,
+  MemoryNotePatch,
+  MemoryVaultRef,
+} from '@/common/types/agent/memory';
 import type { SaveSkillRequest, SaveSkillResult } from '@/common/types/agent/skillProposal';
 
 export type IRealtimeReconnectedEvent = {

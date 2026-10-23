@@ -25,6 +25,16 @@ vi.mock('@/renderer/utils/file/download', () => ({
   downloadFileFromPath: (...args: unknown[]) => mockDownloadFileFromPath(...args),
 }));
 
+vi.mock('@/renderer/pages/conversation/Messages/acp/MemorySavedChip', () => ({
+  default: ({ action, title }: { action: string; title: string }) => (
+    <div data-testid='memory-chip'>{`${action}:${title}`}</div>
+  ),
+}));
+
+vi.mock('@/renderer/pages/conversation/Messages/acp/NoteSavedChip', () => ({
+  default: ({ text }: { text: string }) => <div data-testid='note-chip'>{text}</div>,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -202,5 +212,38 @@ describe('MessageToolGroupSummary ACP image output', () => {
 
     expect(screen.queryByTestId('local-image')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('acp.image.download_aria')).not.toBeInTheDocument();
+  });
+});
+
+describe('MessageToolGroupSummary note chips', () => {
+  const call = (id: string, name: string, output: string): IMessageToolCall => ({
+    id,
+    conversation_id: 'conv-1',
+    type: 'tool_call',
+    content: { call_id: id, name, args: {}, status: 'completed', output },
+  });
+
+  it('shows a "Remembered" chip for memory_save and keeps the old notebook chip for add', () => {
+    const memory = JSON.stringify({
+      saved: true,
+      action: 'updated',
+      scope: 'own',
+      id: 'm1',
+      version: 'v',
+      title: 'Plan',
+    });
+    const notebook = JSON.stringify({ id: 'n1', saved: true, text: 'Prefers tea', source: 'agent' });
+
+    render(
+      <MessageToolGroupSummary
+        messages={[
+          call('t1', 'mcp__aionui-notes__memory_save', memory),
+          call('t2', 'mcp__aionui-notes__add', notebook),
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId('memory-chip')).toHaveTextContent('updated:Plan');
+    expect(screen.getByTestId('note-chip')).toHaveTextContent('Prefers tea');
   });
 });

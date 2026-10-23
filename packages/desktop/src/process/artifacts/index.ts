@@ -13,11 +13,19 @@ import { ipcBridge } from '@/common';
 import { getEnvAwareName } from '@/common/config/appEnv';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import type { Note } from '@/common/types/agent/artifacts';
+import type { MemoryNoteInput, MemoryResult, MemoryVaultRef } from '@/common/types/agent/memory';
 import { DEFAULT_AGENT_ID, DEFAULT_AGENT_SETTING_KEY } from '@/common/types/agent/defaultAgent';
-import { syncNotesToRule } from '@process/services/agentBrowser/assistantRules';
+import {
+  backendAssistantRuleDeps,
+  ensureBrowserRuleInAssistants,
+  syncNotesToRule,
+} from '@process/services/agentBrowser/assistantRules';
 import { backendDefaultAgentDeps } from '@process/services/agentBrowser/defaultAgent';
 import { createSkillSaver, type SkillSaverDeps } from '@process/services/agentSkills/saveSkill';
-import { createAgentResolver, createNotesStore, notesRoot, type NotesApi, type NotesStore } from './notes';
+import { createMemoryApi, getMemoryStore, onMemoryChange, type MemoryApiHandler } from './memory/memoryApi';
+import { createMemoryNotesAdd, migrateNotebooks } from './memory/memoryNotebook';
+import type { MemoryStore } from './memory/memoryStore';
+import { AGENT_ID_RE, createAgentResolver, createNotesStore, notesRoot, type NotesApi, type NotesStore } from './notes';
 import { renderArtifactPage } from './pages';
 import { startArtifactServer, type ArtifactServer } from './server';
 import { createArtifactStore, type ArtifactStore } from './store';
@@ -77,7 +85,7 @@ const rememberPort = async (rootDir: string, port: number): Promise<void> => {
  * without artifacts.
  */
 export async function startArtifacts(
-  opts: { rootDir?: string; port?: number; notes?: NotesApi } = {}
+  opts: { rootDir?: string; port?: number; notes?: NotesApi; memory?: MemoryApiHandler } = {}
 ): Promise<{ server: ArtifactServer; token: string; store: ArtifactStore } | null> {
   try {
     const rootDir = opts.rootDir ?? artifactsRoot();
@@ -91,6 +99,7 @@ export async function startArtifacts(
         libsDir: artifactLibsDir(),
         port,
         notes: opts.notes,
+        memory: opts.memory,
       });
     if (opts.port !== undefined) return { server: await start(opts.port), token, store };
     const lastPort = await readLastPort(rootDir);
@@ -309,8 +318,9 @@ export function startAgentSkills(): void {
 }
 
 /**
- * Sets up Agent notebooks: the store (every change re-syncs the Agent's rule), the renderer's `agentNotes` IPC, and
- * what the artifact server needs for the agents' `notes.add`. Call before `startArtifacts`.
+ * Sets up Agent notebooks: the store (every change re-syncs the Agent's rule) and the renderer's `agentNotes` IPC; and
+ * what the artifact server needs for the agents' old `notes.add`, which now saves into memory. Call before
+ * `startArtifacts`.
  */
 export async function startAgentNotes(): Promise<NotesApi> {
   // Loaded here, not at the top: services.ts pulls in Electron, which this module's unit tests run without.
@@ -323,5 +333,180 @@ export async function startAgentNotes(): Promise<NotesApi> {
   ipcBridge.agentNotes.delete.provider((request) => guardAsync(() => handlers.delete(request)));
   ipcBridge.agentNotes.removeAgent.provider((request) => guardAsync(() => handlers.removeAgent(request)));
   startAgentSkills();
-  return { store, resolveAgent: resolveChatAgent };
+  return { add: createMemoryNotesAdd(getMemoryStore()), resolveAgent: resolveChatAgent };
+}
+
+type MemoryReply<D = void> = { success: boolean; data?: D; msg?: string };
+
+/** A failed reply's `msg` is the error code (`invalid`, `not-found`, `stale`, ...), for the renderer to translate. */
+const INVALID_MEMORY_REQUEST = { success: false, msg: 'invalid' } as const;
+
+const fieldsOf = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+const vaultOf = (value: unknown): MemoryVaultRef | null => {
+  const vault = fieldsOf(value);
+  if (vault.kind === 'shared') return { kind: 'shared' };
+  return vault.kind === 'agent' && typeof vault.agentId === 'string' && AGENT_ID_RE.test(vault.agentId)
+    ? { kind: 'agent', agentId: vault.agentId }
+    : null;
+};
+
+const toMemoryReply = <T>(result: MemoryResult<T>): MemoryReply<T> =>
+  'value' in result ? { success: true, data: result.value } : { success: false, msg: result.error };
+
+/** The note fields the user sets; a `source` or `fromChat` sent by the renderer is dropped. The store checks values. */
+const USER_NOTE_FIELDS = ['type', 'title', 'summary', 'body', 'tags', 'confidence'] as const;
+const userNoteFields = (value: unknown): Record<string, unknown> => {
+  const fields = fieldsOf(value);
+  return Object.fromEntries(
+    USER_NOTE_FIELDS.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]])
+  );
+};
+
+/** The request's vault and its `keys` as strings, or null when any is missing or of the wrong kind. */
+const memoryArgs = (request: unknown, keys: string[]): { vault: MemoryVaultRef; values: string[] } | null => {
+  const fields = fieldsOf(request);
+  const vault = vaultOf(fields.vault);
+  const values = keys.map((key) => fields[key]);
+  return vault && values.every((value) => typeof value === 'string') ? { vault, values: values as string[] } : null;
+};
+
+export type MemoryIpcDeps = {
+  /** Opens a folder in the file manager; resolves to an error message, empty on success (Electron's `shell.openPath`). */
+  openPath(dir: string): Promise<string>;
+  /** Drops the chat lookups of a deleted agent. */
+  forgetAgent?(agentId: string): void;
+  /** Deletes a deleted agent's old notebook, which would otherwise be migrated into a new vault on the next start. */
+  removeNotebook?(agentId: string): Promise<void>;
+};
+
+/**
+ * The renderer's Memory panel IPC (`agentMemory.*`). Requests come from the renderer, so the vault and every field are
+ * checked here and again by the store. Notes the user creates are theirs (`source: user`, and only they may write
+ * instructions); an edit keeps a note's source, and `confirm` makes an agent's note the user's.
+ */
+export function createMemoryIpcHandlers(store: MemoryStore, deps: MemoryIpcDeps) {
+  return {
+    list: async (request: unknown) => {
+      const args = memoryArgs(request, []);
+      return args ? toMemoryReply(await store.list(args.vault)) : INVALID_MEMORY_REQUEST;
+    },
+    get: async (request: unknown) => {
+      const args = memoryArgs(request, ['id']);
+      return args ? toMemoryReply(await store.get(args.vault, args.values[0])) : INVALID_MEMORY_REQUEST;
+    },
+    create: async (request: unknown) => {
+      const args = memoryArgs(request, []);
+      const input = fieldsOf(request).input;
+      if (!args || typeof input !== 'object' || input === null) return INVALID_MEMORY_REQUEST;
+      const note = { ...userNoteFields(input), source: 'user' } as MemoryNoteInput;
+      return toMemoryReply(await store.create(args.vault, note));
+    },
+    update: async (request: unknown) => {
+      const args = memoryArgs(request, ['id', 'version']);
+      const patch = fieldsOf(request).patch;
+      if (!args || typeof patch !== 'object' || patch === null) return INVALID_MEMORY_REQUEST;
+      const [id, version] = args.values;
+      return toMemoryReply(await store.update(args.vault, id, userNoteFields(patch), version));
+    },
+    retire: async (request: unknown) => {
+      const args = memoryArgs(request, ['id', 'reason']);
+      return args
+        ? toMemoryReply(await store.retire(args.vault, args.values[0], args.values[1]))
+        : INVALID_MEMORY_REQUEST;
+    },
+    confirm: async (request: unknown) => {
+      const args = memoryArgs(request, ['id', 'version']);
+      return args
+        ? toMemoryReply(await store.confirm(args.vault, args.values[0], args.values[1]))
+        : INVALID_MEMORY_REQUEST;
+    },
+    getCore: async (request: unknown) => {
+      const args = memoryArgs(request, []);
+      return args ? toMemoryReply(await store.core(args.vault)) : INVALID_MEMORY_REQUEST;
+    },
+    setCore: async (request: unknown) => {
+      const args = memoryArgs(request, ['text']);
+      return args ? toMemoryReply(await store.setCore(args.vault, args.values[0])) : INVALID_MEMORY_REQUEST;
+    },
+    hygiene: async (request: unknown) => {
+      const args = memoryArgs(request, []);
+      return args ? toMemoryReply(await store.hygiene(args.vault)) : INVALID_MEMORY_REQUEST;
+    },
+    openFolder: async (request: unknown): Promise<MemoryReply> => {
+      const args = memoryArgs(request, []);
+      if (!args) return INVALID_MEMORY_REQUEST;
+      const dir = await store.folder(args.vault);
+      if (!('value' in dir)) return toMemoryReply(dir);
+      const error = await deps.openPath(dir.value);
+      if (!error) return { success: true };
+      console.warn('[memory] could not open the memory folder', error);
+      return { success: false, msg: 'io' };
+    },
+    removeAgent: async (request: unknown): Promise<MemoryReply> => {
+      const { agentId } = fieldsOf(request);
+      if (typeof agentId !== 'string' || !AGENT_ID_RE.test(agentId)) return INVALID_MEMORY_REQUEST;
+      // The main agent can't be deleted, so its memory never goes this way.
+      if (agentId === DEFAULT_AGENT_ID) return { success: false, msg: 'forbidden' };
+      const removed = await store.removeAgent(agentId);
+      if (!removed.ok) return toMemoryReply(removed);
+      deps.forgetAgent?.(agentId);
+      await deps.removeNotebook?.(agentId);
+      return { success: true };
+    },
+  };
+}
+
+/** How long after the last memory change the rules are rewritten, so a burst of saves costs one rewrite. */
+const MEMORY_RULE_SYNC_DELAY_MS = 2000;
+
+/**
+ * Memory: the handler the artifact server serves at `/api/memory/*`, the Memory panel's `agentMemory` IPC, and the
+ * agents' rules kept current (debounced) after each change. The shared memory is in every agent's rule; an agent's own
+ * only in its own. The old notebooks are copied into memory in the background; startup never waits for it.
+ */
+export async function startAgentMemory(): Promise<MemoryApiHandler> {
+  // Loaded here, not at the top: both pull in Electron, which this module's unit tests run without.
+  const [{ guardAsync }, { shell }] = await Promise.all([
+    import('@process/services/agentBrowser/services'),
+    import('electron'),
+  ]);
+  const store = getMemoryStore();
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const later = (key: string, task: () => Promise<unknown>) => {
+    clearTimeout(timers.get(key));
+    timers.set(
+      key,
+      setTimeout(() => {
+        timers.delete(key);
+        task().catch((error: unknown) => console.warn('[memory] rule sync failed', key, error));
+      }, MEMORY_RULE_SYNC_DELAY_MS)
+    );
+  };
+  onMemoryChange((vault) => {
+    if (vault.kind === 'shared') later('*shared', () => ensureBrowserRuleInAssistants(backendAssistantRuleDeps));
+    else later(vault.agentId, () => syncNotesToRule(vault.agentId));
+  });
+  const handlers = createMemoryIpcHandlers(store, {
+    openPath: (dir) => shell.openPath(dir),
+    forgetAgent: (agentId) => resolveChatAgent.forgetAgent(agentId),
+    removeNotebook: (agentId) => createNotesStore(notesRoot()).removeAgent(agentId),
+  });
+  const { agentMemory } = ipcBridge;
+  agentMemory.list.provider((request) => guardAsync(() => handlers.list(request)));
+  agentMemory.get.provider((request) => guardAsync(() => handlers.get(request)));
+  agentMemory.create.provider((request) => guardAsync(() => handlers.create(request)));
+  agentMemory.update.provider((request) => guardAsync(() => handlers.update(request)));
+  agentMemory.retire.provider((request) => guardAsync(() => handlers.retire(request)));
+  agentMemory.confirm.provider((request) => guardAsync(() => handlers.confirm(request)));
+  agentMemory.getCore.provider((request) => guardAsync(() => handlers.getCore(request)));
+  agentMemory.setCore.provider((request) => guardAsync(() => handlers.setCore(request)));
+  agentMemory.openFolder.provider((request) => guardAsync(() => handlers.openFolder(request)));
+  agentMemory.hygiene.provider((request) => guardAsync(() => handlers.hygiene(request)));
+  agentMemory.removeAgent.provider((request) => guardAsync(() => handlers.removeAgent(request)));
+  void migrateNotebooks(notesRoot(), store).catch((error: unknown) =>
+    console.error('[memory] could not migrate the old notebooks; trying again next start', error)
+  );
+  return createMemoryApi({ store, resolveAgent: resolveChatAgent });
 }

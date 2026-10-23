@@ -109,6 +109,13 @@
     "fromPage": "Bir web sayfasından · doğrulanmadı",
     "open": "Not defterini aç"
   },
+  "memoryChip": {
+    "created": "Hatırlandı",
+    "updated": "Güncellendi",
+    "superseded": "Eski bir bilgi değiştirildi",
+    "aboutYou": "Hakkınızda",
+    "open": "Belleği aç"
+  },
   "skillCard": {
     "title": "Beceri olarak kaydedilsin mi?",
     "appliesWhen": "Şu durumda geçerli: {{description}}",

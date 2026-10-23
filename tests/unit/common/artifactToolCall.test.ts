@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseArtifactToolCall, parseNoteToolCall, parseSkillProposalToolCall } from '@/common/chat/artifactToolCall';
+import {
+  detectBuiltinToolCards,
+  parseArtifactToolCall,
+  parseMemorySaveToolCall,
+  parseNoteToolCall,
+  parseSkillProposalToolCall,
+} from '@/common/chat/artifactToolCall';
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
 const url = `http://127.0.0.1:4300/a/${ID}`;
@@ -89,6 +95,80 @@ describe('parseNoteToolCall', () => {
   it('ignores other tools and servers', () => {
     expect(parseNoteToolCall('mcp__aionui-artifacts__create', saved)).toBeUndefined();
     expect(parseNoteToolCall('mcp__other-notes__add', saved)).toBeUndefined();
+  });
+});
+
+describe('parseMemorySaveToolCall', () => {
+  const result = (extra: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      saved: true,
+      action: 'created',
+      scope: 'own',
+      id: 'm1',
+      version: 'v1',
+      title: 'Client',
+      ...extra,
+    });
+
+  it.each(['mcp__aionui-notes__memory_save', 'aionui-notes.memory_save', 'aionui-notes - memory_save (MCP)'])(
+    'reads what %s remembered from its JSON result',
+    (name) => {
+      expect(parseMemorySaveToolCall(name, result())).toEqual({
+        kind: 'memory',
+        action: 'created',
+        scope: 'own',
+        title: 'Client',
+      });
+    }
+  );
+
+  it.each(['updated', 'superseded'] as const)('keeps the %s action and a shared scope', (action) => {
+    expect(parseMemorySaveToolCall('mcp__aionui-notes__memory_save', result({ action, scope: 'shared' }))).toEqual({
+      kind: 'memory',
+      action,
+      scope: 'shared',
+      title: 'Client',
+    });
+  });
+
+  it('recognises a bare memory_save when the server field names the notes server', () => {
+    expect(parseMemorySaveToolCall('memory_save', result(), 'aionui-notes')).toMatchObject({ title: 'Client' });
+    expect(parseMemorySaveToolCall('memory_save', result(), 'other')).toBeUndefined();
+  });
+
+  it.each([
+    ['an error text', 'A chat saves at most 30 notes'],
+    ['an unsaved result', result({ saved: false })],
+    ['an unknown action', result({ action: 'deleted' })],
+    ['an unknown scope', result({ scope: 'everyone' })],
+    ['a missing title', result({ title: '' })],
+    ['a missing id', result({ id: undefined })],
+    ['no output', undefined],
+  ])('ignores %s', (_label, output) => {
+    expect(parseMemorySaveToolCall('mcp__aionui-notes__memory_save', output)).toBeUndefined();
+  });
+
+  it('ignores other tools and servers', () => {
+    expect(parseMemorySaveToolCall('mcp__aionui-notes__add', result())).toBeUndefined();
+    expect(parseMemorySaveToolCall('mcp__other-notes__memory_save', result())).toBeUndefined();
+  });
+
+  it('is what a memory_save call shows, by name or by a wrapped call that names the tool', () => {
+    expect(detectBuiltinToolCards('mcp__aionui-notes__memory_save', {}, result()).note).toMatchObject({
+      kind: 'memory',
+    });
+    expect(detectBuiltinToolCards('execute', {}, result(), undefined, { script: 'memory_save(x)' }).note).toMatchObject(
+      { kind: 'memory', title: 'Client' }
+    );
+    expect(detectBuiltinToolCards('execute', {}, result(), undefined, { script: 'other' }).note).toBeUndefined();
+  });
+
+  it('still shows an old notebook save as a notebook note', () => {
+    const old = JSON.stringify({ id: 'n1', saved: true, text: 'Prefers metric units', source: 'agent' });
+    expect(detectBuiltinToolCards('mcp__aionui-notes__add', {}, old).note).toEqual({
+      text: 'Prefers metric units',
+      source: 'agent',
+    });
   });
 });
 

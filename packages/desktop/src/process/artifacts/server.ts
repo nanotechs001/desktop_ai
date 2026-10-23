@@ -15,6 +15,7 @@ import {
   type ArtifactResult,
   type ArtifactVersion,
 } from '@/common/types/agent/artifacts';
+import type { MemoryApiHandler } from './memory/memoryApi';
 import type { NotesApi } from './notes';
 import type { ArtifactStore } from './store';
 
@@ -36,6 +37,8 @@ export type ArtifactServerOptions = {
   port?: number;
   /** Serves `POST /api/notes/add` when given. */
   notes?: NotesApi;
+  /** Serves `POST /api/memory/{search,read,save,log,retire}` when given. */
+  memory?: MemoryApiHandler;
 };
 
 const HOST = '127.0.0.1';
@@ -67,6 +70,7 @@ const PAGE_RE = /^\/a\/([A-Za-z0-9_-]{22})(?:\/v\/([1-9]\d{0,8}))?$/;
 const LIB_RE = /^\/lib\/([A-Za-z0-9_-][A-Za-z0-9._-]{0,127})$/;
 const API_RE = /^\/api\/artifacts\/(create|update|get)$/;
 const NOTES_RE = /^\/api\/notes\/(add|list|update|delete)$/;
+const MEMORY_RE = /^\/api\/memory\/(search|read|save|log|retire)$/;
 const LIB_TYPES: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -161,7 +165,7 @@ const callStore = (
   return store.get(b.conversationId, b.id, b.version as number | undefined);
 };
 
-/** Adds a note to the notebook of the chat's Agent; the Agent comes from the conversation, never from the body. */
+/** The old `add` tool: saves a note for the chat's Agent; the Agent comes from the conversation, never from the body. */
 const addNote = async (notes: NotesApi, adds: Map<string, number>, b: ApiBody): Promise<unknown> => {
   if (typeof b.text !== 'string') return badRequest('text must be a string');
   if (b.fromPage !== undefined && typeof b.fromPage !== 'boolean') return badRequest('fromPage must be a boolean');
@@ -179,7 +183,7 @@ const addNote = async (notes: NotesApi, adds: Map<string, number>, b: ApiBody): 
   const result =
     agent.ok === false
       ? { ok: false as const, error: 'not-found' as const, message: agent.message }
-      : await notes.store.add(agent.agentId, b.text, b.fromPage ? 'page' : 'agent');
+      : await notes.add(agent.agentId, b.text, b.fromPage ? 'page' : 'agent');
   if (!result.ok) adds.set(b.conversationId, (adds.get(b.conversationId) ?? 1) - 1);
   return result;
 };
@@ -273,6 +277,9 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     const notesMatch = req.method === 'POST' && notes ? NOTES_RE.exec(pathname) : null;
     if (notes && notesMatch)
       return serveApi(req, res, notesMatch[1] === 'add' ? (b) => addNote(notes, noteAdds, b) : null);
+    const memory = opts.memory;
+    const memoryMatch = req.method === 'POST' && memory ? MEMORY_RE.exec(pathname) : null;
+    if (memory && memoryMatch) return serveApi(req, res, (b) => memory(memoryMatch[1], b));
     send(res, 404, TEXT_TYPE, 'Not found');
   };
 

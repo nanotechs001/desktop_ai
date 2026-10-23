@@ -67,19 +67,96 @@
   "cannotDeleteDefault": "默认 Agent 无法删除。",
   "ruleMarkersBroken": "请修正此 Agent 指令中的 Pixebot Browser 区块标记。",
   "ruleTooLong": "这些指令太长了",
-  "notebook": {
-    "title": "笔记本",
-    "hint": "此智能体学到的内容和你的指示。新对话中会加入它的指令。",
-    "addInstruction": "添加指示",
-    "placeholder": "给此智能体的一条指示",
-    "empty": "还没有笔记。",
-    "loadFailed": "无法加载笔记本。",
+  "memory": {
+    "title": "记忆",
+    "hint": "这个智能体在多次对话间记住的内容。固定事实和指令会在每个新对话中提供给它；其余内容它会在工作时检索。",
+    "tabs": {
+      "agent": "此智能体",
+      "shared": "关于你"
+    },
+    "sharedHint": "你的智能体对你的了解。所有智能体都会读取这份记忆。",
+    "core": {
+      "title": "固定事实",
+      "hint": "在新对话中始终提供给智能体。请保持简短。",
+      "placeholder": "- 喜欢简短的回答\n- 按里斯本时间工作",
+      "saveFailed": "无法保存固定事实。",
+      "full": "固定事实已满，请先精简。"
+    },
+    "pinned": "已固定。",
+    "search": "搜索记忆",
+    "allTypes": "所有类型",
+    "addNote": "添加笔记",
+    "openFolder": "打开文件夹",
+    "openFolderFailed": "无法打开文件夹。",
+    "empty": "还没有记住任何内容。",
+    "noMatch": "没有匹配的笔记。",
+    "loadFailed": "无法加载记忆。",
+    "loadNoteFailed": "无法打开笔记。",
     "saveFailed": "无法保存笔记。",
-    "deleteFailed": "无法删除笔记。",
+    "superseded": "已替换",
+    "retire": "停用",
+    "retireConfirm": "停用这条笔记？智能体将不再看到它，它会保留在记忆回收站中。",
+    "retireFailed": "无法停用笔记。",
+    "pin": "固定到事实",
+    "confirm": "确认",
+    "confirmHint": "这是智能体写的。确认后它就归你所有，所有智能体都会在新对话中获得它。",
+    "confirmed": "已确认。所有智能体都会在新对话中获得这条笔记。",
     "source": {
+      "user": "你",
       "agent": "已学到",
-      "user": "指示",
-      "page": "来自网页"
+      "page": "来自网页",
+      "sharedAgent": "由智能体编写"
+    },
+    "types": {
+      "instructions": "给智能体的指令",
+      "fact": "事实",
+      "preference": "偏好",
+      "person": "人物",
+      "project": "项目",
+      "decision": "决定",
+      "procedure": "操作方法",
+      "source": "网页来源"
+    },
+    "dialog": {
+      "newTitle": "新笔记",
+      "editTitle": "笔记",
+      "type": "类型",
+      "title": "标题",
+      "summary": "摘要",
+      "body": "详情",
+      "tags": "标签",
+      "tagsPlaceholder": "输入标签后按回车"
+    },
+    "errors": {
+      "invalid": "请检查笔记：有字段为空或过长。",
+      "notFound": "这条笔记已不存在。",
+      "stale": "这条笔记在你打开后已在别处被修改，现已显示最新版本。",
+      "limitReached": "这份记忆已满，请先停用一些笔记。",
+      "conflict": "记忆文件夹处于异常状态，因此未做任何更改。",
+      "io": "无法读取或写入记忆文件。",
+      "forbidden": "这份记忆不允许此操作。"
+    },
+    "health": {
+      "title": "记忆状况",
+      "count": "{{notes}} / {{max}} 条笔记",
+      "trash": "回收站：{{trash}} 条",
+      "allClear": "没有需要整理的内容。",
+      "loadFailed": "无法检查记忆。",
+      "duplicates": "可能重复",
+      "duplicatesHint": "这些笔记看起来说的是同一件事。保留最新的一条，停用其余的。",
+      "orphanLinks": "指向不存在笔记的链接",
+      "orphanLinksHint": "这些笔记链接到了一条不存在的笔记。",
+      "stale": "可能已过时",
+      "staleHint": "已有 {{days}} 天或更久未更新。请确认它们是否仍然正确。",
+      "open": "打开",
+      "stillTrue": "仍然正确",
+      "retireDuplicateConfirm": "停用这条副本？最新的一条会保留。停用的笔记保留在记忆回收站中。"
+    },
+    "tidy": {
+      "button": "整理记忆",
+      "hint": "打开一个新对话，并填入整理请求，由你检查后发送。和其他对话一样，整理会使用智能体的模型。",
+      "prompt": "请使用你的记忆工具整理你的长期记忆：\n1. 用 memory_search 浏览你的记忆，用 memory_read 阅读完整笔记。\n2. 合并重复：保留最好的一条笔记并用 memory_save 更新它，然后取代（supersede）或停用（memory_retire）多余的副本。\n3. 修正矛盾：用 memory_save 加 supersede 保存正确的版本，让旧笔记作为历史保留。\n4. 如果不确定某件事是否仍然正确、或哪个版本是对的，修改前先问我。\n5. 绝不要修改我自己写的笔记。\n6. 完成后，总结你做了哪些修改。",
+      "promptShared": "请使用你的记忆工具整理关于我的共享记忆（scope \"shared\"）：\n1. 用 memory_search 浏览它，用 memory_read（scope \"shared\"）阅读完整笔记。\n2. 合并重复：保留最好的一条笔记并用 memory_save（scope \"shared\"）更新它，然后取代（supersede）或停用（memory_retire，scope \"shared\"）多余的副本。\n3. 修正矛盾：用 memory_save 加 supersede 保存正确的版本，让旧笔记作为历史保留。\n4. 如果不确定某件事是否仍然正确、或哪个版本是对的，修改前先问我。\n5. 绝不要修改我自己写的笔记。\n6. 只修改共享记忆。完成后，总结你做了哪些修改。"
     }
   },
   "browserProfile": {
@@ -103,7 +180,7 @@
     "chats_one": "它的 {{count}} 个聊天，包括消息、文件和历史记录",
     "chats_other": "它的 {{count}} 个聊天，包括消息、文件和历史记录",
     "browserProfile": "它的浏览器配置文件：Cookie、登录状态、网站数据和扩展",
-    "notebook": "它的笔记本（它学到的内容）和规则",
+    "notebook": "它的记忆和笔记本（它学到的内容）以及规则",
     "tasks": "它的 {{count}} 个计划任务",
     "tasks_one": "它的 {{count}} 个计划任务",
     "tasks_other": "它的 {{count}} 个计划任务",

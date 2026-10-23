@@ -109,6 +109,13 @@
     "fromPage": "來自網頁 · 未經核實",
     "open": "開啟筆記本"
   },
+  "memoryChip": {
+    "created": "已記住",
+    "updated": "已更新",
+    "superseded": "已取代過時的事實",
+    "aboutYou": "關於你",
+    "open": "開啟記憶"
+  },
   "skillCard": {
     "title": "儲存為技能？",
     "appliesWhen": "適用情境：{{description}}",

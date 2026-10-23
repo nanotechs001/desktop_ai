@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   deleteProfileData: vi.fn(),
   assistantsDelete: vi.fn(),
   removeAgentNotes: vi.fn(),
+  removeAgentMemory: vi.fn(),
   listJobs: vi.fn(),
   removeJob: vi.fn(),
   getPlatformSettings: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@/common', () => ({
     browser: { deleteProfileData: { invoke: (...a: unknown[]) => m.deleteProfileData(...a) } },
     assistants: { delete: { invoke: (...a: unknown[]) => m.assistantsDelete(...a) } },
     agentNotes: { removeAgent: { invoke: (...a: unknown[]) => m.removeAgentNotes(...a) } },
+    agentMemory: { removeAgent: { invoke: (...a: unknown[]) => m.removeAgentMemory(...a) } },
     cron: {
       listJobs: { invoke: (...a: unknown[]) => m.listJobs(...a) },
       removeJob: { invoke: (...a: unknown[]) => m.removeJob(...a) },
@@ -101,6 +103,7 @@ beforeEach(() => {
   m.syncChannelSettings.mockResolvedValue(undefined);
   m.assistantsDelete.mockImplementation(async () => (m.calls.push('deleteBot'), undefined));
   m.removeAgentNotes.mockImplementation(async () => (m.calls.push('forget'), { success: true }));
+  m.removeAgentMemory.mockImplementation(async () => (m.calls.push('forgetMemory'), { success: true }));
   m.persistEnginePin.mockResolvedValue(undefined);
   m.forgetBotColor.mockResolvedValue(undefined);
   m.configRemove.mockResolvedValue(undefined);
@@ -119,6 +122,7 @@ describe('deleteVaBot', () => {
     expect(outcome).toEqual({ ok: true });
     const firstOf = (name: string) => m.calls.indexOf(name);
     const order = ['profile', 'collect', 'removeChats', 'listJobs', 'removeJob', 'clearBinding', 'deleteBot', 'forget'];
+    expect(m.calls.indexOf('forgetMemory')).toBeGreaterThan(firstOf('deleteBot'));
     expect(order.map(firstOf)).toEqual(
       order
         .map(firstOf)
@@ -329,15 +333,17 @@ describe('deleteVaBot', () => {
 
       expect(outcome).toMatchObject({ ok: false, stage: 'bot' });
       expect(m.removeAgentNotes).not.toHaveBeenCalled();
+      expect(m.removeAgentMemory).not.toHaveBeenCalled();
       expect(m.configRemove).not.toHaveBeenCalled();
     });
 
-    it('forgets its notebook, engine pin and color after the delete', async () => {
+    it('forgets its notebook, memory, engine pin and color after the delete', async () => {
       m.config.set('agent.enginePins', { [BOT]: 'engine-x' });
 
       await deleteVaBot(BOT, {});
 
       expect(m.removeAgentNotes).toHaveBeenCalledWith({ agentId: BOT });
+      expect(m.removeAgentMemory).toHaveBeenCalledWith({ agentId: BOT });
       expect(m.persistEnginePin).toHaveBeenCalledWith(BOT, null);
       expect(m.forgetBotColor).toHaveBeenCalledWith(BOT);
     });
@@ -357,6 +363,7 @@ describe('deleteVaBot', () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {});
       m.config.set('guid.lastAssistantId', BOT);
       m.removeAgentNotes.mockRejectedValue(new Error('x'));
+      m.removeAgentMemory.mockResolvedValue({ success: false, msg: 'locked' });
       m.configRemove.mockRejectedValue(new Error('y'));
 
       expect(await deleteVaBot(BOT, {})).toEqual({ ok: true });

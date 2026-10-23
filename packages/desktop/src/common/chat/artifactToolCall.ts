@@ -8,11 +8,29 @@ const TOOL_NAME = /^(?:create|update)$/;
 // `mcp__aionui-artifacts__create`, `aionui-artifacts.create`, `aionui-artifacts - update (MCP)`.
 const QUALIFIED_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_ARTIFACTS_MCP_NAME}[\\W_]+(?:create|update)\\b`);
 
-/** What the chat's "Saved to notebook" chip needs from an `aionui-notes` add call. */
-export type NoteChipData = { text: string; source: 'agent' | 'page' };
+/** What the chat's "Saved to notebook" chip needs from an `aionui-notes` add call (old chats, and the `add` alias). */
+export type NotebookChipData = { text: string; source: 'agent' | 'page' };
+
+const MEMORY_ACTIONS = ['created', 'updated', 'superseded'] as const;
+const MEMORY_SCOPES = ['own', 'shared'] as const;
+
+/** What the chat's "Remembered" chip needs from an `aionui-notes` memory_save call. */
+export type MemoryChipData = {
+  kind: 'memory';
+  action: (typeof MEMORY_ACTIONS)[number];
+  /** `shared`: a fact about the user, in the memory every agent reads. */
+  scope: (typeof MEMORY_SCOPES)[number];
+  title: string;
+};
+
+/** A note the agent saved: to its old notebook, or to its memory. */
+export type NoteChipData = NotebookChipData | MemoryChipData;
 
 // `mcp__aionui-notes__add`, `aionui-notes.add`, `aionui-notes - add (MCP)`.
 const QUALIFIED_NOTE_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_NOTES_MCP_NAME}[\\W_]+add\\b`);
+
+// `mcp__aionui-notes__memory_save`, `aionui-notes.memory_save`, `aionui-notes - memory_save (MCP)`.
+const QUALIFIED_MEMORY_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_NOTES_MCP_NAME}[\\W_]+memory_save\\b`);
 
 // `mcp__aionui-notes__propose_skill`, `aionui-notes.propose_skill`, `aionui-notes - propose_skill (MCP)`.
 const QUALIFIED_SKILL_TOOL_NAME = new RegExp(`(?:^|[^A-Za-z0-9-])${BUILTIN_NOTES_MCP_NAME}[\\W_]+propose_skill\\b`);
@@ -62,13 +80,38 @@ export const parseNoteToolCall = (
   name: string,
   output: string | undefined,
   server?: string
-): NoteChipData | undefined => {
+): NotebookChipData | undefined => {
   if (!QUALIFIED_NOTE_TOOL_NAME.test(name) && !(server === BUILTIN_NOTES_MCP_NAME && name === 'add')) return undefined;
   const result = parseResult(output);
   const text = asText(result?.text);
   const source = result?.source;
   if (result?.saved !== true || !text || (source !== 'agent' && source !== 'page')) return undefined;
   return { text, source };
+};
+
+const oneOf = <T extends string>(values: readonly T[], value: unknown): value is T =>
+  (values as readonly unknown[]).includes(value);
+
+/** The chip of a memory_save result `{ saved, action, scope, id, version, title }`, or undefined when it isn't one. */
+const toMemoryChip = (result: Record<string, unknown> | undefined): MemoryChipData | undefined => {
+  const title = asText(result?.title);
+  if (result?.saved !== true || !title || !asText(result.id)) return undefined;
+  if (!oneOf(MEMORY_ACTIONS, result.action) || !oneOf(MEMORY_SCOPES, result.scope)) return undefined;
+  return { kind: 'memory', action: result.action, scope: result.scope, title };
+};
+
+/**
+ * Reads a memory_save call of the built-in notes MCP from its JSON result. Returns undefined for any other call and
+ * for an error or malformed result.
+ */
+export const parseMemorySaveToolCall = (
+  name: string,
+  output: string | undefined,
+  server?: string
+): MemoryChipData | undefined => {
+  const isMemoryTool =
+    QUALIFIED_MEMORY_TOOL_NAME.test(name) || (server === BUILTIN_NOTES_MCP_NAME && name === 'memory_save');
+  return isMemoryTool ? toMemoryChip(parseResult(output)) : undefined;
 };
 
 /**
@@ -87,7 +130,7 @@ export const parseSkillProposalToolCall = (
   return parseSkillProposal(typeof input === 'string' ? parseResult(input) : input);
 };
 
-/** What a tool call row shows for the built-in MCPs: an artifact card, a "Saved to notebook" chip, a skill card. */
+/** What a tool call row shows for the built-in MCPs: an artifact card, a "Saved to notebook"/"Remembered" chip, a skill card. */
 export type BuiltinToolCards = { artifact?: ArtifactCardData; note?: NoteChipData; skill?: SkillProposal };
 
 /** Whether `record` (the whole call: names, input, wrapper metadata) mentions `word`, at any depth. */
@@ -139,7 +182,9 @@ export const detectBuiltinToolCards = (
     (result.source === 'agent' || result.source === 'page') &&
     mentions(call, BUILTIN_NOTES_MCP_NAME)
       ? { text: noteText, source: result.source }
-      : undefined);
+      : undefined) ??
+    parseMemorySaveToolCall(name, output, server) ??
+    (mentions(call, 'memory_save') ? toMemoryChip(result) : undefined);
 
   const skill =
     parseSkillProposalToolCall(name, input, output, server) ??
