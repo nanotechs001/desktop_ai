@@ -33,7 +33,7 @@ vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({
 }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
+  useLayoutContext: () => ({ isMobile: false, siderCollapsed: true, setSiderCollapsed: vi.fn() }),
 }));
 vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true, isMacOS: () => true }));
 

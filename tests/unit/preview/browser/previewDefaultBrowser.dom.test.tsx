@@ -773,13 +773,13 @@ describe('conversation route preview scope entry', () => {
 
     await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
     expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
-      openBrowserIfEmpty: true,
+      openBrowserIfEmpty: false,
       carryFromScope: undefined,
       conversationId: 'c1',
     });
   });
 
-  it('enters the scope with the browser default and carries the live tabs once project_id arrives', async () => {
+  it('enters a regular chat without a blank browser (it opens on its files) and carries the live tabs once project_id arrives', async () => {
     getConversationOrNull.mockResolvedValueOnce(conv(null)).mockResolvedValue(conv('p1'));
     render(
       <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
@@ -789,7 +789,7 @@ describe('conversation route preview scope entry', () => {
 
     await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
     expect(scopeEntered).toHaveBeenLastCalledWith('/w', {
-      openBrowserIfEmpty: true,
+      openBrowserIfEmpty: false,
       carryFromScope: undefined,
       conversationId: 'c1',
     });
@@ -798,7 +798,7 @@ describe('conversation route preview scope entry', () => {
 
     await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(2));
     expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
-      openBrowserIfEmpty: true,
+      openBrowserIfEmpty: false,
       carryFromScope: '/w',
       conversationId: 'c1',
     });
@@ -819,7 +819,7 @@ describe('conversation route preview scope entry', () => {
     setConversationListForTest([]);
   });
 
-  it('does not name the default Agent or a built-in preset as a bot: their chats keep a temporary browser each', async () => {
+  it('does not name the default Agent or a built-in preset as a bot: their chats open on their files, no blank browser', async () => {
     for (const assistant of [
       { id: 'aion-default-agent', source: 'user' },
       { id: 'preset-x', source: 'builtin' },
@@ -838,7 +838,7 @@ describe('conversation route preview scope entry', () => {
       // eslint-disable-next-line no-await-in-loop -- one render at a time
       await waitFor(() => expect(scopeEntered).toHaveBeenCalledTimes(1));
       expect(scopeEntered).toHaveBeenLastCalledWith('p1', {
-        openBrowserIfEmpty: true,
+        openBrowserIfEmpty: false,
         carryFromScope: undefined,
         conversationId: 'c1',
       });

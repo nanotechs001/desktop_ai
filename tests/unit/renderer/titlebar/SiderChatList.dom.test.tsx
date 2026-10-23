@@ -18,6 +18,11 @@ vi.mock('@renderer/hooks/context/ThemeContext', () => ({
 vi.mock('@renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ isMobile: false }),
 }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('@renderer/hooks/assistant/useRegularChatsOnly', () => ({ useRegularChatsOnly: () => () => true }));
+vi.mock('@renderer/components/layout/Titlebar/HistoryPanel', () => ({
+  HistoryPanelBody: () => <div data-testid='sider-chat-list' />,
+}));
 vi.mock('@renderer/utils/ui/siderTooltip', () => ({
   cleanupSiderTooltips: vi.fn(),
   getSiderTooltipProps: () => ({}),
@@ -27,6 +32,7 @@ vi.mock('@renderer/components/layout/Sider/SiderNav', () => ({
   SiderSearchEntry: () => null,
   SiderScheduledEntry: () => <div data-testid='sider-scheduled' />,
   SiderAssistantEntry: () => <div data-testid='sider-agents' />,
+  SiderNavEntry: ({ label }: { label: string }) => <div data-testid={`sider-entry-${label}`} />,
 }));
 vi.mock('@renderer/components/layout/Sider/SiderFooter', () => ({
   default: () => <div data-testid='sider-footer' />,
@@ -35,18 +41,24 @@ vi.mock('@renderer/pages/settings/components/SettingsSider', () => ({ default: (
 import Sider from '@renderer/components/layout/Sider';
 
 describe('Sider', () => {
-  it.each([
-    { mode: 'expanded sidebar', collapsed: false },
-    { mode: 'icon rail', collapsed: true },
-  ])('renders no conversation list in the $mode', async ({ collapsed }) => {
-    render(<Sider collapsed={collapsed} />);
+  it('lists the chats under New chat, VA Bots, Scheduled and Artifacts in the expanded sidebar', async () => {
+    render(<Sider collapsed={false} />);
+
+    expect(await screen.findByTestId('sider-footer')).toBeInTheDocument();
+    expect(screen.getByTestId('sider-new-chat')).toBeInTheDocument();
+    expect(screen.getByTestId('sider-agents')).toBeInTheDocument();
+    expect(screen.getByTestId('sider-scheduled')).toBeInTheDocument();
+    expect(screen.getByTestId('sider-entry-conversation.artifacts.title')).toBeInTheDocument();
+    expect(screen.getByTestId('sider-chat-list')).toBeInTheDocument();
+  });
+
+  it('keeps the icon rail to its icons, without the chat list', async () => {
+    render(<Sider collapsed />);
 
     expect(await screen.findByTestId('sider-footer')).toBeInTheDocument();
     // Let any lazily imported list resolve before asserting it is absent.
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
-    expect(screen.getByTestId('sider-new-chat')).toBeInTheDocument();
-    expect(screen.getByTestId('sider-agents')).toBeInTheDocument();
-    expect(screen.getByTestId('sider-scheduled')).toBeInTheDocument();
-    expect(document.querySelector('[id^="c-"], .chat-history__item')).toBeNull();
+    expect(screen.getByTestId('sider-entry-conversation.artifacts.title')).toBeInTheDocument();
+    expect(screen.queryByTestId('sider-chat-list')).toBeNull();
   });
 });

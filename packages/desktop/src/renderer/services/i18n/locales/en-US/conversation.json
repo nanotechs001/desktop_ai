@@ -649,6 +649,7 @@
     "refreshFiles": "Refresh files",
     "refreshChanges": "Refresh changes",
     "collapseAll": "Collapse all",
+    "hidePanel": "Hide panel",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "Expand plan",
     "collapse": "Collapse plan"
+  },
+  "artifacts": {
+    "title": "Artifacts",
+    "description": "Pages, documents and diagrams Pixebot created in your chats. Open one to see it in its chat.",
+    "empty": "No artifacts yet. Pages and documents Pixebot creates show up here.",
+    "loadFailed": "Couldn’t load the artifacts",
+    "retry": "Try again",
+    "desktopOnly": "Artifacts are available in the desktop app."
   }
 }

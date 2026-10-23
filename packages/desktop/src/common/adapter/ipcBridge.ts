@@ -1514,6 +1514,8 @@ export const agentSkills = {
 /** The artifact server this launch: its origin (`http://127.0.0.1:<port>`); fails while artifacts are unavailable. */
 export const artifacts = {
   origin: bridge.buildProvider<IBridgeResponse<string>, void>('artifacts.origin'),
+  /** Every artifact the agents created, last updated first (desktop only). */
+  list: bridge.buildProvider<IBridgeResponse<ArtifactMeta[]>, void>('artifacts.list'),
 };
 
 // ---------------------------------------------------------------------------
@@ -2420,7 +2422,7 @@ export const channel = {
   userAuthorized: wsMappedEmitter<IChannelUser>('channel.user-authorized', (raw) => toChannelUser(raw as RawUser)),
 };
 
-import type { Note } from '@/common/types/agent/artifacts';
+import type { ArtifactMeta, Note } from '@/common/types/agent/artifacts';
 import type { SaveSkillRequest, SaveSkillResult } from '@/common/types/agent/skillProposal';
 
 export type IRealtimeReconnectedEvent = {

@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 import ChatConversation from './components/ChatConversation';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
-import { previewScopeOfChat } from '@/renderer/pages/conversation/Preview/context/previewScope';
+import { botOfScope, previewScopeOfChat } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { setCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
@@ -80,8 +80,10 @@ const ChatConversationIndex: React.FC = () => {
     const last = lastEnteredRef.current;
     const carryFromScope = last?.conversationId === conversationId ? (last.scope ?? undefined) : undefined;
     lastEnteredRef.current = { conversationId, scope };
-    // The WebUI cannot show a webview, so it gets no blank browser tab over the chat.
-    enterScopeRef.current(scope, { openBrowserIfEmpty: isElectronDesktop(), carryFromScope, conversationId });
+    // Only a VA Bot's chat starts on its browser; the main agent's open on their files, and the browser shows once
+    // the agent opens a tab. The WebUI cannot show a webview, so it gets no blank browser tab over the chat.
+    const openBrowserIfEmpty = isElectronDesktop() && botOfScope(scope) != null;
+    enterScopeRef.current(scope, { openBrowserIfEmpty, carryFromScope, conversationId });
   }, [conversationId, scope, waitsForBots]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the

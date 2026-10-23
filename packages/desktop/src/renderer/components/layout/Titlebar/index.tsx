@@ -103,8 +103,10 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // mobile keeps the default weight so icons stay legible at larger sizes.
   const desktopIconStroke = layout?.isMobile ? undefined : 2.5;
   // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
-  // Desktop has no left icon bar outside Settings (navigation lives top right), so the toggle shows there only.
-  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && (layout?.isMobile ? !isSettingsRoute : isSettingsRoute);
+  // Desktop has the sider on every route, so the toggle shows everywhere.
+  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && (!layout?.isMobile || !isSettingsRoute);
+  // The open desktop sider has its own chat search.
+  const showChatSearch = Boolean(layout?.isMobile || layout?.siderCollapsed !== false);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })
@@ -251,24 +253,26 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
           aria-label={siderTooltip}
         />
       )}
-      <Button
-        type='text'
-        size='mini'
-        className={titlebarButtonClass}
-        icon={
-          <Search
-            theme='outline'
-            size={iconSize}
-            fill='currentColor'
-            strokeWidth={desktopIconStroke}
-            className='block leading-none'
-            style={{ lineHeight: 0 }}
-          />
-        }
-        onClick={() => setHistoryOpen(true)}
-        aria-label={searchTooltip}
-        title={searchTooltip}
-      />
+      {showChatSearch && (
+        <Button
+          type='text'
+          size='mini'
+          className={titlebarButtonClass}
+          icon={
+            <Search
+              theme='outline'
+              size={iconSize}
+              fill='currentColor'
+              strokeWidth={desktopIconStroke}
+              className='block leading-none'
+              style={{ lineHeight: 0 }}
+            />
+          }
+          onClick={() => setHistoryOpen(true)}
+          aria-label={searchTooltip}
+          title={searchTooltip}
+        />
+      )}
     </>
   );
 

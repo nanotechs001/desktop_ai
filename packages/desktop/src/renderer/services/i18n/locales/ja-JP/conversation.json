@@ -649,6 +649,7 @@
     "refreshFiles": "ファイルを更新",
     "refreshChanges": "変更を更新",
     "collapseAll": "すべて折りたたむ",
+    "hidePanel": "パネルを隠す",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "プランを展開",
     "collapse": "プランを折りたたむ"
+  },
+  "artifacts": {
+    "title": "成果物",
+    "description": "Pixebot がチャットで作成したページ、ドキュメント、図です。開くとそのチャットで表示されます。",
+    "empty": "まだ成果物はありません。Pixebot が作成したページやドキュメントがここに表示されます。",
+    "loadFailed": "成果物を読み込めませんでした",
+    "retry": "再試行",
+    "desktopOnly": "成果物はデスクトップアプリで利用できます。"
   }
 }

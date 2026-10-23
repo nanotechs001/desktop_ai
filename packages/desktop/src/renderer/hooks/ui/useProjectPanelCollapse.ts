@@ -19,7 +19,7 @@
  * host handler is the sole actor; for a non-project conversation `active` is
  * false here and ChatLayout owns the event. No double-handling.
  *
- * Scope: the panel starts collapsed. Desktop persists the collapse preference per project (switch away and
+ * Scope: the panel starts as `defaultCollapsed` says (open for the main agent's chats). Desktop persists the collapse preference per project (switch away and
  * back restores it, consistent with the no-remount principle). Mobile starts
  * collapsed and force-collapses on project change (the overlay must not linger
  * across projects), and does not persist.
@@ -33,13 +33,14 @@ const COLLAPSE_KEY_PREFIX = 'project-panel-collapse:';
 
 const collapseKey = (projectId: string): string => `${COLLAPSE_KEY_PREFIX}${projectId}`;
 
-/** Read the persisted desktop preference for a project (default: collapsed). */
-const readStoredCollapsed = (projectId: string | null): boolean => {
+/** Read the persisted desktop preference for a project, or the default when there is none. */
+const readStoredCollapsed = (projectId: string | null, defaultCollapsed: boolean): boolean => {
   if (!projectId || typeof window === 'undefined') return true;
   try {
-    return localStorage.getItem(collapseKey(projectId)) !== 'expanded';
+    const stored = localStorage.getItem(collapseKey(projectId));
+    return stored === null ? defaultCollapsed : stored !== 'expanded';
   } catch {
-    return true;
+    return defaultCollapsed;
   }
 };
 
@@ -50,6 +51,8 @@ type UseProjectPanelCollapseParams = {
   isMobile: boolean;
   /** True when a project host is live (project bound). Gates event handling. */
   active: boolean;
+  /** Start collapsed when the user stored no preference for the project (default: true). */
+  defaultCollapsed?: boolean;
 };
 
 type UseProjectPanelCollapseReturn = {
@@ -61,8 +64,11 @@ export function useProjectPanelCollapse({
   projectId,
   isMobile,
   active,
+  defaultCollapsed = true,
 }: UseProjectPanelCollapseParams): UseProjectPanelCollapseReturn {
-  const [collapsed, setCollapsed] = useState<boolean>(() => (isMobile ? true : readStoredCollapsed(projectId)));
+  const [collapsed, setCollapsed] = useState<boolean>(() =>
+    isMobile ? true : readStoredCollapsed(projectId, defaultCollapsed)
+  );
 
   // Mirror ref so the event handler reads current state without re-subscribing.
   const collapsedRef = useRef(collapsed);
@@ -74,8 +80,8 @@ export function useProjectPanelCollapse({
   // preference; mobile always starts collapsed (overlay hidden) and must not carry
   // an open overlay across a project switch.
   useEffect(() => {
-    setCollapsed(isMobile ? true : readStoredCollapsed(projectId));
-  }, [projectId, isMobile]);
+    setCollapsed(isMobile ? true : readStoredCollapsed(projectId, defaultCollapsed));
+  }, [projectId, isMobile, defaultCollapsed]);
 
   // Single toggle seam: handle WORKSPACE_TOGGLE_EVENT only when a project host is
   // live. Desktop persists the new state per project.

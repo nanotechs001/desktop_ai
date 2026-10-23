@@ -34,6 +34,7 @@ vi.mock('@/renderer/pages/conversation/Preview', () => ({
 }));
 vi.mock('@/renderer/pages/conversation/Preview/context/previewScope', () => ({
   previewScopeOfChat: () => null,
+  botOfScope: () => undefined,
 }));
 vi.mock('@/renderer/pages/conversation/explorer/currentProjectStore', () => ({ setCurrentProject: vi.fn() }));
 vi.mock('@/renderer/pages/conversation/explorer/currentConversationStore', () => ({ setCurrentConversation: vi.fn() }));

@@ -30,6 +30,7 @@ vi.mock('@/common', () => ({
 
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
 import { resetExplorerStoreForTest } from '@/renderer/pages/conversation/explorer/explorerStore';
+import { WORKSPACE_TOGGLE_EVENT } from '@/renderer/utils/workspace/workspaceEvents';
 
 const entry = (over: Partial<ProjectEntryDto>): ProjectEntryDto => ({
   pe_id: 'peA',
@@ -133,6 +134,19 @@ describe('ExplorerContainer data integration', () => {
     const row = title.closest('[data-runtime-status]');
     expect(row?.getAttribute('data-runtime-status')).toBe('available');
     expect(row?.className).not.toContain('text-t-secondary');
+  });
+
+  it('hides the whole Files panel from its own header, like the titlebar toggle', async () => {
+    projectGet.mockResolvedValue(detail([entry({ pe_id: 'peA', display_name: 'Root Alpha' })]));
+    const toggled = vi.fn();
+    window.addEventListener(WORKSPACE_TOGGLE_EVENT, toggled);
+    renderContainer('p1');
+    expect(await screen.findByText('Root Alpha')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.hidePanel' }));
+
+    expect(toggled).toHaveBeenCalledTimes(1);
+    window.removeEventListener(WORKSPACE_TOGGLE_EVENT, toggled);
   });
 
   it('switches to the Changes tab without unmounting the explorer (kept mounted)', async () => {

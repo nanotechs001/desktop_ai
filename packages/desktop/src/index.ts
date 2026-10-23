@@ -848,6 +848,13 @@ const handleAppReady = async (): Promise<void> => {
   ipcBridge.artifacts.origin.provider(async () =>
     artifactOrigin ? { success: true, data: artifactOrigin } : { success: false, msg: 'Artifacts are unavailable' }
   );
+  const artifactStore = artifacts?.store;
+  ipcBridge.artifacts.list.provider(async () => {
+    if (!artifactStore) return { success: false, msg: 'Artifacts are unavailable' };
+    const listed = await artifactStore.list();
+    if (listed.ok === false) return { success: false, msg: listed.message };
+    return { success: true, data: listed.value };
+  });
 
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
   if (debugBackendStartupFailure) {

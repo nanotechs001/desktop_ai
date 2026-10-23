@@ -650,6 +650,7 @@
     "refreshFiles": "Dateien aktualisieren",
     "refreshChanges": "Änderungen aktualisieren",
     "collapseAll": "Alle einklappen",
+    "hidePanel": "Bereich ausblenden",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -797,5 +798,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "Plan ausklappen",
     "collapse": "Plan einklappen"
+  },
+  "artifacts": {
+    "title": "Artefakte",
+    "description": "Seiten, Dokumente und Diagramme, die Pixebot in deinen Chats erstellt hat. Öffne eines, um es im Chat zu sehen.",
+    "empty": "Noch keine Artefakte. Seiten und Dokumente, die Pixebot erstellt, erscheinen hier.",
+    "loadFailed": "Artefakte konnten nicht geladen werden",
+    "retry": "Erneut versuchen",
+    "desktopOnly": "Artefakte sind in der Desktop-App verfügbar."
   }
 }

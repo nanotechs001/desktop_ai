@@ -651,6 +651,7 @@
     "refreshFiles": "Dosyaları yenile",
     "refreshChanges": "Değişiklikleri yenile",
     "collapseAll": "Tümünü daralt",
+    "hidePanel": "Paneli gizle",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -798,5 +799,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "Planı genişlet",
     "collapse": "Planı daralt"
+  },
+  "artifacts": {
+    "title": "Yapıtlar",
+    "description": "Pixebot’un sohbetlerinizde oluşturduğu sayfalar, belgeler ve diyagramlar. Sohbetinde görmek için birini açın.",
+    "empty": "Henüz yapıt yok. Pixebot’un oluşturduğu sayfalar ve belgeler burada görünür.",
+    "loadFailed": "Yapıtlar yüklenemedi",
+    "retry": "Tekrar dene",
+    "desktopOnly": "Yapıtlar masaüstü uygulamasında kullanılabilir."
   }
 }

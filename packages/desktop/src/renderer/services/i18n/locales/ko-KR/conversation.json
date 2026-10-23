@@ -649,6 +649,7 @@
     "refreshFiles": "파일 새로 고침",
     "refreshChanges": "변경 새로 고침",
     "collapseAll": "모두 접기",
+    "hidePanel": "패널 숨기기",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "계획 펼치기",
     "collapse": "계획 접기"
+  },
+  "artifacts": {
+    "title": "아티팩트",
+    "description": "Pixebot이 채팅에서 만든 페이지, 문서, 다이어그램입니다. 열면 해당 채팅에서 볼 수 있습니다.",
+    "empty": "아직 아티팩트가 없습니다. Pixebot이 만든 페이지와 문서가 여기에 표시됩니다.",
+    "loadFailed": "아티팩트를 불러오지 못했습니다",
+    "retry": "다시 시도",
+    "desktopOnly": "아티팩트는 데스크톱 앱에서 사용할 수 있습니다."
   }
 }

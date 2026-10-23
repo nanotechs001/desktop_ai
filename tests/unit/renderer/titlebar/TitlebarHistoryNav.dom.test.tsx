@@ -45,7 +45,8 @@ vi.mock('@/renderer/components/layout/Titlebar/TitlebarNav', () => ({
 }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({ default: () => null }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ ...layoutState, siderCollapsed: false, setSiderCollapsed: vi.fn() }),
+  // The sider as its icon rail: chat search lives in the titlebar then (the open sider has its own).
+  useLayoutContext: () => ({ ...layoutState, siderCollapsed: true, setSiderCollapsed: vi.fn() }),
 }));
 vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: () => true, isMacOS: () => true }));
 
@@ -60,10 +61,10 @@ describe('Titlebar chat history controls', () => {
     nav.forward.mockClear();
   });
 
-  it('shows Search without Back and Forward buttons, and no sidebar toggle outside Settings', () => {
+  it('shows Search and the sidebar toggle (the sider is on every route), without Back and Forward buttons', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
-    expect(screen.queryByRole('button', { name: 'common.collapse' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'common.expandMore' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'conversation.history.searchChats' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.historyBack' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.forward' })).not.toBeInTheDocument();

@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useId, useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Button } from '@arco-design/web-react';
 import { History, Message, Plus, Schedule, SettingTwo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import type { TChatConversation } from '@/common/config/storage';
-import { DEFAULT_AGENT_SETTING_KEY, isVaBotAgent } from '@/common/types/agent/defaultAgent';
-import { useConfig } from '@/renderer/hooks/config/useConfig';
+import { useRegularChatsOnly } from '@/renderer/hooks/assistant/useRegularChatsOnly';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import RobotListButton from './RobotListButton';
 import HistoryPanel from './HistoryPanel';
@@ -94,9 +93,12 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { closePreview } = usePreviewContext();
-  const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
   const [historyOpen, setHistoryOpen] = useState(false);
   const isSettings = pathname.startsWith('/settings');
+  const layout = useLayoutContext();
+  // The open sidebar already holds New chat, the chat list and Scheduled.
+  const siderOpen = layout?.siderCollapsed === false && !layout.isMobile;
+  const inSider = new Set<string>(siderOpen ? ['new-chat', 'history', 'scheduled'] : []);
 
   const go = (path: string, state?: unknown) => {
     closePreview();
@@ -118,10 +120,7 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
     void navigate(target.startsWith('/settings') ? '/guid' : target);
   };
   // VA Bots keep their own conversations; this history lists the regular (default agent) chats only.
-  const regularChatsOnly = useCallback(
-    (conversation: TChatConversation) => !isVaBotAgent(conversation.assistant, storedDefaultAgentId),
-    [storedDefaultAgentId]
-  );
+  const regularChatsOnly = useRegularChatsOnly();
 
   const icon = (Icon: typeof Plus) => (
     <Icon
@@ -183,12 +182,15 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
       />
     );
 
-  const [newChat, ...rest] = items;
+  const visible = items.filter((item) => !inSider.has(item.key));
+  const [first, ...rest] = visible;
+  // New chat, when shown, leads; the leading controls follow it.
+  const leadsWithNewChat = first?.key === 'new-chat';
   return (
     <>
-      {renderItem(newChat)}
+      {leadsWithNewChat && renderItem(first)}
       {leading}
-      {rest.map(renderItem)}
+      {(leadsWithNewChat ? rest : visible).map(renderItem)}
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

@@ -649,6 +649,7 @@
     "refreshFiles": "Actualiser les fichiers",
     "refreshChanges": "Actualiser les modifications",
     "collapseAll": "Tout réduire",
+    "hidePanel": "Masquer le panneau",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "Développer le plan",
     "collapse": "Réduire le plan"
+  },
+  "artifacts": {
+    "title": "Artefacts",
+    "description": "Pages, documents et diagrammes créés par Pixebot dans vos discussions. Ouvrez-en un pour le voir dans sa discussion.",
+    "empty": "Aucun artefact pour l’instant. Les pages et documents créés par Pixebot apparaîtront ici.",
+    "loadFailed": "Impossible de charger les artefacts",
+    "retry": "Réessayer",
+    "desktopOnly": "Les artefacts sont disponibles dans l’application de bureau."
   }
 }

@@ -649,6 +649,7 @@
     "refreshFiles": "به‌روزرسانی پرونده‌ها",
     "refreshChanges": "به‌روزرسانی تغییرات",
     "collapseAll": "جمع کردن همه",
+    "hidePanel": "پنهان کردن پنل",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "گسترش برنامه",
     "collapse": "جمع کردن برنامه"
+  },
+  "artifacts": {
+    "title": "مصنوعات",
+    "description": "صفحه‌ها، اسناد و نمودارهایی که Pixebot در گفتگوهای شما ساخته است. یکی را باز کنید تا در گفتگوی خودش ببینید.",
+    "empty": "هنوز مصنوعی نیست. صفحه‌ها و اسنادی که Pixebot می‌سازد اینجا نمایش داده می‌شوند.",
+    "loadFailed": "بارگیری مصنوعات ممکن نشد",
+    "retry": "تلاش دوباره",
+    "desktopOnly": "مصنوعات در برنامه دسکتاپ در دسترس هستند."
   }
 }

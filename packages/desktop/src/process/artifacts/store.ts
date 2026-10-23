@@ -31,6 +31,8 @@ export type ArtifactStore = {
   get(conversationId: string, id: string, version?: number): Promise<ArtifactResult<ArtifactVersion>>;
   /** Looks an artifact up by id alone. For the page server only; agent-facing calls must use `get`. */
   getById(id: string, version?: number): Promise<ArtifactResult<ArtifactVersion>>;
+  /** Every artifact of every conversation, last updated first, without content. An unreadable one is skipped. */
+  list(): Promise<ArtifactResult<ArtifactMeta[]>>;
   /**
    * Removes the folders of conversations that are not in `liveConversationIds` and returns how many
    * were removed. An empty set deletes nothing unless `allowEmpty` is true: callers must pass the real
@@ -244,6 +246,30 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
     return conversationId ? get(conversationId, id, version) : notFound();
   };
 
+  const list: ArtifactStore['list'] = async () => {
+    try {
+      const conversations = (await listDir(rootDir)).filter((c) => c.isDirectory() && CONVERSATION_ID_RE.test(c.name));
+      const metas = await Promise.all(
+        conversations.map(async (conv) => {
+          const entries = await listDir(path.join(rootDir, conv.name));
+          const ids = entries.filter((e) => e.isDirectory() && ARTIFACT_ID_RE.test(e.name)).map((e) => e.name);
+          return Promise.all(
+            ids.map((id) =>
+              readMeta(conv.name, id).catch((e: unknown): null => {
+                console.warn('[artifacts] skipping an unreadable artifact', conv.name, id, e);
+                return null;
+              })
+            )
+          );
+        })
+      );
+      const value = metas.flat().filter((meta): meta is ArtifactMeta => meta !== null);
+      return { ok: true, value: value.toSorted((a, b) => b.updatedAt - a.updatedAt) };
+    } catch (e) {
+      return toIoFailure(e, READ_IO_MESSAGE);
+    }
+  };
+
   const create: ArtifactStore['create'] = async (conversationId, input) => {
     if (!CONVERSATION_ID_RE.test(conversationId)) return notFound();
     if (typeof input !== 'object' || input === null) return fail('bad-content', 'Input must be an object');
@@ -354,5 +380,5 @@ export function createArtifactStore(rootDir: string): ArtifactStore {
     return removed.size;
   };
 
-  return { create, update, get, getById, cleanup };
+  return { create, update, get, getById, list, cleanup };
 }

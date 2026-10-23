@@ -1,12 +1,16 @@
 import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { DocDetail } from '@icon-park/react';
+import { HistoryPanelBody } from '@renderer/components/layout/Titlebar/HistoryPanel';
+import { useRegularChatsOnly } from '@renderer/hooks/assistant/useRegularChatsOnly';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview/context/PreviewContext';
 import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
-import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry } from './SiderNav';
+import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry, SiderNavEntry } from './SiderNav';
 import SiderFooter from './SiderFooter';
 
 const SettingsSider = React.lazy(() => import('@renderer/pages/settings/components/SettingsSider'));
@@ -16,7 +20,11 @@ interface SiderProps {
   collapsed?: boolean;
 }
 
+const ignoreClose = () => {};
+
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
+  const { t } = useTranslation();
+  const regularChatsOnly = useRegularChatsOnly();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const location = useLocation();
@@ -77,6 +85,18 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     blurActiveElement();
     closePreview();
     Promise.resolve(navigate('/scheduled')).catch((error) => {
+      console.error('Navigation failed:', error);
+    });
+    if (onSessionClick) {
+      onSessionClick();
+    }
+  };
+
+  const handleArtifactsClick = () => {
+    cleanupSiderTooltips();
+    blurActiveElement();
+    closePreview();
+    Promise.resolve(navigate('/artifacts')).catch((error) => {
       console.error('Navigation failed:', error);
     });
     if (onSessionClick) {
@@ -192,7 +212,26 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleScheduledClick}
             />
-            {/* Chats live in the titlebar history panel; the sider only holds the nav entries above. */}
+            <SiderNavEntry
+              label={t('conversation.artifacts.title')}
+              icon={DocDetail}
+              isMobile={isMobile}
+              isActive={pathname === '/artifacts'}
+              collapsed={collapsed}
+              siderTooltipProps={siderTooltipProps}
+              onClick={handleArtifactsClick}
+            />
+            {/* The main agent's chats; the rail has no room for them (the titlebar history covers it). */}
+            {!collapsed && (
+              <div className='flex-1 min-h-0 mt-4px -mx-8px'>
+                <HistoryPanelBody
+                  embedded
+                  autoFocus={false}
+                  filter={regularChatsOnly}
+                  onClose={onSessionClick ?? ignoreClose}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

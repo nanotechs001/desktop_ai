@@ -22,6 +22,7 @@ const LoginPage = React.lazy(() => import('@renderer/pages/login'));
 const QrLoginPage = React.lazy(() => import('@renderer/pages/login/QrLoginPage'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
+const ArtifactsPage = React.lazy(() => import('@renderer/pages/artifacts'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const AgentWidgetPage = React.lazy(() => import('@renderer/pages/agentWidget'));
 
@@ -136,6 +137,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
+          <Route path='/artifacts' element={withRouteFallback(ArtifactsPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />

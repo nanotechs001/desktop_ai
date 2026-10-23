@@ -122,37 +122,65 @@ describe('Layout sider icon-only mode', () => {
     expect(startSubscriptionUsageFeed).toHaveBeenCalled();
   });
 
-  it('renders no left sider on desktop chat routes (navigation lives in the titlebar)', () => {
+  it('shows the left sider on desktop main-agent routes', () => {
     route.pathname = '/guid';
     const { sider } = renderLayout();
-    expect(sider).toBeNull();
+    expect(sider).not.toBeNull();
   });
 
-  it('starts collapsed to icon-only width on desktop with no stored value', () => {
-    const { sider } = renderLayout();
+  describe('in a VA Bot chat', () => {
+    beforeEach(() => {
+      route.pathname = '/conversation/c1';
+      preview.isVaBotMode = true;
+    });
+    afterEach(() => {
+      preview.isVaBotMode = false;
+    });
 
-    expect(sider.classList.contains('collapsed')).toBe(true);
-    expect(sider.style.width).toBe(ICON_ONLY_WIDTH);
+    it('keeps the sider as the icon rail, so the browser keeps its width and the app stays one click away', () => {
+      const { sider } = renderLayout();
+
+      expect(sider).not.toBeNull();
+      expect(sider.classList.contains('collapsed')).toBe(true);
+      expect(sider.style.width).toBe(ICON_ONLY_WIDTH);
+    });
+
+    it("expands the rail on toggle without touching the main chats' stored preference", () => {
+      const { sider } = renderLayout();
+
+      act(() => shortcutMocks.params?.toggleSider());
+
+      expect(sider.classList.contains('collapsed')).toBe(false);
+      expect(sider.style.width).toBe('260px');
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
   });
 
-  it('starts expanded on desktop when a stored 0 says so', () => {
-    localStorage.setItem(STORAGE_KEY, '0');
+  it('starts expanded on desktop with no stored value, so the chat list shows', () => {
     const { sider } = renderLayout();
 
     expect(sider.classList.contains('collapsed')).toBe(false);
     expect(sider.style.width).toBe('260px');
   });
 
+  it('starts icon-only on desktop when a stored 1 says so', () => {
+    localStorage.setItem(STORAGE_KEY, '1');
+    const { sider } = renderLayout();
+
+    expect(sider.classList.contains('collapsed')).toBe(true);
+    expect(sider.style.width).toBe(ICON_ONLY_WIDTH);
+  });
+
   it('persists the toggle', () => {
     const { sider } = renderLayout();
 
     act(() => shortcutMocks.params?.toggleSider());
-    expect(sider.classList.contains('collapsed')).toBe(false);
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('0');
-
-    act(() => shortcutMocks.params?.toggleSider());
     expect(sider.style.width).toBe(ICON_ONLY_WIDTH);
     expect(localStorage.getItem(STORAGE_KEY)).toBe('1');
+
+    act(() => shortcutMocks.params?.toggleSider());
+    expect(sider.classList.contains('collapsed')).toBe(false);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('0');
   });
 
   it('keeps the mobile sidebar hidden at width 0 and leaves the stored preference alone', () => {
@@ -165,14 +193,40 @@ describe('Layout sider icon-only mode', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBe('0');
   });
 
-  it('falls back to collapsed when storage throws', () => {
+  it('falls back to expanded when storage throws', () => {
     const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('denied');
     });
     const { sider } = renderLayout();
     getItem.mockRestore();
 
-    expect(sider.style.width).toBe(ICON_ONLY_WIDTH);
+    expect(sider.style.width).toBe('260px');
+  });
+});
+
+// A regular (main agent) chat: the right side starts on the Files panel; the browser only opens when used.
+describe('Layout regular chat files pane', () => {
+  beforeEach(() => {
+    setViewportWidth(1280);
+    route.pathname = '/conversation/c1';
+    project.id = 'p1';
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    route.pathname = '/settings/about';
+    project.id = null;
+  });
+
+  it('shows the files pane by default', () => {
+    render(<Layout sider={<div>sider</div>} />);
+    expect(screen.getByText('files pane')).toBeVisible();
+  });
+
+  it('keeps the files pane closed once the user closed it for the project', () => {
+    localStorage.setItem('project-panel-collapse:p1', 'collapsed');
+    render(<Layout sider={<div>sider</div>} />);
+    expect(screen.queryByText('files pane')).toBeNull();
   });
 });
 

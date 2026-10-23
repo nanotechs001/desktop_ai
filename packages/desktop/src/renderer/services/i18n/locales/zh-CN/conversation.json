@@ -649,6 +649,7 @@
     "refreshFiles": "刷新文件",
     "refreshChanges": "刷新变更",
     "collapseAll": "全部折叠",
+    "hidePanel": "隐藏面板",
     "removeFolder": "从项目移除",
     "attachDuplicate": "该文件夹已在项目中",
     "attachOverlap": "该文件夹与项目中已有文件夹重叠",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "展开计划",
     "collapse": "收起计划"
+  },
+  "artifacts": {
+    "title": "产物",
+    "description": "Pixebot 在对话中创建的页面、文档和图表。点击可在对应对话中打开。",
+    "empty": "还没有产物。Pixebot 创建的页面和文档会显示在这里。",
+    "loadFailed": "无法加载产物",
+    "retry": "重试",
+    "desktopOnly": "产物仅在桌面应用中可用。"
   }
 }

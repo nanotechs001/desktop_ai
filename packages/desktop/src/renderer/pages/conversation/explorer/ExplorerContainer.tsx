@@ -17,12 +17,15 @@
  */
 
 import { Button, Input, Message, Modal, Spin, Tooltip } from '@arco-design/web-react';
-import { FoldUpOne, FolderPlus, Refresh } from '@icon-park/react';
+import { ExpandRight, FoldUpOne, FolderPlus, Refresh } from '@icon-park/react';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { dispatchWorkspaceHasFilesEvent } from '@/renderer/utils/workspace/workspaceEvents';
+import {
+  dispatchWorkspaceHasFilesEvent,
+  dispatchWorkspaceToggleEvent,
+} from '@/renderer/utils/workspace/workspaceEvents';
 
 import { ipcBridge } from '@/common';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
@@ -611,6 +614,17 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
               />
             </Tooltip>
           )}
+          {/* Hides the whole panel, same as the titlebar's panel toggle (which brings it back). */}
+          <Tooltip content={t('conversation.explorer.hidePanel')} mini position='br'>
+            <Button
+              type='text'
+              size='small'
+              className='flex items-center justify-center'
+              icon={<ExpandRight theme='outline' size='16' />}
+              aria-label={t('conversation.explorer.hidePanel')}
+              onClick={dispatchWorkspaceToggleEvent}
+            />
+          </Tooltip>
         </div>
       </div>
       {/* Files tab (explorer): kept mounted across tab switches so the tree + WS

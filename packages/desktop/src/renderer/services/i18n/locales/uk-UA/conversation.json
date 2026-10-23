@@ -659,6 +659,7 @@
     "refreshFiles": "Оновити файли",
     "refreshChanges": "Оновити зміни",
     "collapseAll": "Згорнути все",
+    "hidePanel": "Сховати панель",
     "removeFolder": "Remove from project",
     "attachDuplicate": "This folder is already in the project",
     "attachOverlap": "This folder overlaps a folder already in the project",
@@ -814,5 +815,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "Розгорнути план",
     "collapse": "Згорнути план"
+  },
+  "artifacts": {
+    "title": "Артефакти",
+    "description": "Сторінки, документи й діаграми, створені Pixebot у ваших чатах. Відкрийте, щоб побачити в чаті.",
+    "empty": "Артефактів поки немає. Сторінки й документи, створені Pixebot, з’являться тут.",
+    "loadFailed": "Не вдалося завантажити артефакти",
+    "retry": "Повторити",
+    "desktopOnly": "Артефакти доступні в настільному застосунку."
   }
 }

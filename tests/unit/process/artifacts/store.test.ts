@@ -539,4 +539,36 @@ describe('artifact store', () => {
       });
     });
   });
+
+  describe('list', () => {
+    it("returns every conversation's artifacts, last updated first, without their content", async () => {
+      const store = createArtifactStore(root);
+      const first = ok(await store.create('conv1', input));
+      const second = ok(await store.create('conv2', { title: 'Notes', kind: 'markdown', content: '# hi' }));
+      vi.spyOn(Date, 'now').mockReturnValue(second.updatedAt + 1000);
+      ok(await store.update('conv1', first.id, { content: '<h1>v2</h1>' }));
+
+      const listed = ok(await store.list());
+
+      expect(listed.map((meta) => [meta.conversationId, meta.title, meta.latest])).toEqual([
+        ['conv1', 'Dashboard', 2],
+        ['conv2', 'Notes', 1],
+      ]);
+      expect(listed[0]).not.toHaveProperty('content');
+    });
+
+    it('is empty before any artifact exists', async () => {
+      expect(ok(await createArtifactStore(root).list())).toEqual([]);
+    });
+
+    it('skips an artifact whose metadata is corrupt and keeps the rest', async () => {
+      const store = createArtifactStore(root);
+      const good = ok(await store.create('conv1', input));
+      const bad = ok(await store.create('conv1', { ...input, title: 'Broken' }));
+      await fs.writeFile(path.join(root, 'conv1', bad.id, 'meta.json'), '{not json');
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      expect(ok(await store.list()).map((meta) => meta.id)).toEqual([good.id]);
+    });
+  });
 });

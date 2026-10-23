@@ -106,14 +106,14 @@ const UpdateModal = React.lazy(() => import('@/renderer/components/settings/Upda
 const DEFAULT_SIDER_WIDTH = 260;
 // Icon-only rail width: a 40px content area (8px padding each side) fits the 34px Sider rows.
 const DESKTOP_COLLAPSED_WIDTH = 56;
-// '1' = icon-only (default), '0' = full width. Desktop only; mobile never reads or writes it.
+// '1' = icon-only, '0' = full width (default, so the chat list shows). Desktop only; mobile never reads or writes it.
 const SIDER_COLLAPSED_STORAGE_KEY = 'sider-collapsed';
 
 const readStoredSiderCollapsed = (): boolean => {
   try {
-    return localStorage.getItem(SIDER_COLLAPSED_STORAGE_KEY) !== '0';
+    return localStorage.getItem(SIDER_COLLAPSED_STORAGE_KEY) === '1';
   } catch {
-    return true;
+    return false;
   }
 };
 // 桌面侧栏连续可调：下限 200；低于此值拖拽即吸附收起（消灭旧 130 死区）。
@@ -142,7 +142,9 @@ const Layout: React.FC<{
   sider: React.ReactNode;
   onSessionClick?: () => void;
 }> = ({ sider, onSessionClick: _onSessionClick }) => {
-  const [collapsed, setCollapsed] = useState(readStoredSiderCollapsed);
+  const [mainCollapsed, setMainCollapsed] = useState(readStoredSiderCollapsed);
+  // A VA Bot chat's rail, once the user expands it: this session only, the stored preference is left alone.
+  const [botRailExpanded, setBotRailExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window === 'undefined' ? 390 : window.innerWidth
@@ -162,10 +164,6 @@ const Layout: React.FC<{
   const pathnameRef = useRef(location.pathname);
   pathnameRef.current = location.pathname;
   const workspaceAvailable = location.pathname.startsWith('/conversation/');
-  const toggleSider = useCallback(() => {
-    setCollapsed((previous) => !previous);
-  }, []);
-  useConversationShortcuts({ navigate, toggleSider });
   useAgentWidgetSync();
   // Usage readings can arrive before any chat's send box mounts.
   useEffect(startSubscriptionUsageFeed, []);
@@ -214,6 +212,16 @@ const Layout: React.FC<{
     revealFileFor,
     revealPreviewFor,
   } = usePreviewContext();
+  // The sider is on every route. A VA Bot chat keeps its browser wide, so the sider is its icon rail until the user
+  // expands it; everywhere else it follows the stored preference.
+  const botRail = isVaBotMode && !isMobile && !isSettingsRoute;
+  const collapsed = botRail ? !botRailExpanded : mainCollapsed;
+  const setCollapsed = useCallback(
+    (value: boolean) => (botRail ? setBotRailExpanded(!value) : setMainCollapsed(value)),
+    [botRail]
+  );
+  const toggleSider = useCallback(() => setCollapsed(!collapsed), [collapsed, setCollapsed]);
+  useConversationShortcuts({ navigate, toggleSider });
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
   // their reserve. Active only when a project is bound and on desktop.
@@ -231,6 +239,8 @@ const Layout: React.FC<{
     projectId: currentProject,
     isMobile,
     active: Boolean(currentProject),
+    // The main agent's chats open on their files; a VA Bot's browser comes first.
+    defaultCollapsed: isVaBotMode,
   });
   const toggleExplorer = useCallback(() => {
     dispatchWorkspaceToggleEvent();
@@ -308,21 +318,21 @@ const Layout: React.FC<{
 
   const collapsedRef = useRef(collapsed);
   const isMobileRef = useRef(isMobile);
-  const persistedCollapsedRef = useRef(collapsed);
+  const persistedCollapsedRef = useRef(mainCollapsed);
   useEffect(() => {
     isMobileRef.current = isMobile;
   }, [isMobile]);
   // Persist the user's desktop choice. The mobile overlay and the forced collapse when the window shrinks
   // are transient, so they must not overwrite it.
   useEffect(() => {
-    if (isMobileRef.current || collapsed === persistedCollapsedRef.current) return;
-    persistedCollapsedRef.current = collapsed;
+    if (isMobileRef.current || mainCollapsed === persistedCollapsedRef.current) return;
+    persistedCollapsedRef.current = mainCollapsed;
     try {
-      localStorage.setItem(SIDER_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+      localStorage.setItem(SIDER_COLLAPSED_STORAGE_KEY, mainCollapsed ? '1' : '0');
     } catch {
       // ignore: the preference just won't survive a restart
     }
-  }, [collapsed]);
+  }, [mainCollapsed]);
 
   // 桌面侧栏连续可调宽 + 记忆宽度 + 收起吸附。复用 useResizableSplit
   // 的 pointer/rAF 拖拽管线：拖到 <200 吸附收起（onCollapsedChange→collapsed），
@@ -360,7 +370,7 @@ const Layout: React.FC<{
     if (!isMobile || collapsedRef.current) {
       return;
     }
-    setCollapsed(true);
+    setMainCollapsed(true);
   }, [isMobile]);
 
   // 清理侧栏 Tooltip 残留节点，避免移动端路由切换后浮层卡在左上角
@@ -550,17 +560,18 @@ const Layout: React.FC<{
         )}
 
         <ArcoLayout className={'size-full layout flex-1 min-h-0'}>
-          {/* Desktop: navigation lives in the titlebar's top-right corner; the sider only holds the Settings menu. */}
-          {(isMobile || isSettingsRoute) && (
-            <ArcoLayout.Sider
-              collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
-              collapsed={siderCollapsed}
-              width={siderWidth}
-              className={classNames('!bg-2 layout-sider', {
-                collapsed: siderCollapsed,
-              })}
-              style={siderStyle}
-            >
+          {/* Every route has the sider; a VA Bot chat starts with the icon rail (see botRail). */}
+          <ArcoLayout.Sider
+            collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
+            collapsed={siderCollapsed}
+            width={siderWidth}
+            className={classNames('!bg-2 layout-sider', {
+              collapsed: siderCollapsed,
+            })}
+            style={siderStyle}
+          >
+            {/* The desktop chat routes keep the brand in the titlebar; the sider starts with New chat there. */}
+            {(isMobile || isSettingsRoute) && (
               <ArcoLayout.Header
                 className={classNames(
                   'flex items-center pt-8px pb-8px layout-sider-header',
@@ -612,25 +623,25 @@ const Layout: React.FC<{
                 )}
                 {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
               </ArcoLayout.Header>
-              <ArcoLayout.Content className='pt-0 px-8px pb-0 layout-sider-content'>
-                {React.isValidElement(sider)
-                  ? React.cloneElement(sider, {
-                      onSessionClick: () => {
-                        cleanupSiderTooltips();
-                        if (isMobile) setCollapsed(true);
-                      },
-                      collapsed: siderCollapsed,
-                    } as any)
-                  : sider}
-              </ArcoLayout.Content>
-              {!isMobile &&
-                createSiderDragHandle({
-                  className: 'z-20',
-                  style: { right: '-4px', width: '8px' },
-                  linePlacement: 'start',
-                })}
-            </ArcoLayout.Sider>
-          )}
+            )}
+            <ArcoLayout.Content className='pt-0 px-8px pb-0 layout-sider-content'>
+              {React.isValidElement(sider)
+                ? React.cloneElement(sider, {
+                    onSessionClick: () => {
+                      cleanupSiderTooltips();
+                      if (isMobile) setCollapsed(true);
+                    },
+                    collapsed: siderCollapsed,
+                  } as any)
+                : sider}
+            </ArcoLayout.Content>
+            {!isMobile &&
+              createSiderDragHandle({
+                className: 'z-20',
+                style: { right: '-4px', width: '8px' },
+                linePlacement: 'start',
+              })}
+          </ArcoLayout.Sider>
 
           {/* Content + project Explorer share one measured flex row (stage3
                 FULL / P2). `mainRowRef` gives the [content|explorer] width for the

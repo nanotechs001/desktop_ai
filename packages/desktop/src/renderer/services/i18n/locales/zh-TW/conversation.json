@@ -649,6 +649,7 @@
     "refreshFiles": "重新整理檔案",
     "refreshChanges": "重新整理變更",
     "collapseAll": "全部摺疊",
+    "hidePanel": "隱藏面板",
     "removeFolder": "從專案移除",
     "attachDuplicate": "該資料夾已在專案中",
     "attachOverlap": "該資料夾與專案中既有資料夾重疊",
@@ -796,5 +797,13 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "展開計劃",
     "collapse": "收合計劃"
+  },
+  "artifacts": {
+    "title": "產出物",
+    "description": "Pixebot 在對話中建立的頁面、文件和圖表。點擊可在對應對話中開啟。",
+    "empty": "還沒有產出物。Pixebot 建立的頁面和文件會顯示在這裡。",
+    "loadFailed": "無法載入產出物",
+    "retry": "重試",
+    "desktopOnly": "產出物僅在桌面應用程式中可用。"
   }
 }
