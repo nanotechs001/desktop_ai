@@ -55,6 +55,13 @@ pub fn build_skills_index_text(skills: &[SkillIndex]) -> String {
         ));
     }
     lines.push(String::new());
+    // Agents with a native skill tool (OpenCode's, Claude Code's) reached for it first, got "not found"
+    // and reported the skill as inaccessible instead of using the commands below.
+    lines.push(
+        "These skills are provided by AionUi and are not in your own Skill tool (it will report them as \
+         not found), so load them with the commands below."
+            .to_string(),
+    );
     // These command lines are the CONTRACT, not prose: both subcommands read their
     // arguments as a JSON object on STDIN and reject positional arguments outright
     // (`aionui-app/src/cli.rs` declares them as argument-less variants). An earlier
@@ -258,6 +265,24 @@ mod tests {
         assert!(command_at < protocol_at, "channel A is the preferred path");
         assert!(text.contains("$AIONUI_HELPER_BIN"));
         assert!(text.contains("skills cat"), "supplementary files need their own hint");
+    }
+
+    /// A live OpenCode bot asked its own Skill tool for an injected skill, got
+    /// "not found" and told the user the skill was inaccessible. The block must
+    /// say up front that the agent's own skill tool cannot see these.
+    #[test]
+    fn the_index_block_warns_that_the_agents_own_skill_tool_cannot_see_these() {
+        let text = build_skills_index_text(&[SkillIndex {
+            name: "page-builder".into(),
+            description: "d".into(),
+        }]);
+        let warning_at = text
+            .find("not in your own Skill tool")
+            .expect("the block must steer the agent away from its own skill tool");
+        assert!(
+            warning_at < text.find("skills show").unwrap(),
+            "warn before teaching the command"
+        );
     }
 
     /// Discovery upstream returns from a HashMap, so an unsorted block would vary
