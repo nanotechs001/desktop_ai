@@ -412,8 +412,8 @@ describe('preview tab context menu — pinning', () => {
     expect(screen.queryByText('Pinned page')).toBeNull();
     expect(pinned.style.width).toBe('36px');
     expect(pinned.querySelector('[data-testid="preview-tab-close"]')).toBeNull();
-    // Without a site icon the pin stands in, so the tab is never blank.
-    expect(pinned.querySelector('[title="preview.browser.pinnedTooltip"]')).toBeTruthy();
+    // Drawn as a tile, like Chrome's and Arc's; without a site icon the page's first letter stands in.
+    expect(pinned.querySelector('[data-testid="pinned-tile"]')?.textContent).toBe('P');
     expect(screen.getByTestId('preview-tab-u').querySelector('[data-testid="preview-tab-close"]')).toBeTruthy();
   });
 

@@ -107,6 +107,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
     activeTab,
     closeTab,
     switchTab,
+    moveTab,
     updateTab,
     collapsePreview,
     toggleMaximized,
@@ -1267,6 +1268,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ closing = false }) => {
           onSwitchTab={switchTab}
           onCloseTab={handleCloseTab}
           onContextMenu={handleTabContextMenu}
+          onMoveTab={moveTab}
           onClosePanel={handleClosePanel}
           isMobile={layout?.isMobile}
           // VA Bot conversations get a chat toggle (chat collapsed under the browser) in

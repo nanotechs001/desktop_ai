@@ -218,6 +218,7 @@ export interface PreviewContextValue {
   /** Close a tab. Only a close the user started (`byUser`, the default) keeps the scope's pane closed afterwards. */
   closeTab: (tabId: string, options?: { byUser?: boolean }) => void;
   switchTab: (tabId: string) => void;
+  moveTab: (tabId: string, targetId: string) => void; // Drag-to-reorder: tabId takes targetId's place
   updateContent: (content: string) => void;
   /**
    * 按 tabId 局部更新 tab（标题 / 地址 / metadata），不影响 dirty 状态。
@@ -653,6 +654,16 @@ const movePinChanged = (tabs: PreviewTab[], tabId: string): PreviewTab[] => {
   const rest = tabs.filter((tab) => tab.id !== tabId);
   const pinnedCount = rest.filter((tab) => tab.metadata?.pinned === true).length;
   return [...rest.slice(0, pinnedCount), moved, ...rest.slice(pinnedCount)];
+};
+
+/** A dragged tab takes the dropped-on tab's place, like Chrome; it never crosses into or out of the pinned group. */
+export const moveTabTo = (tabs: PreviewTab[], tabId: string, targetId: string): PreviewTab[] => {
+  const from = tabs.findIndex((tab) => tab.id === tabId);
+  const to = tabs.findIndex((tab) => tab.id === targetId);
+  if (from < 0 || to < 0 || from === to) return tabs;
+  if ((tabs[from].metadata?.pinned === true) !== (tabs[to].metadata?.pinned === true)) return tabs;
+  const rest = tabs.toSpliced(from, 1);
+  return rest.toSpliced(to, 0, tabs[from]);
 };
 
 const profileMetadata = (profile?: BrowserTabProfile): PreviewMetadata | undefined =>
@@ -1772,6 +1783,10 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     [setBackground]
   );
 
+  const moveTab = useCallback((tabId: string, targetId: string) => {
+    setTabs((prevTabs) => moveTabTo(prevTabs, tabId, targetId));
+  }, []);
+
   /**
    * Re-read a tab's content from disk, replacing what is on screen.
    *
@@ -2106,6 +2121,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
       clearPreviewForScope,
       closeTab,
       switchTab: setActiveTabId,
+      moveTab,
       updateContent,
       updateTab,
       openBrowserTab: openBrowserTabOrForward,
@@ -2148,6 +2164,7 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     clearPreviewForScope,
     closeTab,
     setActiveTabId,
+    moveTab,
     updateContent,
     updateTab,
     openBrowserTabOrForward,

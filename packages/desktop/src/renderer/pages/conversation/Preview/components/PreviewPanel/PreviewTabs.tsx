@@ -5,10 +5,10 @@
  */
 
 import { iconColors } from '@/renderer/styles/colors';
-import { Close, Comments, Pin, Plus } from '@icon-park/react';
+import { Close, Comments, Plus } from '@icon-park/react';
 import { Button } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BrowserTabProfile } from '@/common/types/browser';
 import type { TabFadeState } from '../../hooks/useTabOverflow';
@@ -32,6 +32,11 @@ const MAX_TAB_WIDTH_PX = 180;
 const MIN_TAB_WIDTH_PX = 56;
 /** A pinned tab is icon-only, like Chrome's. */
 const PINNED_TAB_WIDTH_PX = 36;
+/** Drag data type for a tab being reordered, so drops of links or files onto the strip are not taken for one. */
+const TAB_DRAG_TYPE = 'application/x-preview-tab';
+
+/** What a pinned tile shows without a site icon: the page's first letter. */
+const monogramOf = (tab: PreviewTab): string => (tab.title.trim().charAt(0) || '•').toUpperCase();
 
 /**
  * Tab 信息
@@ -192,6 +197,9 @@ interface PreviewTabsProps {
    * the plus button never appears in a document-only panel.
    */
   onNewBrowserTab?: () => void;
+
+  /** Drag-to-reorder: the dragged tab takes the dropped-on tab's place. Tabs are not draggable without it. */
+  onMoveTab?: (tabId: string, targetId: string) => void;
 }
 
 /**
@@ -218,13 +226,46 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   chatToggle,
   isMobile,
   onToggleMaximize,
+  onMoveTab,
 }) => {
   const { t } = useTranslation();
   const { left: showLeftFade, right: showRightFade } = tabFadeState;
+  // dragover cannot read drag data, so the dragged tab is remembered here.
+  const draggedIdRef = useRef<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  // Site icons that failed to load: hidden, and a pinned tab shows its pin instead of going blank.
+  const [brokenFavicons, setBrokenFavicons] = useState<ReadonlySet<string>>(() => new Set());
+  const faviconOf = (tab: PreviewTab) => (tab.favicon && !brokenFavicons.has(tab.favicon) ? tab.favicon : undefined);
+  // 站点图标（浏览器 tab）/ Site icon (browser tabs)
+  const renderFavicon = (tab: PreviewTab, sizeClass: string) => (
+    <img
+      src={faviconOf(tab)}
+      alt=''
+      className={`${sizeClass} flex-shrink-0 rd-2px`}
+      // 图标加载失败时不再显示，避免出现破图占位 / Dropped on load failure, never a broken image
+      onError={() => {
+        const failed = tab.favicon;
+        if (failed) setBrokenFavicons((previous) => new Set(previous).add(failed));
+      }}
+    />
+  );
+
+  const endDrag = () => {
+    draggedIdRef.current = null;
+    setDraggedId(null);
+    setDropTargetId(null);
+  };
+  // A tab only moves within its group: pinned tabs stay at the start.
+  const canDropOn = (target: PreviewTab) => {
+    const dragged = tabs.find((tab) => tab.id === draggedIdRef.current);
+    return !!dragged && dragged.id !== target.id && !!dragged.pinned === !!target.pinned;
+  };
+  const indexOf = (tabId: string | null) => tabs.findIndex((tab) => tab.id === tabId);
 
   return (
     <div
-      className='relative flex-shrink-0 bg-bg-2'
+      className='relative flex-shrink-0 bg-2'
       style={{ minHeight: '36px', borderBottom: '1px solid var(--border-base)' }}
     >
       <div className='flex items-center h-36px w-full'>
@@ -236,9 +277,10 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 key={tab.id}
                 data-testid={`preview-tab-${tab.id}`}
                 title={tab.pinned ? tab.title : undefined}
-                className={`flex items-center gap-6px h-full cursor-pointer transition-colors ${tab.pinned ? 'justify-center flex-shrink-0' : 'px-10px'} ${tab.id === activeTabId ? 'bg-bg-1 text-t-primary' : 'text-t-secondary hover:bg-bg-3'}`}
-                style={
-                  tab.pinned
+                draggable={!!onMoveTab}
+                className={`flex items-center gap-6px h-full cursor-pointer transition-colors ${tab.pinned ? 'justify-center flex-shrink-0' : `px-10px ${tab.id === activeTabId ? 'bg-1 text-t-primary' : 'text-t-secondary hover:bg-3'}`} ${tab.id === draggedId ? 'opacity-50' : ''}`}
+                style={{
+                  ...(tab.pinned
                     ? { width: `${PINNED_TAB_WIDTH_PX}px` }
                     : {
                         flexGrow: 1,
@@ -246,8 +288,35 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                         flexBasis: 0,
                         minWidth: `${MIN_TAB_WIDTH_PX}px`,
                         maxWidth: `${MAX_TAB_WIDTH_PX}px`,
-                      }
-                }
+                      }),
+                  // Insertion marker on the side the dragged tab will land (logical, so RTL flips it).
+                  ...(tab.id === dropTargetId && {
+                    [indexOf(draggedId) < indexOf(tab.id) ? 'borderInlineEnd' : 'borderInlineStart']:
+                      '2px solid rgb(var(--primary-6))',
+                  }),
+                }}
+                onDragStart={(e) => {
+                  if (!onMoveTab) return;
+                  draggedIdRef.current = tab.id;
+                  setDraggedId(tab.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData(TAB_DRAG_TYPE, tab.id);
+                }}
+                onDragOver={(e) => {
+                  if (!canDropOn(tab)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDropTargetId(tab.id);
+                }}
+                onDrop={(e) => {
+                  const draggedTabId = draggedIdRef.current;
+                  if (draggedTabId && canDropOn(tab)) {
+                    e.preventDefault();
+                    onMoveTab?.(draggedTabId, tab.id);
+                  }
+                  endDrag();
+                }}
+                onDragEnd={endDrag}
                 onClick={() => onSwitchTab(tab.id)}
                 onContextMenu={(e) => onContextMenu(e, tab.id)}
                 // 中键关闭 / Middle-click to close.
@@ -275,24 +344,18 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 {/* min-w-0 是省略号生效的前提：flex 子项默认按内容撑开，不允许收缩
                     min-w-0 is what makes truncation possible: a flex child defaults
                     to its content width and refuses to shrink below it. */}
-                <span className='text-12px flex items-center gap-4px min-w-0'>
-                  {/* A pinned tab without a site icon shows the pin, so it is never blank. */}
-                  {tab.pinned && !tab.favicon && (
-                    <span className='flex flex-shrink-0' title={t('preview.browser.pinnedTooltip')}>
-                      <Pin theme='outline' size='12' fill={iconColors.secondary} />
+                {/* flex-1 pushes the close button to the tab's end, so equal-width tabs also look equal. */}
+                <span className={`text-12px flex items-center gap-4px min-w-0 ${tab.pinned ? '' : 'flex-1'}`}>
+                  {/* A pinned tab is a tile, like Chrome's and Arc's: the site icon, else the page's first letter. */}
+                  {tab.pinned ? (
+                    <span
+                      data-testid='pinned-tile'
+                      className={`flex items-center justify-center size-26px rd-6px text-12px font-semibold transition-colors ${tab.id === activeTabId ? 'bg-1 text-t-primary border border-solid border-b-base' : 'bg-fill-3 text-t-secondary hover:bg-fill-4'}`}
+                    >
+                      {faviconOf(tab) ? renderFavicon(tab, 'w-16px h-16px') : monogramOf(tab)}
                     </span>
-                  )}
-                  {/* 站点图标（浏览器 tab）/ Site icon (browser tabs) */}
-                  {tab.favicon && (
-                    <img
-                      src={tab.favicon}
-                      alt=''
-                      className='w-12px h-12px flex-shrink-0 rd-2px'
-                      // 图标加载失败时静默隐藏，避免出现破图占位 / Hide silently on load failure
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
+                  ) : (
+                    faviconOf(tab) && renderFavicon(tab, 'w-12px h-12px')
                   )}
                   {/* 只让标题文字收缩并省略；图标与指示器保持完整可见。
                       title 属性提供完整标题，避免截断后信息丢失。
@@ -331,7 +394,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 {!tab.pinned && (
                   <span
                     data-testid='preview-tab-close'
-                    className='flex items-center justify-center w-16px h-16px rd-4px flex-shrink-0 hover:bg-bg-3 transition-colors'
+                    className='flex items-center justify-center w-16px h-16px rd-4px flex-shrink-0 hover:bg-3 transition-colors'
                     onClick={(e) => {
                       e.stopPropagation();
                       onCloseTab(tab.id);
@@ -349,7 +412,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
           {/* 新建浏览器 tab / New browser tab */}
           {onNewBrowserTab && (
             <div
-              className='flex items-center justify-center w-24px h-24px ms-4px rd-4px cursor-pointer flex-shrink-0 hover:bg-bg-3 transition-colors'
+              className='flex items-center justify-center w-24px h-24px ms-4px rd-4px cursor-pointer flex-shrink-0 hover:bg-3 transition-colors'
               onClick={onNewBrowserTab}
               title={t('preview.browser.newTab')}
             >
@@ -365,7 +428,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 Maximize / restore: hide the chat area so the preview fills it; side panels stay unchanged */}
             {onToggleMaximize && (
               <div
-                className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-bg-3 transition-colors'
+                className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-3 transition-colors'
                 onClick={onToggleMaximize}
                 title={
                   chatToggle
@@ -404,7 +467,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
             )}
             {onClosePanel && !isMobile && (
               <div
-                className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-bg-3 transition-colors'
+                className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-3 transition-colors'
                 onClick={onClosePanel}
                 title={t('preview.collapsePanel')}
               >
