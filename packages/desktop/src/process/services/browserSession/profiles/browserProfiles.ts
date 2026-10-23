@@ -136,6 +136,8 @@ export type DeleteProfileDeps = {
   /** Unloads the session's extensions. */
   unloadExtensions(session: DeletableSession): void;
   removeDir(dir: string): Promise<void>;
+  /** Queues a folder that could not be removed now (still held open, as on Windows) for removal at the next start. */
+  deferRemoval(dir: string): Promise<void>;
   /** Forgets what main keeps for the partition elsewhere (session caches, remembered permissions). */
   forgetPartition(partition: string): void;
 };
@@ -158,7 +160,16 @@ export async function deleteAgentBrowserData(agentId: string, deps: DeleteProfil
   await deps.closeLiveContents(session, { kind: 'agent', agentId });
   deps.unloadExtensions(session);
   await clearBrowsingData(session);
-  await deps.removeDir(folder);
+  try {
+    await deps.removeDir(folder);
+  } catch (error) {
+    // Windows cannot delete files the live session still holds open; the data is cleared, the folder goes next start.
+    console.warn(
+      '[BrowserProfiles] the deleted profile folder is still in use; it is removed at the next start:',
+      error
+    );
+    await deps.deferRemoval(folder);
+  }
 
   deps.forgetPartition(partition);
   deletedPartitions.add(partition);

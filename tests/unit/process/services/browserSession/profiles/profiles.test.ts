@@ -144,6 +144,9 @@ describe('deleteAgentBrowserData', () => {
         forgetPartition: vi.fn((partition: string) => {
           steps.push(`forget ${partition}`);
         }),
+        deferRemoval: vi.fn(async (dir: string) => {
+          steps.push(`defer ${dir}`);
+        }),
       },
     };
   };
@@ -197,12 +200,24 @@ describe('deleteAgentBrowserData', () => {
     }
   });
 
-  it('keeps the profile known when a step fails, so nothing claims it is gone', async () => {
+  it('finishes the delete when the folder is still held open (Windows), leaving its removal to the next start', async () => {
     const partition = agentPartition('bare:busy');
+    const { deps, steps } = recordingDeps(folderOf(partition));
+    deps.removeDir.mockRejectedValueOnce(Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }));
+
+    await deleteAgentBrowserData('bare:busy', deps);
+
+    expect(steps.slice(-2)).toEqual([`defer ${folderOf(partition)}`, `forget ${partition}`]);
+    expect(isDeletedAgentProfile('bare:busy')).toBe(true);
+  });
+
+  it('keeps the profile known when a step fails, so nothing claims it is gone', async () => {
+    const partition = agentPartition('bare:busy-2');
     const { deps } = recordingDeps(folderOf(partition));
     deps.removeDir.mockRejectedValueOnce(new Error('EBUSY'));
+    deps.deferRemoval.mockRejectedValueOnce(new Error('disk full'));
 
-    await expect(deleteAgentBrowserData('bare:busy', deps)).rejects.toThrow('EBUSY');
+    await expect(deleteAgentBrowserData('bare:busy-2', deps)).rejects.toThrow('disk full');
     expect(deps.forgetPartition).not.toHaveBeenCalled();
     expect(profileOfPartition(partition)).not.toBeNull();
   });

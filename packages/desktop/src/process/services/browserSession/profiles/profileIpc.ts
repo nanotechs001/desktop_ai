@@ -20,6 +20,7 @@ import {
   partitionOfProfile,
 } from './browserProfiles';
 import { detectBrowserSources, type BrowserSource } from './cookieImport/detect';
+import { deferProfileRemoval, removeDeferredProfileDirs } from './deferredRemoval';
 import { importCookies } from './cookieImport/importCookies';
 
 type Reply<D = undefined> = { success: boolean; data?: D; msg?: string };
@@ -127,6 +128,10 @@ function registerCookieImportIpc(): void {
 
 /** The renderer's browser-profile IPC: a tab's partition (its session set up first), and clearing or deleting data. */
 export function registerBrowserProfileIpc(): void {
+  // Folders of bots deleted last run that were still in use then (Windows); nothing holds them open now.
+  void removeDeferredProfileDirs(app.getPath('userData')).catch((error: unknown) =>
+    console.warn('[BrowserProfiles] could not clean up deleted bot profiles:', error)
+  );
   registerCookieImportIpc();
   ipcBridge.browser.profilePartition.provider(async (request) => {
     const profile = parseBrowserTabProfile(request);
@@ -166,7 +171,8 @@ export function registerBrowserProfileIpc(): void {
           await closeSessionContents(target as Electron.Session);
         },
         unloadExtensions: (target) => unloadExtensions(target as Electron.Session),
-        removeDir: (dir) => fs.rm(dir, { recursive: true, force: true }),
+        removeDir: (dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 3 }),
+        deferRemoval: (dir) => deferProfileRemoval(app.getPath('userData'), dir),
         forgetPartition: (partition) => {
           forgetBrowserSession(partition);
           forgetPermissions(partition);
