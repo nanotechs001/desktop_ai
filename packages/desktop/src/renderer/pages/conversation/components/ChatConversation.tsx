@@ -21,6 +21,7 @@ import useSWR from 'swr';
 import { useChatLocation } from '@/renderer/pages/agentWidget/chatLocation';
 import { useRestoreHiddenAgentWidget, useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 import WidgetChatPlaceholder, { ShowAgentWidgetButton } from '@/renderer/pages/agentWidget/WidgetChatPlaceholder';
+import CloseVaChatButton from './ChatLayout/CloseVaChatButton';
 import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
 import WatchBrowserButton from '@/renderer/components/media/browserLive/WatchBrowserButton';
 import {
@@ -330,6 +331,7 @@ const ChatConversation: React.FC<{
           />
         </div>
       )}
+      {isVaBot && <CloseVaChatButton />}
     </div>
   );
 
