@@ -13,7 +13,7 @@
   ],
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev --config packages/desktop/electron.vite.config.ts",
+    "dev": "node scripts/ensureCore.js && electron-vite dev --config packages/desktop/electron.vite.config.ts",
     "start": "electron-vite dev --config packages/desktop/electron.vite.config.ts",
     "core:build": "node scripts/buildCore.js",
     "start:multi": "cross-env AIONUI_MULTI_INSTANCE=1 electron-vite dev --config packages/desktop/electron.vite.config.ts",

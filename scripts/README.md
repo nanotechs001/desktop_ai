@@ -9,6 +9,7 @@ Build, packaging and dev tooling for Pixebot Browser. Run them through the `pack
 | `build-with-builder.js`        | Entry point for `dist*` / `build-*`: electron-vite build, builtin MCP bundles, backend bundle, then electron-builder |
 | `build-mcp-servers.js`         | Bundles the four builtin MCP servers (`builtin-mcp-*.js`) as self-contained CJS                                      |
 | `buildCore.js`                 | Release build of the Rust backend in `core/` (`bun run core:build`)                                                  |
+| `ensureCore.js`                | Before `bun run dev`: rebuilds aioncore when `core/` (incl. built-in skills) is newer than the binary                |
 | `prepareLocalCore.js`          | Bundles the backend built from `core/` into `resources/bundled-aioncore/<platform>-<arch>/` (default for packaging)  |
 | `prepareAioncore.js`           | Downloads the stock AionCore release instead (`AIONUI_BACKEND_SOURCE=release`, needed for cross-arch builds)         |
 | `resolveAioncoreVersion.js`    | Resolves the AionCore version for `prepareAioncore.js`                                                               |
