@@ -1316,5 +1316,9 @@
   "crossSessionMessageDesc": "Permite que agentes enviem mensagens para suas outras conversas. Desativar também desliga a menção @@ na caixa de entrada.",
   "crossSessionMessageDisabledBanner": "As mensagens entre conversas estão desativadas, a menção @@ não está disponível.",
   "crossSessionMessageResume": "Ativar novamente",
-  "crossSessionMessageUpdateFailed": "Falha ao atualizar a configuração de mensagens entre conversas"
+  "crossSessionMessageUpdateFailed": "Falha ao atualizar a configuração de mensagens entre conversas",
+  "chatHistory": {
+    "title": "Histórico de conversas",
+    "description": "Exclui todas as conversas com o agente principal. Os Pixebots mantêm as suas. Esta ação não pode ser desfeita."
+  }
 }

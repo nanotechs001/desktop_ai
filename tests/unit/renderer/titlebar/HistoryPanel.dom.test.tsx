@@ -1,9 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { TChatConversation } from '@/common/config/storage';
+// The app loads this in main.tsx; Modal.confirm cannot render under React 19 without it.
+import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { Message, Modal } from '@arco-design/web-react';
 import { addEventListener } from '@/renderer/utils/emitter';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -23,18 +26,31 @@ const chats = vi.hoisted(() => ({ value: [] as TChatConversation[] }));
 
 vi.mock('@arco-design/web-react', async (importOriginal) => {
   const arco = await importOriginal<typeof import('@arco-design/web-react')>();
-  return { ...arco, Message: { ...arco.Message, success: vi.fn(), error: vi.fn() } };
+  return {
+    ...arco,
+    Message: { ...arco.Message, success: vi.fn(), error: vi.fn(), warning: vi.fn(), loading: vi.fn() },
+  };
 });
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown>) => (params ? `${key} ${JSON.stringify(params)}` : key),
+  }),
 }));
 const ipc = vi.hoisted(() => ({
   update: vi.fn().mockResolvedValue(true),
   archive: vi.fn().mockResolvedValue(undefined),
+  remove: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('@/common', () => ({
-  ipcBridge: { conversation: { update: { invoke: ipc.update } }, sidebar: { archive: { invoke: ipc.archive } } },
+  ipcBridge: {
+    conversation: { update: { invoke: ipc.update }, remove: { invoke: ipc.remove } },
+    sidebar: { archive: { invoke: ipc.archive } },
+  },
+}));
+vi.mock('@/renderer/utils/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/utils/platform')>()),
+  isElectronDesktop: () => false,
 }));
 vi.mock('@/renderer/hooks/context/ConversationHistoryContext', async () => {
   const { buildGroupedHistory } = await import('@/renderer/pages/conversation/GroupedHistory/utils/groupingHelpers');
@@ -196,5 +212,72 @@ describe('HistoryPanel', () => {
     renderPanel();
 
     expect(screen.queryByRole('button', { name: 'conversation.historySearch.tooltip' })).not.toBeInTheDocument();
+  });
+
+  describe('deleting chats', () => {
+    // Static confirms close with an animation; under load an earlier test's can still be in the page, so the newest wins.
+    const confirmDelete = async () =>
+      fireEvent.click(
+        (await screen.findAllByRole('button', { name: 'conversation.history.confirmDelete' })).at(-1) as HTMLElement
+      );
+
+    afterEach(() => {
+      Modal.destroyAll();
+    });
+
+    const listen = (event: 'conversation.deleted' | 'chat.history.refresh') => {
+      const listener = vi.fn();
+      const stop = addEventListener(event, listener);
+      return { listener, stop };
+    };
+
+    it('deletes a chat from the row menu after confirming', async () => {
+      ipc.remove.mockClear().mockResolvedValue(true);
+      const deleted = listen('conversation.deleted');
+      const refreshed = listen('chat.history.refresh');
+      renderPanel();
+
+      fireEvent.click(screen.getByTestId('conversation-row-menu-t2'));
+      fireEvent.click((await screen.findAllByText('common.delete')).at(-1) as HTMLElement);
+      expect(await screen.findByText('conversation.history.deleteTitle')).toBeInTheDocument();
+      expect(ipc.remove).not.toHaveBeenCalled();
+      await confirmDelete();
+
+      await waitFor(() => expect(ipc.remove).toHaveBeenCalledWith({ id: 't2' }));
+      await waitFor(() => expect(deleted.listener).toHaveBeenCalledWith('t2'));
+      await waitFor(() => expect(refreshed.listener).toHaveBeenCalled());
+      expect(Message.success).toHaveBeenCalledWith('conversation.history.deleteSuccess');
+      deleted.stop();
+      refreshed.stop();
+    });
+
+    it('leaves the open chat when it is deleted', async () => {
+      ipc.remove.mockClear().mockResolvedValue(true);
+      renderPanel(vi.fn(), { initialPath: '/conversation/y1' });
+
+      fireEvent.click(screen.getByTestId('conversation-row-menu-y1'));
+      fireEvent.click((await screen.findAllByText('common.delete')).at(-1) as HTMLElement);
+      await confirmDelete();
+
+      await waitFor(() => expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/));
+    });
+
+    it('reports a chat the backend would not delete', async () => {
+      ipc.remove.mockClear().mockResolvedValue(false);
+      renderPanel(vi.fn(), { initialPath: '/conversation/t1' });
+
+      fireEvent.click(screen.getByTestId('conversation-row-menu-t1'));
+      fireEvent.click((await screen.findAllByText('common.delete')).at(-1) as HTMLElement);
+      await confirmDelete();
+
+      await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.history.deleteFailed'));
+      expect(screen.getByTestId('path')).toHaveTextContent('/conversation/t1');
+    });
+
+    it('leaves clearing the whole history to Settings', () => {
+      renderPanel();
+
+      expect(screen.queryByRole('button', { name: 'conversation.history.clearHistory' })).not.toBeInTheDocument();
+    });
   });
 });

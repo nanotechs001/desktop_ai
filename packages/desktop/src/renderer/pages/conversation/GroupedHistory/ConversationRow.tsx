@@ -15,6 +15,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { Checkbox, Dropdown, Menu, Spin, Tooltip } from '@arco-design/web-react';
 import {
   Attention,
+  DeleteOne,
   EditOne,
   Export,
   FolderClose,
@@ -58,6 +59,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
     onCreateCronTask,
     onArchive,
     onExport,
+    onDelete,
     onTogglePin,
     onToggleManualUnread,
     isManualUnread,
@@ -285,6 +287,10 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
                     }
                     if (key === 'archive') {
                       onArchive(conversation);
+                      return;
+                    }
+                    if (key === 'delete') {
+                      onDelete?.(conversation);
                     }
                   }}
                 >
@@ -328,6 +334,14 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
                       <span>{t('conversation.history.archive')}</span>
                     </div>
                   </Menu.Item>
+                  {onDelete && (
+                    <Menu.Item key='delete'>
+                      <div className='flex items-center gap-8px text-danger-6'>
+                        <DeleteOne theme='outline' size='14' />
+                        <span>{t('common.delete')}</span>
+                      </div>
+                    </Menu.Item>
+                  )}
                 </Menu>
               }
               trigger='click'

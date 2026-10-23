@@ -1314,5 +1314,9 @@
   "crossSessionMessageDesc": "允许 Agent 向你的其他会话发送消息。关闭后，输入框的 @@ 会话提及与投递能力同时停用。",
   "crossSessionMessageDisabledBanner": "跨会话消息已关闭，输入框的 @@ 会话提及不可用。",
   "crossSessionMessageResume": "重新开启",
-  "crossSessionMessageUpdateFailed": "跨会话消息设置更新失败"
+  "crossSessionMessageUpdateFailed": "跨会话消息设置更新失败",
+  "chatHistory": {
+    "title": "聊天记录",
+    "description": "删除与主智能体的所有对话。Pixebot 的对话会保留。此操作无法撤销。"
+  }
 }

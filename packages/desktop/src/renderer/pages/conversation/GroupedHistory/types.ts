@@ -53,6 +53,8 @@ export type ConversationRowProps = {
   onCreateCronTask: (conversation: TChatConversation) => void;
   onArchive: (conversation: TChatConversation) => void;
   onExport?: (conversation: TChatConversation) => void;
+  /** Shows a Delete entry in the row menu; omitted where chats are only archived. */
+  onDelete?: (conversation: TChatConversation) => void;
   onTogglePin: (conversation: TChatConversation) => void;
   onToggleManualUnread: (conversation: TChatConversation) => void;
   getJobStatus: (conversation_id: string) => 'none' | 'active' | 'paused' | 'error' | 'unread';

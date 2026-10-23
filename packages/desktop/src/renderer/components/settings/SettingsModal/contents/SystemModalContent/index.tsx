@@ -28,6 +28,7 @@ import BrowserNotificationGrant from './BrowserNotificationGrant';
 import DevSettings from './DevSettings';
 import AgentWidgetSection from './AgentWidgetSection';
 import BrowserDataSection from './BrowserDataSection';
+import ChatHistorySection from './ChatHistorySection';
 import DirInputItem from './DirInputItem';
 import PreferenceRow from './PreferenceRow';
 import VoiceInputSection from './VoiceInputSection';
@@ -572,6 +573,9 @@ const SystemModalContent: React.FC = () => {
 
           {/* In-app browser: sign-in state and cache */}
           <BrowserDataSection />
+
+          {/* Chats with the main agent: clear them all at once */}
+          <ChatHistorySection />
 
           {/* Developer settings: DevTools + CDP (only visible in dev mode) */}
           <DevSettings />

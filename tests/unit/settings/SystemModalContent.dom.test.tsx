@@ -46,6 +46,10 @@ vi.mock('@/renderer/components/settings/LanguageSwitcher', () => ({
   default: () => <div>LanguageSwitcher</div>,
 }));
 
+// Covered by its own test; it needs the app-wide chat list.
+vi.mock('@/renderer/components/settings/SettingsModal/contents/SystemModalContent/ChatHistorySection', () => ({
+  default: () => null,
+}));
 vi.mock('@/renderer/components/settings/SettingsModal/contents/SystemModalContent/DevSettings', () => ({
   default: () => <div>DevSettings</div>,
 }));

@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Drawer, Empty, Input, Modal } from '@arco-design/web-react';
+import { Button, Drawer, Empty, Input, Message, Modal } from '@arco-design/web-react';
 import { Search } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { TChatConversation } from '@/common/config/storage';
+import { removeChats } from '@/renderer/hooks/assistant/botChats';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
 import ConversationRow from '@/renderer/pages/conversation/GroupedHistory/ConversationRow';
 import { useConversationActions } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationActions';
 import type { GroupedHistoryResult } from '@/renderer/pages/conversation/GroupedHistory/types';
 import { orderHistoryConversations } from '@/renderer/pages/conversation/GroupedHistory/utils/visibleConversationOrder';
 import { getActivityTime, getTimelineLabel } from '@/renderer/utils/chat/timeline';
+import { emitter } from '@/renderer/utils/emitter';
 
 const PANEL_WIDTH = 360;
 
@@ -59,6 +61,8 @@ type HistoryPanelProps = {
   onSelect?: (conversation: TChatConversation) => void;
   /** Rendered inside another surface (no drawer): no room reserved for the window's titlebar. */
   embedded?: boolean;
+  /** Focus the search field on mount (default). The always-visible sider list must not steal focus. */
+  autoFocus?: boolean;
 };
 
 /** Search field and chat list. Mounted only while the drawer is open, so its data hooks cost nothing when closed. */
@@ -69,12 +73,16 @@ export const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open' | 'placem
   title,
   onSelect,
   embedded,
+  autoFocus = true,
 }) => {
   const { t } = useTranslation();
   const [keyword, setKeyword] = useState('');
+  // The keyboard highlight follows the search field; a list nobody is typing into shows only the open chat.
+  const [searchFocused, setSearchFocused] = useState(autoFocus);
   const [activeIndex, setActiveIndex] = useState(0);
   const history = useConversationHistoryContext();
   const openConversationId = useLocation().pathname.match(/^\/conversation\/([^/]+)/)?.[1];
+  const navigate = useNavigate();
   const actions = useConversationActions({
     onSessionClick: onClose,
     markAsRead: history.markAsRead,
@@ -107,11 +115,40 @@ export const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open' | 'placem
       .filter((section) => section.conversations.length > 0);
   }, [history.groupedHistory, keyword, t, filter]);
   const visible = useMemo(() => sections.flatMap((section) => section.conversations), [sections]);
-  const activeConversation = visible[Math.min(activeIndex, visible.length - 1)];
+  const activeConversation = searchFocused ? visible[Math.min(activeIndex, visible.length - 1)] : undefined;
 
   useEffect(() => {
     setActiveIndex(0);
   }, [keyword]);
+
+  const leaveIfOpen = useCallback(
+    (conversationId: string) => {
+      if (conversationId === openConversationId) void navigate('/');
+    },
+    [navigate, openConversationId]
+  );
+
+  const handleDelete = useCallback(
+    (conversation: TChatConversation) => {
+      actions.handleMenuVisibleChange(conversation.id, false);
+      Modal.confirm({
+        title: t('conversation.history.deleteTitle'),
+        content: t('conversation.history.deleteConfirm', { name: conversation.name }),
+        okText: t('conversation.history.confirmDelete'),
+        cancelText: t('conversation.history.cancelDelete'),
+        okButtonProps: { status: 'danger' },
+        alignCenter: true,
+        getPopupContainer: () => document.body,
+        onOk: async () => {
+          const { failed } = await removeChats([conversation], { onRemoved: leaveIfOpen });
+          emitter.emit('chat.history.refresh');
+          if (failed.length > 0) Message.error(t('conversation.history.deleteFailed'));
+          else Message.success(t('conversation.history.deleteSuccess'));
+        },
+      });
+    },
+    [actions, leaveIfOpen, t]
+  );
 
   useEffect(() => {
     if (activeConversation)
@@ -142,7 +179,9 @@ export const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open' | 'placem
         >
           {title && <div className='px-4px pb-8px text-16px font-semibold text-t-primary'>{title}</div>}
           <Input
-            autoFocus
+            autoFocus={autoFocus}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             allowClear
             value={keyword}
             onChange={setKeyword}
@@ -155,7 +194,7 @@ export const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open' | 'placem
               long
               type='text'
               size='small'
-              className='mt-4px !justify-start'
+              className='mt-4px !flex items-center gap-6px !justify-start'
               icon={<Search theme='outline' size='14' fill='currentColor' />}
               onClick={onSearchMessages}
             >
@@ -203,6 +242,7 @@ export const HistoryPanelBody: React.FC<Omit<HistoryPanelProps, 'open' | 'placem
                       onEditStart={actions.handleEditStart}
                       onCreateCronTask={actions.handleCreateCronTask}
                       onArchive={actions.handleArchive}
+                      onDelete={handleDelete}
                       onTogglePin={actions.handleTogglePin}
                       onToggleManualUnread={actions.handleToggleManualUnread}
                       getJobStatus={history.getJobStatus}

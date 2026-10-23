@@ -1313,5 +1313,9 @@
   "crossSessionMessageDesc": "Permet aux agents d'envoyer des messages à vos autres conversations. La désactivation coupe aussi la mention @@ dans la zone de saisie.",
   "crossSessionMessageDisabledBanner": "Les messages entre conversations sont désactivés, la mention @@ est indisponible.",
   "crossSessionMessageResume": "Réactiver",
-  "crossSessionMessageUpdateFailed": "Échec de la mise à jour du réglage des messages entre conversations"
+  "crossSessionMessageUpdateFailed": "Échec de la mise à jour du réglage des messages entre conversations",
+  "chatHistory": {
+    "title": "Historique des discussions",
+    "description": "Supprime toutes les discussions avec l’agent principal. Les Pixebots conservent les leurs. Cette action est irréversible."
+  }
 }
