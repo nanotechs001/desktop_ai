@@ -311,6 +311,10 @@ describe('tabs navigate', () => {
   });
 
   it('reports a failed load and a missing current tab as errors', async () => {
+    // Nothing shared: a shared tab would become the current tab.
+    relay.on('AionRelay.listTabs', () => ({
+      tabs: [{ targetId: 'wc-7', title: 'Blank', url: 'about:blank', owner: 'agent' }],
+    }));
     const client = await connectClient(relay.env);
     expect(textOf(await callTabs(client, { action: 'navigate', url: 'https://example.com/' }))).toContain(
       'No current tab'
@@ -330,6 +334,64 @@ describe('tabs navigate', () => {
     const reply = await callTabs(client, { action: 'navigate', url: 'https://gmail.com/', tab: 'wc-7' });
     expect(reply.isError).toBeFalsy();
     expect(textOf(reply)).toContain('observe');
+  });
+});
+
+// "Share with <bot>": the bot works in the tab the user shared and does not reload a page it already shows.
+describe('a tab the user shares', () => {
+  beforeEach(() => {
+    relay.on('Target.attachToTarget', ({ targetId }) => ({ sessionId: `s-${String(targetId)}` }));
+    relay.on('Emulation.setFocusEmulationEnabled', () => ({}));
+    relay.on('Page.navigate', () => ({ frameId: 'TOP', loaderId: 'L1' }));
+    relay.on('AionRelay.reportAction', () => ({}));
+  });
+
+  it('becomes the current tab when the bot has none, so it never needs to open another', async () => {
+    const client = await connectClient(relay.env);
+
+    const reply = await callTabs(client, { action: 'navigate', url: 'https://docs.example.com/guide' });
+
+    expect(reply.isError).toBeFalsy();
+    expect(relay.callsTo('Target.attachToTarget')).toEqual([{ targetId: 'wc-9', flatten: true }]);
+    expect(relay.callsTo('Target.createTarget')).toEqual([]);
+  });
+
+  it('takes over from the tab the bot was using when it is shared while the bot works', async () => {
+    const client = await connectClient(relay.env);
+    await callTabs(client, { action: 'open' }); // current: wc-7; wc-9 was already shared
+    relay.on('AionRelay.listTabs', () => ({
+      tabs: [
+        { targetId: 'wc-7', title: 'Blank', url: 'about:blank', owner: 'agent' },
+        { targetId: 'wc-9', title: 'Docs', url: 'https://docs.example.com/', owner: 'shared' },
+        { targetId: 'wc-11', title: 'Builder', url: 'https://app.example.com/builder', owner: 'shared' },
+      ],
+    }));
+
+    await callTabs(client, { action: 'navigate', url: 'https://app.example.com/other' });
+
+    expect(relay.callsTo('Target.attachToTarget')).toEqual([{ targetId: 'wc-11', flatten: true }]);
+  });
+
+  it('is used by tabs open when it already shows that page, instead of a new tab', async () => {
+    const client = await connectClient(relay.env);
+
+    const reply = await callTabs(client, { action: 'open', url: 'https://docs.example.com' });
+
+    expect(reply.isError).toBeFalsy();
+    expect(jsonOf(reply)).toMatchObject({ tab: 'wc-9', reused: true });
+    expect(relay.callsTo('Target.createTarget')).toEqual([]);
+    const listed = jsonOf(await callTabs(client, { action: 'list' }));
+    expect(listed.current).toBe('wc-9');
+  });
+
+  it('is not reloaded when the bot navigates to the page it already shows', async () => {
+    const client = await connectClient(relay.env);
+
+    const reply = await callTabs(client, { action: 'navigate', url: 'https://docs.example.com/', tab: 'wc-9' });
+
+    expect(reply.isError).toBeFalsy();
+    expect(textOf(reply)).toContain('not reloaded');
+    expect(relay.callsTo('Page.navigate')).toEqual([]);
   });
 });
 

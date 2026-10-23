@@ -100,8 +100,10 @@ const isRelayTab = (value: unknown): value is RelayTab => {
  * relay ties tab ownership to the connection.
  */
 export class RelayClient {
-  /** The tab later calls use when they name none; set by `tabs` open and switch. */
+  /** The tab later calls use when they name none; set by `tabs` open and switch, or by the user sharing a tab. */
   currentTab: string | null = null;
+  /** Shared tabs the agent has already been shown; one shared after that takes over the current tab. */
+  private knownShared = new Set<string>();
 
   private conn: CdpConnection | null = null;
   private connecting: Promise<CdpConnection> | null = null;
@@ -154,6 +156,26 @@ export class RelayClient {
       owner,
       ...(pinned === true ? { pinned: true as const } : {}),
     }));
+  }
+
+  /** Marks the shared tabs in `tabs` as seen, so only a tab the user shares later takes over the current tab. */
+  noteShared(tabs: TabSummary[]): void {
+    for (const tab of tabs) if (tab.owner === 'shared') this.knownShared.add(tab.tab);
+  }
+
+  /**
+   * The tab a call that names none should use: a tab the user shared since the agent last looked (they shared it so
+   * the agent works there), else the current tab, else a shared tab when the agent has none.
+   */
+  async resolveCurrentTab(): Promise<string | null> {
+    // A relay that cannot list right now must not fail the call itself: it goes on in the current tab.
+    const tabs = await this.listTabs().catch((): TabSummary[] => []);
+    const shared = tabs.filter((tab) => tab.owner === 'shared');
+    const fresh = shared.filter((tab) => !this.knownShared.has(tab.tab));
+    this.noteShared(tabs);
+    const pick = fresh.at(-1) ?? (this.currentTab ? undefined : shared.at(-1));
+    if (pick) this.currentTab = pick.tab;
+    return this.currentTab;
   }
 
   /** Closes a tab this client opened. */
@@ -302,6 +324,7 @@ export class RelayClient {
       this.sessions = new Map();
       this.sessionIds = new Map();
       this.currentTab = null;
+      this.knownShared = new Set();
     });
     this.conn = conn;
     return conn;
