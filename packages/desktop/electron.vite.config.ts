@@ -145,6 +145,8 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           input: {
             index: resolve('packages/desktop/src/preload/main.ts'),
+            // Registered on browser sessions for extension pages and workers (browserSession/extensions.ts).
+            extensionBrowserAlias: resolve('packages/desktop/src/preload/extensionBrowserAlias.ts'),
           },
         },
       },

@@ -96,6 +96,17 @@ describe('initBrowserExtensions', () => {
     expect(mocks.constructed[0]).toMatchObject({ license: 'GPL-3.0', session: browserSession });
   });
 
+  // Electron gives extension workers a partial `browser` (no windows, contextMenus...); the library fills only
+  // `chrome`, so LastPass, which prefers `browser`, crashed on browser.windows and its popup stayed blank.
+  it('points `browser` at the full chrome API in extension pages and workers of the session', async () => {
+    const registerPreloadScript = vi.fn();
+    const session = { name: 'with-preloads', registerPreloadScript } as unknown as Electron.Session;
+    await initBrowserExtensions({ session, getMainWindow: () => null, openTab: vi.fn(), closeTab: vi.fn() });
+    const scripts = registerPreloadScript.mock.calls.map(([script]) => script);
+    expect(scripts.map((script) => script.type).sort()).toEqual(['frame', 'service-worker']);
+    for (const script of scripts) expect(script.filePath).toMatch(/preload[\\/]extensionBrowserAlias\.js$/);
+  });
+
   it('installs Web Store extensions into the given folder for an Agent profile', async () => {
     const agentSession = { name: 'agent' } as unknown as Electron.Session;
 

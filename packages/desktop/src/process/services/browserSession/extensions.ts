@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import path from 'node:path';
 import { dialog, session as electronSession } from 'electron';
 import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-chrome-extensions';
 import { installChromeWebStore } from 'electron-chrome-web-store';
@@ -111,6 +112,20 @@ const liveWindow = (getMainWindow: () => Electron.BrowserWindow | null): Electro
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
 };
 
+/** The preload that makes `browser` the full `chrome` API in extension contexts (preload/extensionBrowserAlias.ts). */
+const BROWSER_ALIAS_PRELOAD = path.join(__dirname, '../preload/extensionBrowserAlias.js');
+
+/**
+ * Registers {@link BROWSER_ALIAS_PRELOAD} for extension pages and service workers, after the library's own preload
+ * (registered by its constructor), so `chrome` is complete when `browser` is pointed at it.
+ */
+const registerBrowserAlias = (session: Electron.Session): void => {
+  if (!('registerPreloadScript' in session)) return;
+  for (const type of ['frame', 'service-worker'] as const) {
+    session.registerPreloadScript({ id: `aion-browser-alias-${type}`, type, filePath: BROWSER_ALIAS_PRELOAD });
+  }
+};
+
 /**
  * The process-wide part of extension support, set up once: `<browser-action-list>` in the main window (whose pages
  * use the default session) resolves only browser partitions already set up (none is created on request), and only
@@ -164,6 +179,7 @@ export async function initBrowserExtensions(deps: ExtensionsDeps): Promise<Brows
     removeTab: (tab) => closeTab(tab.id),
   });
 
+  registerBrowserAlias(session);
   // Not awaited: loading installed extensions from disk must not delay tracking tabs.
   const beforeInstall = createBeforeInstall((prompt) => confirmInstall(liveMainWindow(), prompt));
   installChromeWebStore({
