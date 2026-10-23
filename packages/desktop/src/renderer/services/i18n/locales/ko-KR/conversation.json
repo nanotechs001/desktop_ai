@@ -560,7 +560,8 @@
       "sevenDayOverageIncluded": "주간 Fable",
       "overage": "추가 사용량",
       "unknown": "사용량"
-    }
+    },
+    "limitHit": "이 AI는 지금 계속할 수 없습니다(한도 도달 또는 모델 오류). 전환해서 계속하세요:"
   },
   "subscriptionUsage": {
     "title": "{{engine}} 사용량",

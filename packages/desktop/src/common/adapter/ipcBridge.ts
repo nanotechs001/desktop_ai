@@ -16,6 +16,7 @@ import { withoutHiddenAgents } from '../types/agent/hiddenAgents';
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type {
   AgentActionEvent,
+  Bookmark,
   ConfirmRequest,
   BrowserShortcutRequest,
   BrowserTabProfile,
@@ -25,6 +26,7 @@ import type {
   DownloadItem,
   PermissionRequest,
   TabOwnership,
+  UrlSuggestion,
 } from '@/common/types/browser';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
@@ -1428,6 +1430,15 @@ export const browser = {
     listSources: bridge.buildProvider<IBridgeResponse<CookieImportSource[]>, void>('browser.cookie-import.sources'),
     run: bridge.buildProvider<IBridgeResponse<CookieImportOutcome>, CookieImportRequest>('browser.cookie-import.run'),
   },
+  // the user's bookmarks (one list for the whole app; agents read it too), and their changes, main → renderer
+  bookmarks: {
+    list: bridge.buildProvider<Bookmark[], void>('browser.bookmarks.list'),
+    add: bridge.buildProvider<IBridgeResponse<void>, { url: string; title: string }>('browser.bookmarks.add'),
+    remove: bridge.buildProvider<IBridgeResponse<void>, { url: string }>('browser.bookmarks.remove'),
+    changed: bridge.buildEmitter<Bookmark[]>('browser.bookmarks.changed'),
+  },
+  // address bar suggestions for what the user is typing, from the bookmarks and the visit history
+  suggestUrls: bridge.buildProvider<UrlSuggestion[], { query: string }>('browser.suggest-urls'),
   getDownloads: bridge.buildProvider<IBridgeResponse<DownloadItem[]>, void>('browser.get-downloads'),
   openDownload: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.open-download'),
   showDownloadInFolder: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('browser.show-download-in-folder'),
@@ -1504,6 +1515,20 @@ export const agentNotes = {
   delete: bridge.buildProvider<IBridgeResponse<void>, { agentId: string; id: string }>('agent-notes.delete'),
   // a deleted Agent: its notebook, and main's cached chats of it
   removeAgent: bridge.buildProvider<IBridgeResponse<void>, { agentId: string }>('agent-notes.remove-agent'),
+};
+
+// The user's reminder list (the titlebar bell). Agents reach the same list through the notes MCP's reminder tools.
+export const reminders = {
+  list: bridge.buildProvider<IBridgeResponse<Reminder[]>, void>('reminders.list'),
+  add: bridge.buildProvider<IBridgeResponse<Reminder>, { title: string; dueAt: number; note?: string }>(
+    'reminders.add'
+  ),
+  snooze: bridge.buildProvider<IBridgeResponse<Reminder>, { id: string; minutes: number }>('reminders.snooze'),
+  reschedule: bridge.buildProvider<IBridgeResponse<Reminder>, { id: string; dueAt: number }>('reminders.reschedule'),
+  done: bridge.buildProvider<IBridgeResponse<Reminder>, { id: string }>('reminders.done'),
+  remove: bridge.buildProvider<IBridgeResponse<void>, { id: string }>('reminders.remove'),
+  // main → renderer: the whole list on every change
+  changed: bridge.buildEmitter<Reminder[]>('reminders.changed'),
 };
 
 // Long-term memory as the user sees it (Memory panel in the agent editor): an agent's own vault, or the shared one about
@@ -2466,6 +2491,7 @@ import type {
   MemoryNotePatch,
   MemoryVaultRef,
 } from '@/common/types/agent/memory';
+import type { Reminder } from '@/common/types/agent/reminders';
 import type { SaveSkillRequest, SaveSkillResult } from '@/common/types/agent/skillProposal';
 
 export type IRealtimeReconnectedEvent = {

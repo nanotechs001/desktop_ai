@@ -9,6 +9,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { NOTE_LIMITS, type Note } from '@/common/types/agent/artifacts';
 import { MEMORY_CONFIDENCES, MEMORY_LIMITS, MEMORY_NOTE_TYPES } from '@/common/types/agent/memory';
+import { REMINDER_LIMITS } from '@/common/types/agent/reminders';
 import { skillProposalInput } from '@/common/types/agent/skillProposal';
 import { unavailableMessage, type ApiOutcome, type ArtifactsApi } from '../aionArtifacts/apiClient';
 
@@ -99,6 +100,50 @@ function registerMemoryTools(server: McpServer, api: ArtifactsApi): void {
   );
 }
 
+const REMINDER_DUE =
+  "Give `due` as an ISO 8601 date and time with the user's UTC offset (e.g. 2026-10-24T17:30:00+08:00; reminder_list " +
+  "returns the user's current local time), or `inMinutes` for a time from now.";
+const REMINDER_DESCRIPTIONS = {
+  add: `Set a reminder in the user's reminder list when they ask to be reminded of something; the bell in the app lights up when it is due. ${REMINDER_DUE}`,
+  list: "List the user's open reminders (includeDone adds finished ones), with ids and the user's current local time.",
+  done: 'Mark a reminder done.',
+  snooze: 'Snooze a reminder: it is due again `minutes` from now.',
+  reschedule: `Move a reminder to another date and time; a done reminder opens again. ${REMINDER_DUE}`,
+};
+const reminderId = z.string().min(1).max(64);
+const reminderDue = {
+  due: z.string().min(1).max(64).optional(),
+  inMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(10 * 365 * 24 * 60)
+    .optional(),
+};
+const reminderInputs = {
+  add: {
+    title: z.string().trim().min(1).max(REMINDER_LIMITS.maxTitleChars),
+    note: z.string().max(REMINDER_LIMITS.maxNoteChars).optional(),
+    ...reminderDue,
+  },
+  list: { includeDone: z.boolean().optional() },
+  done: { id: reminderId },
+  snooze: { id: reminderId, minutes: z.number().int().min(1).max(REMINDER_LIMITS.maxSnoozeMinutes) },
+  reschedule: { id: reminderId, ...reminderDue },
+};
+
+/** The reminder tools: each posts its arguments to `/api/reminders/<op>`, the user's one reminder list. */
+function registerReminderTools(server: McpServer, api: ArtifactsApi): void {
+  for (const op of ['add', 'list', 'done', 'snooze', 'reschedule'] as const) {
+    server.registerTool(
+      `reminder_${op}`,
+      { description: REMINDER_DESCRIPTIONS[op], inputSchema: reminderInputs[op] },
+      async (args: Record<string, unknown>) =>
+        toolReply(await api.post<Record<string, unknown>>(`/api/reminders/${op}`, args))
+    );
+  }
+}
+
 const addInput = {
   text: z.string().trim().min(1).max(NOTE_LIMITS.maxChars),
   fromPage: z.boolean().optional(),
@@ -149,5 +194,6 @@ export function createNotesMcpServer(api: ArtifactsApi): McpServer {
     })
   );
   registerMemoryTools(server, api);
+  registerReminderTools(server, api);
   return server;
 }

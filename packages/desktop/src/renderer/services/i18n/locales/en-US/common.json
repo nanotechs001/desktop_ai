@@ -166,5 +166,21 @@
   "selectedSkills": "Selected skills",
   "searchPlaceholder": "Search",
   "recentFolders": "Recent",
-  "chooseDifferentFolder": "Choose a different folder"
+  "chooseDifferentFolder": "Choose a different folder",
+  "reminders": {
+    "title": "Reminders",
+    "newPlaceholder": "Remind me to…",
+    "inAnHour": "In 1 hour",
+    "add": "Add",
+    "done": "Done",
+    "snooze": "Snooze",
+    "snooze10m": "10 minutes",
+    "snooze1h": "1 hour",
+    "snoozeTomorrow": "Tomorrow 9:00",
+    "move": "Move date",
+    "due": "Due now",
+    "dueCount": "{{count}} reminder(s) due",
+    "empty": "No reminders. Add one above, or ask an agent to remind you.",
+    "failed": "Couldn't update the reminder. Try again."
+  }
 }

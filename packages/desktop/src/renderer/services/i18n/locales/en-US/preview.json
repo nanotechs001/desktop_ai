@@ -319,6 +319,14 @@
         "unknown": "Couldn't import the cookies. Try again.",
         "list_failed": "Couldn't look for browsers on this Mac."
       }
+    },
+    "bookmarks": {
+      "add": "Bookmark this page",
+      "remove": "Remove bookmark",
+      "menu": "Bookmarks",
+      "empty": "No bookmarks yet. Use the star to add the page you are on.",
+      "removeItem": "Remove from bookmarks",
+      "failed": "Couldn't update your bookmarks. Try again."
     }
   },
   "showChat": "Show chat",

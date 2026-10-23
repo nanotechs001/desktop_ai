@@ -426,6 +426,32 @@ describe('preview tab context menu — pinning', () => {
     expect(tab.style.maxWidth).toBe('180px');
   });
 
+  it('sets the active tab apart: its own background, an accent line on top and bolder text', () => {
+    renderStrip([
+      { id: 'a', title: 'Active page', canPin: true },
+      { id: 'b', title: 'Other page', canPin: true },
+    ]);
+
+    const active = screen.getByTestId('preview-tab-a');
+    const other = screen.getByTestId('preview-tab-b');
+    expect(active.getAttribute('aria-selected')).toBe('true');
+    expect(active.className).toContain('font-medium');
+    expect(active.style.boxShadow).toContain('--primary-6');
+    expect(other.getAttribute('aria-selected')).toBe('false');
+    expect(other.style.boxShadow).toBe('');
+  });
+
+  it('marks the tab the bot is working in with a bot icon, and no other', () => {
+    renderStrip([
+      { id: 'w', title: 'Bot page', canPin: true, agentActive: true },
+      { id: 'i', title: 'Idle page', canPin: true },
+    ]);
+
+    expect(screen.getByTestId('preview-tab-w').querySelector('[data-testid="preview-tab-bot"]')).toBeTruthy();
+    expect(screen.getByTestId('preview-tab-i').querySelector('[data-testid="preview-tab-bot"]')).toBeNull();
+    expect(screen.getByTitle('preview.browser.agentActiveTooltip')).toBeTruthy();
+  });
+
   it('shows no profile robot badge on tabs', () => {
     renderStrip([{ id: 'b', title: 'Bot page', canPin: true, profile: { kind: 'agent', agentId: 'bot-1' } }]);
 

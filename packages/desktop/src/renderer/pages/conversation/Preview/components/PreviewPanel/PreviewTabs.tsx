@@ -5,7 +5,7 @@
  */
 
 import { iconColors } from '@/renderer/styles/colors';
-import { Close, Comments, Plus } from '@icon-park/react';
+import { Close, Comments, Plus, Robot } from '@icon-park/react';
 import { Button } from '@arco-design/web-react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React, { useRef, useState } from 'react';
@@ -278,8 +278,12 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 data-testid={`preview-tab-${tab.id}`}
                 title={tab.pinned ? tab.title : undefined}
                 draggable={!!onMoveTab}
-                className={`flex items-center gap-6px h-full cursor-pointer transition-colors ${tab.pinned ? 'justify-center flex-shrink-0' : `px-10px ${tab.id === activeTabId ? 'bg-1 text-t-primary' : 'text-t-secondary hover:bg-3'}`} ${tab.id === draggedId ? 'opacity-50' : ''}`}
+                role='tab'
+                aria-selected={tab.id === activeTabId}
+                className={`flex items-center gap-6px h-full cursor-pointer transition-colors ${tab.pinned ? 'justify-center flex-shrink-0' : `px-10px ${tab.id === activeTabId ? 'bg-1 text-t-primary font-medium' : 'text-t-secondary hover:bg-3'}`} ${tab.id === draggedId ? 'opacity-50' : ''}`}
                 style={{
+                  // The active tab's accent line along its top edge, like Chrome's, so it reads at a glance.
+                  ...(tab.id === activeTabId && !tab.pinned && { boxShadow: 'inset 0 2px 0 rgb(var(--primary-6))' }),
                   ...(tab.pinned
                     ? { width: `${PINNED_TAB_WIDTH_PX}px` }
                     : {
@@ -367,12 +371,15 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                       {tab.title}
                     </span>
                   )}
-                  {/* Agent 操作中指示器 / Agent activity indicator */}
+                  {/* The bot is working in this tab: a bot icon, pulsing while it works. */}
                   {tab.agentActive && (
                     <span
-                      className='w-6px h-6px rd-full bg-success animate-pulse flex-shrink-0'
+                      data-testid='preview-tab-bot'
+                      className='flex flex-shrink-0 animate-pulse'
                       title={t('preview.browser.agentActiveTooltip')}
-                    />
+                    >
+                      <Robot theme='filled' size='12' fill='rgb(var(--primary-6))' />
+                    </span>
                   )}
                   {/* 未保存指示器 / Unsaved indicator */}
                   {tab.isDirty && (

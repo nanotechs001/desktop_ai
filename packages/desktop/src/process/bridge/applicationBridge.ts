@@ -13,6 +13,7 @@ import { getZoomFactor, setZoomFactor } from '@process/utils/zoom';
 import { getCdpStatus, updateCdpConfig } from '@process/utils/configureChromium';
 import { getGpuStatus, setGpuUserOverride } from '@process/utils/gpuRecovery';
 import { selectBrowserTab } from '@process/services/browserSession/browserSession';
+import { registerBrowsingDataIpc } from '@process/services/browserSession/profiles/browsingDataIpc';
 import { registerBrowserProfileIpc } from '@process/services/browserSession/profiles/profileIpc';
 import { initApplicationBridgeCore } from './applicationBridgeCore';
 import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
@@ -225,6 +226,7 @@ export function initApplicationBridge(): void {
 
   // Agent browser profiles: a tab's partition, and clearing or deleting an Agent's browser data.
   registerBrowserProfileIpc();
+  registerBrowsingDataIpc();
 
   // The relay exposes every browser tab itself; this only tells extensions which tab is on screen.
   ipcBridge.application.reportBrowserWebContentsId.provider(async ({ webContentsId }) => {

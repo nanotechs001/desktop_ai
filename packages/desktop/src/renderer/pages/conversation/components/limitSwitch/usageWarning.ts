@@ -5,6 +5,7 @@
  */
 
 import type { IConversationRateLimitUpdatedEvent, RateLimitWindowKind } from '@/common/adapter/ipcBridge';
+import type { IMessageTips, TMessage } from '@/common/chat/chatLib';
 
 /** Usage fraction from which the near-limit warning shows. */
 export const USAGE_WARNING_THRESHOLD = 0.9;
@@ -66,6 +67,27 @@ export function pickUsageWarning(info: IConversationRateLimitUpdatedEvent): Usag
     dismissKeys: [...new Set((atThreshold.length > 0 ? atThreshold : [shown]).map(readingKey))],
   };
 }
+
+/**
+ * The id of the chat's latest error when switching engines fixes it (the backend's `switch_engine` resolution: a plan
+ * limit, an unavailable model), else null. Status messages after it are skipped; anything the user or the agent wrote
+ * since means the chat moved on.
+ */
+export function latestSwitchableError(messages: readonly TMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.type === 'text') return null;
+    if (message.type !== 'tips') continue;
+    const content = message.content as IMessageTips['content'];
+    if (content.type !== 'error') continue;
+    return content.error?.resolution?.kind === 'switch_engine' ? message.id : null;
+  }
+  return null;
+}
+
+/** Dismissal identity of the switch prompt for one failed message. */
+export const failedMessageKey = (conversationId: string, messageId: string): string =>
+  `${conversationId}|error|${messageId}`;
 
 /** Dismissal identities: the conversation with each of the warning's {@link UsageWarning.dismissKeys}. */
 export const usageWarningKeys = (conversationId: string, warning: UsageWarning): string[] =>

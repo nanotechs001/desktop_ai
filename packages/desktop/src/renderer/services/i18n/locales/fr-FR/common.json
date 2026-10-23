@@ -166,5 +166,21 @@
   "selectedSkills": "Compétences sélectionnées",
   "searchPlaceholder": "Agents de recherche...",
   "recentFolders": "Récents",
-  "chooseDifferentFolder": "Choisir un autre dossier"
+  "chooseDifferentFolder": "Choisir un autre dossier",
+  "reminders": {
+    "title": "Rappels",
+    "newPlaceholder": "Me rappeler de…",
+    "inAnHour": "Dans 1 heure",
+    "add": "Ajouter",
+    "done": "Terminé",
+    "snooze": "Reporter",
+    "snooze10m": "10 minutes",
+    "snooze1h": "1 heure",
+    "snoozeTomorrow": "Demain 9:00",
+    "move": "Changer la date",
+    "due": "À faire maintenant",
+    "dueCount": "{{count}} rappel(s) à faire",
+    "empty": "Aucun rappel. Ajoutez-en un ci-dessus ou demandez à un agent de vous le rappeler.",
+    "failed": "Impossible de mettre à jour le rappel. Réessayez."
+  }
 }

@@ -25,6 +25,9 @@ vi.mock('@/common', () => ({
     browser: {
       getDownloads: { invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })) },
       downloadsChanged: { on: () => () => {} },
+      // BrowserViewer mounts BookmarksButton and asks for address bar suggestions.
+      bookmarks: { list: { invoke: () => Promise.resolve([]) }, changed: { on: () => () => {} } },
+      suggestUrls: { invoke: () => Promise.resolve([]) },
       shortcut: { on: () => () => {} },
       closeTabRequested: {
         on: (handler: (request: { webContentsId: number }) => void) => {

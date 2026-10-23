@@ -827,10 +827,14 @@ const handleAppReady = async (): Promise<void> => {
   // startBackendOrExit() so the artifacts MCP under aioncore inherits it. Only the url is logged.
   let artifacts: Awaited<ReturnType<typeof import('./process/artifacts').startArtifacts>> = null;
   try {
-    const { startAgentMemory, startAgentNotes, startArtifacts } = await import('./process/artifacts');
+    const { startAgentMemory, startAgentNotes, startArtifacts, startReminders } = await import('./process/artifacts');
     // The old notes.add now saves into memory; the notebook IPC stays for the old editor.
     // Memory (search, save, log) is served next to it, answers the Memory panel's IPC and refreshes the agents' rules.
-    const started = await startArtifacts({ notes: await startAgentNotes(), memory: await startAgentMemory() });
+    const started = await startArtifacts({
+      notes: await startAgentNotes(),
+      memory: await startAgentMemory(),
+      reminders: await startReminders(),
+    });
     if (started) {
       process.env.AION_ARTIFACTS_URL = started.server.origin;
       process.env.AION_ARTIFACTS_TOKEN = started.token;

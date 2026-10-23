@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   ownership: null as ((list: TabOwnership[]) => void) | null,
   action: null as ((event: AgentActionEvent) => void) | null,
   userInput: null as ((event: { webContentsId: number; at: number }) => void) | null,
+  stream: null as ((message: { type: string; conversation_id: string; data?: unknown }) => void) | null,
 }));
 
 // Arco's imperative Message needs a legacy ReactDOM.render, which React 19 lacks in jsdom.
@@ -36,8 +37,19 @@ vi.mock('@/common', () => ({
     browser: {
       getDownloads: { invoke: () => Promise.resolve({ success: true, data: [] }) },
       downloadsChanged: { on: () => () => {} },
+      // BrowserViewer mounts BookmarksButton and asks for address bar suggestions.
+      bookmarks: { list: { invoke: () => Promise.resolve([]) }, changed: { on: () => () => {} } },
+      suggestUrls: { invoke: () => Promise.resolve([]) },
       shortcut: { on: () => () => {} },
       closeTabRequested: { on: () => () => {} },
+    },
+    conversation: {
+      responseStream: {
+        on: (handler: (message: { type: string; conversation_id: string }) => void) => {
+          mocks.stream = handler;
+          return () => {};
+        },
+      },
     },
     agentBrowser: {
       share: { invoke: mocks.share },
@@ -109,6 +121,7 @@ const mount = async (initial: TabOwnership[]) => {
   const onAgentOwnedChange = vi.fn();
   const onAgentAction = vi.fn();
   const onUserInput = vi.fn();
+  const onAgentWorkingChange = vi.fn();
   const view = render(
     <BrowserViewer
       url='https://example.com'
@@ -119,12 +132,13 @@ const mount = async (initial: TabOwnership[]) => {
       onAgentOwnedChange={onAgentOwnedChange}
       onAgentAction={onAgentAction}
       onUserInput={onUserInput}
+      onAgentWorkingChange={onAgentWorkingChange}
     />
   );
   await act(async () => {
     view.container.querySelector('webview')?.dispatchEvent(new Event('dom-ready'));
   });
-  return { ...view, onAgentOwnedChange, onAgentAction, onUserInput };
+  return { ...view, onAgentOwnedChange, onAgentAction, onUserInput, onAgentWorkingChange };
 };
 
 beforeEach(() => {
@@ -137,6 +151,7 @@ afterEach(() => {
   mocks.ownership = null;
   mocks.action = null;
   mocks.userInput = null;
+  mocks.stream = null;
   for (const name of Object.keys(stubs)) {
     delete (HTMLUnknownElement.prototype as unknown as Record<string, unknown>)[name];
   }
@@ -203,6 +218,38 @@ describe('BrowserViewer agent chrome', () => {
     act(() => mocks.action?.(event({ op: 'navigate', label: 'https://example.com/next', rect: null })));
     act(() => mocks.action?.(event({ op: 'switch', label: '', rect: null })));
     expect(onAgentAction.mock.calls).toEqual([['tab-1'], ['tab-1']]);
+  });
+
+  // The tab strip shows a bot icon on the tab the bot is working in right now, and only until it is done.
+  it('reports the bot working in this tab on its actions here only, and done when its chat finishes', async () => {
+    const owner = { clientId: 'c1', label: 'Bot', conversationId: 'chat-1' };
+    const { onAgentWorkingChange } = await mount([tab({ owner })]);
+    await waitFor(() => expect(onAgentWorkingChange).toHaveBeenLastCalledWith('tab-1', false));
+
+    act(() => mocks.action?.(event({ webContentsId: 99 })));
+    expect(onAgentWorkingChange).not.toHaveBeenCalledWith('tab-1', true);
+
+    act(() => mocks.action?.(event()));
+    expect(onAgentWorkingChange).toHaveBeenLastCalledWith('tab-1', true);
+
+    act(() => mocks.stream?.({ type: 'finish', conversation_id: 'chat-other' }));
+    expect(onAgentWorkingChange).toHaveBeenLastCalledWith('tab-1', true);
+    act(() => mocks.stream?.({ type: 'finish', conversation_id: 'chat-1' }));
+    expect(onAgentWorkingChange).toHaveBeenLastCalledWith('tab-1', false);
+  });
+
+  it('stops showing the bot as working after a quiet stretch with no actions', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { onAgentWorkingChange } = await mount([tab({ sharedWith: 'all' })]);
+      act(() => mocks.action?.(event()));
+      expect(onAgentWorkingChange).toHaveBeenLastCalledWith('tab-1', true);
+
+      act(() => vi.advanceTimersByTime(25_000));
+      expect(onAgentWorkingChange).toHaveBeenLastCalledWith('tab-1', false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("passes on the user's input in this tab's page only", async () => {

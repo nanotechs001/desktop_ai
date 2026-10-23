@@ -13,6 +13,7 @@ import {
   isUsageWarningDismissed,
   pickUsageWarning,
   usageWarningKeys,
+  latestSwitchableError,
 } from '@/renderer/pages/conversation/components/limitSwitch/usageWarning';
 import { withoutResetWindows } from '@/renderer/pages/conversation/components/limitSwitch/useRateLimitInfo';
 
@@ -134,5 +135,31 @@ describe('withoutResetWindows (M4)', () => {
     );
     expect(kept?.windows).toEqual([{ kind: 'seven_day', utilization: 0.5, resets_at: 200 }]);
     expect(withoutResetWindows(reading({ resets_at: null }), now)).not.toBeNull();
+  });
+});
+
+describe('latestSwitchableError', () => {
+  const text = (id: string) => ({ id, type: 'text', position: 'right', content: { content: 'hi' } });
+  const status = (id: string) => ({ id, type: 'agent_status', position: 'center', content: {} });
+  const failed = (id: string, kind?: string) => ({
+    id,
+    type: 'tips',
+    position: 'center',
+    content: {
+      type: 'error',
+      content: "You've hit your session limit",
+      error: { message: 'limit', code: 'USER_LLM_PROVIDER_USAGE_LIMITED', ...(kind ? { resolution: { kind } } : {}) },
+    },
+  });
+  const latest = (messages: unknown[]) => latestSwitchableError(messages as never);
+
+  it('is the last error when switching engines fixes it, past status chatter after it', () => {
+    expect(latest([text('a'), failed('e1', 'switch_engine'), status('s')])).toBe('e1');
+  });
+
+  it('is none once the user wrote again, or when switching would not help', () => {
+    expect(latest([failed('e1', 'switch_engine'), text('b')])).toBeNull();
+    expect(latest([text('a'), failed('e2')])).toBeNull();
+    expect(latest([])).toBeNull();
   });
 });

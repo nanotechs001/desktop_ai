@@ -319,6 +319,14 @@
         "unknown": "無法匯入 Cookie，請重試。",
         "list_failed": "無法在此 Mac 上尋找瀏覽器。"
       }
+    },
+    "bookmarks": {
+      "add": "將此頁加入書籤",
+      "remove": "移除書籤",
+      "menu": "書籤",
+      "empty": "還沒有書籤。點星號即可加入目前頁面。",
+      "removeItem": "從書籤中移除",
+      "failed": "無法更新書籤，請再試一次。"
     }
   },
   "showChat": "顯示對話",

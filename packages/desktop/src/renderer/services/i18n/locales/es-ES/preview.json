@@ -319,6 +319,14 @@
         "unknown": "No se pudieron importar las cookies. Inténtalo de nuevo.",
         "list_failed": "No se pudo buscar navegadores en este Mac."
       }
+    },
+    "bookmarks": {
+      "add": "Añadir esta página a marcadores",
+      "remove": "Quitar marcador",
+      "menu": "Marcadores",
+      "empty": "Aún no hay marcadores. Usa la estrella para añadir la página actual.",
+      "removeItem": "Quitar de marcadores",
+      "failed": "No se pudieron actualizar los marcadores. Inténtalo de nuevo."
     }
   },
   "showChat": "Mostrar chat",

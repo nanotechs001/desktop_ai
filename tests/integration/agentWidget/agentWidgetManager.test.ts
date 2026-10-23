@@ -1189,6 +1189,22 @@ describe("opening a VA Bot's settings in the main window", () => {
     webContents: { send: vi.fn() },
   });
 
+  // "Open main window" in a robot's popup: the bot's browser opens in the main window, the chat stays in the popup,
+  // so the robot does not step away (moving the chat into the main window made it disappear).
+  it('openInMain shows the bot browser in the main window and keeps the chat in its popup', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A);
+    manager.setChatLocation(A, 'widget');
+    const main = makeMain();
+    host.getMainWindow.mockReturnValue(main);
+
+    manager.openInMain(A);
+
+    expect(main.show).toHaveBeenCalled();
+    expect(main.webContents.send).toHaveBeenCalledWith('tray:open-link-in-conversation', { conversation_id: A });
+    expect(manager.getChatLocations()[A]).toBe('widget');
+  });
+
   it('brings the main window forward and tells it which bot, leaving the chat where it is', async () => {
     const { manager } = await makeManager();
     manager.ensure(A);

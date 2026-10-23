@@ -23,6 +23,9 @@ vi.mock('@/renderer/hooks/context/LayoutContext', () => ({ useLayoutContext: () 
 vi.mock('@/renderer/components/layout/Titlebar/RobotListButton', () => ({
   default: ({ label }: { label: string }) => <button type='button' aria-label={label} />,
 }));
+vi.mock('@/renderer/components/layout/Titlebar/RemindersButton', () => ({
+  default: () => <button type='button' aria-label='reminders' />,
+}));
 
 import TitlebarNav from '@/renderer/components/layout/Titlebar/TitlebarNav';
 
@@ -48,7 +51,7 @@ describe('TitlebarNav', () => {
   it('leaves New chat, history and scheduled to the open sidebar', () => {
     layout.value = { isMobile: false, siderCollapsed: false };
     renderNav();
-    expect(buttonLabels()).toEqual(['search', 'settings.assistants', 'common.settings']);
+    expect(buttonLabels()).toEqual(['search', 'settings.assistants', 'common.settings', 'reminders']);
   });
 
   it('brings them back while the sidebar is an icon rail', () => {
@@ -58,7 +61,7 @@ describe('TitlebarNav', () => {
     expect(buttonLabels()).toContain('conversation.welcome.newConversation');
   });
 
-  it('puts New chat first, the leading controls next, then VA Bots before history', () => {
+  it('puts New chat first, the leading controls next, VA Bots before history, and the reminders bell last', () => {
     render(
       <div data-testid='bar'>
         <TitlebarNav buttonClassName='nav' iconSize={18} leading={<button type='button' aria-label='search' />} />
@@ -75,6 +78,7 @@ describe('TitlebarNav', () => {
       'conversation.history.chatHistory',
       'cron.scheduledTasks',
       'common.settings',
+      'reminders',
     ]);
   });
 });

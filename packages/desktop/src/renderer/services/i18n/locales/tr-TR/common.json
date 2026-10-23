@@ -166,5 +166,21 @@
   "selectedSkills": "Seçili beceriler",
   "searchPlaceholder": "Search",
   "recentFolders": "Son kullanılan",
-  "chooseDifferentFolder": "Farklı klasör seç"
+  "chooseDifferentFolder": "Farklı klasör seç",
+  "reminders": {
+    "title": "Hatırlatıcılar",
+    "newPlaceholder": "Bana hatırlat…",
+    "inAnHour": "1 saat içinde",
+    "add": "Ekle",
+    "done": "Tamam",
+    "snooze": "Ertele",
+    "snooze10m": "10 dakika",
+    "snooze1h": "1 saat",
+    "snoozeTomorrow": "Yarın 9:00",
+    "move": "Tarihi değiştir",
+    "due": "Şimdi zamanı",
+    "dueCount": "{{count}} hatırlatıcının zamanı geldi",
+    "empty": "Hatırlatıcı yok. Yukarıdan ekleyin veya bir ajandan hatırlatmasını isteyin.",
+    "failed": "Hatırlatıcı güncellenemedi. Tekrar deneyin."
+  }
 }

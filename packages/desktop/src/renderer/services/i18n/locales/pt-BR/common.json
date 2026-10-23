@@ -166,5 +166,21 @@
   "selectedSkills": "Habilidades selecionadas",
   "searchPlaceholder": "Search",
   "recentFolders": "Recente",
-  "chooseDifferentFolder": "Escolher uma pasta diferente"
+  "chooseDifferentFolder": "Escolher uma pasta diferente",
+  "reminders": {
+    "title": "Lembretes",
+    "newPlaceholder": "Lembrar de…",
+    "inAnHour": "Em 1 hora",
+    "add": "Adicionar",
+    "done": "Concluído",
+    "snooze": "Adiar",
+    "snooze10m": "10 minutos",
+    "snooze1h": "1 hora",
+    "snoozeTomorrow": "Amanhã 9:00",
+    "move": "Mudar data",
+    "due": "Vence agora",
+    "dueCount": "{{count}} lembrete(s) vencido(s)",
+    "empty": "Nenhum lembrete. Adicione um acima ou peça a um agente para lembrar você.",
+    "failed": "Não foi possível atualizar o lembrete. Tente novamente."
+  }
 }

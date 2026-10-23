@@ -169,5 +169,21 @@
   "selectedSkills": "Вибрані навички",
   "searchPlaceholder": "Search",
   "recentFolders": "Недавні",
-  "chooseDifferentFolder": "Виберіть іншу папку"
+  "chooseDifferentFolder": "Виберіть іншу папку",
+  "reminders": {
+    "title": "Нагадування",
+    "newPlaceholder": "Нагадати…",
+    "inAnHour": "Через 1 годину",
+    "add": "Додати",
+    "done": "Готово",
+    "snooze": "Відкласти",
+    "snooze10m": "10 хвилин",
+    "snooze1h": "1 година",
+    "snoozeTomorrow": "Завтра о 9:00",
+    "move": "Перенести",
+    "due": "Час настав",
+    "dueCount": "Нагадувань до виконання: {{count}}",
+    "empty": "Нагадувань немає. Додайте вище або попросіть агента нагадати.",
+    "failed": "Не вдалося оновити нагадування. Спробуйте ще раз."
+  }
 }

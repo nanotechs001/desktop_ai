@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useRegularChatsOnly } from '@/renderer/hooks/assistant/useRegularChatsOnly';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
+import RemindersButton from './RemindersButton';
 import RobotListButton from './RobotListButton';
 import HistoryPanel from './HistoryPanel';
 
@@ -191,6 +192,7 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
       {leadsWithNewChat && renderItem(first)}
       {leading}
       {(leadsWithNewChat ? rest : visible).map(renderItem)}
+      <RemindersButton buttonClassName={buttonClassName} iconSize={iconSize} />
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

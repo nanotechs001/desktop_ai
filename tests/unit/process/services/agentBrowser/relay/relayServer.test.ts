@@ -87,6 +87,9 @@ const resolveProfile = vi.fn(async (conversationId?: string) => ({
   final: true,
 }));
 
+/** The user's bookmarks main hands the relay; tests set it. */
+let bookmarkList: { url: string; title: string; addedAt: number }[] = [];
+
 const start = async (limits: Partial<RelayLimits> = {}, sessions?: DebuggerSessions): Promise<RelayHandle> => {
   registry = createTargetRegistry();
   relay = await startRelayServer({
@@ -98,6 +101,7 @@ const start = async (limits: Partial<RelayLimits> = {}, sessions?: DebuggerSessi
     requestConfirm,
     waitForTab,
     resolveProfile,
+    listBookmarks: () => bookmarkList,
     limits,
   });
   return relay;
@@ -241,6 +245,46 @@ describe('relay server: targets', () => {
     expect(registry.ownership(41)?.owner).toMatchObject({ label: 'my agent' });
   });
 
+  // A bot asked for a page its browser already shows (or that it opened and a redirect moved on the same site): it got a
+  // second tab of the same page. Now it gets the tab it already has.
+  it('Target.createTarget reuses a tab the agent may use that shows the page, even after a same-site redirect', async () => {
+    const handle = await start();
+    const client = await connect(handle, 'bot');
+    const tab = new FakeContents(61, 'https://example.com/');
+    nextTab = () => {
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    const first = await client.send('Target.createTarget', { url: 'https://slack.example.com/archives/C1' });
+    tab.commitSilently('https://app.slack.example.com/client/T1/C1'); // where the site redirected it
+
+    const again = await client.send('Target.createTarget', { url: 'https://slack.example.com/archives/C1' });
+    const shown = await client.send('Target.createTarget', { url: 'https://app.slack.example.com/client/T1/C1/' });
+
+    expect(again.result).toEqual(first.result);
+    expect(shown.result).toEqual(first.result);
+    expect(openTab).toHaveBeenCalledTimes(1);
+  });
+
+  it("Target.createTarget opens a new tab over the user's own unshared tab, or one now on another site", async () => {
+    const handle = await start();
+    const client = await connect(handle, 'bot');
+    registry.track(new FakeContents(70, 'https://private.example.com/'), agentProfileOf()); // the user's, not shared
+    let nextId = 71;
+    nextTab = () => {
+      const tab = new FakeContents(nextId++, 'https://example.com/');
+      registry.track(tab);
+      return Promise.resolve(tab);
+    };
+    await client.send('Target.createTarget', { url: 'https://private.example.com/' });
+    const moved = registry.contents(71) as unknown as FakeContents;
+    moved.commitSilently('https://elsewhere.test/'); // a link took it to another site
+
+    await client.send('Target.createTarget', { url: 'https://private.example.com/' });
+
+    expect(openTab).toHaveBeenCalledTimes(2);
+  });
+
   it("Target.createTarget names the client's chat (X-Aion-Conversation) to the pane; none when absent or malformed", async () => {
     const handle = await start();
     let nextId = 50;
@@ -341,6 +385,17 @@ describe('relay server: targets', () => {
     registry.share(91, true);
     const tabs = (await flaky.send('AionRelay.listTabs')).result?.tabs as Array<{ targetId: string }>;
     expect(tabs.map((t) => t.targetId)).toEqual(['wc-91']);
+  });
+
+  it("lets an agent read the user's bookmarks, title and address only", async () => {
+    bookmarkList = [{ url: 'https://viziplatform.com/', title: 'Vizi Platform', addedAt: 5 }];
+    const handle = await start();
+    const agent = await connect(handle, 'x', { 'X-Aion-Conversation': 'conv_X' });
+
+    const reply = await agent.send('AionRelay.listBookmarks');
+
+    expect(reply.result).toEqual({ bookmarks: [{ title: 'Vizi Platform', url: 'https://viziplatform.com/' }] });
+    bookmarkList = [];
   });
 
   it("a shared tab in Agent X's profile reaches only X's clients; a shared Personal tab reaches every client", async () => {
@@ -1183,7 +1238,7 @@ describe('relay server: limits', () => {
     const client = await connect(handle);
     ownedTab(33, 'claude');
     ownedTab(34, 'claude');
-    const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
+    const reply = await client.send('Target.createTarget', { url: 'https://new.example.com' });
     expect(reply.error?.message).toMatch(/at most 2 tabs/);
     expect(openTab).not.toHaveBeenCalled();
   });
@@ -1200,7 +1255,7 @@ describe('relay server: limits', () => {
       { targetId: 'wc-35', owner: 'agent' },
       { targetId: 'wc-36', owner: 'agent' },
     ]);
-    const reply = await client.send('Target.createTarget', { url: 'https://example.com' });
+    const reply = await client.send('Target.createTarget', { url: 'https://new.example.com' });
     expect(reply.error?.message).toMatch(/at most 2 tabs/);
   });
 
@@ -1214,7 +1269,8 @@ describe('relay server: limits', () => {
       return Promise.resolve(tab);
     };
     const replies = await Promise.all(
-      Array.from({ length: 6 }, () => client.send('Target.createTarget', { url: 'https://example.com' }))
+      // Six different pages: the same page twice would reuse its tab.
+      Array.from({ length: 6 }, (_, i) => client.send('Target.createTarget', { url: `https://example.com/${i}` }))
     );
     expect(replies.slice(0, 5).every((reply) => reply.result?.targetId)).toBe(true);
     expect(replies[5].error?.message).toMatch(/rate limited/);
@@ -1826,7 +1882,7 @@ describe("relay server: a VA Bot's new chat takes over its tabs", () => {
     );
     expect((await first.send('AionRelay.listTabs')).result?.tabs).toEqual([]);
     // At the cap the connection stands; the re-claimed tabs count, and hygiene sees the newest first.
-    expect((await next.send('Target.createTarget', { url: 'https://example.com' })).error?.message).toMatch(
+    expect((await next.send('Target.createTarget', { url: 'https://new.example.com' })).error?.message).toMatch(
       /at most 2 tabs/
     );
     expect(onAgentTab.mock.calls.map(([id]) => id)).toEqual([101, 100]);

@@ -319,6 +319,14 @@
         "unknown": "Não foi possível importar os cookies. Tente de novo.",
         "list_failed": "Não foi possível procurar navegadores neste Mac."
       }
+    },
+    "bookmarks": {
+      "add": "Adicionar esta página aos favoritos",
+      "remove": "Remover favorito",
+      "menu": "Favoritos",
+      "empty": "Ainda não há favoritos. Use a estrela para adicionar a página atual.",
+      "removeItem": "Remover dos favoritos",
+      "failed": "Não foi possível atualizar seus favoritos. Tente novamente."
     }
   },
   "showChat": "Mostrar chat",

@@ -198,6 +198,15 @@ describe('the chat under an agent that opens the pane', () => {
     expect(ctx.isVaChatCollapsed).toBe(false);
   });
 
+  // A chatbot (a VA bot with its floating robot) is talked to on the desktop: its chat starts closed in the main window.
+  it('starts a chatbot chat closed under its browser', () => {
+    mount();
+    act(() => ctx.setVaBotMode(true, false));
+    enter(BOT_SCOPE, botChat('c1'));
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.isVaChatCollapsed).toBe(true);
+  });
+
   // Clicking a bot opened its browser but folded its chat away; the chat now stays open and folds only on request.
   it('keeps the chat open when the user enters a bot chat with its browser', () => {
     mount();
@@ -466,20 +475,14 @@ describe('the agent activity dot', () => {
       .filter((tab) => tab.metadata?.agentActive)
       .map((tab) => tab.id);
 
-  it("marks only the on-screen chat's own agent tabs, and never for another chat", () => {
+  // The bot icon is per tab now (BrowserViewer reports the tab the bot acts in): a browser tool call in the chat's
+  // stream lit all of that chat's tabs, and only for engines that report tool groups.
+  it("no longer lights a chat's tabs from its browser tool calls", () => {
     mount();
     enter(BOT_SCOPE, botChat('c1'));
-    const blank = String(ctx.activeTabId);
-    const own = openBotTab('https://example.com/own', 'c1');
-
-    emit(browserCall('c9', 'Executing'));
-    expect(dotted()).toEqual([]);
+    openBotTab('https://example.com/own', 'c1');
 
     emit(browserCall('c1', 'Executing'));
-    expect(dotted()).toEqual([own]);
-    expect(dotted()).not.toContain(blank);
-
-    emit(browserCall('c1', 'Success'));
     expect(dotted()).toEqual([]);
   });
 });

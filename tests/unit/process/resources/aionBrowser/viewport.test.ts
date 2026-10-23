@@ -55,9 +55,10 @@ describe('viewport tool', () => {
     await openTab();
     const reply = await viewport({ preset: 'mobile' });
     expect(reply.isError).toBeFalsy();
-    expect(JSON.parse(textOf(reply))).toEqual({ viewport: { width: 390, height: 844, mobile: true } });
+    // Height 0 keeps the pane's own height: a fixed 844 left a gap above the page when the pane was another height.
+    expect(JSON.parse(textOf(reply))).toEqual({ viewport: { width: 390, height: 'pane', mobile: true } });
     expect(relay.callsTo('Emulation.setDeviceMetricsOverride')).toEqual([
-      { width: 390, height: 844, deviceScaleFactor: 0, mobile: true },
+      { width: 390, height: 0, deviceScaleFactor: 0, mobile: true },
     ]);
     expect(relay.callsTo('Emulation.setTouchEmulationEnabled')).toEqual([{ enabled: true, maxTouchPoints: 5 }]);
   });
@@ -65,7 +66,10 @@ describe('viewport tool', () => {
   it('a custom wide width is a desktop-style viewport without touch', async () => {
     await openTab();
     const reply = await viewport({ width: 1024 });
-    expect(JSON.parse(textOf(reply))).toEqual({ viewport: { width: 1024, height: 1024, mobile: false } });
+    expect(JSON.parse(textOf(reply))).toEqual({ viewport: { width: 1024, height: 'pane', mobile: false } });
+    expect(relay.callsTo('Emulation.setDeviceMetricsOverride')).toEqual([
+      { width: 1024, height: 0, deviceScaleFactor: 0, mobile: false },
+    ]);
     expect(relay.callsTo('Emulation.setTouchEmulationEnabled')).toEqual([{ enabled: false }]);
   });
 

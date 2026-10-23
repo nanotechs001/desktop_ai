@@ -46,3 +46,31 @@ export function isAgentNavigableUrl(url: string, blockedLoopbackPorts: ReadonlyS
   const port = parsed.port ? Number(parsed.port) : DEFAULT_PORTS[parsed.protocol];
   return !(isLoopback(host) && blockedLoopbackPorts.has(port));
 }
+
+const parse = (url: string): URL | null => {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+};
+
+const pagePath = (url: URL): string => url.pathname.replace(/\/+$/, '') || '/';
+
+/** The same page: the same address, with the path's trailing slash and the #fragment ignored. */
+export function isSamePage(a: string, b: string): boolean {
+  const left = parse(a);
+  const right = parse(b);
+  if (!left || !right) return a === b;
+  return left.origin === right.origin && pagePath(left) === pagePath(right) && left.search === right.search;
+}
+
+/**
+ * The same site: the host's last two labels match (slack.example.com and app.slack.example.com share example.com).
+ * shortcut: no public-suffix list, so example.co.uk and other.co.uk count as one site; upgrade if that matters.
+ */
+export function isSameSite(a: string, b: string): boolean {
+  const site = (url: string) => parse(url)?.hostname.split('.').slice(-2).join('.') ?? null;
+  const left = site(a);
+  return left !== null && left === site(b);
+}

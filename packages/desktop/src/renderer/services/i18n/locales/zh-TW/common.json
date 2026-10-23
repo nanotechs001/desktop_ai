@@ -166,5 +166,21 @@
   "selectedSkills": "已選技能",
   "searchPlaceholder": "搜尋",
   "recentFolders": "最近使用",
-  "chooseDifferentFolder": "選擇其他目錄"
+  "chooseDifferentFolder": "選擇其他目錄",
+  "reminders": {
+    "title": "提醒",
+    "newPlaceholder": "提醒我…",
+    "inAnHour": "1 小時後",
+    "add": "新增",
+    "done": "完成",
+    "snooze": "稍後提醒",
+    "snooze10m": "10 分鐘",
+    "snooze1h": "1 小時",
+    "snoozeTomorrow": "明天 9:00",
+    "move": "變更時間",
+    "due": "已到期",
+    "dueCount": "{{count}} 個提醒已到期",
+    "empty": "沒有提醒。在上方新增，或請代理提醒你。",
+    "failed": "無法更新提醒，請再試一次。"
+  }
 }

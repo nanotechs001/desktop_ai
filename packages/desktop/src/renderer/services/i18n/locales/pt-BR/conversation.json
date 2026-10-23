@@ -566,7 +566,8 @@
       "sevenDayOverageIncluded": "semanal do Fable",
       "overage": "de uso extra",
       "unknown": "de uso"
-    }
+    },
+    "limitHit": "Esta IA não pode continuar agora (atingiu o limite ou o modelo falhou). Troque para continuar:"
   },
   "subscriptionUsage": {
     "title": "Uso do {{engine}}",

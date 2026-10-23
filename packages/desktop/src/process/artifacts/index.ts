@@ -25,6 +25,7 @@ import { createSkillSaver, type SkillSaverDeps } from '@process/services/agentSk
 import { createMemoryApi, getMemoryStore, onMemoryChange, type MemoryApiHandler } from './memory/memoryApi';
 import { createMemoryNotesAdd, migrateNotebooks } from './memory/memoryNotebook';
 import type { MemoryStore } from './memory/memoryStore';
+import { createReminderStore, createRemindersApi, type RemindersApiHandler } from './reminders';
 import { AGENT_ID_RE, createAgentResolver, createNotesStore, notesRoot, type NotesApi, type NotesStore } from './notes';
 import { renderArtifactPage } from './pages';
 import { startArtifactServer, type ArtifactServer } from './server';
@@ -85,7 +86,13 @@ const rememberPort = async (rootDir: string, port: number): Promise<void> => {
  * without artifacts.
  */
 export async function startArtifacts(
-  opts: { rootDir?: string; port?: number; notes?: NotesApi; memory?: MemoryApiHandler } = {}
+  opts: {
+    rootDir?: string;
+    port?: number;
+    notes?: NotesApi;
+    memory?: MemoryApiHandler;
+    reminders?: RemindersApiHandler;
+  } = {}
 ): Promise<{ server: ArtifactServer; token: string; store: ArtifactStore } | null> {
   try {
     const rootDir = opts.rootDir ?? artifactsRoot();
@@ -100,6 +107,7 @@ export async function startArtifacts(
         port,
         notes: opts.notes,
         memory: opts.memory,
+        reminders: opts.reminders,
       });
     if (opts.port !== undefined) return { server: await start(opts.port), token, store };
     const lastPort = await readLastPort(rootDir);
@@ -466,6 +474,43 @@ const MEMORY_RULE_SYNC_DELAY_MS = 2000;
  * agents' rules kept current (debounced) after each change. The shared memory is in every agent's rule; an agent's own
  * only in its own. The old notebooks are copied into memory in the background; startup never waits for it.
  */
+/**
+ * The user's reminder list (userData/reminders.json): the titlebar bell's IPC, and the agents' API for the artifact
+ * server. Every change goes out to the windows.
+ */
+export async function startReminders(): Promise<RemindersApiHandler> {
+  // Loaded here, not at the top: both pull in Electron, which this module's unit tests run without.
+  const [{ guardAsync }, { app }] = await Promise.all([
+    import('@process/services/agentBrowser/services'),
+    import('electron'),
+  ]);
+  const store = createReminderStore(path.join(app.getPath('userData'), 'reminders.json'));
+  store.onChange((list) => ipcBridge.reminders.changed.emit(list));
+  const ok = async <T>(task: Promise<T>) => ({ success: true as const, data: await task });
+  const idOf = (request: unknown): string => String((request as { id?: unknown } | undefined)?.id ?? '');
+  const { reminders } = ipcBridge;
+  reminders.list.provider(() => guardAsync(() => ok(Promise.resolve(store.list()))));
+  reminders.add.provider((request) =>
+    guardAsync(() =>
+      ok(
+        store.add({
+          title: String(request?.title ?? ''),
+          dueAt: Number(request?.dueAt),
+          note: typeof request?.note === 'string' ? request.note : undefined,
+          createdBy: 'user',
+        })
+      )
+    )
+  );
+  reminders.snooze.provider((request) => guardAsync(() => ok(store.snooze(idOf(request), Number(request?.minutes)))));
+  reminders.reschedule.provider((request) =>
+    guardAsync(() => ok(store.reschedule(idOf(request), Number(request?.dueAt))))
+  );
+  reminders.done.provider((request) => guardAsync(() => ok(store.done(idOf(request)))));
+  reminders.remove.provider((request) => guardAsync(() => ok(store.remove(idOf(request)))));
+  return createRemindersApi(store);
+}
+
 export async function startAgentMemory(): Promise<MemoryApiHandler> {
   // Loaded here, not at the top: both pull in Electron, which this module's unit tests run without.
   const [{ guardAsync }, { shell }] = await Promise.all([

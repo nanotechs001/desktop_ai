@@ -19,7 +19,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { useChatLocation } from '@/renderer/pages/agentWidget/chatLocation';
-import { useRestoreHiddenAgentWidget, useSuspendAgentWidget } from '@/renderer/pages/agentWidget/useAgentWidgetSync';
+import {
+  useAgentWidgetSettings,
+  useRestoreHiddenAgentWidget,
+  useSuspendAgentWidget,
+} from '@/renderer/pages/agentWidget/useAgentWidgetSync';
 import WidgetChatPlaceholder, { ShowAgentWidgetButton } from '@/renderer/pages/agentWidget/WidgetChatPlaceholder';
 import CloseVaChatButton from './ChatLayout/CloseVaChatButton';
 import AgentHistoryButton from '@/renderer/components/layout/Titlebar/AgentHistoryButton';
@@ -206,10 +210,12 @@ const ChatConversation: React.FC<{
   const [storedDefaultAgentId] = useConfig(DEFAULT_AGENT_SETTING_KEY);
   const { setVaBotMode, isVaChatCollapsed, isOpen: isPreviewOpen } = usePreviewContext();
   const isVaBot = isVaBotAgent(conversation?.assistant, storedDefaultAgentId);
+  // A chatbot (floating robots on) is talked to through its robot, so its chat starts closed under the browser.
+  const chatbot = isVaBot && Boolean(useAgentWidgetSettings()?.enabled);
   useEffect(() => {
-    setVaBotMode(isVaBot);
+    setVaBotMode(isVaBot, !chatbot);
     return () => setVaBotMode(false);
-  }, [isVaBot, setVaBotMode]);
+  }, [isVaBot, chatbot, setVaBotMode]);
   const workspaceEnabled = Boolean(conversation?.extra?.workspace) && !conversation?.project_id;
   const cronJobId = resolveCronJobId(conversation?.extra);
   const layout = useLayoutContext();

@@ -14,12 +14,15 @@ import type { TChatConversation } from '@/common/config/storage';
 
 const h = vi.hoisted(() => ({
   suspend: vi.fn(),
+  setVaBotMode: vi.fn(),
+  widgetsEnabled: false,
   preview: { isOpen: false, isVaChatCollapsed: true },
 }));
 
 vi.mock('@/renderer/pages/agentWidget/useAgentWidgetSync', () => ({
   useSuspendAgentWidget: (conversationId: string | undefined, chatOpen: boolean) => h.suspend(conversationId, chatOpen),
   useRestoreHiddenAgentWidget: () => undefined,
+  useAgentWidgetSettings: () => ({ enabled: h.widgetsEnabled }),
 }));
 vi.mock('@/renderer/pages/agentWidget/chatLocation', () => ({ useChatLocation: () => 'main' }));
 vi.mock('@/common/types/agent/defaultAgent', async (importOriginal) => ({
@@ -27,7 +30,7 @@ vi.mock('@/common/types/agent/defaultAgent', async (importOriginal) => ({
   isVaBotAgent: () => true,
 }));
 vi.mock('@/renderer/pages/conversation/Preview', () => ({
-  usePreviewContext: () => ({ ...h.preview, openPreview: vi.fn(), setVaBotMode: vi.fn() }),
+  usePreviewContext: () => ({ ...h.preview, openPreview: vi.fn(), setVaBotMode: h.setVaBotMode }),
 }));
 vi.mock('@/renderer/pages/conversation/Messages/MessageList', () => ({ default: () => <div>message history</div> }));
 vi.mock('@/renderer/pages/conversation/Messages/hooks', () => ({
@@ -88,5 +91,19 @@ describe('the robot of the VA Bot chat on screen steps away while the user sees 
 
   it('counts a chat shown under the open browser pane', () => {
     expect(chatOpenFlag({ isOpen: true, isVaChatCollapsed: false })).toBe(true);
+  });
+});
+
+describe("a VA Bot chat's place in the main window", () => {
+  it('starts closed under the browser for a chatbot, which is talked to through its robot', () => {
+    h.widgetsEnabled = true;
+    chatOpenFlag({ isOpen: true, isVaChatCollapsed: true });
+    expect(h.setVaBotMode).toHaveBeenLastCalledWith(true, false);
+  });
+
+  it('starts open when the floating robots are off, since the main window is the only place to chat', () => {
+    h.widgetsEnabled = false;
+    chatOpenFlag({ isOpen: true, isVaChatCollapsed: false });
+    expect(h.setVaBotMode).toHaveBeenLastCalledWith(true, true);
   });
 });

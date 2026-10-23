@@ -14,6 +14,7 @@ import {
   onBrowserTabShown,
   shownBrowserTab,
 } from '@process/services/browserSession/browserSession';
+import { listBookmarks } from '@process/services/browserSession/profiles/browsingDataIpc';
 import { isAskingToLeave, setWindowOpenHooks, type UnloadPlan } from '@process/services/browserSession/windowOpen';
 import {
   isDeletedAgentProfile,
@@ -451,6 +452,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     resolveProfile: (conversationId) => agentTabProfile(options.resolveAgent, conversationId, options.isDefaultAgent),
     chatInfo,
     closeTab: (webContentsId) => ipcBridge.browser.closeTabRequested.emit({ webContentsId }),
+    listBookmarks,
     onAgentTab: (webContentsId) => hygiene.adopt(webContentsId),
     onAgentAction: (event) => {
       browserView?.noteAgentAction(event.webContentsId);

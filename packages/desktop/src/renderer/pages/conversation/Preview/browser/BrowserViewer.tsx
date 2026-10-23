@@ -13,6 +13,7 @@ import { isPlatformPrimaryModifier } from '@/renderer/utils/ui/keyboardShortcuts
 import { useOptionalPreviewContext } from '../context/PreviewContext';
 import AgentControls from './BrowserChrome/AgentControls';
 import AgentOverlay from './BrowserChrome/AgentOverlay';
+import BookmarksButton from './BrowserChrome/BookmarksButton';
 import CrashOverlay, { type CrashState } from './BrowserChrome/CrashOverlay';
 import DownloadsButton from './BrowserChrome/DownloadsButton';
 import ExtensionActions from './BrowserChrome/ExtensionActions';
@@ -23,6 +24,12 @@ import ProfileErrorOverlay from './BrowserProfiles/ProfileErrorOverlay';
 import { useProfilePartition } from './BrowserProfiles/useBrowserProfiles';
 import { BROWSER_BLANK_URL, browserTabLabelFromUrl, resolveAddressBarInput } from './constants';
 import { useAgentBrowser } from './useAgentBrowser';
+
+/** Past this long without an action in a tab, the bot is no longer shown working there. */
+const BOT_WORKING_QUIET_MS = 20_000;
+
+/** Address bar suggestions from the user's bookmarks and history (kept in main). Stable, so lookups are not redone. */
+const suggestBrowserUrls = (query: string) => ipcBridge.browser.suggestUrls.invoke({ query });
 
 /** `getWebContentsId()` throws before dom-ready and after the page crashed; that means "not this one". */
 const ownWebContentsId = (webview: Electron.WebviewTag): number | null => {
@@ -84,6 +91,8 @@ export interface BrowserViewerProps {
   agentOwnedHint?: boolean;
   /** An agent acted on this tab (each action the relay reports, a tab switch or load included) */
   onAgentAction?: (tabId: string) => void;
+  /** Whether the bot is working in this tab right now: on with its actions here, off when its chat's turn ends. */
+  onAgentWorkingChange?: (tabId: string, working: boolean) => void;
   /** The user pressed a key or the mouse in this tab's page (main reports it, at most once a second) */
   onUserInput?: (tabId: string) => void;
   /** The browser profile the tab lives in; Personal when absent. Fixed for the tab's life (a new profile is a new tab) */
@@ -116,6 +125,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   onAgentOwnedChange,
   agentOwnedHint = false,
   onAgentAction,
+  onAgentWorkingChange,
   onUserInput,
   profile,
   pinned = false,
@@ -333,6 +343,26 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
     if (latestAction) onAgentAction?.(tabId);
   }, [latestAction, tabId, onAgentAction]);
 
+  // The bot is working here from its action in this tab until its chat's turn ends, or a quiet stretch passes.
+  const [botWorking, setBotWorking] = useState(false);
+  useEffect(() => {
+    if (!latestAction) return undefined;
+    setBotWorking(true);
+    const quiet = setTimeout(() => setBotWorking(false), BOT_WORKING_QUIET_MS);
+    return () => clearTimeout(quiet);
+  }, [latestAction]);
+  const ownerChat = ownership && ownership.owner !== 'user' ? ownership.owner.conversationId : undefined;
+  useEffect(() => {
+    // `?.` only tolerates test mocks without the stream; production always has it.
+    if (!botWorking) return undefined;
+    return ipcBridge.conversation?.responseStream?.on((message) => {
+      const ended = message.type === 'finish' || message.type === 'error';
+      // A tab shared from the user's side names no chat: any chat's turn ending lets it go, a new action relights it.
+      if (ended && (ownerChat === undefined || message.conversation_id === ownerChat)) setBotWorking(false);
+    });
+  }, [botWorking, ownerChat]);
+  useEffect(() => onAgentWorkingChange?.(tabId, botWorking), [botWorking, tabId, onAgentWorkingChange]);
+
   // Main keeps no pin of its own across a restart or a remount (a new webContents), so the pin is reported each time
   // the tab's webContents is known, and on every change; a tab that was never pinned says nothing.
   const reportedPin = useRef<{ id: number; pinned: boolean } | null>(null);
@@ -383,6 +413,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
               {tabWebContentsId !== null && (
                 <AgentControls webContentsId={tabWebContentsId} ownership={ownership} actions={actions} />
               )}
+              <BookmarksButton url={url} getTitle={() => webview?.getTitle() ?? ''} onOpen={handleUrlChange} />
               <ExtensionActions partition={partition} profile={profile} />
               <DownloadsButton />
               <CookieImportMenu profile={profile ?? { kind: 'agent', agentId: DEFAULT_AGENT_ID }} />
@@ -390,6 +421,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
           }
           className='bg-1'
           resolveUrlInput={resolveAddressBarInput}
+          suggestUrls={suggestBrowserUrls}
           onUrlChange={handleUrlChange}
           onTitleChange={handleTitleChange}
           onFaviconChange={handleFaviconChange}

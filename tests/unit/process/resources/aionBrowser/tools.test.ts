@@ -337,6 +337,22 @@ describe('tabs navigate', () => {
   });
 });
 
+describe('tabs bookmarks', () => {
+  it("lists the user's bookmarks as untrusted page text, to open with tabs open or navigate", async () => {
+    relay.on('AionRelay.listBookmarks', () => ({
+      bookmarks: [{ title: 'Vizi\u0007 Platform', url: 'https://viziplatform.com/' }],
+    }));
+    const client = await connectClient(relay.env);
+
+    const reply = await callTabs(client, { action: 'bookmarks' });
+
+    expect(reply.isError).toBeFalsy();
+    expect(jsonOf(reply)).toEqual({ bookmarks: [{ title: 'Vizi Platform', url: 'https://viziplatform.com/' }] });
+    const { tools } = await client.listTools();
+    expect(tools[0].description).toContain('bookmarks');
+  });
+});
+
 // "Share with <bot>": the bot works in the tab the user shared and does not reload a page it already shows.
 describe('a tab the user shares', () => {
   beforeEach(() => {

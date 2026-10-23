@@ -11,6 +11,7 @@ import { ipcBridge } from '@/common';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { InternalNavTracker, shouldResetHistoryForUrlProp } from './webviewHistory';
 import WebviewUnavailable from './WebviewUnavailable';
+import { UrlSuggestionList, useUrlSuggestions, type SuggestUrls } from './UrlSuggestions';
 import BrowserLiveView from './browserLive/BrowserLiveView';
 
 export interface WebviewHostProps {
@@ -76,6 +77,8 @@ export interface WebviewHostProps {
   addressInputRef?: React.Ref<HTMLInputElement>;
   /** The browser preview tab on screen: outside Electron it shows the conversation's desktop tab live instead. */
   liveView?: boolean;
+  /** Address bar suggestions for what the user types (bookmarks, history); none when absent (needs `showNavBar`). */
+  suggestUrls?: SuggestUrls;
 }
 
 const MIN_ZOOM_FACTOR = 0.75;
@@ -114,6 +117,7 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
   webviewTabIndex,
   chromeInert,
   addressInputRef,
+  suggestUrls,
 }) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -157,6 +161,11 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
   // playlist video) must never be written back into it.
   const [srcUrl, setSrcUrl] = useState(url);
   const [inputUrl, setInputUrl] = useState(url);
+  // What the user is typing in the address bar (null when not typing): only that asks for suggestions.
+  const [typedQuery, setTypedQuery] = useState<string | null>(null);
+  const suggestions = useUrlSuggestions(suggestUrls, typedQuery);
+  // The address of the link under the pointer (Electron's update-target-url), shown at the bottom left like Chrome.
+  const [linkUrl, setLinkUrl] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [zoomFactor, setZoomFactor] = useState(1);
   const [webviewReady, setWebviewReady] = useState(false);
@@ -276,7 +285,11 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
     const webviewEl = webviewRef.current;
     if (!webviewEl) return;
 
-    const handleStartLoading = () => setIsLoading(true);
+    const handleStartLoading = () => {
+      setIsLoading(true);
+      setLinkUrl('');
+    };
+    const handleTargetUrl = (event: Event & { url?: string }) => setLinkUrl(event.url ?? '');
     const handleStopLoading = () => {
       setIsLoading(false);
     };
@@ -542,6 +555,7 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
     webviewEl.addEventListener('render-process-gone', handleRenderProcessGone as EventListener);
     webviewEl.addEventListener('unresponsive', handleUnresponsive);
     webviewEl.addEventListener('responsive', handleResponsive);
+    webviewEl.addEventListener('update-target-url', handleTargetUrl as EventListener);
 
     return () => {
       webviewEl.removeEventListener('did-start-loading', handleStartLoading);
@@ -557,6 +571,7 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
       webviewEl.removeEventListener('render-process-gone', handleRenderProcessGone as EventListener);
       webviewEl.removeEventListener('unresponsive', handleUnresponsive);
       webviewEl.removeEventListener('responsive', handleResponsive);
+      webviewEl.removeEventListener('update-target-url', handleTargetUrl as EventListener);
     };
   }, [navigateToWithHistory, currentUrl, onDidFinishLoad, onDidFailLoad, isStarOfficeUrl, interceptNavigation]);
 
@@ -664,6 +679,7 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
   const handleUrlSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
+      setTypedQuery(null);
       const raw = inputUrl.trim();
       if (!raw) return;
       if (resolveUrlInput) {
@@ -678,15 +694,23 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
     [inputUrl, navigateToWithHistory, resolveUrlInput]
   );
 
-  const handleUrlKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
-        setInputUrl(currentUrl);
-        (e.target as HTMLInputElement).blur();
-      }
+  const pickSuggestion = useCallback(
+    (target: string) => {
+      setTypedQuery(null);
+      navigateToWithHistory(target);
     },
-    [currentUrl]
+    [navigateToWithHistory]
   );
+
+  const handleUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // The suggestion list takes its keys first: the first Escape closes it, the next one resets the address.
+    if (suggestions.onKeyDown(e, pickSuggestion)) return;
+    if (e.key === 'Escape') {
+      setTypedQuery(null);
+      setInputUrl(currentUrl);
+      (e.target as HTMLInputElement).blur();
+    }
+  };
 
   // Build webview attributes
   /**
@@ -862,17 +886,23 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
               <span className='toolbar-chip'>{Math.round(zoomFactor * 100)}%</span>
             </div>
           )}
-          <form onSubmit={handleUrlSubmit} className='flex-1 ms-2px'>
+          <form onSubmit={handleUrlSubmit} className='flex-1 ms-2px relative'>
             <input
               ref={addressInputRef}
               type='text'
               value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
+              onChange={(e) => {
+                setInputUrl(e.target.value);
+                setTypedQuery(e.target.value);
+              }}
               onKeyDown={handleUrlKeyDown}
               onFocus={(e) => e.target.select()}
+              onBlur={() => setTypedQuery(null)}
               className='toolbar-input'
               placeholder={t('preview.browser.addressPlaceholder')}
+              aria-autocomplete='list'
             />
+            <UrlSuggestionList items={suggestions.items} highlight={suggestions.highlight} onPick={pickSuggestion} />
           </form>
           {navBarExtra}
         </div>
@@ -903,6 +933,14 @@ const ElectronWebviewHost: React.FC<WebviewHostProps> = ({
           tabIndex={webviewTabIndex}
           {...webviewAttrs}
         />
+        {linkUrl && (
+          <div
+            data-testid='webview-link-status'
+            className='absolute start-4px bottom-4px z-10 max-w-[60%] truncate px-8px py-2px rd-4px text-12px bg-2 text-t-secondary border border-solid border-[var(--border-base)] pointer-events-none'
+          >
+            {linkUrl}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -561,7 +561,8 @@
       "sevenDayOverageIncluded": "wöchentlich Fable",
       "overage": "Zusatznutzung",
       "unknown": "Nutzung"
-    }
+    },
+    "limitHit": "Diese KI kann gerade nicht weitermachen (Limit erreicht oder Modellfehler). Wechsle, um weiterzumachen:"
   },
   "subscriptionUsage": {
     "title": "{{engine}}-Nutzung",

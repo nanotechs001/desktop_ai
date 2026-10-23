@@ -560,7 +560,8 @@
       "sevenDayOverageIncluded": "hebdomadaire Fable",
       "overage": "d'utilisation supplémentaire",
       "unknown": "d'utilisation"
-    }
+    },
+    "limitHit": "Cette IA ne peut pas continuer pour l'instant (limite atteinte ou modèle en erreur). Changez pour poursuivre :"
   },
   "subscriptionUsage": {
     "title": "Utilisation de {{engine}}",

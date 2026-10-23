@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/** A page the user bookmarked in the in-app browser (one list for the whole app). */
+export type Bookmark = { url: string; title: string; addedAt: number };
+
+/** An address bar suggestion from the bookmarks or the visit history. */
+export type UrlSuggestion = { url: string; title: string; bookmarked: boolean };
+
 /** A file download started from the in-app browser. */
 export type DownloadItem = {
   id: string;

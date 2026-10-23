@@ -166,5 +166,21 @@
   "selectedSkills": "選択済みスキル",
   "searchPlaceholder": "Search",
   "recentFolders": "最近使用",
-  "chooseDifferentFolder": "別のフォルダを選択"
+  "chooseDifferentFolder": "別のフォルダを選択",
+  "reminders": {
+    "title": "リマインダー",
+    "newPlaceholder": "リマインドする内容…",
+    "inAnHour": "1時間後",
+    "add": "追加",
+    "done": "完了",
+    "snooze": "スヌーズ",
+    "snooze10m": "10分",
+    "snooze1h": "1時間",
+    "snoozeTomorrow": "明日 9:00",
+    "move": "日時を変更",
+    "due": "期限です",
+    "dueCount": "{{count}}件のリマインダーが期限です",
+    "empty": "リマインダーはありません。上で追加するか、エージェントに頼んでください。",
+    "failed": "リマインダーを更新できませんでした。もう一度お試しください。"
+  }
 }

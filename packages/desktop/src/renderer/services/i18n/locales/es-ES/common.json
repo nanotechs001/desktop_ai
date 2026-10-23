@@ -166,5 +166,21 @@
   "selectedSkills": "Habilidades seleccionadas",
   "searchPlaceholder": "Search",
   "recentFolders": "Recientes",
-  "chooseDifferentFolder": "Elegir otra carpeta"
+  "chooseDifferentFolder": "Elegir otra carpeta",
+  "reminders": {
+    "title": "Recordatorios",
+    "newPlaceholder": "Recuérdame…",
+    "inAnHour": "En 1 hora",
+    "add": "Añadir",
+    "done": "Hecho",
+    "snooze": "Posponer",
+    "snooze10m": "10 minutos",
+    "snooze1h": "1 hora",
+    "snoozeTomorrow": "Mañana 9:00",
+    "move": "Cambiar fecha",
+    "due": "Vence ahora",
+    "dueCount": "{{count}} recordatorio(s) pendiente(s)",
+    "empty": "No hay recordatorios. Añade uno arriba o pide a un agente que te lo recuerde.",
+    "failed": "No se pudo actualizar el recordatorio. Inténtalo de nuevo."
+  }
 }

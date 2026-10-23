@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAgentNavigableUrl } from '@process/services/agentBrowser/relay/agentUrl';
+import { isAgentNavigableUrl, isSamePage, isSameSite } from '@process/services/agentBrowser/relay/agentUrl';
 
 const RELAY_PORT = 4100;
 const BACKEND_PORT = 4200;
@@ -13,5 +13,20 @@ describe('isAgentNavigableUrl: artifact origin', () => {
     expect(isAgentNavigableUrl(`http://127.0.0.1:${ARTIFACT_PORT}/a/AAAAAAAAAAAAAAAAAAAAAA/v/2`, blocked)).toBe(true);
     expect(isAgentNavigableUrl(`http://127.0.0.1:${RELAY_PORT}/a/AAAAAAAAAAAAAAAAAAAAAA`, blocked)).toBe(false);
     expect(isAgentNavigableUrl(`http://127.0.0.1:${BACKEND_PORT}/`, blocked)).toBe(false);
+  });
+});
+
+describe('isSamePage / isSameSite', () => {
+  it('treats a trailing slash and a #fragment as the same page, other paths, queries or hosts as different', () => {
+    expect(isSamePage('https://a.test/x/', 'https://a.test/x#top')).toBe(true);
+    expect(isSamePage('https://a.test/', 'https://a.test')).toBe(true);
+    expect(isSamePage('https://a.test/x?q=1', 'https://a.test/x?q=2')).toBe(false);
+    expect(isSamePage('https://a.test/x', 'https://b.test/x')).toBe(false);
+  });
+
+  it('counts subdomains of one site as the same site', () => {
+    expect(isSameSite('https://app.slack.example.com/c', 'https://slack.example.com/a')).toBe(true);
+    expect(isSameSite('https://elsewhere.test/', 'https://slack.example.com/')).toBe(false);
+    expect(isSameSite('not a url', 'https://a.test/')).toBe(false);
   });
 });

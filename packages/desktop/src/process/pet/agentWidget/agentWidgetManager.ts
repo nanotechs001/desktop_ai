@@ -769,10 +769,12 @@ export class AgentWidgetManager {
     return main;
   }
 
+  /**
+   * Show the bot's browser in the main window (Watch: the link channel without a link). The chat stays in its popup,
+   * so the robot stays on the desktop; moving the chat into the main window made the robot step away.
+   */
   openInMain(conversationId: string): void {
-    this.setChatLocation(conversationId, 'main');
-    // Same channel the tray menu uses; Layout.tsx navigates to the conversation.
-    this.focusMain()?.webContents.send('tray:navigate-to-conversation', { conversation_id: conversationId });
+    this.focusMain()?.webContents.send('tray:open-link-in-conversation', { conversation_id: conversationId });
   }
 
   /** Show the main window on a VA Bot's settings; the chat stays in its popup. */

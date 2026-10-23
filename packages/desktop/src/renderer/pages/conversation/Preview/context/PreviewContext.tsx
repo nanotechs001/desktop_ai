@@ -19,7 +19,7 @@ import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from '../browser/constants';
-import { isBrowserMcpActivity, isBrowserMcpSettled } from '../browser/agentActivity';
+import { isBrowserMcpActivity } from '../browser/agentActivity';
 import { profileKeyOf } from '../browser/BrowserProfiles/useBrowserProfiles';
 import { isUserBusyInPane } from '../browser/useFollowAgentTab';
 import { maybeNotifyFirstAgentBrowserUse } from '../browser/firstUseNotice';
@@ -208,7 +208,8 @@ export interface PreviewContextValue {
   toggleMaximized: () => void;
   /** The open conversation runs on a VA Bot (a user-created Agent): browser on top, chat underneath. */
   isVaBotMode: boolean;
-  setVaBotMode: (on: boolean) => void;
+  /** Turns the browser-on-top / chat-underneath layout on or off; `chatOpen` (default true) is the chat's start state. */
+  setVaBotMode: (on: boolean, chatOpen?: boolean) => void;
   /** VA Bot layout only: the chat under the browser is collapsed (the default). */
   isVaChatCollapsed: boolean;
   /** Show/hide the VA Bot chat; showing it focuses its message box. */
@@ -1492,9 +1493,9 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   const toggleMaximized = useCallback(() => setIsMaximized((prev) => !prev), []);
 
   /** Entering a VA Bot conversation shows its chat under the browser; the user folds it away (chat button, divider). */
-  const setVaBotMode = useCallback((on: boolean) => {
+  const setVaBotMode = useCallback((on: boolean, chatOpen = true) => {
     setIsVaBotMode(on);
-    if (on) setIsVaChatCollapsed(false);
+    if (on) setIsVaChatCollapsed(!chatOpen);
   }, []);
 
   const toggleVaChat = useCallback(() => {
@@ -2054,19 +2055,6 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
   useEffect(() => {
     // A robot window shows no tabs to badge, and its one-time notice would land clipped in the robot.
     if (readOnly) return;
-    const markBrowserTabs = (conversationId: string, agentActive: boolean) => {
-      // Only the tabs that chat's agent drives (relay ownership): another chat's browser use lights none of them.
-      const ofChat = (tab: PreviewTab) =>
-        tab.content_type === 'browser' && tab.metadata?.agentConversationId === conversationId;
-      setTabs((prevTabs) => {
-        // 没有需要改的 tab 时返回原数组，避免无意义的重渲染
-        // Return the same array when nothing changes, so no pointless re-render is triggered.
-        if (!prevTabs.some((tab) => ofChat(tab) && Boolean(tab.metadata?.agentActive) !== agentActive)) {
-          return prevTabs;
-        }
-        return prevTabs.map((tab) => (ofChat(tab) ? { ...tab, metadata: { ...tab.metadata, agentActive } } : tab));
-      });
-    };
 
     /**
      * 这个订阅纯粹是锦上添花（一个角标 + 一次提示）。如果消息流不可用（WebUI
@@ -2082,16 +2070,10 @@ export const PreviewProvider: React.FC<PreviewProviderProps> = ({ children, read
     if (!stream?.on) return;
 
     const unsubscribe = stream.on((message) => {
-      // The dot lights for the chat on screen only (it always goes out); the one-time notice is for the first browser
-      // use anywhere.
-      if (isBrowserMcpActivity(message.type, message.data)) {
-        if (message.conversation_id === getCurrentConversation()) markBrowserTabs(message.conversation_id, true);
-        maybeNotifyFirstAgentBrowserUse();
-        return;
-      }
-      if (isBrowserMcpSettled(message.type, message.data)) {
-        markBrowserTabs(message.conversation_id, false);
-      }
+      // The one-time notice is for the first browser use anywhere.
+      // The tab strip's bot icon now follows the bot's actions per tab (BrowserViewer): this stream lit every tab of
+      // the chat, and only for some engines.
+      if (isBrowserMcpActivity(message.type, message.data)) maybeNotifyFirstAgentBrowserUse();
     });
 
     return unsubscribe;

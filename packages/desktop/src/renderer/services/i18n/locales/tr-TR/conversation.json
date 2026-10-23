@@ -550,7 +550,8 @@
       "sevenDayOverageIncluded": "haftalık Fable",
       "overage": "ek kullanım",
       "unknown": "kullanım"
-    }
+    },
+    "limitHit": "Bu yapay zekâ şu an devam edemiyor (sınıra ulaştı ya da modeli hata verdi). Devam etmek için geçiş yapın:"
   },
   "subscriptionUsage": {
     "title": "{{engine}} kullanımı",

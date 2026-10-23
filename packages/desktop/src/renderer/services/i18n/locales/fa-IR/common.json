@@ -166,5 +166,21 @@
   "selectedSkills": "مهارت‌های انتخاب‌شده",
   "searchPlaceholder": "Search",
   "recentFolders": "اخیر",
-  "chooseDifferentFolder": "انتخاب پوشه دیگر"
+  "chooseDifferentFolder": "انتخاب پوشه دیگر",
+  "reminders": {
+    "title": "یادآورها",
+    "newPlaceholder": "یادم بینداز که…",
+    "inAnHour": "تا ۱ ساعت دیگر",
+    "add": "افزودن",
+    "done": "انجام شد",
+    "snooze": "به تعویق انداختن",
+    "snooze10m": "۱۰ دقیقه",
+    "snooze1h": "۱ ساعت",
+    "snoozeTomorrow": "فردا ساعت ۹:۰۰",
+    "move": "تغییر تاریخ",
+    "due": "اکنون موعد است",
+    "dueCount": "{{count}} یادآور سررسید شده",
+    "empty": "یادآوری نیست. بالا یکی اضافه کنید یا از یک عامل بخواهید یادآوری کند.",
+    "failed": "یادآور به‌روزرسانی نشد. دوباره تلاش کنید."
+  }
 }

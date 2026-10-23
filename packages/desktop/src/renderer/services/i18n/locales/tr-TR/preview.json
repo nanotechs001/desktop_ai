@@ -319,6 +319,14 @@
         "unknown": "Çerezler içe aktarılamadı. Yeniden deneyin.",
         "list_failed": "Bu Mac’te tarayıcılar aranamadı."
       }
+    },
+    "bookmarks": {
+      "add": "Bu sayfayı yer imlerine ekle",
+      "remove": "Yer imini kaldır",
+      "menu": "Yer imleri",
+      "empty": "Henüz yer imi yok. Açık sayfayı eklemek için yıldızı kullanın.",
+      "removeItem": "Yer imlerinden kaldır",
+      "failed": "Yer imleri güncellenemedi. Tekrar deneyin."
     }
   },
   "showChat": "Sohbeti göster",

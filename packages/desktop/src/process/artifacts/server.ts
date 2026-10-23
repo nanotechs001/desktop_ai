@@ -16,6 +16,7 @@ import {
   type ArtifactVersion,
 } from '@/common/types/agent/artifacts';
 import type { MemoryApiHandler } from './memory/memoryApi';
+import type { RemindersApiHandler } from './reminders';
 import type { NotesApi } from './notes';
 import type { ArtifactStore } from './store';
 
@@ -39,6 +40,8 @@ export type ArtifactServerOptions = {
   notes?: NotesApi;
   /** Serves `POST /api/memory/{search,read,save,log,retire}` when given. */
   memory?: MemoryApiHandler;
+  /** Serves `POST /api/reminders/{add,list,done,snooze,reschedule}` when given. */
+  reminders?: RemindersApiHandler;
 };
 
 const HOST = '127.0.0.1';
@@ -71,6 +74,7 @@ const LIB_RE = /^\/lib\/([A-Za-z0-9_-][A-Za-z0-9._-]{0,127})$/;
 const API_RE = /^\/api\/artifacts\/(create|update|get)$/;
 const NOTES_RE = /^\/api\/notes\/(add|list|update|delete)$/;
 const MEMORY_RE = /^\/api\/memory\/(search|read|save|log|retire)$/;
+const REMINDERS_RE = /^\/api\/reminders\/(add|list|done|snooze|reschedule)$/;
 const LIB_TYPES: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -280,6 +284,9 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     const memory = opts.memory;
     const memoryMatch = req.method === 'POST' && memory ? MEMORY_RE.exec(pathname) : null;
     if (memory && memoryMatch) return serveApi(req, res, (b) => memory(memoryMatch[1], b));
+    const reminders = opts.reminders;
+    const remindersMatch = req.method === 'POST' && reminders ? REMINDERS_RE.exec(pathname) : null;
+    if (reminders && remindersMatch) return serveApi(req, res, (b) => reminders(remindersMatch[1], b));
     send(res, 404, TEXT_TYPE, 'Not found');
   };
 

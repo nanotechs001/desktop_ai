@@ -89,7 +89,7 @@ afterEach(async () => {
 });
 
 describe('aionui-notes memory tools', () => {
-  it('registers the memory tools next to add and propose_skill', async () => {
+  it('registers the memory tools next to add and propose_skill, then the reminder tools', async () => {
     await start();
     const { tools } = await (await connect('chat-agent-1')).listTools();
 
@@ -101,6 +101,11 @@ describe('aionui-notes memory tools', () => {
       'memory_save',
       'memory_log',
       'memory_retire',
+      'reminder_add',
+      'reminder_list',
+      'reminder_done',
+      'reminder_snooze',
+      'reminder_reschedule',
     ]);
   });
 

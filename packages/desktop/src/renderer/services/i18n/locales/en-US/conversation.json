@@ -560,7 +560,8 @@
       "sevenDayOverageIncluded": "weekly Fable",
       "overage": "extra usage",
       "unknown": "usage"
-    }
+    },
+    "limitHit": "This AI can't continue right now (it hit its limit or its model failed). Switch to keep going:"
   },
   "subscriptionUsage": {
     "title": "{{engine}} usage",

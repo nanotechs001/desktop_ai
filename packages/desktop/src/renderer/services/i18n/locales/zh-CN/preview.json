@@ -319,6 +319,14 @@
         "unknown": "无法导入 Cookie，请重试。",
         "list_failed": "无法在此 Mac 上查找浏览器。"
       }
+    },
+    "bookmarks": {
+      "add": "将此页加入书签",
+      "remove": "移除书签",
+      "menu": "书签",
+      "empty": "还没有书签。点星标即可添加当前页面。",
+      "removeItem": "从书签中移除",
+      "failed": "无法更新书签，请重试。"
     }
   },
   "showChat": "显示对话",

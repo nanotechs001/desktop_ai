@@ -560,7 +560,8 @@
       "sevenDayOverageIncluded": "每週 Fable ",
       "overage": "額外用量",
       "unknown": "用量"
-    }
+    },
+    "limitHit": "這個 AI 暫時無法繼續（已達上限或模型出錯）。切換後繼續："
   },
   "subscriptionUsage": {
     "title": "{{engine}} 用量",

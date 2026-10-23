@@ -168,5 +168,21 @@
   "selectedSkills": "Выбранные навыки",
   "searchPlaceholder": "Search",
   "recentFolders": "Недавние",
-  "chooseDifferentFolder": "Выбрать другую папку"
+  "chooseDifferentFolder": "Выбрать другую папку",
+  "reminders": {
+    "title": "Напоминания",
+    "newPlaceholder": "Напомнить…",
+    "inAnHour": "Через 1 час",
+    "add": "Добавить",
+    "done": "Готово",
+    "snooze": "Отложить",
+    "snooze10m": "10 минут",
+    "snooze1h": "1 час",
+    "snoozeTomorrow": "Завтра в 9:00",
+    "move": "Перенести",
+    "due": "Пора",
+    "dueCount": "Напоминаний к выполнению: {{count}}",
+    "empty": "Напоминаний нет. Добавьте выше или попросите агента напомнить.",
+    "failed": "Не удалось обновить напоминание. Попробуйте ещё раз."
+  }
 }

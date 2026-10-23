@@ -319,6 +319,14 @@
         "unknown": "Die Cookies konnten nicht importiert werden. Versuchen Sie es erneut.",
         "list_failed": "Auf diesem Mac konnte nicht nach Browsern gesucht werden."
       }
+    },
+    "bookmarks": {
+      "add": "Seite als Lesezeichen speichern",
+      "remove": "Lesezeichen entfernen",
+      "menu": "Lesezeichen",
+      "empty": "Noch keine Lesezeichen. Mit dem Stern fügst du die aktuelle Seite hinzu.",
+      "removeItem": "Aus Lesezeichen entfernen",
+      "failed": "Lesezeichen konnten nicht aktualisiert werden. Versuche es erneut."
     }
   },
   "showChat": "Chat anzeigen",

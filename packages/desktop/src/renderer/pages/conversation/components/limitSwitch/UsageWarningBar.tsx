@@ -10,10 +10,13 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RateLimitWindowKind } from '@/common/adapter/ipcBridge';
 import LimitSwitchActions from './LimitSwitchActions';
+import { useMessageList } from '@/renderer/pages/conversation/Messages/hooks';
 import {
   dismissUsageWarning,
+  failedMessageKey,
   formatResetTime,
   isUsageWarningDismissed,
+  latestSwitchableError,
   pickUsageWarning,
   usageWarningKeys,
 } from './usageWarning';
@@ -31,15 +34,62 @@ const WINDOW_KEYS: Record<RateLimitWindowKind, string> = {
   overage: 'overage',
 };
 
+/** The bar's frame: a message, a dismiss button and the switch choices. */
+const SwitchBar: React.FC<{
+  conversationId: string;
+  text: string;
+  reason: 'limitHit' | 'nearLimit';
+  onDismiss: () => void;
+}> = ({ conversationId, text, reason, onDismiss }) => {
+  const { t } = useTranslation();
+  return (
+    // Unfolds when it appears (motion-reveal-rows), so the send box and the messages above it ease up instead of
+    // jumping.
+    <div className='motion-reveal-rows' role='status'>
+      <div className='mb-6px flex flex-col gap-6px rounded-8px px-10px py-8px text-12px bg-warning-light-1 text-t-primary'>
+        <div className='flex items-start justify-between gap-8px'>
+          <span>{text}</span>
+          <Button
+            size='mini'
+            type='text'
+            aria-label={t(`${PREFIX}.dismiss`)}
+            icon={<Close theme='outline' size='12' />}
+            onClick={onDismiss}
+          />
+        </div>
+        <LimitSwitchActions conversationId={conversationId} reason={reason} />
+      </div>
+    </div>
+  );
+};
+
 /**
- * Warns above the send box when the agent reports its plan usage is near a limit, and offers the same
- * "switch and continue" choices as the limit-error card. Dismissing hides it until the window resets or the usage
- * crosses the next bucket.
+ * Above the send box, the "switch and continue" choices: when the chat's latest message is an error a switch fixes
+ * (a limit hit or a model error; it pops up again for each new one, whatever was dismissed at 90%), else when the
+ * agent reports its plan usage is near a limit. Dismissing the near-limit warning hides it until the window resets or
+ * the usage crosses the next bucket.
  */
 const UsageWarningBar: React.FC<{ conversationId: string }> = ({ conversationId }) => {
   const { t, i18n } = useTranslation();
   const info = useRateLimitInfo(conversationId);
   const [, setDismissals] = useState(0);
+  const failedId = latestSwitchableError(useMessageList());
+  if (failedId) {
+    const key = failedMessageKey(conversationId, failedId);
+    if (!isUsageWarningDismissed([key])) {
+      return (
+        <SwitchBar
+          conversationId={conversationId}
+          text={t(`${PREFIX}.limitHit`)}
+          reason='limitHit'
+          onDismiss={() => {
+            dismissUsageWarning([key]);
+            setDismissals((n) => n + 1);
+          }}
+        />
+      );
+    }
+  }
   const warning = info ? pickUsageWarning(info) : null;
   if (!warning) return null;
   const keys = usageWarningKeys(conversationId, warning);
@@ -56,26 +106,15 @@ const UsageWarningBar: React.FC<{ conversationId: string }> = ({ conversationId 
       : t(`${PREFIX}.resets`, { time: formatResetTime(warning.resetsAt, i18n.language) });
 
   return (
-    // Unfolds when a reading arrives (motion-reveal-rows), so the send box and the messages above it ease up instead
-    // of jumping.
-    <div className='motion-reveal-rows' role='status'>
-      <div className='mb-6px flex flex-col gap-6px rounded-8px px-10px py-8px text-12px bg-warning-light-1 text-t-primary'>
-        <div className='flex items-start justify-between gap-8px'>
-          <span>{resets ? `${usage} · ${resets}` : usage}</span>
-          <Button
-            size='mini'
-            type='text'
-            aria-label={t(`${PREFIX}.dismiss`)}
-            icon={<Close theme='outline' size='12' />}
-            onClick={() => {
-              dismissUsageWarning(keys);
-              setDismissals((n) => n + 1);
-            }}
-          />
-        </div>
-        <LimitSwitchActions conversationId={conversationId} reason='nearLimit' />
-      </div>
-    </div>
+    <SwitchBar
+      conversationId={conversationId}
+      text={resets ? `${usage} · ${resets}` : usage}
+      reason='nearLimit'
+      onDismiss={() => {
+        dismissUsageWarning(keys);
+        setDismissals((n) => n + 1);
+      }}
+    />
   );
 };
 

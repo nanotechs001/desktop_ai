@@ -560,7 +560,8 @@
       "sevenDayOverageIncluded": "هفتگی Fable",
       "overage": "استفادهٔ اضافی",
       "unknown": "استفاده"
-    }
+    },
+    "limitHit": "این هوش مصنوعی فعلاً نمی‌تواند ادامه دهد (به سقف رسیده یا مدلش خطا داده). برای ادامه، تغییر دهید:"
   },
   "subscriptionUsage": {
     "title": "مصرف {{engine}}",

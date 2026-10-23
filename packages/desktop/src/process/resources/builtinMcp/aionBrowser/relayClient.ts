@@ -158,6 +158,17 @@ export class RelayClient {
     }));
   }
 
+  /** The user's bookmarks (title and address), read-only. */
+  async listBookmarks(): Promise<Array<{ title: string; url: string }>> {
+    const conn = await this.ensureConnected();
+    const { bookmarks } = await conn.send<{ bookmarks?: unknown }>('AionRelay.listBookmarks');
+    if (!Array.isArray(bookmarks)) return [];
+    return bookmarks
+      .filter((b): b is Record<string, unknown> => typeof b === 'object' && b !== null)
+      .filter((b) => typeof b.title === 'string' && typeof b.url === 'string')
+      .map((b) => ({ title: b.title as string, url: b.url as string }));
+  }
+
   /** Marks the shared tabs in `tabs` as seen, so only a tab the user shares later takes over the current tab. */
   noteShared(tabs: TabSummary[]): void {
     for (const tab of tabs) if (tab.owner === 'shared') this.knownShared.add(tab.tab);

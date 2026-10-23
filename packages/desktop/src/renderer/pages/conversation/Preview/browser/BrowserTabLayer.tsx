@@ -218,6 +218,11 @@ const BrowserTabLayer: React.FC = () => {
     [updateTab]
   );
   const handleTitleChange = useCallback((tabId: string, title: string) => updateTab?.(tabId, { title }), [updateTab]);
+  // The tab strip's bot icon: on the tab the bot works in right now.
+  const handleAgentWorkingChange = useCallback(
+    (tabId: string, agentActive: boolean) => updateTab?.(tabId, { metadata: { agentActive } }),
+    [updateTab]
+  );
   const handleFaviconChange = useCallback(
     (tabId: string, favicon: string) => updateTab?.(tabId, { metadata: { favicon } }),
     [updateTab]
@@ -348,6 +353,7 @@ const BrowserTabLayer: React.FC = () => {
               agentOwnedHint={Boolean(tab.metadata?.agentOwned)}
               pinned={tab.metadata?.pinned === true}
               onAgentAction={followAgent.onAgentAction}
+              onAgentWorkingChange={handleAgentWorkingChange}
               onUserInput={followAgent.onUserInput}
               active={shown}
             />

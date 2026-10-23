@@ -79,6 +79,7 @@ vi.mock('@/renderer/pages/conversation/components/limitSwitch/switchAndContinue'
 }));
 
 import UsageWarningBar from '@/renderer/pages/conversation/components/limitSwitch/UsageWarningBar';
+import { MessageListProvider } from '@/renderer/pages/conversation/Messages/hooks';
 
 const engine = (id: string) => ({
   id,
@@ -220,6 +221,44 @@ describe('UsageWarningBar', () => {
         }),
       })
     );
+  });
+
+  // The 90% warning was dismissed (or never came: only some engines report usage) and then the model failed: the switch
+  // choices pop up again for that error. A dismissal covers that error only; the next one shows them again.
+  it('pops up again with the switch buttons when the chat ends in a limit or model error', async () => {
+    withAlternatives('c-failed');
+    const failed = (id: string) => ({
+      id,
+      type: 'tips',
+      position: 'center',
+      conversation_id: 'c-failed',
+      content: {
+        type: 'error',
+        content: "You've hit your session limit",
+        error: { message: 'limit', code: 'USER_LLM_PROVIDER_USAGE_LIMITED', resolution: { kind: 'switch_engine' } },
+      },
+    });
+    const renderWith = (messages: unknown[]) =>
+      render(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <MemoryRouter initialEntries={['/conversation/c-failed']}>
+            <MessageListProvider value={messages as never}>
+              <UsageWarningBar conversationId='c-failed' />
+            </MessageListProvider>
+          </MemoryRouter>
+        </SWRConfig>
+      );
+
+    const first = renderWith([failed('e1')]);
+    expect(screen.getByRole('status')).toHaveTextContent(translate('conversation.usageWarning.limitHit'));
+    expect(await screen.findByRole('button', { name: 'Engine codex' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: translate('conversation.usageWarning.dismiss') }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    first.unmount();
+
+    renderWith([failed('e1'), failed('e2')]);
+    expect(screen.getByRole('status')).toHaveTextContent(translate('conversation.usageWarning.limitHit'));
   });
 
   it('shows the backup notice with a Settings button when there is nothing to switch to', async () => {

@@ -12,7 +12,7 @@ import { DEFAULT_AGENT_ID } from '@/common/types/agent/defaultAgent';
 import type { AgentActionEvent, BrowserTabProfile, ConfirmRequest } from '@/common/types/browser';
 import { sanitizePageText } from '@/common/utils/utils';
 import { webOriginOf } from '../confirmGate';
-import { isAgentNavigableUrl } from './agentUrl';
+import { isAgentNavigableUrl, isSamePage, isSameSite } from './agentUrl';
 import { createDebuggerSessions, type DebuggerSessions, type RelayEvent, type SessionInfo } from './debuggerSessions';
 import {
   FRAME_GONE,
@@ -62,6 +62,8 @@ export type RelayServerDeps = {
   resolveProfile(conversationId: string | undefined): Promise<ProfileLookup>;
   /** Asks the pane to close a browser tab (ipcBridge.browser.closeTabRequested). */
   closeTab(webContentsId: number): void;
+  /** The user's bookmarks, which agents may read (AionRelay.listBookmarks); none when absent. */
+  listBookmarks?(): ReadonlyArray<{ url: string; title: string }>;
   /** An agent's tab was claimed for it (Target.createTarget, or its bot's new chat took it over), e.g. for the tab cap. */
   onAgentTab?(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
@@ -300,8 +302,29 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     );
   };
 
+  /** The page an agent last asked each tab to load (create or Page.navigate), so a redirected tab is still known. */
+  const requestedUrls = new Map<number, string>();
+
+  /**
+   * A tab this client may use that already shows `url`, or that it asked for `url` and a redirect moved on the same
+   * site (a tab a link later took to another site no longer counts). The user's shared tab is preferred.
+   */
+  const tabShowing = (conn: Connection, url: string): number | null => {
+    const found = registry.listTargets().flatMap(({ targetId, url: shown }) => {
+      const id = webContentsIdFromTargetId(targetId);
+      const tab = id === null ? null : registry.ownership(id);
+      if (id === null || !mayAct(tab, conn.client)) return [];
+      const requested = requestedUrls.get(id);
+      const redirected = requested !== undefined && isSamePage(requested, url) && isSameSite(shown, url);
+      if (!isSamePage(shown, url) && !redirected) return [];
+      return [{ id, shared: tab?.owner === 'user' || tab?.owner.clientId !== conn.client.clientId }];
+    });
+    return (found.find((tab) => tab.shared) ?? found[0])?.id ?? null;
+  };
+
   const createTarget = async (conn: Connection, params: Params): Promise<Params> => {
-    await refreshProfile(conn);
+    // As before listing: the bot's idle tabs become this chat's, so a page one of them shows is found below.
+    await refreshForListing(conn);
     const { client } = conn;
     // Only the url comes from the agent; any profile-like field in its params is ignored.
     const { profile } = client;
@@ -311,6 +334,12 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
       throw new Error(
         'Target.createTarget only accepts web urls outside link-local, metadata and app-internal addresses'
       );
+    }
+    // The page is already open in a tab it may use: that tab, not a second one (and no tab cap or rate limit spent).
+    const open = tabShowing(conn, url);
+    if (open !== null) {
+      registry.touch(open, conn.conversationId);
+      return { targetId: targetIdFor(open) };
     }
     const owned = registry.all().filter((t) => t.owner !== 'user' && t.owner.clientId === client.clientId).length;
     if (owned + conn.pendingCreates >= limits.maxTabsPerClient) {
@@ -335,6 +364,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     }
     registry.track(contents, profile);
     registry.claim(contents.id, { ...client, conversationId: conn.conversationId });
+    requestedUrls.set(contents.id, url);
+    contents.once('destroyed', () => requestedUrls.delete(contents.id));
     // The client may have gone while the tab opened; it must not stay claimable under its label.
     if (!connections.has(client.clientId)) registry.releaseClient(client.clientId);
     deps.onAgentTab?.(contents.id);
@@ -646,6 +677,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         return {}; // The relay always auto-attaches OOPIFs itself.
       case 'AionRelay.listTabs':
         return listTabs(conn);
+      case 'AionRelay.listBookmarks':
+        return { bookmarks: (deps.listBookmarks?.() ?? []).map(({ title, url }) => ({ title, url })) };
       case 'AionRelay.reportAction':
         return reportAction(conn, params);
       case 'AionRelay.requestConfirm':
@@ -678,6 +711,7 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
     if (decision.allow === false) throw new Error(decision.message);
     registry.touch(webContentsId, conn.conversationId);
     if (method === 'Page.reload') return reload(session, params);
+    if (method === 'Page.navigate' && typeof params.url === 'string') requestedUrls.set(webContentsId, params.url);
     const agentKey = agentKeyOf(method, params);
     const endKey = agentKey ? registry.beginAgentKey(webContentsId, agentKey) : null;
     try {

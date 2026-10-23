@@ -166,5 +166,21 @@
   "selectedSkills": "Ausgewählte Skills",
   "searchPlaceholder": "Search",
   "recentFolders": "Zuletzt",
-  "chooseDifferentFolder": "Anderen Ordner wählen"
+  "chooseDifferentFolder": "Anderen Ordner wählen",
+  "reminders": {
+    "title": "Erinnerungen",
+    "newPlaceholder": "Erinnere mich an…",
+    "inAnHour": "In 1 Stunde",
+    "add": "Hinzufügen",
+    "done": "Erledigt",
+    "snooze": "Schlummern",
+    "snooze10m": "10 Minuten",
+    "snooze1h": "1 Stunde",
+    "snoozeTomorrow": "Morgen 9:00",
+    "move": "Datum ändern",
+    "due": "Jetzt fällig",
+    "dueCount": "{{count}} Erinnerung(en) fällig",
+    "empty": "Keine Erinnerungen. Füge oben eine hinzu oder bitte einen Agenten, dich zu erinnern.",
+    "failed": "Die Erinnerung konnte nicht aktualisiert werden. Versuche es erneut."
+  }
 }
