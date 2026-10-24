@@ -37,15 +37,52 @@ export function toChromeUserAgent(electronUa: string): string {
 /** Google's own sites, where its sign-in must see the Electron token (see {@link toBrowserUserAgent}). */
 const ELECTRON_TOKEN_SITES = ['google.com', 'youtube.com'];
 
-/** Whether pages and requests at `url` keep the Electron token: Google's and YouTube's own hosts only. */
-export function keepsElectronToken(url: string): boolean {
-  let host: string;
+/**
+ * Hosts Cloudflare challenged under the plain-Chrome agent. Its bot check sees the browser is not the Chrome the
+ * agent claims and keeps answering "Just a moment..." (clicking "Verify you are human" loops); Electron's own agent
+ * passes. Kept for this run: a host's first challenge after a restart switches it again.
+ */
+const challengedHosts = new Set<string>();
+
+const hostOf = (url: string): string | null => {
   try {
-    host = new URL(url).hostname.toLowerCase();
+    return new URL(url).hostname.toLowerCase();
   } catch {
-    return false;
+    return null;
   }
-  return ELECTRON_TOKEN_SITES.some((site) => host === site || host.endsWith(`.${site}`));
+};
+
+/** Whether pages and requests at `url` keep the Electron token: Google's and YouTube's hosts, and challenged ones. */
+export function keepsElectronToken(url: string): boolean {
+  const host = hostOf(url);
+  if (host === null) return false;
+  return challengedHosts.has(host) || ELECTRON_TOKEN_SITES.some((site) => host === site || host.endsWith(`.${site}`));
+}
+
+/** Cloudflare marks its challenge page with `cf-mitigated: challenge` (any header case). */
+const isCloudflareChallenge = (headers: Record<string, string[]> | undefined): boolean =>
+  Object.entries(headers ?? {}).some(
+    ([name, values]) => name.toLowerCase() === 'cf-mitigated' && values.some((v) => v.toLowerCase() === 'challenge')
+  );
+
+/**
+ * When Cloudflare challenges a page load, its host gets Electron's own agent from then on and the tab loads it again
+ * (once per host: a challenge that remains is the user's own check, not a loop). `reload` loads the url in the tab;
+ * its browser-started load switches the tab's agent (see {@link installSiteUserAgent}).
+ */
+export function installChallengeFallback(
+  session: Electron.Session,
+  reload: (webContentsId: number, url: string) => void
+): void {
+  session.webRequest.onHeadersReceived((details, callback) => {
+    callback({});
+    if (details.resourceType !== 'mainFrame' || !isCloudflareChallenge(details.responseHeaders)) return;
+    const host = hostOf(details.url);
+    if (host === null || challengedHosts.has(host) || keepsElectronToken(details.url)) return;
+    challengedHosts.add(host);
+    console.warn(`[BrowserSession] Cloudflare challenged ${host}; using the browser's own agent there`);
+    if (details.webContentsId !== undefined) reload(details.webContentsId, details.url);
+  });
 }
 
 /** The user agent for a page or request at `url`: Electron's for Google, plain Chrome everywhere else. */

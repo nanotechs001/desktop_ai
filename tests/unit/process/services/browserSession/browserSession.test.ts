@@ -15,10 +15,14 @@ type StubContents = {
 };
 
 const mocks = vi.hoisted(() => {
-  const browserSession = { setUserAgent: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() }, storagePath: '/u/p' };
+  const browserSession = {
+    setUserAgent: vi.fn(),
+    webRequest: { onBeforeSendHeaders: vi.fn(), onHeadersReceived: vi.fn() },
+    storagePath: '/u/p',
+  };
   const agentSession = {
     setUserAgent: vi.fn(),
-    webRequest: { onBeforeSendHeaders: vi.fn() },
+    webRequest: { onBeforeSendHeaders: vi.fn(), onHeadersReceived: vi.fn() },
     storagePath: '/u/Partitions/aionui-agent-x',
   };
   return {

@@ -19,7 +19,12 @@ import {
   rememberBrowserSession,
 } from './profiles/browserProfiles';
 import { installBrowserShortcuts } from './shortcuts';
-import { installRequestUserAgent, installSiteUserAgent, toBrowserUserAgent } from './userAgent';
+import {
+  installChallengeFallback,
+  installRequestUserAgent,
+  installSiteUserAgent,
+  toBrowserUserAgent,
+} from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
 
 export type BrowserSessionDeps = { getMainWindow: () => Electron.BrowserWindow | null };
@@ -119,6 +124,13 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   rememberBrowserSession(partition, browserSession);
   browserSession.setUserAgent(toBrowserUserAgent(app.userAgentFallback));
   installRequestUserAgent(browserSession, app.userAgentFallback);
+  installChallengeFallback(browserSession, (webContentsId, url) => {
+    // Deferred a tick: loading from inside the response's own handling would race it.
+    setImmediate(() => {
+      const contents = webContents.fromId(webContentsId);
+      if (contents && !contents.isDestroyed()) contents.loadURL(url).catch(() => {});
+    });
+  });
   installDownloads(browserSession);
   installPermissions(browserSession, partition);
   extensionsSettled.set(partition, startExtensions(partition, browserSession, deps));

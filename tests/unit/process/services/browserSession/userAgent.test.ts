@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import {
+  installChallengeFallback,
   installRequestUserAgent,
   installSiteUserAgent,
   keepsElectronToken,
@@ -253,5 +254,58 @@ describe('installRequestUserAgent', () => {
     expect(send('https://www.gstatic.com/x.js', 'script', { 'User-Agent': 'tab agent' })).toEqual({
       'User-Agent': 'tab agent',
     });
+  });
+});
+
+// Cloudflare answers the plain-Chrome agent with an endless "Just a moment..." (403, cf-mitigated: challenge) because
+// the browser is not Chrome; Electron's own agent passes (measured on identity.wpengine.com).
+describe('installChallengeFallback', () => {
+  type HeadersListener = (
+    details: {
+      url: string;
+      resourceType: string;
+      statusCode: number;
+      webContentsId?: number;
+      responseHeaders?: Record<string, string[]>;
+    },
+    callback: (response: Record<string, never>) => void
+  ) => void;
+  const setup = () => {
+    let listener: HeadersListener | null = null;
+    const session = { webRequest: { onHeadersReceived: vi.fn((fn: HeadersListener) => (listener = fn)) } };
+    const reload = vi.fn();
+    installChallengeFallback(session as never, reload);
+    const respond = (
+      url: string,
+      statusCode: number,
+      headers: Record<string, string[]>,
+      resourceType = 'mainFrame'
+    ) => {
+      const callback = vi.fn();
+      listener!({ url, resourceType, statusCode, webContentsId: 9, responseHeaders: headers }, callback);
+      expect(callback).toHaveBeenCalledWith({});
+    };
+    return { reload, respond };
+  };
+
+  it("gives a site that Cloudflare challenges Electron's own agent and reloads the tab, once", () => {
+    const { reload, respond } = setup();
+    const url = 'https://challenged.example.net/oauth2/authorize?x=1';
+    expect(userAgentFor(url, ELECTRON_UA)).toBe(CHROME_UA);
+
+    respond(url, 403, { 'CF-Mitigated': ['challenge'], Server: ['cloudflare'] });
+
+    expect(userAgentFor(url, ELECTRON_UA)).toBe(toBrowserUserAgent(ELECTRON_UA));
+    expect(reload).toHaveBeenCalledWith(9, url);
+    respond(url, 403, { 'cf-mitigated': ['challenge'] }); // still challenged: the user's own check, no reload loop
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores responses that are no challenge, and challenges outside the page itself', () => {
+    const { reload, respond } = setup();
+    respond('https://plain.example.org/', 200, { server: ['cloudflare'] });
+    respond('https://frame.example.org/', 403, { 'cf-mitigated': ['challenge'] }, 'subFrame');
+    expect(reload).not.toHaveBeenCalled();
+    expect(userAgentFor('https://plain.example.org/', ELECTRON_UA)).toBe(CHROME_UA);
   });
 });
