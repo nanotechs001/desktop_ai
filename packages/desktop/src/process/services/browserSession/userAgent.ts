@@ -59,6 +59,9 @@ export function keepsElectronToken(url: string): boolean {
   return challengedHosts.has(host) || ELECTRON_TOKEN_SITES.some((site) => host === site || host.endsWith(`.${site}`));
 }
 
+/** Repeated challenges of one host after the switch that are reported for diagnosis. */
+const MAX_REPORTED_REPEATS = 5;
+
 /** Cloudflare marks its challenge page with `cf-mitigated: challenge` (any header case). */
 const isCloudflareChallenge = (headers: Record<string, string[]> | undefined): boolean =>
   Object.entries(headers ?? {}).some(
@@ -72,13 +75,25 @@ const isCloudflareChallenge = (headers: Record<string, string[]> | undefined): b
  */
 export function installChallengeFallback(
   session: Electron.Session,
-  reload: (webContentsId: number, url: string) => void
+  reload: (webContentsId: number, url: string) => void,
+  stillChallenged?: (webContentsId: number, url: string, repeat: number) => void
 ): void {
+  // Repeats per host after the switch, reported the first few times (diagnostics; the loop is the user's to judge).
+  const repeats = new Map<string, number>();
   session.webRequest.onHeadersReceived((details, callback) => {
     callback({});
     if (details.resourceType !== 'mainFrame' || !isCloudflareChallenge(details.responseHeaders)) return;
     const host = hostOf(details.url);
-    if (host === null || challengedHosts.has(host) || keepsElectronToken(details.url)) return;
+    if (host === null) return;
+    if (challengedHosts.has(host)) {
+      const repeat = (repeats.get(host) ?? 0) + 1;
+      repeats.set(host, repeat);
+      if (repeat <= MAX_REPORTED_REPEATS && details.webContentsId !== undefined) {
+        stillChallenged?.(details.webContentsId, details.url, repeat);
+      }
+      return;
+    }
+    if (keepsElectronToken(details.url)) return;
     challengedHosts.add(host);
     console.warn(`[BrowserSession] Cloudflare challenged ${host}; using the browser's own agent there`);
     if (details.webContentsId !== undefined) reload(details.webContentsId, details.url);

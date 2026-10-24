@@ -274,7 +274,8 @@ describe('installChallengeFallback', () => {
     let listener: HeadersListener | null = null;
     const session = { webRequest: { onHeadersReceived: vi.fn((fn: HeadersListener) => (listener = fn)) } };
     const reload = vi.fn();
-    installChallengeFallback(session as never, reload);
+    const stillChallenged = vi.fn();
+    installChallengeFallback(session as never, reload, stillChallenged);
     const respond = (
       url: string,
       statusCode: number,
@@ -285,7 +286,7 @@ describe('installChallengeFallback', () => {
       listener!({ url, resourceType, statusCode, webContentsId: 9, responseHeaders: headers }, callback);
       expect(callback).toHaveBeenCalledWith({});
     };
-    return { reload, respond };
+    return { reload, respond, stillChallenged };
   };
 
   it("gives a site that Cloudflare challenges Electron's own agent and reloads the tab, once", () => {
@@ -299,6 +300,20 @@ describe('installChallengeFallback', () => {
     expect(reload).toHaveBeenCalledWith(9, url);
     respond(url, 403, { 'cf-mitigated': ['challenge'] }); // still challenged: the user's own check, no reload loop
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // The Windows loop: the user passes the check, the page reloads, Cloudflare challenges again. Each repeat is
+  // reported (a few times per host) so the app can log why: the clearance cookie, the tab's agent.
+  it('reports a host Cloudflare keeps challenging after the switch, a few times at most', () => {
+    const { respond, stillChallenged } = setup();
+    const url = 'https://again.example.net/login';
+    respond(url, 403, { 'cf-mitigated': ['challenge'] });
+    expect(stillChallenged).not.toHaveBeenCalled();
+
+    for (let i = 0; i < 8; i += 1) respond(url, 403, { 'cf-mitigated': ['challenge'] });
+
+    expect(stillChallenged).toHaveBeenCalledWith(9, url, 1);
+    expect(stillChallenged).toHaveBeenCalledTimes(5);
   });
 
   it('ignores responses that are no challenge, and challenges outside the page itself', () => {

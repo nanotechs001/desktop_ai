@@ -24,6 +24,7 @@ import {
   installRequestUserAgent,
   installSiteUserAgent,
   toBrowserUserAgent,
+  userAgentFor,
 } from './userAgent';
 import { installBeforeUnloadDialog, installWindowOpenHandler } from './windowOpen';
 
@@ -124,13 +125,17 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   rememberBrowserSession(partition, browserSession);
   browserSession.setUserAgent(toBrowserUserAgent(app.userAgentFallback));
   installRequestUserAgent(browserSession, app.userAgentFallback);
-  installChallengeFallback(browserSession, (webContentsId, url) => {
-    // Deferred a tick: loading from inside the response's own handling would race it.
-    setImmediate(() => {
-      const contents = webContents.fromId(webContentsId);
-      if (contents && !contents.isDestroyed()) contents.loadURL(url).catch(() => {});
-    });
-  });
+  installChallengeFallback(
+    browserSession,
+    (webContentsId, url) => {
+      // Deferred a tick: loading from inside the response's own handling would race it.
+      setImmediate(() => {
+        const contents = webContents.fromId(webContentsId);
+        if (contents && !contents.isDestroyed()) contents.loadURL(url).catch(() => {});
+      });
+    },
+    (webContentsId, url, repeat) => void logStillChallenged(browserSession, webContentsId, url, repeat)
+  );
   installDownloads(browserSession);
   installPermissions(browserSession, partition);
   extensionsSettled.set(partition, startExtensions(partition, browserSession, deps));
@@ -198,6 +203,28 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
       }
     }
   });
+}
+
+/**
+ * Why Cloudflare keeps challenging a site after the switch to the browser's own agent: whether its clearance cookie
+ * was kept, and whether the tab's agent is the one its requests carry (the clearance is tied to it). Cookie names and
+ * counts only, never values.
+ */
+async function logStillChallenged(
+  browserSession: Electron.Session,
+  webContentsId: number,
+  url: string,
+  repeat: number
+): Promise<void> {
+  const cookies = await browserSession.cookies.get({ url }).catch((): Electron.Cookie[] => []);
+  const tabAgent = webContents.fromId(webContentsId)?.getUserAgent();
+  const sentAgent = userAgentFor(url, app.userAgentFallback);
+  console.warn(
+    `[BrowserSession] Cloudflare challenged ${new URL(url).hostname} again (#${repeat}): ` +
+      `cf_clearance ${cookies.some((c) => c.name === 'cf_clearance') ? 'present' : 'missing'}, ` +
+      `${cookies.length} cookie(s) for the page, tab agent ${tabAgent === sentAgent ? 'matches' : `differs (${tabAgent})`}, ` +
+      `sent agent ${sentAgent}`
+  );
 }
 
 /** Open tabs/popups per regular-chat temporary partition. */
