@@ -48,37 +48,13 @@ describe('TitlebarNav', () => {
     layout.value = null;
   });
 
-  it('leaves New chat, history and scheduled to the open sidebar', () => {
-    layout.value = { isMobile: false, siderCollapsed: false };
+  // History, Scheduled and New chat live in the sidebar (its rail on the left); the bell sits right after search.
+  it.each([
+    { state: 'open', siderCollapsed: false },
+    { state: 'an icon rail', siderCollapsed: true },
+  ])('shows search, the reminders bell, VA Bots and Settings while the sidebar is $state', ({ siderCollapsed }) => {
+    layout.value = { isMobile: false, siderCollapsed };
     renderNav();
-    expect(buttonLabels()).toEqual(['search', 'settings.assistants', 'common.settings', 'reminders']);
-  });
-
-  it('brings them back while the sidebar is an icon rail', () => {
-    layout.value = { isMobile: false, siderCollapsed: true };
-    renderNav();
-    expect(buttonLabels()).toContain('conversation.history.chatHistory');
-    expect(buttonLabels()).toContain('conversation.welcome.newConversation');
-  });
-
-  it('puts New chat first, the leading controls next, VA Bots before history, and the reminders bell last', () => {
-    render(
-      <div data-testid='bar'>
-        <TitlebarNav buttonClassName='nav' iconSize={18} leading={<button type='button' aria-label='search' />} />
-      </div>
-    );
-
-    const labels = Array.from(screen.getByTestId('bar').querySelectorAll('[aria-label]'))
-      .filter((node) => node.tagName === 'BUTTON')
-      .map((node) => node.getAttribute('aria-label'));
-    expect(labels).toEqual([
-      'conversation.welcome.newConversation',
-      'search',
-      'settings.assistants',
-      'conversation.history.chatHistory',
-      'cron.scheduledTasks',
-      'common.settings',
-      'reminders',
-    ]);
+    expect(buttonLabels()).toEqual(['search', 'reminders', 'settings.assistants', 'common.settings']);
   });
 });

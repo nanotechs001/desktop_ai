@@ -221,7 +221,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleArtifactsClick}
             />
-            {/* The main agent's chats; the rail has no room for them (the titlebar history covers it). */}
+            {/* The main agent's chats; the rail has no room for them (open the sidebar, or use the titlebar search). */}
             {!collapsed && (
               <div className='flex-1 min-h-0 mt-4px -mx-8px'>
                 <HistoryPanelBody

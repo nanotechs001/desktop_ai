@@ -33,7 +33,7 @@ interface TitlebarProps {
 // ArrowLeft/ArrowRight (which span y=12..36) so the sidebar icon reads a
 // touch larger. The rect remains centered at y=24, matching the arrows'
 // centerline so all three icons stay on the same visual baseline.
-const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size = 18, strokeWidth = 4 }) => (
+export const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size = 18, strokeWidth = 4 }) => (
   <svg
     width={size}
     height={size}
@@ -102,9 +102,9 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // Desktop uses slimmer strokes to match macOS-native chrome aesthetics;
   // mobile keeps the default weight so icons stay legible at larger sizes.
   const desktopIconStroke = layout?.isMobile ? undefined : 2.5;
-  // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
-  // Desktop has the sider on every route, so the toggle shows everywhere.
-  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && (!layout?.isMobile || !isSettingsRoute);
+  // Desktop keeps the toggle in the sidebar itself (above New chat); only the Settings sidebar, which has no such
+  // row, keeps it here. Mobile keeps it here outside Settings.
+  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && (layout?.isMobile ? !isSettingsRoute : isSettingsRoute);
   // The open desktop sider has its own chat search.
   const showChatSearch = Boolean(layout?.isMobile || layout?.siderCollapsed !== false);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);

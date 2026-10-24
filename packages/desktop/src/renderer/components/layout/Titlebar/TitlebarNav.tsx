@@ -4,17 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useId, useState } from 'react';
+import React, { useId } from 'react';
 import { Button } from '@arco-design/web-react';
-import { History, Message, Plus, Schedule, SettingTwo } from '@icon-park/react';
+import { SettingTwo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useRegularChatsOnly } from '@/renderer/hooks/assistant/useRegularChatsOnly';
-import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import RemindersButton from './RemindersButton';
 import RobotListButton from './RobotListButton';
-import HistoryPanel from './HistoryPanel';
 
 /** The VA Bots mark: the robot's helmet, visor and orbit ring, drawn in the toolbar's current color. */
 const HaloOrbIcon: React.FC<{ size: number }> = ({ size }) => {
@@ -47,59 +44,24 @@ const HaloOrbIcon: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
-/** icon-park's default stroke, in its 48-unit viewBox. */
-const ICON_PARK_STROKE = 4;
-
-/**
- * New chat: a speech bubble with a small plus at its top right (icon-park has no message-with-plus icon). Both parts
- * are drawn smaller than `size`, so their strokes are scaled up to keep the toolbar's line weight.
- */
-const NewChatIcon: React.FC<{ size: number; strokeWidth?: number }> = ({ size, strokeWidth = ICON_PARK_STROKE }) => {
-  const bubble = Math.round(size * 0.82);
-  const plus = Math.round(size * 0.5);
-  return (
-    <span className='relative block' style={{ width: size, height: size }} aria-hidden='true'>
-      <Message
-        theme='outline'
-        size={bubble}
-        fill='currentColor'
-        strokeWidth={(strokeWidth * size) / bubble}
-        className='absolute start-0 bottom-0 block leading-none'
-      />
-      <Plus
-        theme='outline'
-        size={plus}
-        fill='currentColor'
-        strokeWidth={(strokeWidth * size) / plus}
-        className='absolute top-0 end-0 block leading-none'
-      />
-    </span>
-  );
-};
-
 type TitlebarNavProps = {
   buttonClassName: string;
   iconSize: number;
   strokeWidth?: number;
-  /** Controls shown right after New chat (search, back and forward). */
+  /** Controls shown first (search). */
   leading?: React.ReactNode;
 };
 
 /**
- * The app's navigation, in the titlebar's top-right corner (desktop): new chat, then `leading`, VA Bots, the regular
- * chats' history, scheduled tasks and settings. Replaces the left icon bar.
+ * The app's navigation, in the titlebar's top-right corner (desktop): `leading` (search), the reminders bell, VA Bots
+ * and settings. New chat, the chat history and scheduled tasks are the sidebar's (its rail on the left).
  */
 const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, strokeWidth, leading }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { closePreview } = usePreviewContext();
-  const [historyOpen, setHistoryOpen] = useState(false);
   const isSettings = pathname.startsWith('/settings');
-  const layout = useLayoutContext();
-  // The open sidebar already holds New chat, the chat list and Scheduled.
-  const siderOpen = layout?.siderCollapsed === false && !layout.isMobile;
-  const inSider = new Set<string>(siderOpen ? ['new-chat', 'history', 'scheduled'] : []);
 
   const go = (path: string, state?: unknown) => {
     closePreview();
@@ -120,10 +82,7 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
     }
     void navigate(target.startsWith('/settings') ? '/guid' : target);
   };
-  // VA Bots keep their own conversations; this history lists the regular (default agent) chats only.
-  const regularChatsOnly = useRegularChatsOnly();
-
-  const icon = (Icon: typeof Plus) => (
+  const icon = (Icon: typeof SettingTwo) => (
     <Icon
       theme='outline'
       size={iconSize}
@@ -134,24 +93,11 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
   );
   const items: Array<{ key: string; label: string; icon: React.ReactNode; onClick: () => void }> = [
     {
-      key: 'new-chat',
-      label: t('conversation.welcome.newConversation'),
-      icon: <NewChatIcon size={iconSize} strokeWidth={strokeWidth} />,
-      onClick: () => go('/guid', { resetAssistant: true }),
-    },
-    {
       key: 'assistants',
       label: t('settings.assistants'),
       icon: <HaloOrbIcon size={iconSize} />,
       onClick: () => go('/assistants'),
     },
-    {
-      key: 'history',
-      label: t('conversation.history.chatHistory'),
-      icon: icon(History),
-      onClick: () => setHistoryOpen(true),
-    },
-    { key: 'scheduled', label: t('cron.scheduledTasks'), icon: icon(Schedule), onClick: () => go('/scheduled') },
     {
       key: 'settings',
       label: isSettings ? t('common.back') : t('common.settings'),
@@ -183,23 +129,11 @@ const TitlebarNav: React.FC<TitlebarNavProps> = ({ buttonClassName, iconSize, st
       />
     );
 
-  const visible = items.filter((item) => !inSider.has(item.key));
-  const [first, ...rest] = visible;
-  // New chat, when shown, leads; the leading controls follow it.
-  const leadsWithNewChat = first?.key === 'new-chat';
   return (
     <>
-      {leadsWithNewChat && renderItem(first)}
       {leading}
-      {(leadsWithNewChat ? rest : visible).map(renderItem)}
       <RemindersButton buttonClassName={buttonClassName} iconSize={iconSize} />
-      <HistoryPanel
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        placement='right'
-        title={t('conversation.history.chatHistory')}
-        filter={regularChatsOnly}
-      />
+      {items.map(renderItem)}
     </>
   );
 };

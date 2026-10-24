@@ -61,10 +61,10 @@ describe('Titlebar chat history controls', () => {
     nav.forward.mockClear();
   });
 
-  it('shows Search and the sidebar toggle (the sider is on every route), without Back and Forward buttons', () => {
+  it('shows Search without the sidebar toggle (it sits in the sidebar, above New chat) or Back and Forward', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
-    expect(screen.getByRole('button', { name: 'common.expandMore' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'common.expandMore' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'conversation.history.searchChats' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.historyBack' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.forward' })).not.toBeInTheDocument();
