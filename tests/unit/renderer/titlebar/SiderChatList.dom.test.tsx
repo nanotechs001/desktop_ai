@@ -15,13 +15,19 @@ vi.mock('@renderer/hooks/context/AuthContext', () => ({
 vi.mock('@renderer/hooks/context/ThemeContext', () => ({
   useThemeContext: () => ({ theme: 'light', setTheme: vi.fn() }),
 }));
+const layout = vi.hoisted(() => ({ isMobile: false }));
 vi.mock('@renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false }),
+  useLayoutContext: () => layout,
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@renderer/hooks/assistant/useRegularChatsOnly', () => ({ useRegularChatsOnly: () => () => true }));
+const regularChatsOnly = vi.hoisted(() => () => true);
+vi.mock('@renderer/hooks/assistant/useRegularChatsOnly', () => ({ useRegularChatsOnly: () => regularChatsOnly }));
+const listFilter = vi.hoisted(() => ({ value: undefined as unknown }));
 vi.mock('@renderer/components/layout/Titlebar/HistoryPanel', () => ({
-  HistoryPanelBody: () => <div data-testid='sider-chat-list' />,
+  HistoryPanelBody: ({ filter }: { filter?: unknown }) => {
+    listFilter.value = filter;
+    return <div data-testid='sider-chat-list' />;
+  },
 }));
 vi.mock('@renderer/utils/ui/siderTooltip', () => ({
   cleanupSiderTooltips: vi.fn(),
@@ -50,6 +56,22 @@ describe('Sider', () => {
     expect(screen.getByTestId('sider-scheduled')).toBeInTheDocument();
     expect(screen.getByTestId('sider-entry-conversation.artifacts.title')).toBeInTheDocument();
     expect(screen.getByTestId('sider-chat-list')).toBeInTheDocument();
+  });
+
+  it('lists only the main agent chats on desktop, where VA Bots keep their own history', async () => {
+    layout.isMobile = false;
+    render(<Sider collapsed={false} />);
+    expect(await screen.findByTestId('sider-chat-list')).toBeInTheDocument();
+    expect(listFilter.value).toBe(regularChatsOnly);
+  });
+
+  // A phone has no VA Bots menu: with bot chats filtered out, a refreshed phone could not get back to one.
+  it('lists the VA Bot chats too on a phone', async () => {
+    layout.isMobile = true;
+    render(<Sider collapsed={false} />);
+    expect(await screen.findByTestId('sider-chat-list')).toBeInTheDocument();
+    expect(listFilter.value).toBeUndefined();
+    layout.isMobile = false;
   });
 
   it('keeps the icon rail to its icons, without the chat list', async () => {

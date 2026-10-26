@@ -42,11 +42,15 @@ export type StreamDeps = {
   peer: StreamPeer;
   /** The stream ended; its service forgets it. */
   onClose(): void;
+  /** Whether a text field of the tab has the focus, so the phone opens its keyboard only for one. */
+  textFieldFocused?: () => Promise<boolean>;
 };
 
 type AllowedKey = (typeof ALLOWED_KEYS)[number];
 
 const NO_FRAMES_MS = 5000;
+/** After a tap, the time its click (and the page's own handlers) take to move the focus. */
+const FOCUS_CHECK_MS = 200;
 const TAB_POLL_MS = 1000;
 const CLOSE_CODES: Record<StreamRefusal, number> = { 'tab-closed': 1001, 'not-allowed': 1008 };
 /** Without a virtual key code Chromium dispatches the key but runs no default action (no submit, no delete). */
@@ -74,7 +78,7 @@ export const viewableContents = (registry: TargetRegistry, webContentsId: number
  * out as CDP input (the agent keeps working and sees the change); it hears the tab's title and url. Ends
  * itself when the tab closes or stops being viewable. Joins the cast at once, so the cast outlives its attach.
  */
-export function createStream({ registry, cast, webContentsId, peer, onClose }: StreamDeps): Stream {
+export function createStream({ registry, cast, webContentsId, peer, onClose, textFieldFocused }: StreamDeps): Stream {
   let started = false;
   let done = false;
   /** Metadata of the frame the phone shows, for mapping its taps. */
@@ -83,6 +87,9 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
   let noFrames: NodeJS.Timeout | undefined;
   let poll: NodeJS.Timeout | undefined;
   let unsubscribe: Array<() => void> = [];
+  let focusCheck: NodeJS.Timeout | undefined;
+  /** Counts taps, so only the latest tap's focus answer reaches the phone. */
+  let taps = 0;
 
   const syncTab = (): void => {
     const target = registry.listTargets().find((t) => t.targetId === targetIdFor(webContentsId));
@@ -107,6 +114,17 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
     cast.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     cast.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...click });
     cast.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...click });
+    if (!textFieldFocused) return;
+    const thisTap = ++taps;
+    clearTimeout(focusCheck);
+    focusCheck = setTimeout(() => {
+      void textFieldFocused().then(
+        (editable) => {
+          if (!done && thisTap === taps) peer.sendText(JSON.stringify({ type: 'focus', editable }));
+        },
+        (error: unknown) => console.warn('[BrowserView] focus check failed:', error)
+      );
+    }, FOCUS_CHECK_MS);
   };
   const scroll = (nx: number, ny: number, dy: number): void => {
     if (!shown) return;
@@ -145,6 +163,7 @@ export function createStream({ registry, cast, webContentsId, peer, onClose }: S
     if (done) return;
     done = true;
     clearTimeout(noFrames);
+    clearTimeout(focusCheck);
     clearInterval(poll);
     unsubscribe.forEach((off) => off());
     cast.leave(viewer);

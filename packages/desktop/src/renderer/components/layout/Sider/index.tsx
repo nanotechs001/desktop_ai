@@ -227,7 +227,8 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                 <HistoryPanelBody
                   embedded
                   autoFocus={false}
-                  filter={regularChatsOnly}
+                  // Phones have no VA Bots menu, so their chats are listed here too (else a phone cannot get back to one).
+                  filter={isMobile ? undefined : regularChatsOnly}
                   onClose={onSessionClick ?? ignoreClose}
                 />
               </div>

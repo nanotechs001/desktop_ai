@@ -4,6 +4,7 @@ import AppLoader from '@renderer/components/layout/AppLoader';
 import DocumentTitle from '@renderer/components/layout/DocumentTitle';
 import { useCrossSessionRateLimitNotice } from '@/renderer/hooks/system/useCrossSessionRateLimitNotice';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
+import type { LoginRedirectState } from '@renderer/pages/login/returnPath';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -59,6 +60,7 @@ const CapabilitiesRedirect: React.FC = () => {
 
 const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status, user } = useAuth();
+  const { pathname, search } = useLocation();
   // Mounted once for every authenticated route: the loop warning has to reach
   // the user even when they are looking at a THIRD conversation, which is the
   // whole reason it is a broadcast rather than an in-conversation banner.
@@ -69,7 +71,9 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
   }
 
   if (status !== 'authenticated') {
-    return <Navigate to='/login' replace />;
+    // Sign-in comes back here, so a chat open when the session ran out is not lost.
+    const state: LoginRedirectState = { from: `${pathname}${search}` };
+    return <Navigate to='/login' replace state={state} />;
   }
 
   return React.cloneElement(layout);

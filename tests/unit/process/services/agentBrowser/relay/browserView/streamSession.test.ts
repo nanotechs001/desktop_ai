@@ -246,6 +246,31 @@ describe('browser view: phone input', () => {
     ]);
   });
 
+  // The phone keyboard opened on every tap; it now opens only when the tap focused a text field.
+  it('tells the phone after a tap whether a text field took the focus, in any frame', async () => {
+    const { handle, peer } = await streaming();
+    tab.frameAnswers = [false, true];
+    send(handle, { type: 'tap', nx: 0.5, ny: 0.25 });
+    expect(peer.texts).not.toContainEqual(expect.objectContaining({ type: 'focus' }));
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(peer.texts.at(-1)).toEqual({ type: 'focus', editable: true });
+
+    tab.frameAnswers = [false];
+    send(handle, { type: 'tap', nx: 0.1, ny: 0.1 });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(peer.texts.at(-1)).toEqual({ type: 'focus', editable: false });
+  });
+
+  it('answers only the latest of quick taps, and a frame that cannot answer counts as no field', async () => {
+    const { handle, peer } = await streaming();
+    tab.frameAnswers = [true];
+    send(handle, { type: 'tap', nx: 0.5, ny: 0.25 });
+    send(handle, { type: 'tap', nx: 0.5, ny: 0.3 });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(peer.texts.filter((text) => text.type === 'focus')).toEqual([{ type: 'focus', editable: true }]);
+  });
+
   it('scroll, text and key send their commands', async () => {
     const { handle } = await streaming();
     send(handle, { type: 'scroll', nx: 0.5, ny: 0.5, dy: 120 });

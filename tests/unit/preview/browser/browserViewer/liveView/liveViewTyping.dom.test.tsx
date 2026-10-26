@@ -172,7 +172,8 @@ describe('BrowserLiveView typing', () => {
     expect(document.activeElement).toBe(hiddenInput());
   });
 
-  it('a tap on the picture sends the tap, then focuses the input so the phone keyboard opens', async () => {
+  // The phone keyboard opened on every tap, also on a plain link or button.
+  it('a tap on the picture sends the tap and leaves the keyboard closed until the page focuses a text field', async () => {
     const ws = await connected();
     await showFrame(ws);
     const surface = screen.getByRole('img');
@@ -184,7 +185,19 @@ describe('BrowserLiveView typing', () => {
     act(() => vi.advanceTimersByTime(300));
 
     expect(ws.messages().filter((m) => m.type === 'tap')).toHaveLength(1);
+    expect(document.activeElement).not.toBe(hiddenInput());
+    ws.receive(JSON.stringify({ type: 'focus', editable: true }));
     expect(document.activeElement).toBe(hiddenInput());
+  });
+
+  it('closes the keyboard when a tap lands outside a text field', async () => {
+    const ws = await connected();
+    fireEvent.click(screen.getByRole('button', { name: /preview\.browser\.liveKeyboard/ }));
+    expect(document.activeElement).toBe(hiddenInput());
+
+    ws.receive(JSON.stringify({ type: 'focus', editable: false }));
+
+    expect(document.activeElement).not.toBe(hiddenInput());
   });
 
   it('the hidden input is 16px, so iOS does not zoom when it is focused', async () => {

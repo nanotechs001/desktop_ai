@@ -28,12 +28,16 @@ const STOP_CODES = new Set([1001, 1008]);
 const streamUrl = (tabId: string): string =>
   `${location.origin.replace(/^http/, 'ws')}/api/browser-view/stream?tab=${encodeURIComponent(tabId)}`;
 
-const parseTabInfo = (raw: string): LiveTabInfo | 'no-frames' | null => {
+/** After a tap: whether a text field of the tab took the focus. */
+type FocusInfo = { editable: boolean };
+
+const parseTabInfo = (raw: string): LiveTabInfo | FocusInfo | 'no-frames' | null => {
   try {
     const message: unknown = JSON.parse(raw);
     if (typeof message !== 'object' || message === null) return null;
-    const { type, title, url } = message as Record<string, unknown>;
+    const { type, title, url, editable } = message as Record<string, unknown>;
     if (type === 'no-frames') return 'no-frames';
+    if (type === 'focus') return { editable: editable === true };
     if (type !== 'tab') return null;
     return {
       title: typeof title === 'string' ? title : '',
@@ -54,17 +58,22 @@ type LiveStream = {
 
 /**
  * One phone stream of a desktop tab: `hello` on open, each frame into `imgRef` (acked once decoded, so main sends
- * the next), and reconnects with backoff unless main refused the tab. `tabId` null keeps it idle.
+ * the next), and reconnects with backoff unless main refused the tab. `tabId` null keeps it idle. `onFieldFocus`
+ * hears, after each tap, whether it focused a text field of the tab.
  */
 export const useBrowserLiveStream = (
   tabId: string | null,
   imgRef: RefObject<HTMLImageElement | null>,
-  surfaceRef: RefObject<HTMLElement | null>
+  surfaceRef: RefObject<HTMLElement | null>,
+  onFieldFocus?: (editable: boolean) => void
 ): LiveStream => {
   const [status, setStatus] = useState<LiveStatus>('connecting');
   const [tab, setTab] = useState<LiveTabInfo | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const metaRef = useRef<FrameMeta | null>(null);
+  // Read when a message arrives, so a new callback does not reconnect the stream.
+  const onFieldFocusRef = useRef(onFieldFocus);
+  onFieldFocusRef.current = onFieldFocus;
 
   const send = useCallback((message: LiveClientMessage) => {
     const socket = socketRef.current;
@@ -115,7 +124,9 @@ export const useBrowserLiveStream = (
         if (typeof event.data !== 'string') return void showFrame(socket, event.data as ArrayBuffer);
         const parsed = parseTabInfo(event.data);
         if (parsed === 'no-frames') setStatus((current) => (current === 'live' ? current : 'no-frames'));
-        else if (parsed) setTab(parsed);
+        else if (!parsed) return;
+        else if ('editable' in parsed) onFieldFocusRef.current?.(parsed.editable);
+        else setTab(parsed);
       };
       socket.onclose = (event: CloseEvent) => {
         if (disposed) return;

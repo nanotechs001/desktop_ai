@@ -43,8 +43,6 @@ type Options = {
   imgRef: RefObject<HTMLImageElement | null>;
   metaRef: RefObject<FrameMeta | null>;
   send: (message: LiveClientMessage) => void;
-  /** After a tap is sent: the page may have focused a text field. */
-  onTap: () => void;
 };
 
 type PointerHandlers = {
@@ -69,7 +67,7 @@ const midpoint = (a: ViewPoint, b: ViewPoint): ViewPoint => ({ x: (a.x + b.x) / 
  * Pointer gestures on the live picture. One finger taps (sent after the double-tap window), scrolls the page at 1x
  * and pans the picture when zoomed; two fingers pinch-zoom 1x..4x; a double-tap zooms to 2x there or back to 1x.
  */
-export const useLiveGestures = ({ surfaceRef, imgRef, metaRef, send, onTap }: Options): LiveGestures => {
+export const useLiveGestures = ({ surfaceRef, imgRef, metaRef, send }: Options): LiveGestures => {
   const [viewport, setViewportState] = useState<LiveViewport>(UNZOOMED);
   const viewportRef = useRef<LiveViewport>(UNZOOMED);
   const pointersRef = useRef(new Map<number, ViewPoint>());
@@ -120,9 +118,8 @@ export const useLiveGestures = ({ surfaceRef, imgRef, metaRef, send, onTap }: Op
       if (pendingTapRef.current === tap) pendingTapRef.current = null;
       if (!tap.target) return;
       send({ type: 'tap', nx: tap.target.nx, ny: tap.target.ny });
-      onTap();
     },
-    [onTap, send]
+    [send]
   );
 
   const endDrag = useCallback(() => {

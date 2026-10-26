@@ -2,10 +2,11 @@ import loginLogo from '@renderer/assets/logos/brand/app.png';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '../../hooks/context/AuthContext';
 import './LoginPage.css';
+import { returnPathOf } from './returnPath';
 
 type MessageState = {
   type: 'error' | 'success';
@@ -34,6 +35,7 @@ const deobfuscate = (text: string): string => {
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const returnPath = returnPathOf(useLocation().state);
   const { status, login } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -83,9 +85,9 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      void navigate('/guid', { replace: true });
+      void navigate(returnPath, { replace: true });
     }
-  }, [navigate, status]);
+  }, [navigate, returnPath, status]);
 
   const clearMessageLater = useCallback(() => {
     if (messageTimer.current) {
@@ -160,7 +162,7 @@ const LoginPage: React.FC = () => {
         showMessage({ type: 'success', text: successText });
 
         window.setTimeout(() => {
-          void navigate('/guid', { replace: true });
+          void navigate(returnPath, { replace: true });
         }, 600);
       } else {
         const errorText = (() => {
@@ -184,7 +186,7 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [login, navigate, password, rememberMe, showMessage, t, username]
+    [login, navigate, password, rememberMe, returnPath, showMessage, t, username]
   );
 
   if (status === 'checking') {

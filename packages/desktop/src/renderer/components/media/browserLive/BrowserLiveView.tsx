@@ -52,7 +52,12 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
   // The desktop marks the tab the agent acted on last; before any action, the list's last tab is its newest.
   const picked = tabs?.find((tab) => tab.id === pickedId);
   const listed = picked ?? tabs?.find((tab) => tab.active) ?? tabs?.at(-1) ?? null;
-  const { status, tab, metaRef, send } = useBrowserLiveStream(listed?.id ?? null, imgRef, surfaceRef);
+  // The keyboard opens when a tap focused a text field of the page, and closes when one lands elsewhere.
+  const onFieldFocus = useCallback((editable: boolean) => {
+    if (editable) inputRef.current?.focus();
+    else inputRef.current?.blur();
+  }, []);
+  const { status, tab, metaRef, send } = useBrowserLiveStream(listed?.id ?? null, imgRef, surfaceRef, onFieldFocus);
   const shown = tab ?? listed;
   const hasTabs = Boolean(tabs?.length);
 
@@ -68,7 +73,6 @@ const BrowserLiveView: React.FC<BrowserLiveViewProps> = ({ fallback, className, 
     imgRef,
     metaRef,
     send,
-    onTap: focusKeyboard,
   });
   // Each tab opens unzoomed.
   const listedId = listed?.id ?? null;

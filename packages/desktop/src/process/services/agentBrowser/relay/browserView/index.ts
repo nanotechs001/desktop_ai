@@ -7,6 +7,7 @@
 import type { DebuggerSessions } from '../debuggerSessions';
 import { webContentsIdFromTargetId, type RelayContents, type TargetRegistry } from '../targetRegistry';
 import { viewableTabs, type ViewTab } from './rules';
+import { textFieldFocused } from './focusedField';
 import {
   createStream,
   viewableContents,
@@ -86,7 +87,15 @@ export function createBrowserViewService({ registry, sessions, botOf }: BrowserV
       const contents = viewableContents(registry, webContentsId);
       if (typeof contents === 'string') return { error: contents };
       const cast = castFor(contents);
-      const stream = createStream({ registry, cast, webContentsId, peer, onClose: () => streams.delete(stream) });
+      const stream = createStream({
+        registry,
+        cast,
+        webContentsId,
+        peer,
+        onClose: () => streams.delete(stream),
+        textFieldFocused: () =>
+          textFieldFocused(contents.isDestroyed() ? [] : (contents.mainFrame.framesInSubtree ?? [])),
+      });
       // Tracked before the attach settles, so closeAll ends a stream that is still attaching (it refuses below).
       streams.add(stream);
       const ready = await cast.ready;

@@ -69,8 +69,14 @@ export class FakeContents extends EventEmitter {
     return this.pendingUrl ?? this.url;
   }
 
-  get mainFrame(): { url: string } {
-    return { url: this.url };
+  /** What each frame's focused-field script answers (see browserView/focusedField). */
+  frameAnswers: unknown[] = [];
+
+  get mainFrame(): { url: string; framesInSubtree: Array<{ executeJavaScript(code: string): Promise<unknown> }> } {
+    return {
+      url: this.url,
+      framesInSubtree: this.frameAnswers.map((answer) => ({ executeJavaScript: () => Promise.resolve(answer) })),
+    };
   }
 
   getTitle(): string {

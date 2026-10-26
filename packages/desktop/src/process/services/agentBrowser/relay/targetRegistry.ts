@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { ScriptFrame } from './browserView/focusedField';
 import type { BrowserTabProfile, TabOwnership } from '@/common/types/browser';
 
 /**
@@ -39,7 +40,7 @@ export type RelayContents = {
   readonly debugger: RelayDebugger;
   getURL(): string;
   /** The committed main frame; `getURL()` may already show a navigation that has not committed. */
-  readonly mainFrame: { readonly url: string };
+  readonly mainFrame: { readonly url: string; readonly framesInSubtree?: readonly ScriptFrame[] };
   getTitle(): string;
   isDestroyed(): boolean;
   reload(): void;
