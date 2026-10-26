@@ -15,6 +15,7 @@ import {
   toBrowserUserAgent,
   toChromeUserAgent,
   userAgentFor,
+  withUserAgent,
 } from '@process/services/browserSession/userAgent';
 
 const BROWSER_UA =
@@ -285,6 +286,26 @@ describe('installRequestUserAgent', () => {
     expect(
       send('https://accounts.google.com/', 'mainFrame', { 'user-agent': CHROME_UA, Accept: '*/*', 'sec-ch-ua': brands })
     ).toEqual({ 'User-Agent': toBrowserUserAgent(ELECTRON_UA), Accept: '*/*', 'sec-ch-ua': brands });
+  });
+
+  // Cloudflare fingerprints header order: User-Agent moved to the end got every pass of its check refused.
+  it('keeps every header where Chrome put it, User-Agent included', () => {
+    const send = sessionWithListener();
+    const chromeOrder = {
+      'Upgrade-Insecure-Requests': '1',
+      'User-Agent': toBrowserUserAgent(ELECTRON_UA),
+      Accept: 'text/html',
+      'Sec-Fetch-Mode': 'navigate',
+    };
+    const sent = send('https://socialadsmentor.com/wp-login.php', 'mainFrame', chromeOrder);
+    expect(Object.keys(sent)).toEqual(Object.keys(chromeOrder));
+    expect(sent['User-Agent']).toBe(CHROME_UA);
+  });
+
+  it('sends the headers untouched when the agent is already right', () => {
+    const headers = { Accept: '*/*', 'User-Agent': CHROME_UA, 'Accept-Language': 'en' };
+    expect(withUserAgent(headers, CHROME_UA)).toBe(headers);
+    expect(withUserAgent({ Accept: '*/*' }, CHROME_UA)).toEqual({ Accept: '*/*', 'User-Agent': CHROME_UA });
   });
 
   it("leaves a page's other requests on the tab's agent", () => {

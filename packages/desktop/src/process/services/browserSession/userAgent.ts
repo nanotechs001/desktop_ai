@@ -139,12 +139,23 @@ export function userAgentFor(url: string, electronUa: string): string {
 export function installRequestUserAgent(session: Electron.Session, electronUa: string): void {
   session.webRequest.onBeforeSendHeaders((details, callback) => {
     if (details.resourceType !== 'mainFrame') return callback({ requestHeaders: details.requestHeaders });
-    const requestHeaders = Object.fromEntries(
-      Object.entries(details.requestHeaders).filter(([name]) => name.toLowerCase() !== 'user-agent')
-    );
-    requestHeaders['User-Agent'] = userAgentFor(details.url, electronUa);
-    callback({ requestHeaders });
+    callback({ requestHeaders: withUserAgent(details.requestHeaders, userAgentFor(details.url, electronUa)) });
   });
+}
+
+/**
+ * `headers` sending `agent` as their user agent, every header kept where it was: untouched when the agent is already
+ * right, otherwise the value replaced in place. Cloudflare fingerprints header order, and Chrome sends User-Agent
+ * early, never last: moving it to the end made every page load look like another client than the one that passed the
+ * check, so each pass was refused and challenged again (the socialadsmentor.com loop, cf_clearance and agent matching).
+ */
+export function withUserAgent(headers: Record<string, string>, agent: string): Record<string, string> {
+  const name = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent');
+  if (name === undefined) return { ...headers, 'User-Agent': agent };
+  if (headers[name] === agent) return headers;
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => (key === name ? ['User-Agent', agent] : [key, value]))
+  );
 }
 
 /** about:blank and the like: no request goes out, and a popup's opener may be writing into it. */
