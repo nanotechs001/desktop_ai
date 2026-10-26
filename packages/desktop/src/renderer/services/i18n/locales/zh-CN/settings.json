@@ -1207,6 +1207,8 @@
       "create": "添加",
       "added": "账号已添加。登录后即可使用。",
       "signIn": "登录",
+      "notSignedIn": "未登录",
+      "signInOpened": "请在终端窗口中完成登录，然后回到这里。",
       "signInHelp": "在终端中运行以下命令，然后输入 /login 登录此账号：",
       "copy": "复制命令",
       "copied": "已复制",

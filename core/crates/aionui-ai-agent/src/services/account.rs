@@ -6,12 +6,13 @@
 //! data dir. `agent_source_info.account_of` marks it, so vendor-label lookups
 //! keep resolving the seeded row.
 
-use aionui_api_types::{AgentEnvEntry, AgentMetadata, AgentSourceInfo};
+use aionui_api_types::{AgentAccountStatus, AgentEnvEntry, AgentMetadata, AgentSourceInfo};
 use aionui_common::generate_short_id;
 use aionui_db::UpsertAgentMetadataParams;
 use tracing::{info, warn};
 
 use super::AgentService;
+use super::account_sign_in::{is_signed_in, open_sign_in_terminal};
 use crate::error::AgentError;
 
 /// Backends whose CLI keeps a separate login per config dir, and the env var naming it.
@@ -119,6 +120,68 @@ impl AgentService {
             .get_for_user(user_id, &id)
             .await?
             .ok_or_else(|| AgentError::internal(format!("Agent '{id}' not visible after upsert")))
+    }
+
+    /// Whether each of the user's engine accounts is signed in.
+    pub async fn agent_account_status(&self, user_id: &str) -> Result<Vec<AgentAccountStatus>, AgentError> {
+        let rows = self
+            .registry()
+            .repo_handle()
+            .list_all_for_user(user_id)
+            .await
+            .map_err(|e| AgentError::internal(format!("repo.list_all_for_user: {e}")))?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let info = parse_source_info(row.agent_source_info.as_deref());
+                info.account_of?;
+                let signed_in = info
+                    .account_dir
+                    .is_some_and(|dir| is_signed_in(std::path::Path::new(&dir)));
+                Some(AgentAccountStatus { id: row.id, signed_in })
+            })
+            .collect())
+    }
+
+    /// Opens a terminal running the account's CLI on its own config dir, where the user signs it in.
+    pub async fn sign_in_agent_account(&self, user_id: &str, id: &str) -> Result<(), AgentError> {
+        let row = self
+            .registry()
+            .repo_handle()
+            .get_for_user(user_id, id)
+            .await
+            .map_err(|e| AgentError::internal(format!("repo.get_for_user: {e}")))?
+            .ok_or_else(|| AgentError::not_found(format!("Agent '{id}' not found")))?;
+        let info = parse_source_info(row.agent_source_info.as_deref());
+        let env_key = ACCOUNT_CONFIG_DIR_ENV
+            .iter()
+            .find(|(backend, _)| row.backend.as_deref() == Some(*backend))
+            .map(|(_, key)| *key);
+        let (Some(_), Some(dir), Some(env_key)) = (info.account_of, info.account_dir, env_key) else {
+            return Err(AgentError::bad_request(format!(
+                "Agent '{id}' is not an engine account"
+            )));
+        };
+        // Only a dir this service made: the terminal runs a CLI there.
+        let dir = std::path::PathBuf::from(dir);
+        if !dir.starts_with(self.data_dir().join(ACCOUNTS_DIR)) {
+            return Err(AgentError::forbidden(
+                "The account's folder is outside the app's accounts folder",
+            ));
+        }
+        tokio::fs::create_dir_all(&dir)
+            .await
+            .map_err(|e| AgentError::internal(format!("create account dir: {e}")))?;
+        open_sign_in_terminal(env_key, &dir).await.map_err(|e| {
+            warn!(agent_id = %id, error = %e, "engine account sign-in terminal failed");
+            if e.kind() == std::io::ErrorKind::Unsupported {
+                AgentError::bad_request(e.to_string())
+            } else {
+                AgentError::internal(format!("open terminal: {e}"))
+            }
+        })?;
+        info!(agent_id = %id, "engine account sign-in terminal opened");
+        Ok(())
     }
 
     /// Removes an account row. Its config dir (and the login in it) is left on disk.

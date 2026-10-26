@@ -75,6 +75,13 @@ pub struct CreateAgentAccountRequest {
     pub label: String,
 }
 
+/// One row of `GET /api/agents/accounts/status`: whether that engine account's CLI is signed in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentAccountStatus {
+    pub id: String,
+    pub signed_in: bool,
+}
+
 /// Response body for `DELETE /api/agents/custom/{id}` and `DELETE /api/agents/accounts/{id}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteCustomAgentResponse {

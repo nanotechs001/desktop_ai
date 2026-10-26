@@ -18,7 +18,9 @@ import {
   buildAgentRuntimeThoughtLevelOption,
 } from '@/renderer/utils/model/agentRuntimeCatalog';
 import {
+  ENGINE_ACCOUNT_STATUS_SWR_KEY,
   ENGINE_CATALOG_SWR_KEY,
+  fetchEngineAccountSignedIn,
   fetchManagedAgentsOrThrow,
   type ManagedAgent,
 } from '@/renderer/utils/model/agentTypes';
@@ -157,6 +159,7 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
   const { data: engines } = useSWR<ManagedAgent[]>(ENGINE_CATALOG_SWR_KEY, fetchManagedAgentsOrThrow);
   const { providers, getAvailableModels } = useModelProviderList();
   const usage = useAllSubscriptionUsage();
+  const { data: signedIn } = useSWR(ENGINE_ACCOUNT_STATUS_SWR_KEY, fetchEngineAccountSignedIn);
 
   if (!conversation || !engines) return null;
 
@@ -180,6 +183,9 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
       ? t(`${PREFIX}.targetLimited`, { engine: engineName(engine) })
       : t(`${PREFIX}.targetLimitedUntil`, { engine: engineName(engine), time: formatResetTime(until, i18n.language) });
   };
+
+  // An engine account never signed in fails its first message ("Not logged in"), so it waits for Settings -> Agent.
+  const notSignedIn = (engine: ManagedAgent): boolean => signedIn?.[engine.id] === false;
 
   const run = async (target: SwitchTarget): Promise<void> => {
     if (busy) return;
@@ -235,6 +241,10 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
       </div>
       <div className='flex flex-wrap gap-6px'>
         {targets.engines.map((engine) => {
+          if (notSignedIn(engine)) {
+            const label = `${engineName(engine)} · ${t(`${PREFIX}.notSignedIn`)}`;
+            return choice(engine.id, label, t(`${PREFIX}.notSignedInTooltip`), true);
+          }
           const limited = limitedTooltip(engine);
           return choice(engine.id, engineName(engine), limited ?? tooltipFor(engine, false), limited !== null);
         })}

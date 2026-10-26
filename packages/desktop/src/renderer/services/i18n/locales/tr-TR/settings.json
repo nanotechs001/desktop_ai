@@ -1194,6 +1194,8 @@
       "create": "Ekle",
       "added": "Hesap eklendi. Kullanmak için giriş yapın.",
       "signIn": "Giriş yap",
+      "notSignedIn": "Oturum açılmadı",
+      "signInOpened": "Terminal penceresinde oturum açmayı tamamlayın, sonra buraya dönün.",
       "signInHelp": "Bunu bir terminalde çalıştırın, ardından bu hesaba giriş yapmak için /login yazın:",
       "copy": "Komutu kopyala",
       "copied": "Kopyalandı",

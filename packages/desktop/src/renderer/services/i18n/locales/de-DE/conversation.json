@@ -342,6 +342,8 @@
       "tooltipChatOnly": "Fährt in einem neuen Chat mit dieser Auswahl und dem bisherigen Gespräch fort. Sonst ändert sich nichts.",
       "targetLimited": "{{engine}} hat sein Nutzungslimit ebenfalls erreicht.",
       "targetLimitedUntil": "{{engine}} hat sein Nutzungslimit ebenfalls erreicht, bis {{time}}.",
+      "notSignedIn": "Nicht angemeldet",
+      "notSignedInTooltip": "Melde dieses Konto zuerst unter Einstellungen → Agenten an.",
       "failed": "Wechseln und Fortfahren ist fehlgeschlagen. Es wurde nichts geändert.",
       "handoff": {
         "header": "Fortsetzung eines früheren Chats (die vorherige KI hat ihr Nutzungslimit erreicht). Kontext:",

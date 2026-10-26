@@ -342,6 +342,8 @@
       "tooltipChatOnly": "Continúa en un chat nuevo con esta opción y la conversación reciente. No cambia nada más.",
       "targetLimited": "{{engine}} también ha alcanzado su límite de uso.",
       "targetLimitedUntil": "{{engine}} también ha alcanzado su límite de uso, hasta {{time}}.",
+      "notSignedIn": "Sin iniciar sesión",
+      "notSignedInTooltip": "Inicia sesión en esta cuenta primero en Ajustes → Agentes.",
       "failed": "No se pudo cambiar y continuar. No se cambió nada.",
       "handoff": {
         "header": "Continuación de un chat anterior (la IA anterior alcanzó su límite de uso). Contexto:",

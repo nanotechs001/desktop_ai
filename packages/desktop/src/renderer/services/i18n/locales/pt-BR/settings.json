@@ -1206,6 +1206,8 @@
       "create": "Adicionar",
       "added": "Conta adicionada. Entre nela para usá-la.",
       "signIn": "Entrar",
+      "notSignedIn": "Sem login",
+      "signInOpened": "Conclua o login na janela do terminal e depois volte aqui.",
       "signInHelp": "Execute isto em um terminal e digite /login para entrar nesta conta:",
       "copy": "Copiar comando",
       "copied": "Copiado",

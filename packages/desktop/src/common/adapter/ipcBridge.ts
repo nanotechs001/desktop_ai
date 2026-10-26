@@ -1178,6 +1178,13 @@ export const acpConversation = {
   deleteAgentAccount: httpDelete<{ deleted: boolean }, { id: string }>(
     (p) => `/api/agents/accounts/${encodeURIComponent(p.id)}`
   ),
+  /** Whether each engine account's CLI is signed in. */
+  listAgentAccountStatus: httpGet<{ id: string; signed_in: boolean }[], void>('/api/agents/accounts/status'),
+  /** Opens a terminal running the account's CLI on its own config dir, where the user signs it in. */
+  signInAgentAccount: httpPost<void, { id: string }>(
+    (p) => `/api/agents/accounts/${encodeURIComponent(p.id)}/sign-in`,
+    () => ({})
+  ),
   setAgentEnabled: httpPatch<AgentMetadata, { id: string; enabled: boolean }>(
     (p) => `/api/agents/${p.id}/enabled`,
     (p) => ({ enabled: p.enabled })

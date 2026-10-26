@@ -3,13 +3,15 @@
  * Copyright 2026 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * Engine accounts in Settings -> Agent: adding another login of the claude engine, signing it in from a terminal,
- * removing it, and each login's own 5-hour and weekly usage.
+ * Engine accounts in Settings -> Agent: adding another login of the claude engine, signing it in from a terminal
+ * (or the command, when the terminal cannot open), its Not signed in tag, removing it, and each login's own 5-hour and
+ * weekly usage.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+import { SWRConfig } from 'swr';
 
 // t() echoes the key, with its params, so text and values are assertable.
 vi.mock('react-i18next', () => ({
@@ -22,7 +24,10 @@ vi.mock('react-i18next', () => ({
 const mocks = vi.hoisted(() => ({
   createAgentAccount: vi.fn(),
   deleteAgentAccount: vi.fn(),
+  signInAgentAccount: vi.fn(),
+  listAgentAccountStatus: vi.fn(),
   copyText: vi.fn(),
+  message: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
   usage: {} as Record<string, unknown>,
 }));
 vi.mock('@/common', () => ({
@@ -30,6 +35,8 @@ vi.mock('@/common', () => ({
     acpConversation: {
       createAgentAccount: { invoke: mocks.createAgentAccount },
       deleteAgentAccount: { invoke: mocks.deleteAgentAccount },
+      signInAgentAccount: { invoke: mocks.signInAgentAccount },
+      listAgentAccountStatus: { invoke: mocks.listAgentAccountStatus },
     },
   },
 }));
@@ -37,7 +44,7 @@ vi.mock('@/renderer/utils/ui/clipboard', () => ({ copyText: mocks.copyText }));
 // Arco's global Message renders through a legacy ReactDOM API this React version lacks.
 vi.mock('@arco-design/web-react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@arco-design/web-react')>()),
-  Message: { success: vi.fn(), error: vi.fn() },
+  Message: mocks.message,
 }));
 vi.mock('@/renderer/pages/conversation/components/limitSwitch/subscriptionUsage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/renderer/pages/conversation/components/limitSwitch/subscriptionUsage')>()),
@@ -75,10 +82,19 @@ const reading = (fiveHour: number, week: number) => ({
   updated_at: NOW_MS,
 });
 
+// A fresh SWR cache per render, so one test's sign-in status never reaches the next.
+const renderActions = (agent: ManagedAgent) =>
+  render(
+    <SWRConfig value={{ provider: () => new Map() }}>
+      <EngineAccountActions agent={agent} onChanged={vi.fn()} />
+    </SWRConfig>
+  );
+
 describe('engine accounts', () => {
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW_MS);
     mocks.usage = {};
+    mocks.listAgentAccountStatus.mockResolvedValue([{ id: 'claude-work', signed_in: true }]);
   });
   afterEach(() => {
     cleanup();
@@ -86,6 +102,9 @@ describe('engine accounts', () => {
     mocks.createAgentAccount.mockReset();
     mocks.deleteAgentAccount.mockReset();
     mocks.copyText.mockReset();
+    mocks.signInAgentAccount.mockReset();
+    mocks.listAgentAccountStatus.mockReset();
+    Object.values(mocks.message).forEach((fn) => fn.mockReset());
   });
 
   it('offers accounts only on the builtin claude row, not on an account or another engine', () => {
@@ -118,16 +137,45 @@ describe('engine accounts', () => {
     expect(mocks.createAgentAccount).not.toHaveBeenCalled();
   });
 
-  it('shows the terminal command that signs the account in to its own config dir, and copies it', async () => {
+  it('opens a terminal on the account to sign it in, without showing the command', async () => {
+    mocks.signInAgentAccount.mockResolvedValue(undefined);
+    renderActions(account);
+
+    fireEvent.click(screen.getByRole('button', { name: 'settings.agentManagement.accounts.signIn' }));
+
+    await waitFor(() => expect(mocks.signInAgentAccount).toHaveBeenCalledWith({ id: 'claude-work' }));
+    await waitFor(() =>
+      expect(mocks.message.info).toHaveBeenCalledWith('settings.agentManagement.accounts.signInOpened')
+    );
+    expect(screen.queryByText(/CLAUDE_CONFIG_DIR=/)).not.toBeInTheDocument();
+  });
+
+  it('shows the command that signs the account in to its own config dir when the terminal cannot open', async () => {
+    mocks.signInAgentAccount.mockRejectedValue(new Error('opening a terminal is not supported on this system'));
     mocks.copyText.mockResolvedValue(undefined);
-    render(<EngineAccountActions agent={account} onChanged={vi.fn()} />);
+    renderActions(account);
 
     fireEvent.click(screen.getByRole('button', { name: 'settings.agentManagement.accounts.signIn' }));
     const command = await screen.findByText(/CLAUDE_CONFIG_DIR=.*\/data\/accounts\/claude-work.* claude/);
-    expect(command).toBeInTheDocument();
+    expect(mocks.message.error).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'settings.agentManagement.accounts.copy' }));
 
     await waitFor(() => expect(mocks.copyText).toHaveBeenCalledWith(command.textContent));
+  });
+
+  it('tags an account that is not signed in, and only that one', async () => {
+    mocks.listAgentAccountStatus.mockResolvedValue([
+      { id: 'claude-work', signed_in: false },
+      { id: 'claude-home', signed_in: true },
+    ]);
+    renderActions(account);
+    expect(await screen.findByText('settings.agentManagement.accounts.notSignedIn')).toBeInTheDocument();
+    cleanup();
+
+    renderActions({ ...account, id: 'claude-home' });
+    await waitFor(() => expect(mocks.listAgentAccountStatus).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0)); // let SWR render the fetched status
+    expect(screen.queryByText('settings.agentManagement.accounts.notSignedIn')).not.toBeInTheDocument();
   });
 
   it('removes an account after confirming', async () => {

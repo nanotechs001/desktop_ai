@@ -1208,6 +1208,8 @@
       "create": "新增",
       "added": "帳號已新增。登入後即可使用。",
       "signIn": "登入",
+      "notSignedIn": "未登入",
+      "signInOpened": "請在終端機視窗中完成登入，然後回到這裡。",
       "signInHelp": "在終端機中執行以下指令，然後輸入 /login 登入此帳號：",
       "copy": "複製指令",
       "copied": "已複製",

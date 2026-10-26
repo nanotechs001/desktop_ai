@@ -1196,6 +1196,8 @@
       "create": "Hinzufügen",
       "added": "Konto hinzugefügt. Melde es an, um es zu nutzen.",
       "signIn": "Anmelden",
+      "notSignedIn": "Nicht angemeldet",
+      "signInOpened": "Schließe die Anmeldung im Terminalfenster ab und kehre dann hierher zurück.",
       "signInHelp": "Führe dies in einem Terminal aus und gib dann /login ein, um dieses Konto anzumelden:",
       "copy": "Befehl kopieren",
       "copied": "Kopiert",

@@ -330,6 +330,8 @@
       "tooltipChatOnly": "Son konuşmayla bu seçenekte yeni bir sohbette devam edilir. Başka hiçbir şey değişmez.",
       "targetLimited": "{{engine}} da kullanım sınırına ulaştı.",
       "targetLimitedUntil": "{{engine}} da kullanım sınırına ulaştı; sıfırlanma: {{time}}.",
+      "notSignedIn": "Oturum açılmadı",
+      "notSignedInTooltip": "Önce Ayarlar → Ajanlar bölümünden bu hesapta oturum açın.",
       "failed": "Geçiş yapılıp devam edilemedi. Hiçbir şey değiştirilmedi.",
       "handoff": {
         "header": "Önceki bir sohbete devam ediliyor (önceki yapay zekâ kullanım sınırına ulaştı). Bağlam:",

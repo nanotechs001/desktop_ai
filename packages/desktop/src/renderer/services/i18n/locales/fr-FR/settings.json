@@ -1206,6 +1206,8 @@
       "create": "Ajouter",
       "added": "Compte ajouté. Connectez-le pour l'utiliser.",
       "signIn": "Se connecter",
+      "notSignedIn": "Non connecté",
+      "signInOpened": "Terminez la connexion dans la fenêtre du terminal, puis revenez ici.",
       "signInHelp": "Exécutez ceci dans un terminal, puis tapez /login pour connecter ce compte :",
       "copy": "Copier la commande",
       "copied": "Copié",

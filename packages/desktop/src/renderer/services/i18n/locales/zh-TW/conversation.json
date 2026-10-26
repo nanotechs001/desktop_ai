@@ -342,6 +342,8 @@
       "tooltipChatOnly": "帶著最近的對話，在使用此選項的新對話中繼續。其他設定不變。",
       "targetLimited": "{{engine}} 也已達到用量上限。",
       "targetLimitedUntil": "{{engine}} 也已達到用量上限，將於 {{time}} 重置。",
+      "notSignedIn": "未登入",
+      "notSignedInTooltip": "請先在 設定 → 智能體 中登入此帳號。",
       "failed": "無法切換並繼續，未做任何變更。",
       "handoff": {
         "header": "繼續先前的對話（先前的 AI 已達到用量上限）。上下文：",

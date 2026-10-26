@@ -342,6 +342,8 @@
       "tooltipChatOnly": "최근 대화를 가지고 이 선택으로 새 채팅에서 계속합니다. 다른 것은 바뀌지 않습니다.",
       "targetLimited": "{{engine}}도 사용 한도에 도달했습니다.",
       "targetLimitedUntil": "{{engine}}도 {{time}}까지 사용 한도에 도달했습니다.",
+      "notSignedIn": "로그인 안 됨",
+      "notSignedInTooltip": "먼저 설정 → 에이전트에서 이 계정에 로그인하세요.",
       "failed": "전환하고 계속할 수 없습니다. 아무것도 변경되지 않았습니다.",
       "handoff": {
         "header": "이전 채팅을 이어갑니다(이전 AI가 사용 한도에 도달했습니다). 컨텍스트:",

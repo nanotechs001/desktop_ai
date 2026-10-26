@@ -171,8 +171,77 @@ async fn account_endpoints_require_login() {
     let remove = request("DELETE", format!("/api/agents/accounts/{CLAUDE_ID}"), "{}");
     let (status, _) = send(&app, remove).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = send(&app, request("GET", "/api/agents/accounts/status".to_owned(), "")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let sign_in = request("POST", format!("/api/agents/accounts/{CLAUDE_ID}/sign-in"), "{}");
+    let (status, _) = send(&app, sign_in).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(
         !dir.path().join("accounts").exists(),
         "nothing is created without a login"
     );
+}
+
+async fn account_status(app: &axum::Router, token: &str) -> Value {
+    let (status, json) = send(app, get_with_token("/api/agents/accounts/status", token)).await;
+    assert_eq!(status, StatusCode::OK, "{json}");
+    json["data"].clone()
+}
+
+#[tokio::test]
+async fn account_status_reports_a_login_once_the_cli_records_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, services) = build_app_in(dir.path()).await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+    assert_eq!(
+        account_status(&app, &token).await,
+        json!([]),
+        "the built-in row is no account"
+    );
+
+    let (_, created) = add_account(&app, &token, &csrf, CLAUDE_ID, "Work").await;
+    let id = created["data"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(
+        account_status(&app, &token).await,
+        json!([{ "id": id, "signed_in": false }])
+    );
+
+    // What a sign-in leaves in the account's dir: the credentials file (Windows, Linux) or, on macOS, where the token
+    // lives in the keychain, the signed-in account in `.claude.json`.
+    let config_dir = dir.path().join("accounts").join(&id);
+    std::fs::write(config_dir.join(".credentials.json"), "{}").unwrap();
+    std::fs::write(
+        config_dir.join(".claude.json"),
+        r#"{"oauthAccount":{"accountUuid":"x"}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        account_status(&app, &token).await,
+        json!([{ "id": id, "signed_in": true }])
+    );
+}
+
+#[tokio::test]
+async fn sign_in_is_only_for_account_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, services) = build_app_in(dir.path()).await;
+    let (token, csrf) = setup_and_login(&mut app, &services, "admin", "StrongP@ss1").await;
+
+    let uri = format!("/api/agents/accounts/{CLAUDE_ID}/sign-in");
+    let (status, json) = send(&app, json_with_token("POST", &uri, json!({}), &token, &csrf)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{json}");
+    assert!(json.to_string().contains("not an engine account"), "{json}");
+
+    let (status, _) = send(
+        &app,
+        json_with_token(
+            "POST",
+            "/api/agents/accounts/no-such-agent/sign-in",
+            json!({}),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

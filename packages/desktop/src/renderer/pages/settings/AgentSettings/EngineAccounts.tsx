@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Button, Input, Message, Popconfirm, Popover, Typography } from '@arco-design/web-react';
+import { Button, Input, Message, Popconfirm, Popover, Tag, Typography } from '@arco-design/web-react';
 import { Delete, Plus } from '@icon-park/react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 import { ipcBridge } from '@/common';
 import { parseError } from '@/common/utils';
 import {
@@ -17,7 +18,11 @@ import {
   useAllSubscriptionUsage,
   type UsageWindow,
 } from '@/renderer/pages/conversation/components/limitSwitch/subscriptionUsage';
-import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
+import {
+  ENGINE_ACCOUNT_STATUS_SWR_KEY,
+  fetchEngineAccountSignedIn,
+  type ManagedAgent,
+} from '@/renderer/utils/model/agentTypes';
 import { isWindows } from '@/renderer/utils/platform';
 import { copyText } from '@/renderer/utils/ui/clipboard';
 
@@ -97,10 +102,27 @@ export const AddEngineAccountButton: React.FC<AccountProps> = ({ agent, onChange
   );
 };
 
-/** On an account row: how to sign it in, and removing it. */
+/**
+ * On an account row: whether it is signed in, Sign in (a terminal on the account's CLI; if that cannot open, the
+ * command to run by hand), and removing it.
+ */
 export const EngineAccountActions: React.FC<AccountProps> = ({ agent, onChanged }) => {
   const { t } = useTranslation();
   const command = signInCommand(agent);
+  // Refetched when the window regains focus, so the tag clears once the user is back from the terminal.
+  const { data: signedIn } = useSWR(ENGINE_ACCOUNT_STATUS_SWR_KEY, fetchEngineAccountSignedIn);
+  const [showCommand, setShowCommand] = useState(false);
+
+  const signIn = async (): Promise<void> => {
+    try {
+      await ipcBridge.acpConversation.signInAgentAccount.invoke({ id: agent.id });
+      Message.info(t(`${PREFIX}.signInOpened`));
+    } catch (error) {
+      console.error('[EngineAccounts] sign-in terminal failed:', error);
+      Message.error(parseError(error));
+      setShowCommand(true);
+    }
+  };
 
   const remove = async (): Promise<void> => {
     try {
@@ -123,10 +145,18 @@ export const EngineAccountActions: React.FC<AccountProps> = ({ agent, onChanged 
 
   return (
     <>
+      {signedIn?.[agent.id] === false && (
+        <Tag size='small' color='orange'>
+          {t(`${PREFIX}.notSignedIn`)}
+        </Tag>
+      )}
       {command && (
+        // Opened only by a failed Sign in; a click elsewhere closes it.
         <Popover
           trigger='click'
           position='bl'
+          popupVisible={showCommand}
+          onVisibleChange={(visible) => !visible && setShowCommand(false)}
           content={
             <div className='flex max-w-420px flex-col gap-8px'>
               <Typography.Text className='text-12px text-t-secondary'>{t(`${PREFIX}.signInHelp`)}</Typography.Text>
@@ -139,7 +169,7 @@ export const EngineAccountActions: React.FC<AccountProps> = ({ agent, onChanged 
             </div>
           }
         >
-          <Button size='small' type='outline'>
+          <Button size='small' type='outline' onClick={() => void signIn()}>
             {t(`${PREFIX}.signIn`)}
           </Button>
         </Popover>

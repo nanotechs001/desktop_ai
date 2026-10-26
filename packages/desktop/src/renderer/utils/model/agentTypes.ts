@@ -190,6 +190,15 @@ export async function fetchManagedAgents(): Promise<ManagedAgent[]> {
  * Like `fetchManagedAgents` but rejects on failure, so callers can tell "could not load" from
  * "no agents". Used where an empty list would otherwise be mistaken for "nothing connected".
  */
+/** SWR key of {@link fetchEngineAccountSignedIn}. */
+export const ENGINE_ACCOUNT_STATUS_SWR_KEY = 'agents.accounts.status';
+
+/** Whether each engine account (by id) is signed in; rows that are no account are absent. */
+export async function fetchEngineAccountSignedIn(): Promise<Record<string, boolean>> {
+  const rows = await ipcBridge.acpConversation.listAgentAccountStatus.invoke();
+  return Object.fromEntries(rows.map((row) => [row.id, row.signed_in]));
+}
+
 export async function fetchManagedAgentsOrThrow(): Promise<ManagedAgent[]> {
   const agents = await ipcBridge.acpConversation.getManagedAgents.invoke();
   if (!Array.isArray(agents)) {

@@ -8,6 +8,8 @@
 //! - `POST /api/agents/custom/try-connect` — test custom agent configuration (e.g. ACP connection)
 //! - `POST /api/agents/{id}/accounts` — add another login of a builtin engine as its own row
 //! - `DELETE /api/agents/accounts/{id}` — remove such an account row
+//! - `GET  /api/agents/accounts/status` — which account rows are signed in
+//! - `POST /api/agents/accounts/{id}/sign-in` — open a terminal on the account's CLI to sign it in
 
 use axum::Router;
 use axum::extract::rejection::JsonRejection;
@@ -15,9 +17,10 @@ use axum::extract::{Extension, Json, Path, State};
 use axum::routing::{delete, get, patch, post, put};
 
 use aionui_api_types::{
-    AgentLogoEntry, AgentManagementRow, AgentMetadata, AgentOverridesResponse, ApiResponse, CreateAgentAccountRequest,
-    CustomAgentUpsertRequest, DeleteCustomAgentResponse, ProviderHealthCheckRequest, ProviderHealthCheckResponse,
-    SetAgentOverridesRequest, SetEnabledRequest, TryConnectCustomAgentRequest, TryConnectCustomAgentResponse,
+    AgentAccountStatus, AgentLogoEntry, AgentManagementRow, AgentMetadata, AgentOverridesResponse, ApiResponse,
+    CreateAgentAccountRequest, CustomAgentUpsertRequest, DeleteCustomAgentResponse, ProviderHealthCheckRequest,
+    ProviderHealthCheckResponse, SetAgentOverridesRequest, SetEnabledRequest, TryConnectCustomAgentRequest,
+    TryConnectCustomAgentResponse,
 };
 use aionui_auth::CurrentUser;
 use aionui_common::ApiError;
@@ -40,7 +43,9 @@ pub fn agent_routes(state: AgentRouterState) -> Router {
         .route("/api/agents/custom/{id}", put(update_custom).delete(delete_custom))
         .route("/api/agents/custom/try-connect", post(try_connect_custom))
         .route("/api/agents/{id}/accounts", post(create_account))
+        .route("/api/agents/accounts/status", get(account_status))
         .route("/api/agents/accounts/{id}", delete(delete_account))
+        .route("/api/agents/accounts/{id}/sign-in", post(sign_in_account))
         .with_state(state)
 }
 
@@ -231,4 +236,30 @@ async fn delete_account(
         .await
         .map_err(agent_error_to_api_error)?;
     Ok(Json(ApiResponse::ok(DeleteCustomAgentResponse { deleted: true })))
+}
+
+async fn account_status(
+    State(state): State<AgentRouterState>,
+    Extension(user): Extension<CurrentUser>,
+) -> Result<Json<ApiResponse<Vec<AgentAccountStatus>>>, ApiError> {
+    Ok(Json(ApiResponse::ok(
+        state
+            .service
+            .agent_account_status(&user.id)
+            .await
+            .map_err(agent_error_to_api_error)?,
+    )))
+}
+
+async fn sign_in_account(
+    State(state): State<AgentRouterState>,
+    Extension(user): Extension<CurrentUser>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<()>>, ApiError> {
+    state
+        .service
+        .sign_in_agent_account(&user.id, &id)
+        .await
+        .map_err(agent_error_to_api_error)?;
+    Ok(Json(ApiResponse::ok(())))
 }

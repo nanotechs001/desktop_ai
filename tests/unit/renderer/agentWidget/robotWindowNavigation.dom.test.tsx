@@ -37,6 +37,8 @@ vi.mock('@/renderer/hooks/agent/useModelProviderList', () => ({
 vi.mock('@/renderer/utils/model/agentTypes', () => ({
   ENGINE_CATALOG_SWR_KEY: 'engines',
   fetchManagedAgentsOrThrow: async () => [{ id: 'codex', name: 'Codex' }],
+  ENGINE_ACCOUNT_STATUS_SWR_KEY: 'engine-accounts',
+  fetchEngineAccountSignedIn: async () => ({}),
 }));
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
   getConversationOrNull: async (id: string) => ({ id, type: 'acp', assistant: { id: 'bot-1' }, extra: {} }),

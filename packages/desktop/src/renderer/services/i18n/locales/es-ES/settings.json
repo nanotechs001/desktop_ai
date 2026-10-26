@@ -1194,6 +1194,8 @@
       "create": "Añadir",
       "added": "Cuenta añadida. Inicia sesión para usarla.",
       "signIn": "Iniciar sesión",
+      "notSignedIn": "Sin iniciar sesión",
+      "signInOpened": "Termina de iniciar sesión en la ventana del terminal y vuelve aquí.",
       "signInHelp": "Ejecuta esto en una terminal y escribe /login para iniciar sesión en esta cuenta:",
       "copy": "Copiar comando",
       "copied": "Copiado",

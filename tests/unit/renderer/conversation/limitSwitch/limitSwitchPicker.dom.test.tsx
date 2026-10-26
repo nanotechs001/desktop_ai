@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Picking where a chat continues: an engine shows the model and thinking level it will use (both changeable) and only
- * Proceed switches; the same picker opens from the chat header for a switch at any time.
+ * Proceed switches; the same picker opens from the chat header for a switch at any time. An engine account that is not
+ * signed in is shown but cannot be picked.
  */
 
 import React from 'react';
@@ -70,6 +71,7 @@ const mocks = vi.hoisted(() => ({
   conversation: null as unknown,
   engines: [] as unknown[],
   providers: [] as unknown[],
+  signedIn: {} as Record<string, boolean>,
   switchAndContinue: vi.fn(),
 }));
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
@@ -78,6 +80,7 @@ vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
 vi.mock('@/renderer/utils/model/agentTypes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/renderer/utils/model/agentTypes')>()),
   fetchManagedAgentsOrThrow: async () => mocks.engines,
+  fetchEngineAccountSignedIn: async () => mocks.signedIn,
 }));
 vi.mock('@/renderer/hooks/agent/useModelProviderList', () => ({
   useModelProviderList: () => ({
@@ -126,6 +129,7 @@ const setUp = (conversationId: string) => {
   mocks.conversation = { id: conversationId, type: 'acp', extra: { agent_id: 'claude' }, assistant: { id: 'bot-1' } };
   mocks.engines = [engine('claude'), CODEX, AION];
   mocks.providers = [OPENAI];
+  mocks.signedIn = {};
 };
 
 const renderIn = (conversationId: string, node: React.ReactNode) =>
@@ -209,6 +213,22 @@ describe('LimitSwitchActions picker', () => {
         target: { kind: 'model', engine: AION, provider: OPENAI, model: 'gpt-4.1' },
       })
     );
+  });
+
+  it('shows an engine account that is not signed in as such, and does not let it be picked', async () => {
+    setUp('c-accounts');
+    const account = (id: string, label: string) =>
+      engine(id, { backend: 'claude', name: `Claude · ${label}`, agent_source_info: { account_of: 'claude' } });
+    mocks.engines = [engine('claude'), account('claude-work', 'Work'), account('claude-home', 'Home')];
+    mocks.signedIn = { 'claude-work': false, 'claude-home': true };
+    renderIn('c-accounts', <LimitSwitchActions conversationId='c-accounts' />);
+
+    const notSignedIn = translate('conversation.agentError.switch.notSignedIn');
+    expect(await screen.findByRole('button', { name: `Claude · Work · ${notSignedIn}` })).toBeDisabled();
+    const home = screen.getByRole('button', { name: 'Claude · Home' });
+    expect(home).toBeEnabled();
+    fireEvent.click(home);
+    expect(proceed()).toBeInTheDocument();
   });
 });
 

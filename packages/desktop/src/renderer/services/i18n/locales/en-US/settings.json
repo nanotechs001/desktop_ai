@@ -1206,6 +1206,8 @@
       "create": "Add",
       "added": "Account added. Sign it in to use it.",
       "signIn": "Sign in",
+      "notSignedIn": "Not signed in",
+      "signInOpened": "Finish signing in in the terminal window, then come back here.",
       "signInHelp": "Run this in a terminal, then type /login to sign this account in:",
       "copy": "Copy command",
       "copied": "Copied",
