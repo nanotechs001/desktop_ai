@@ -1188,7 +1188,23 @@
     "boundAssistantsEmpty": "このエンジンを使用するエージェントはまだありません。",
     "viewAssistant": "詳細",
     "searchPlaceholder": "エージェントを検索...",
-    "noSearchResults": "一致するエージェントはありません。"
+    "noSearchResults": "一致するエージェントはありません。",
+    "accounts": {
+      "add": "アカウントを追加",
+      "addHelp": "このエンジンの別のログインを独立したエンジンとして追加し、チャットやボットがアカウントを切り替えられるようにします。",
+      "labelPlaceholder": "アカウント名（例：仕事）",
+      "create": "追加",
+      "added": "アカウントを追加しました。使うにはサインインしてください。",
+      "signIn": "サインイン",
+      "signInHelp": "ターミナルでこれを実行し、/login と入力してこのアカウントにサインインします：",
+      "copy": "コマンドをコピー",
+      "copied": "コピーしました",
+      "delete": "アカウントを削除",
+      "deleteTitle": "このアカウントを削除しますか？",
+      "deleteHelp": "チャットは残ります。サインイン情報はこのコンピューターに残ります。",
+      "deleteConfirm": "削除",
+      "usage": "5時間 {{fiveHour}}% · 週 {{week}}%"
+    }
   },
   "repair": {
     "pathLabel": "起動パス",

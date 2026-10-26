@@ -2,7 +2,9 @@ import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 
 export type AgentAvailabilityFilter = 'available' | 'unavailable';
 
-const isAgentAvailable = (agent: ManagedAgent): boolean => agent.status === 'online';
+/** Online, or an engine account whose CLI is installed: it stays listed by its main row until it is signed in. */
+const isAgentAvailable = (agent: ManagedAgent): boolean =>
+  agent.status === 'online' || (Boolean(agent.agent_source_info?.account_of) && agent.status !== 'missing');
 
 /**
  * The CLI built into the app (internal aionrs engine). It ships with the app and is always available, so the

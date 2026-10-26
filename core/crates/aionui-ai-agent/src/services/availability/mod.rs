@@ -635,6 +635,8 @@ mod tests {
                 bridge_binary: Some("npx".into()),
                 hub_package_id: None,
                 version: None,
+                account_of: None,
+                account_dir: None,
             },
             enabled: true,
             available: true,

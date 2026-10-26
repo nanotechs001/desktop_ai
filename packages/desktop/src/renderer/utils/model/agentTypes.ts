@@ -52,6 +52,10 @@ export type AgentSourceInfo = {
   bridge_binary?: string;
   hub_package_id?: string;
   version?: string;
+  /** Set on an engine account: another login of the engine row with this id (its own CLI config dir). */
+  account_of?: string;
+  /** An account's CLI config dir, where the user signs it in. */
+  account_dir?: string;
 };
 
 /** Environment variable entry passed to a spawned agent process. */

@@ -392,7 +392,7 @@ describe('MessageTips switch and continue', () => {
     }
   });
 
-  it('switches and opens the new chat on click', async () => {
+  it('switches and opens the new chat on Proceed', async () => {
     switchMocks.conversation = { id: 'c1', type: 'acp', extra: { agent_id: 'claude' }, assistant: { id: 'bot-1' } };
     switchMocks.engines = [engine('claude'), engine('codex')];
     switchMocks.providers = [];
@@ -400,10 +400,15 @@ describe('MessageTips switch and continue', () => {
 
     renderTips(usageLimited('switch_engine'));
     fireEvent.click(await screen.findByRole('button', { name: 'Engine codex' }));
+    expect(switchMocks.switchAndContinue).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
 
     expect(await screen.findByText('opened new chat')).toBeInTheDocument();
     expect(switchMocks.switchAndContinue).toHaveBeenCalledWith(
-      expect.objectContaining({ conversationId: 'c1', target: { kind: 'engine', engine: switchMocks.engines[1] } })
+      expect.objectContaining({
+        conversationId: 'c1',
+        target: { kind: 'engine', engine: switchMocks.engines[1], model: undefined, thoughtLevel: undefined },
+      })
     );
   });
 

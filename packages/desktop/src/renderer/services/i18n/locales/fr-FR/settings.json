@@ -1198,7 +1198,23 @@
     "boundAssistantsEmpty": "Aucun agent n'utilise encore ce moteur.",
     "viewAssistant": "Voir",
     "searchPlaceholder": "Rechercher des agents...",
-    "noSearchResults": "Aucun agent correspondant."
+    "noSearchResults": "Aucun agent correspondant.",
+    "accounts": {
+      "add": "Ajouter un compte",
+      "addHelp": "Ajoute une autre connexion de ce moteur comme moteur distinct, pour que chats et bots puissent changer de compte.",
+      "labelPlaceholder": "Nom du compte, ex. Travail",
+      "create": "Ajouter",
+      "added": "Compte ajouté. Connectez-le pour l'utiliser.",
+      "signIn": "Se connecter",
+      "signInHelp": "Exécutez ceci dans un terminal, puis tapez /login pour connecter ce compte :",
+      "copy": "Copier la commande",
+      "copied": "Copié",
+      "delete": "Retirer le compte",
+      "deleteTitle": "Retirer ce compte ?",
+      "deleteHelp": "Ses chats restent. Sa connexion reste sur cet ordinateur.",
+      "deleteConfirm": "Retirer",
+      "usage": "5 h {{fiveHour}} % · semaine {{week}} %"
+    }
   },
   "repair": {
     "pathLabel": "Chemin de lancement",

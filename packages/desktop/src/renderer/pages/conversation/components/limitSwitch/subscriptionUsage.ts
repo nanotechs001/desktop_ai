@@ -7,6 +7,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { ipcBridge } from '@/common';
 import type { IConversationRateLimitUpdatedEvent, RateLimitWindowKind } from '@/common/adapter/ipcBridge';
+import type { TChatConversation } from '@/common/config/storage';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { resolvePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { getWidgetConversationId } from '@/renderer/pages/agentWidget/chatLocation';
@@ -19,7 +20,10 @@ export const SUBSCRIPTION_USAGE_STORAGE_KEY = 'subscription-usage:v1';
 /** Fraction used (0..1, may exceed 1); `resets_at` in epoch seconds. */
 export type UsageWindow = { utilization: number; resets_at: number | null };
 export type BackendUsage = { windows: Partial<Record<RateLimitWindowKind, UsageWindow>>; updated_at: number };
-/** Keyed by engine id (`claude`, `codex`, …): plan usage is per account, not per chat. */
+/**
+ * Keyed by the chat's engine row id (`extra.agent_id`), else its backend (`claude`, `codex`, …): plan usage is per
+ * login, not per chat, and each account of an engine is its own row.
+ */
 export type SubscriptionUsageState = Record<string, BackendUsage>;
 
 const SECONDS_TO_MS = 1000;
@@ -60,6 +64,16 @@ export function mergeReading(
     [backend]: { windows: { ...state[backend]?.windows, ...incoming }, updated_at: now },
   };
 }
+
+/**
+ * The stored usage of an engine row: its own reading, else (for an engine's main login, never an account) one filed by
+ * backend from a chat without a row.
+ */
+export const usageOfEngine = (
+  state: SubscriptionUsageState,
+  engine: { id: string; backend?: string; agent_source_info?: { account_of?: string } }
+): BackendUsage | undefined =>
+  state[engine.id] ?? (engine.agent_source_info?.account_of ? undefined : state[engine.backend ?? engine.id]);
 
 /** The windows as they stand at `now`: one whose reset has passed is back at 0%. */
 export function currentWindows(
@@ -156,13 +170,22 @@ function apply(backend: string, event: IConversationRateLimitUpdatedEvent, arriv
   notify();
 }
 
-/** The engine of a chat that is not on screen, preset-aware like the on-screen chat's (`ChatConversation`). */
+/** The usage key of a chat: its engine row, so two logins of one engine stay apart. */
+export const usageKeyOf = (conversation: TChatConversation | null | undefined): string | undefined =>
+  (conversation?.extra as { agent_id?: string } | undefined)?.agent_id || undefined;
+
+/**
+ * The usage key of a chat that is not on screen: its engine row, else its engine, preset-aware like the on-screen
+ * chat's (`ChatConversation`).
+ */
 async function lookUpBackend(conversationId: string): Promise<string | undefined> {
   const [conversation, assistantsList] = await Promise.all([
     getConversationOrNull(conversationId),
     ipcBridge.assistants.list.invoke().catch(() => [] as Assistant[]),
   ]);
   if (!conversation) return undefined;
+  const rowKey = usageKeyOf(conversation);
+  if (rowKey) return rowKey;
   // shortcut: no agent logos or extension adapters (they pick a logo, not an engine), upgrade if a legacy row resolves wrong.
   const preset = resolvePresetAssistantInfo(conversation, {
     locale: '',

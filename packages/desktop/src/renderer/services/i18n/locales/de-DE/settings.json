@@ -1188,7 +1188,23 @@
       "version_drift_newer": "Die installierte CLI ist neuer als die von Pixebot Browser verifizierte Version. Sie sollte weiterhin funktionieren; melden Sie ungewöhnliches Verhalten."
     },
     "searchPlaceholder": "Agenten suchen...",
-    "noSearchResults": "Keine passenden Agenten."
+    "noSearchResults": "Keine passenden Agenten.",
+    "accounts": {
+      "add": "Konto hinzufügen",
+      "addHelp": "Fügt eine weitere Anmeldung dieser Engine als eigene Engine hinzu, damit Chats und Bots zwischen Konten wechseln können.",
+      "labelPlaceholder": "Kontoname, z. B. Arbeit",
+      "create": "Hinzufügen",
+      "added": "Konto hinzugefügt. Melde es an, um es zu nutzen.",
+      "signIn": "Anmelden",
+      "signInHelp": "Führe dies in einem Terminal aus und gib dann /login ein, um dieses Konto anzumelden:",
+      "copy": "Befehl kopieren",
+      "copied": "Kopiert",
+      "delete": "Konto entfernen",
+      "deleteTitle": "Dieses Konto entfernen?",
+      "deleteHelp": "Chats darauf bleiben erhalten. Die Anmeldung bleibt auf diesem Computer.",
+      "deleteConfirm": "Entfernen",
+      "usage": "5 Std. {{fiveHour}} % · Woche {{week}} %"
+    }
   },
   "retry": "Erneut versuchen",
   "runtimeStatus": {

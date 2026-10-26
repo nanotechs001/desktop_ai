@@ -1186,7 +1186,23 @@
     "boundAssistantsEmpty": "Bu motoru kullanan Agent henüz yok.",
     "viewAssistant": "Görüntüle",
     "searchPlaceholder": "Agent ara...",
-    "noSearchResults": "Eşleşen agent yok."
+    "noSearchResults": "Eşleşen agent yok.",
+    "accounts": {
+      "add": "Hesap ekle",
+      "addHelp": "Bu motorun başka bir girişini ayrı bir motor olarak ekler; böylece sohbetler ve botlar hesaplar arasında geçiş yapabilir.",
+      "labelPlaceholder": "Hesap adı, ör. İş",
+      "create": "Ekle",
+      "added": "Hesap eklendi. Kullanmak için giriş yapın.",
+      "signIn": "Giriş yap",
+      "signInHelp": "Bunu bir terminalde çalıştırın, ardından bu hesaba giriş yapmak için /login yazın:",
+      "copy": "Komutu kopyala",
+      "copied": "Kopyalandı",
+      "delete": "Hesabı kaldır",
+      "deleteTitle": "Bu hesap kaldırılsın mı?",
+      "deleteHelp": "Sohbetleri kalır. Girişi bu bilgisayarda kalır.",
+      "deleteConfirm": "Kaldır",
+      "usage": "5 saat %{{fiveHour}} · haftalık %{{week}}"
+    }
   },
   "repair": {
     "pathLabel": "Başlatma Yolu",

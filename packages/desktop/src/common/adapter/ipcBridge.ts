@@ -1170,6 +1170,14 @@ export const acpConversation = {
     }
   ),
   deleteCustomAgent: httpDelete<{ deleted: boolean }, { id: string }>((p) => `/api/agents/custom/${p.id}`),
+  /** Another login of a builtin engine (claude) as its own engine row, with its own CLI config dir. */
+  createAgentAccount: httpPost<AgentMetadata, { id: string; label: string }>(
+    (p) => `/api/agents/${encodeURIComponent(p.id)}/accounts`,
+    (p) => ({ label: p.label })
+  ),
+  deleteAgentAccount: httpDelete<{ deleted: boolean }, { id: string }>(
+    (p) => `/api/agents/accounts/${encodeURIComponent(p.id)}`
+  ),
   setAgentEnabled: httpPatch<AgentMetadata, { id: string; enabled: boolean }>(
     (p) => `/api/agents/${p.id}/enabled`,
     (p) => ({ enabled: p.enabled })

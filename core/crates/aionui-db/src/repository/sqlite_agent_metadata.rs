@@ -441,6 +441,9 @@ impl IAgentMetadataRepository for SqliteAgentMetadataRepository {
                  WHERE am.agent_source = 'builtin'
                    AND am.backend = ?
                    AND (am.user_id IS NULL OR am.user_id = ?)
+                   -- An account row (another login of a builtin row) is never the vendor's row.
+                   AND CASE WHEN json_valid(am.agent_source_info)
+                       THEN json_extract(am.agent_source_info, '$.account_of') END IS NULL
                  ORDER BY am.sort_order ASC, am.name ASC
                  LIMIT 1"
             ),

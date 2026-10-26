@@ -4,15 +4,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Button, Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
-import { Down } from '@icon-park/react';
+import { Button, Message, Tooltip } from '@arco-design/web-react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR, { mutate as swrMutate } from 'swr';
-import type { TChatConversation } from '@/common/config/storage';
+import type { IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import { useModelProviderList } from '@/renderer/hooks/agent/useModelProviderList';
 import { useChatNavigation } from '@/renderer/pages/agentWidget/chatLocation';
+import GuidModelSelector from '@/renderer/pages/guid/components/GuidModelSelector';
 import { afterAssistantsChanged } from '@/renderer/services/crossWindowSync';
+import {
+  buildAgentRuntimeModelInfo,
+  buildAgentRuntimeThoughtLevelOption,
+} from '@/renderer/utils/model/agentRuntimeCatalog';
 import {
   ENGINE_CATALOG_SWR_KEY,
   fetchManagedAgentsOrThrow,
@@ -22,7 +26,7 @@ import { getConversationOrNull } from '../../utils/conversationCache';
 import type { HandoffLabels } from './handoffMessage';
 import { useAllSubscriptionUsage } from './subscriptionUsage';
 import { pinnableAssistantId, switchAndContinue } from './switchAndContinue';
-import { listSwitchTargets, type SwitchTarget } from './switchTargets';
+import { listSwitchTargets, type SwitchTarget, type SwitchTargets } from './switchTargets';
 import { formatResetTime } from './usageWarning';
 
 const PREFIX = 'conversation.agentError.switch';
@@ -31,13 +35,19 @@ const PREFIX = 'conversation.agentError.switch';
 const ENGINE_SETTINGS_PATH = '/settings/agent';
 const MODEL_SETTINGS_PATH = '/settings/model';
 
-/** Why the chat is moving on: the limit was hit, or it is close (the near-limit warning). */
-export type SwitchReason = 'limitHit' | 'nearLimit';
+/** Why the chat is moving on: the limit was hit, it is close (the near-limit warning), or the user chose to. */
+export type SwitchReason = 'limitHit' | 'nearLimit' | 'manual';
+
+const HANDOFF_HEADER_KEYS: Record<SwitchReason, string> = {
+  limitHit: 'header',
+  nearLimit: 'headerNearLimit',
+  manual: 'headerManual',
+};
 
 const useHandoffLabels = (reason: SwitchReason): HandoffLabels => {
   const { t } = useTranslation();
   return {
-    header: t(reason === 'nearLimit' ? `${PREFIX}.handoff.headerNearLimit` : `${PREFIX}.handoff.header`),
+    header: t(`${PREFIX}.handoff.${HANDOFF_HEADER_KEYS[reason]}`),
     dataOnly: t(`${PREFIX}.handoff.dataOnly`),
     quoteStart: t(`${PREFIX}.handoff.quoteStart`),
     quoteEnd: t(`${PREFIX}.handoff.quoteEnd`),
@@ -51,23 +61,101 @@ const useHandoffLabels = (reason: SwitchReason): HandoffLabels => {
 const currentEngineId = (conversation: TChatConversation): string | undefined =>
   (conversation.extra as { agent_id?: string } | undefined)?.agent_id;
 
+/** The model and thinking level a picked CLI engine will start on, both changeable, and Proceed. */
+const EnginePicker: React.FC<{ engine: ManagedAgent; busy: boolean; onProceed: (target: SwitchTarget) => void }> = ({
+  engine,
+  busy,
+  onProceed,
+}) => {
+  const { t } = useTranslation();
+  // Unpicked, the model stays the engine's own default (no override), as on the new-chat page.
+  const [model, setModel] = useState<string | null>(null);
+  const [thoughtLevel, setThoughtLevel] = useState<string | null>(null);
+  const modelInfo = buildAgentRuntimeModelInfo(engine);
+  const thoughtOption = buildAgentRuntimeThoughtLevelOption(engine);
+  const shownThoughtLevel = thoughtLevel || thoughtOption?.currentValue || thoughtOption?.options[0]?.value;
+  return (
+    <div className='flex flex-wrap items-center gap-6px'>
+      <GuidModelSelector
+        isGeminiMode={false}
+        modelList={[]}
+        current_model={undefined}
+        setCurrentModel={async () => {}}
+        currentAcpCachedModelInfo={modelInfo}
+        selectedAcpModel={model}
+        setSelectedAcpModel={setModel}
+        thoughtLevelOption={thoughtOption && { ...thoughtOption, currentValue: shownThoughtLevel }}
+        onThoughtLevelSelect={setThoughtLevel}
+      />
+      <Button
+        size='mini'
+        type='primary'
+        loading={busy}
+        onClick={() =>
+          onProceed({ kind: 'engine', engine, model: model ?? undefined, thoughtLevel: shownThoughtLevel })
+        }
+      >
+        {t(`${PREFIX}.proceed`)}
+      </Button>
+    </div>
+  );
+};
+
+/** Which of a provider's models the model engine will start on (the first until another is picked), and Proceed. */
+const ProviderModelPicker: React.FC<{
+  engine: ManagedAgent;
+  entry: SwitchTargets['providers'][number];
+  busy: boolean;
+  onProceed: (target: SwitchTarget) => void;
+}> = ({ engine, entry, busy, onProceed }) => {
+  const { t } = useTranslation();
+  const { provider, models } = entry;
+  // Only the models a switch can move to (the chat's current one is left out).
+  const modelList = [{ ...provider, models }];
+  const [picked, setPicked] = useState<TProviderWithModel>({ ...provider, use_model: models[0] } as TProviderWithModel);
+  return (
+    <div className='flex flex-wrap items-center gap-6px'>
+      <GuidModelSelector
+        isGeminiMode
+        modelList={modelList}
+        current_model={picked}
+        setCurrentModel={async (model) => setPicked(model)}
+        currentAcpCachedModelInfo={null}
+        selectedAcpModel={null}
+        setSelectedAcpModel={() => {}}
+      />
+      <Button
+        size='mini'
+        type='primary'
+        loading={busy}
+        onClick={() => onProceed({ kind: 'model', engine, provider, model: picked.use_model })}
+      >
+        {t(`${PREFIX}.proceed`)}
+      </Button>
+    </div>
+  );
+};
+
 /**
- * Shown on an error whose resolution is `switch_engine` (a usage limit, exhausted credits or quota) and on the
- * near-limit warning: one button per other connected engine and one menu per configured provider, each of which moves
- * this bot (only) there and continues in a new chat. Without any alternative it shows the backup notice, which points
- * to the settings page that adds one.
+ * Where the chat can continue: shown on an error whose resolution is `switch_engine` (a usage limit, exhausted credits
+ * or quota), on the near-limit warning and from the chat header. One button per other connected engine and one per
+ * configured provider; picking one shows the model (and thinking level) it will start on, and Proceed moves this bot
+ * (only) there and continues in a new chat. Without any alternative it shows the backup notice, which points to the settings
+ * page that adds one.
  */
-const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReason }> = ({
+const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReason; onSwitched?: () => void }> = ({
   conversationId,
   reason = 'limitHit',
+  onSwitched,
 }) => {
   const { t, i18n } = useTranslation();
   const { openConversation, openPage } = useChatNavigation();
   const labels = useHandoffLabels(reason);
   const [busy, setBusy] = useState(false);
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const { data: conversation } = useSWR(`conversation/${conversationId}`, () => getConversationOrNull(conversationId));
   const { data: engines } = useSWR<ManagedAgent[]>(ENGINE_CATALOG_SWR_KEY, fetchManagedAgentsOrThrow);
-  const { providers, getAvailableModels, formatModelLabel } = useModelProviderList();
+  const { providers, getAvailableModels } = useModelProviderList();
   const usage = useAllSubscriptionUsage();
 
   if (!conversation || !engines) return null;
@@ -101,6 +189,7 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
       await swrMutate('assistants.list');
       // The bot was re-pinned: windows with their own caches (robots, main) reload it.
       afterAssistantsChanged();
+      onSwitched?.();
       openConversation(id);
     } catch (error) {
       console.error('[limitSwitch] Switch and continue failed:', error);
@@ -122,46 +211,49 @@ const LimitSwitchActions: React.FC<{ conversationId: string; reason?: SwitchReas
     );
   }
 
+  const choice = (id: string, label: string, tooltip: string, limited = false) => (
+    <Tooltip key={id} content={tooltip}>
+      <Button
+        size='mini'
+        type={pickedId === id ? 'primary' : 'secondary'}
+        aria-pressed={pickedId === id}
+        disabled={busy || limited}
+        onClick={() => setPickedId(id)}
+      >
+        {label}
+      </Button>
+    </Tooltip>
+  );
+  const providerChoiceId = (provider: IProvider): string => `provider:${provider.id}`;
+  const pickedEngine = targets.engines.find((engine) => engine.id === pickedId);
+  const pickedProvider = targets.providers.find(({ provider }) => providerChoiceId(provider) === pickedId);
+
   return (
     <div className='flex flex-col gap-6px'>
-      <div className='text-t-secondary text-12px'>{t(`${PREFIX}.title`)}</div>
+      <div className='text-t-secondary text-12px'>
+        {t(reason === 'manual' ? `${PREFIX}.titleManual` : `${PREFIX}.title`)}
+      </div>
       <div className='flex flex-wrap gap-6px'>
         {targets.engines.map((engine) => {
           const limited = limitedTooltip(engine);
-          return (
-            <Tooltip key={engine.id} content={limited ?? tooltipFor(engine, false)}>
-              <Button
-                size='mini'
-                disabled={busy || limited !== null}
-                onClick={() => void run({ kind: 'engine', engine })}
-              >
-                {engineName(engine)}
-              </Button>
-            </Tooltip>
-          );
+          return choice(engine.id, engineName(engine), limited ?? tooltipFor(engine, false), limited !== null);
         })}
         {modelEngine &&
-          targets.providers.map(({ provider, models }) => (
-            <Dropdown
-              key={provider.id}
-              trigger='click'
-              disabled={busy}
-              droplist={
-                <Menu onClickMenuItem={(model) => void run({ kind: 'model', engine: modelEngine, provider, model })}>
-                  {models.map((model) => (
-                    <Menu.Item key={model}>{formatModelLabel(provider, model)}</Menu.Item>
-                  ))}
-                </Menu>
-              }
-            >
-              <Tooltip content={tooltipFor(modelEngine, true)}>
-                <Button size='mini' disabled={busy} icon={<Down theme='outline' size='12' />}>
-                  {provider.name}
-                </Button>
-              </Tooltip>
-            </Dropdown>
-          ))}
+          targets.providers.map(({ provider }) =>
+            choice(providerChoiceId(provider), provider.name, tooltipFor(modelEngine, true))
+          )}
       </div>
+      {/* Keyed by choice, so a newly picked one starts from its own defaults. */}
+      {pickedEngine && <EnginePicker key={pickedEngine.id} engine={pickedEngine} busy={busy} onProceed={run} />}
+      {modelEngine && pickedProvider && (
+        <ProviderModelPicker
+          key={pickedProvider.provider.id}
+          engine={modelEngine}
+          entry={pickedProvider}
+          busy={busy}
+          onProceed={run}
+        />
+      )}
     </div>
   );
 };

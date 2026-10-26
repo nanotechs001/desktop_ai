@@ -79,8 +79,14 @@ vi.mock('@/common', () => ({
       createCustomAgent: { invoke: vi.fn() },
       updateCustomAgent: { invoke: vi.fn() },
       deleteCustomAgent: { invoke: vi.fn() },
+      createAgentAccount: { invoke: vi.fn() },
+      deleteAgentAccount: { invoke: vi.fn() },
       setAgentEnabled: { invoke: vi.fn() },
       checkManagedAgentHealthById: { invoke: vi.fn() },
+    },
+    // The usage line under a claude row follows plan-usage readings.
+    conversation: {
+      rateLimitUpdated: { on: vi.fn(() => () => {}) },
     },
     // Bound-assistant avatar stacks fetch the assistant list via SWR.
     assistants: {
@@ -168,6 +174,36 @@ const makeAgents = () => [
 ];
 
 describe('LocalAgents', () => {
+  it('lets the claude engine take another account, listed as its own engine with sign-in and delete', () => {
+    defaultEngine.agentId = 'aionrs';
+    const claude = { ...makeAgents()[2], available: true, installed: true, status: 'online' };
+    const account = {
+      ...claude,
+      id: 'acp-claude-work',
+      name: 'Claude Code · Work',
+      // Not signed in yet: still listed on the Available tab, where its Sign in action is.
+      status: 'unchecked',
+      agent_source_info: { account_of: 'acp-claude', account_dir: '/data/accounts/acp-claude-work' },
+    };
+    useManagedAgents.mockReturnValue({
+      agents: [makeAgents()[1], claude, account],
+      revalidate: vi.fn(),
+      refreshCatalog: vi.fn(),
+    });
+
+    render(<LocalAgents />);
+
+    const main = screen.getByTestId('agent-row-acp-claude');
+    expect(within(main).getByText('settings.agentManagement.accounts.add')).toBeTruthy();
+    const work = screen.getByTestId('agent-row-acp-claude-work');
+    expect(within(work).getByText('settings.agentManagement.accounts.signIn')).toBeTruthy();
+    expect(within(work).getByRole('button', { name: 'settings.agentManagement.accounts.delete' })).toBeTruthy();
+    expect(within(work).queryByText('settings.agentManagement.accounts.add')).toBeNull();
+    expect(
+      within(screen.getByTestId('agent-row-acp-gemini')).queryByText('settings.agentManagement.accounts.add')
+    ).toBeNull();
+  });
+
   it('marks the default engine and lets another connected engine be set as the default', async () => {
     defaultEngine.agentId = 'acp-gemini';
     defaultEngine.setDefault.mockClear();

@@ -205,6 +205,24 @@ describe('subscription usage store', () => {
     await waitFor(() => expect(result.current?.windows.seven_day?.utilization).toBe(0.3));
   });
 
+  it("files each reading under its chat's engine row, so two logins of one engine keep their own usage", async () => {
+    const store = await load();
+    const chats: Record<string, unknown> = {
+      'c-main': { id: 'c-main', type: 'acp', extra: { backend: 'claude', agent_id: 'claude-main' } },
+      'c-work': { id: 'c-work', type: 'acp', extra: { backend: 'claude', agent_id: 'claude-work' } },
+    };
+    mocks.getConversation = async (id) => chats[id];
+    const { result: main } = renderHook(() => store.useSubscriptionUsage('claude-main', 'c-1'));
+    const { result: work } = renderHook(() => store.useSubscriptionUsage('claude-work', 'c-2'));
+
+    push(reading({ conversation_id: 'c-main', windows: [{ kind: 'five_hour', utilization: 0.2, resets_at: null }] }));
+    push(reading({ conversation_id: 'c-work', windows: [{ kind: 'five_hour', utilization: 0.8, resets_at: null }] }));
+
+    await waitFor(() => expect(work.current?.windows.five_hour?.utilization).toBe(0.8));
+    await waitFor(() => expect(main.current?.windows.five_hour?.utilization).toBe(0.2));
+    expect(JSON.parse(localStorage.getItem(KEY) ?? '{}').claude).toBeUndefined();
+  });
+
   it('files a background chat under its preset assistant engine, as the on-screen chat does', async () => {
     const store = await load();
     mocks.conversation = {

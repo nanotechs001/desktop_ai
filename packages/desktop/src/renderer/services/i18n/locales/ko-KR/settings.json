@@ -1188,7 +1188,23 @@
     "boundAssistantsEmpty": "이 엔진을 사용하는 에이전트가 아직 없습니다.",
     "viewAssistant": "보기",
     "searchPlaceholder": "에이전트 검색...",
-    "noSearchResults": "일치하는 에이전트가 없습니다."
+    "noSearchResults": "일치하는 에이전트가 없습니다.",
+    "accounts": {
+      "add": "계정 추가",
+      "addHelp": "이 엔진의 다른 로그인을 별도 엔진으로 추가해 채팅과 봇이 계정을 전환할 수 있게 합니다.",
+      "labelPlaceholder": "계정 이름 (예: 업무)",
+      "create": "추가",
+      "added": "계정을 추가했습니다. 사용하려면 로그인하세요.",
+      "signIn": "로그인",
+      "signInHelp": "터미널에서 이것을 실행한 뒤 /login을 입력해 이 계정에 로그인하세요:",
+      "copy": "명령 복사",
+      "copied": "복사됨",
+      "delete": "계정 제거",
+      "deleteTitle": "이 계정을 제거할까요?",
+      "deleteHelp": "채팅은 유지됩니다. 로그인 정보는 이 컴퓨터에 남습니다.",
+      "deleteConfirm": "제거",
+      "usage": "5시간 {{fiveHour}}% · 주간 {{week}}%"
+    }
   },
   "repair": {
     "pathLabel": "시작 경로",

@@ -9,6 +9,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { IConversationRateLimitUpdatedEvent } from '@/common/adapter/ipcBridge';
@@ -59,6 +60,7 @@ vi.mock('@arco-design/web-react', async (importOriginal) => ({
 
 const mocks = vi.hoisted(() => ({
   listeners: new Set<(event: IConversationRateLimitUpdatedEvent) => void>(),
+  conversation: null as unknown,
 }));
 vi.mock('@/common', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/common')>();
@@ -80,7 +82,7 @@ vi.mock('@/common', async (importOriginal) => {
   };
 });
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
-  getConversationOrNull: async () => null,
+  getConversationOrNull: async () => mocks.conversation,
 }));
 
 const NOW_MS = 1_785_000_000_000;
@@ -108,13 +110,19 @@ const renderIndicator = async (backend = 'claude') => {
   vi.resetModules();
   const { default: SubscriptionUsageIndicator } =
     await import('@/renderer/pages/conversation/components/limitSwitch/SubscriptionUsageIndicator');
-  return render(<SubscriptionUsageIndicator backend={backend} conversationId='c-1' />);
+  // A fresh SWR cache per render: the chat lookup must not be deduped into another test's.
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <SubscriptionUsageIndicator backend={backend} conversationId='c-1' />
+    </SWRConfig>
+  );
 };
 
 describe('SubscriptionUsageIndicator', () => {
   beforeEach(() => {
     localStorage.clear();
     mocks.listeners.clear();
+    mocks.conversation = null;
     vi.spyOn(Date, 'now').mockReturnValue(NOW_MS);
   });
   afterEach(() => {
@@ -126,6 +134,20 @@ describe('SubscriptionUsageIndicator', () => {
     const { container } = await renderIndicator();
     push({ utilization: 0.5, resets_at: NOW_S + HOUR });
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows the usage of the chat's own login, not another login of the same engine", async () => {
+    localStorage.setItem(
+      'subscription-usage:v1',
+      JSON.stringify({
+        'claude-main': { windows: { five_hour: { utilization: 0.2, resets_at: null } }, updated_at: NOW_MS },
+        'claude-work': { windows: { five_hour: { utilization: 0.8, resets_at: null } }, updated_at: NOW_MS },
+      })
+    );
+    mocks.conversation = { id: 'c-1', type: 'acp', extra: { backend: 'claude', agent_id: 'claude-work' } };
+    await renderIndicator('claude');
+
+    expect(await screen.findByRole('button', { name: /80%/ })).toBeInTheDocument();
   });
 
   it('stays hidden for another engine than the one the reading came from', async () => {

@@ -444,13 +444,18 @@ impl AgentRegistry {
         self.by_id.read().await.get(id).cloned()
     }
 
-    /// First row whose vendor label matches, among `agent_source = 'builtin'`.
+    /// First row whose vendor label matches, among `agent_source = 'builtin'`
+    /// rows that are not accounts (another login of a builtin row).
     pub async fn find_builtin_by_backend(&self, vendor: &str) -> Option<AgentMetadata> {
         self.by_id
             .read()
             .await
             .values()
-            .find(|m| m.backend.as_deref() == Some(vendor) && m.agent_source == AgentSource::Builtin)
+            .find(|m| {
+                m.backend.as_deref() == Some(vendor)
+                    && m.agent_source == AgentSource::Builtin
+                    && m.agent_source_info.account_of.is_none()
+            })
             .cloned()
     }
 
@@ -1627,7 +1632,9 @@ fn probe_command_candidate(command: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aionui_db::{IAgentMetadataRepository, SqliteAgentMetadataRepository, init_database_memory};
+    use aionui_db::{
+        IAgentMetadataRepository, SqliteAgentMetadataRepository, UpsertAgentMetadataParams, init_database_memory,
+    };
 
     async fn registry() -> Arc<AgentRegistry> {
         let db = init_database_memory().await.unwrap();
@@ -1668,6 +1675,59 @@ mod tests {
         // Legacy AionUi yolo aliases resolve to Codex's native
         // `agent-full-access` mode via the catalog row.
         assert_eq!(codex.yolo_id.as_deref(), Some("agent-full-access"));
+    }
+
+    /// An account row (a second claude login) is builtin-sourced with the same
+    /// backend, so vendor-label lookups must skip it and keep resolving the
+    /// seeded row — whatever its sort order or the cache's hash order.
+    #[tokio::test]
+    async fn builtin_backend_lookup_never_returns_an_account_row() {
+        let db = init_database_memory().await.unwrap();
+        let repo = Arc::new(SqliteAgentMetadataRepository::new(db.pool().clone()));
+        for n in 0..5 {
+            let id = format!("acct-{n}");
+            let params = UpsertAgentMetadataParams {
+                id: &id,
+                icon: None,
+                name: "Claude Code · Work",
+                name_i18n: None,
+                description: None,
+                description_i18n: None,
+                backend: Some("claude"),
+                agent_type: "acp",
+                agent_source: "builtin",
+                agent_source_info: Some(r#"{"account_of":"2d23ff1c"}"#),
+                enabled: true,
+                command: None,
+                args: None,
+                env: None,
+                native_skills_dirs: None,
+                skill_delivery: None,
+                behavior_policy: None,
+                yolo_id: None,
+                agent_capabilities: None,
+                auth_methods: None,
+                config_options: None,
+                available_modes: None,
+                available_models: None,
+                available_commands: None,
+                sort_order: -100,
+            };
+            repo.upsert_for_user(SYSTEM_DEFAULT_USER_ID, &params).await.unwrap();
+        }
+        let reg = AgentRegistry::new(repo);
+        reg.hydrate().await.unwrap();
+
+        assert_eq!(reg.find_builtin_by_backend("claude").await.unwrap().id, "2d23ff1c");
+        let for_user = reg
+            .find_builtin_by_backend_for_user(SYSTEM_DEFAULT_USER_ID, "claude")
+            .await
+            .unwrap();
+        assert_eq!(for_user.id, "2d23ff1c");
+        assert!(
+            reg.get("acct-0").await.is_some(),
+            "the account row itself is still served by id"
+        );
     }
 
     #[tokio::test]

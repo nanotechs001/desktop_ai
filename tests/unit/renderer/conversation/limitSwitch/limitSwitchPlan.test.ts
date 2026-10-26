@@ -230,6 +230,25 @@ describe('listSwitchTargets', () => {
       });
     });
 
+    it('reads each login of an engine by its own row: an account never takes the main login’s usage', () => {
+      const account = engine('claude-work', { backend: 'claude', agent_source_info: { account_of: 'claude-main' } });
+      const limitedIn = (usage: Record<string, ReturnType<typeof reading>>) =>
+        listSwitchTargets({
+          conversation: acpChat,
+          engines: [engine('claude-main', { backend: 'claude' }), account],
+          providers: [],
+          getAvailableModels,
+          usage,
+          now: NOW,
+        }).limitedUntil;
+      const full = reading({ five_hour: { utilization: 1, resets_at: inAnHour } });
+
+      expect(limitedIn({ 'claude-work': full })).toEqual({ 'claude-work': inAnHour });
+      expect(limitedIn({ 'claude-main': full })).toEqual({ 'claude-main': inAnHour });
+      // A reading filed under the backend (a chat without an engine row) is the main login's, never an account's.
+      expect(limitedIn({ claude: full })).toEqual({ 'claude-main': inAnHour });
+    });
+
     it('offers it as before once the window resets, below 100%, or on a stale reading', () => {
       expect(limitedOf({ codex: reading({ five_hour: { utilization: 1, resets_at: NOW / 1000 - 1 } }) })).toEqual({});
       expect(limitedOf({ codex: reading({ five_hour: { utilization: 0.99, resets_at: inAnHour } }) })).toEqual({});

@@ -1198,7 +1198,23 @@
     "boundAssistantsEmpty": "Nenhum agente usa este motor ainda.",
     "viewAssistant": "Ver",
     "searchPlaceholder": "Pesquisar agentes...",
-    "noSearchResults": "Nenhum agente correspondente."
+    "noSearchResults": "Nenhum agente correspondente.",
+    "accounts": {
+      "add": "Adicionar conta",
+      "addHelp": "Adiciona outro login deste motor como um motor próprio, para que chats e bots possam alternar entre contas.",
+      "labelPlaceholder": "Nome da conta, ex.: Trabalho",
+      "create": "Adicionar",
+      "added": "Conta adicionada. Entre nela para usá-la.",
+      "signIn": "Entrar",
+      "signInHelp": "Execute isto em um terminal e digite /login para entrar nesta conta:",
+      "copy": "Copiar comando",
+      "copied": "Copiado",
+      "delete": "Remover conta",
+      "deleteTitle": "Remover esta conta?",
+      "deleteHelp": "Os chats nela continuam. O login fica neste computador.",
+      "deleteConfirm": "Remover",
+      "usage": "5 h {{fiveHour}}% · semana {{week}}%"
+    }
   },
   "repair": {
     "pathLabel": "Caminho de Inicialização",

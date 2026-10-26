@@ -55,6 +55,14 @@ pub struct AgentSourceInfo {
     /// Version string for Hub or custom rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Set on an account row: another login of the engine row with this id
+    /// (same CLI, its own config dir in `env`). Vendor-label lookups skip it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_of: Option<String>,
+    /// An account row's CLI config dir (also in its `env`, which management
+    /// views never show): where the user signs the account in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_dir: Option<String>,
 }
 
 /// Adapter-side behaviour switches. These drive code branches that used

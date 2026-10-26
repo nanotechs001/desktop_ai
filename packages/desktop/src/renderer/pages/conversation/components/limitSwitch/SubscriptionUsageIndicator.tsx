@@ -8,13 +8,16 @@ import { Popover, Progress } from '@arco-design/web-react';
 import type { TFunction } from 'i18next';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 import type { RateLimitWindowKind } from '@/common/adapter/ipcBridge';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { getConversationOrNull } from '../../utils/conversationCache';
 import { formatResetTime } from './usageWarning';
 import {
   currentWindows,
   hasSubscriptionWindows,
   MAX_READING_AGE_MS,
+  usageKeyOf,
   useSubscriptionUsage,
   type UsageWindow,
 } from './subscriptionUsage';
@@ -77,7 +80,9 @@ const SubscriptionUsageIndicator: React.FC<{ backend: string; conversationId: st
 }) => {
   const { t, i18n } = useTranslation();
   const isMobile = Boolean(useLayoutContext()?.isMobile);
-  const usage = useSubscriptionUsage(backend, conversationId);
+  // The chat's engine row: each account of an engine has its own usage.
+  const { data: conversation } = useSWR(`conversation/${conversationId}`, () => getConversationOrNull(conversationId));
+  const usage = useSubscriptionUsage(usageKeyOf(conversation) ?? backend, conversationId);
   // Re-render at the next reset (or when the reading grows too old), so the ring never shows a window past it.
   const [tick, setTick] = useState(0);
   useEffect(() => {

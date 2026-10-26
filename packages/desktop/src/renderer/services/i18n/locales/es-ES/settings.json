@@ -1186,7 +1186,23 @@
     "boundAssistantsEmpty": "Ningún agente usa todavía este motor.",
     "viewAssistant": "View",
     "searchPlaceholder": "Buscar agentes...",
-    "noSearchResults": "No hay agentes coincidentes."
+    "noSearchResults": "No hay agentes coincidentes.",
+    "accounts": {
+      "add": "Añadir cuenta",
+      "addHelp": "Añade otro inicio de sesión de este motor como motor propio, para que chats y bots puedan cambiar de cuenta.",
+      "labelPlaceholder": "Nombre de la cuenta, p. ej. Trabajo",
+      "create": "Añadir",
+      "added": "Cuenta añadida. Inicia sesión para usarla.",
+      "signIn": "Iniciar sesión",
+      "signInHelp": "Ejecuta esto en una terminal y escribe /login para iniciar sesión en esta cuenta:",
+      "copy": "Copiar comando",
+      "copied": "Copiado",
+      "delete": "Quitar cuenta",
+      "deleteTitle": "¿Quitar esta cuenta?",
+      "deleteHelp": "Sus chats se conservan. Su inicio de sesión queda en este equipo.",
+      "deleteConfirm": "Quitar",
+      "usage": "5 h {{fiveHour}} % · semana {{week}} %"
+    }
   },
   "retry": "Reintentar",
   "runtimeStatus": {

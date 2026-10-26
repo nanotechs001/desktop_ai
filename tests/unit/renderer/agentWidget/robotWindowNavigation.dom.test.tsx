@@ -80,6 +80,7 @@ describe('in-chat links inside a robot window', () => {
     const show = spy('showConversation');
     renderIn(<LimitSwitchActions conversationId='c1' />, '/widget/c1');
     fireEvent.click(await screen.findByText('Codex'));
+    fireEvent.click(screen.getByText('conversation.agentError.switch.proceed'));
     await waitFor(() => expect(show).toHaveBeenCalledWith({ conversation_id: 'c1', to: 'c2' }));
     expect(path).toBe('/widget/c1');
   });
@@ -144,6 +145,7 @@ describe('in-chat links inside a robot window', () => {
     const show = spy('showConversation');
     renderIn(<LimitSwitchActions conversationId='c1' />, '/conversation/c1');
     fireEvent.click(await screen.findByText('Codex'));
+    fireEvent.click(screen.getByText('conversation.agentError.switch.proceed'));
     await waitFor(() => expect(path).toBe('/conversation/c2'));
     expect(show).not.toHaveBeenCalled();
   });

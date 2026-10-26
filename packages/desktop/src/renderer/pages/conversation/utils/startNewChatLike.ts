@@ -65,6 +65,10 @@ export type NewChatChange = {
   assistant?: TConversationAssistantIdentity;
   /** Start in this permission mode, over the assistant's default (its `permission` override). */
   sessionMode?: string;
+  /** Start on this CLI engine model, over the assistant's default (its `model` override). */
+  acpModel?: string;
+  /** Start at this thinking level, over the assistant's default (its `thought_level` override). */
+  thoughtLevel?: string;
 };
 
 /**
@@ -109,9 +113,15 @@ export async function startNewChatLike(source: TChatConversation, change: NewCha
   const sourceExtra: Record<string, unknown> = latest.extra ?? {};
   const { engine, sessionMode } = change;
   const identity = change.assistant ?? latest.assistant;
-  // The backend sets the mode from the assistant's resolved default, so the override is what makes it stick.
+  // The backend sets mode, model and thinking level from the assistant's resolved defaults, so the overrides are what
+  // make them stick.
+  const overrides = Object.fromEntries(
+    Object.entries({ permission: sessionMode, model: change.acpModel, thought_level: change.thoughtLevel }).filter(
+      ([, value]) => value
+    )
+  );
   const assistant =
-    identity && sessionMode ? { ...identity, conversation_overrides: { permission: sessionMode } } : identity;
+    identity && Object.keys(overrides).length > 0 ? { ...identity, conversation_overrides: overrides } : identity;
   // A temporary folder belongs to its chat: without a workspace the backend makes a fresh one, as for any new chat.
   const dropWorkspace = sourceExtra.is_temporary_workspace === true;
   const carried = CARRIED_EXTRA_KEYS.filter(

@@ -1198,7 +1198,23 @@
     "boundAssistantsTooltip_one": "{{count}} Agent: {{names}}",
     "boundAssistantsTooltip_other": "{{count}} Agents: {{names}}",
     "boundAssistantsEmpty": "No Agents use this engine yet.",
-    "viewAssistant": "View"
+    "viewAssistant": "View",
+    "accounts": {
+      "add": "Add account",
+      "addHelp": "Adds another login of this engine as its own engine, so chats and bots can switch between accounts.",
+      "labelPlaceholder": "Account name, e.g. Work",
+      "create": "Add",
+      "added": "Account added. Sign it in to use it.",
+      "signIn": "Sign in",
+      "signInHelp": "Run this in a terminal, then type /login to sign this account in:",
+      "copy": "Copy command",
+      "copied": "Copied",
+      "delete": "Remove account",
+      "deleteTitle": "Remove this account?",
+      "deleteHelp": "Chats on it stay. Its sign-in stays on this computer.",
+      "deleteConfirm": "Remove",
+      "usage": "5-hour {{fiveHour}}% · weekly {{week}}%"
+    }
   },
   "repair": {
     "pathLabel": "Launch Path",

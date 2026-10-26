@@ -29,6 +29,7 @@ pub struct AgentService {
     broadcaster: Arc<dyn EventBroadcaster>,
     provider_health: ProviderHealthCheckService,
     availability: AgentAvailabilityService,
+    data_dir: PathBuf,
 }
 
 impl AgentService {
@@ -46,6 +47,7 @@ impl AgentService {
             broadcaster,
             provider_health,
             availability,
+            data_dir,
         })
     }
 
@@ -53,6 +55,11 @@ impl AgentService {
     /// for direct repository access (upsert / delete / enable toggle).
     pub(crate) fn registry(&self) -> &Arc<AgentRegistry> {
         &self.registry
+    }
+
+    /// The app data dir; engine accounts keep their CLI config dirs under it.
+    pub(crate) fn data_dir(&self) -> &std::path::Path {
+        &self.data_dir
     }
 
     pub(crate) fn broadcaster(&self) -> &Arc<dyn EventBroadcaster> {

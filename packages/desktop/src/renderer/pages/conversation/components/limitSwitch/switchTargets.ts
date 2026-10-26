@@ -12,10 +12,11 @@ import {
   currentWindows,
   MAX_READING_AGE_MS,
   type SubscriptionUsageState,
+  usageOfEngine,
 } from './subscriptionUsage';
 
-/** Continue on another CLI engine. */
-export type EngineTarget = { kind: 'engine'; engine: ManagedAgent };
+/** Continue on another CLI engine, on the picked model and thinking level (unset: the engine's own default). */
+export type EngineTarget = { kind: 'engine'; engine: ManagedAgent; model?: string; thoughtLevel?: string };
 /** Continue on the API-key model engine with one configured provider model. */
 export type ModelTarget = { kind: 'model'; engine: ManagedAgent; provider: IProvider; model: string };
 export type SwitchTarget = EngineTarget | ModelTarget;
@@ -78,7 +79,7 @@ export function listSwitchTargets({
   const targetEngines = connected.filter((engine) => engine.agent_type !== MODEL_ENGINE_TYPE && !isCurrent(engine));
   const limitedUntil: Record<string, number | null> = {};
   for (const engine of targetEngines) {
-    const until = limitReachedUntil(usage[engine.backend ?? engine.id], now);
+    const until = limitReachedUntil(usageOfEngine(usage, engine), now);
     if (until !== undefined) limitedUntil[engine.id] = until;
   }
   return {

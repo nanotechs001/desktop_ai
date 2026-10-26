@@ -210,12 +210,14 @@ describe('UsageWarningBar', () => {
     push('c-switch', { utilization: 0.97 });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Engine codex' }));
+    expect(mocks.switchAndContinue).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: translate('conversation.agentError.switch.proceed') }));
 
     expect(await screen.findByText('opened new chat')).toBeInTheDocument();
     expect(mocks.switchAndContinue).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'c-switch',
-        target: { kind: 'engine', engine: mocks.engines[1] },
+        target: { kind: 'engine', engine: mocks.engines[1], model: undefined, thoughtLevel: undefined },
         labels: expect.objectContaining({
           header: expect.stringContaining('the previous AI was close to its usage limit'),
         }),

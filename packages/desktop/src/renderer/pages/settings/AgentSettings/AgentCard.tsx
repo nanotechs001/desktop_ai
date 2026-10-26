@@ -28,6 +28,10 @@ type AgentCardBaseProps = {
   isDefault?: boolean;
   /** Present only when the engine can be made the default. */
   onSetDefault?: () => void;
+  /** A second line under the name (e.g. the login's plan usage). */
+  subtitle?: React.ReactNode;
+  /** Row actions shown before Test connection (e.g. engine accounts). */
+  extraActions?: React.ReactNode;
 };
 
 type AgentCardProps =
@@ -104,7 +108,7 @@ const statusLabelKey = (display: DisplayStatus) => {
 const AgentCard: React.FC<AgentCardProps> = (props) => {
   const { t } = useTranslation();
   const logos = useAgentLogos();
-  const { agent, boundAssistants, onTestConnection, onConfigure, isTesting, isDefault, onSetDefault } = props;
+  const { agent, boundAssistants, onTestConnection, onConfigure, isTesting, isDefault, onSetDefault, subtitle } = props;
 
   const isCustom = props.type === 'custom';
   const isDisabled = isCustom && agent.enabled === false;
@@ -173,11 +177,13 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
               </Tooltip>
             )}
           </div>
+          {subtitle}
         </div>
       </div>
 
       <div className='ms-12px flex flex-shrink-0 items-center gap-8px' onClick={stop}>
         <BoundAssistantStack assistants={boundAssistants} />
+        {props.extraActions}
         {onSetDefault && !isDefault ? (
           <Button
             data-testid={`agent-row-set-default-${agent.id}`}

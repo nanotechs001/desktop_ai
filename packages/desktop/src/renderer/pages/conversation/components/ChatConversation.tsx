@@ -40,6 +40,7 @@ import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
 import AcpRuntimeRestartButton from '@/renderer/components/agent/AcpRuntimeRestartButton';
 import GoogleModelSelector from '../platforms/gemini/GoogleModelSelector';
 import AionrsModelSelector from '../platforms/aionrs/AionrsModelSelector';
+import EngineSwitchButton from './limitSwitch/EngineSwitchButton';
 import { isLegacyReadOnlyConversationType } from '../utils/conversationRuntime';
 import { resolveConversationBackend } from '../utils/conversationAssistantIdentity';
 import { useActiveLease } from '../hooks/useActiveLease';
@@ -156,6 +157,7 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
           </>
         )}
         {conversation.assistant && <ConversationNewChatButton conversation={conversation} />}
+        {!isMobile && <EngineSwitchButton conversationId={conversation.id} />}
         {!isMobile && (
           <AionrsModelSelector
             selection={modelSelection}
@@ -328,6 +330,9 @@ const ChatConversation: React.FC<{
         <ShowAgentWidgetButton conversationId={conversation.id} agentId={conversation.assistant?.id} />
       )}
       {conversation && <WatchBrowserButton conversationId={conversation.id} />}
+      {conversation && !isMobile && !isLegacyReadOnlyConversation && (
+        <EngineSwitchButton conversationId={conversation.id} />
+      )}
       {modelSelector && <div className='shrink-0'>{modelSelector}</div>}
       {conversation && conversation.type === 'acp' && !isMobile && !isLegacyReadOnlyConversation && (
         <div className='shrink-0'>

@@ -195,6 +195,25 @@ describe('switchAndContinue', () => {
     });
   });
 
+  it('starts the new chat on the model and thinking level picked for the engine', async () => {
+    await switchAndContinue({
+      conversationId: 'c1',
+      target: { kind: 'engine', engine: CODEX, model: 'gpt-5.4', thoughtLevel: 'high' },
+      labels,
+    });
+
+    expect(sent().assistant).toMatchObject({
+      id: 'bot-1',
+      conversation_overrides: { model: 'gpt-5.4', thought_level: 'high' },
+    });
+  });
+
+  it('leaves the model and thinking level to the engine when none was picked', async () => {
+    await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels });
+
+    expect(sent().assistant).not.toHaveProperty('conversation_overrides');
+  });
+
   it('stashes the handoff as the first ACP message', async () => {
     await switchAndContinue({ conversationId: 'c1', target: { kind: 'engine', engine: CODEX }, labels });
 

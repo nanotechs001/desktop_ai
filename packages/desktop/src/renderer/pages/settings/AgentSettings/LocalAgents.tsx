@@ -23,6 +23,13 @@ import AddActionButton from '@/renderer/components/base/AddActionButton';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AgentCard from './AgentCard';
+import {
+  AddEngineAccountButton,
+  canAddEngineAccount,
+  EngineAccountActions,
+  EngineUsageLine,
+  isEngineAccount,
+} from './EngineAccounts';
 import { isDeprecatedRuntimeAgentType } from '@/renderer/utils/model/agentTypeSupportPolicy';
 import InlineAgentEditor, { type CustomAgentDraft } from './InlineAgentEditor';
 import { getBoundAssistants, useAssistantsForAgents } from './BoundAssistants';
@@ -174,6 +181,24 @@ const LocalAgents: React.FC = () => {
       agent.enabled !== false && agent.status !== 'missing' ? () => void handleSetDefaultEngine(agent.id) : undefined,
   });
 
+  // An engine that takes accounts (and each account) shows its login's plan usage; accounts are added on the main row.
+  const accountProps = (agent: ManagedAgent): { subtitle?: React.ReactNode; extraActions?: React.ReactNode } => {
+    const refresh = async (): Promise<void> => {
+      await refreshCatalog();
+    };
+    if (isEngineAccount(agent)) {
+      return {
+        subtitle: <EngineUsageLine agent={agent} />,
+        extraActions: <EngineAccountActions agent={agent} onChanged={refresh} />,
+      };
+    }
+    if (!canAddEngineAccount(agent)) return {};
+    return {
+      subtitle: <EngineUsageLine agent={agent} />,
+      extraActions: <AddEngineAccountButton agent={agent} onChanged={refresh} />,
+    };
+  };
+
   const openAgentConfig = useCallback(
     (agentId: string) => {
       navigate(`/settings/agent/${agentId}/repair`);
@@ -289,6 +314,7 @@ const LocalAgents: React.FC = () => {
               agent={agent}
               boundAssistants={getBoundAssistants(agent, assistants)}
               {...defaultEngineProps(agent)}
+              {...accountProps(agent)}
               onTestConnection={() => void handleTestConnection(agent.id)}
               onConfigure={() => openAgentConfig(agent.id)}
               isTesting={testingAgentId === agent.id}

@@ -1199,7 +1199,23 @@
     "boundAssistantsTooltip_one": "{{count}} 个 Agent：{{names}}",
     "boundAssistantsTooltip_other": "{{count}} 个 Agent：{{names}}",
     "boundAssistantsEmpty": "暂无 Agent 使用此引擎。",
-    "viewAssistant": "查看详情"
+    "viewAssistant": "查看详情",
+    "accounts": {
+      "add": "添加账号",
+      "addHelp": "将此引擎的另一个登录添加为独立引擎，便于对话和机器人在账号之间切换。",
+      "labelPlaceholder": "账号名称，例如：工作",
+      "create": "添加",
+      "added": "账号已添加。登录后即可使用。",
+      "signIn": "登录",
+      "signInHelp": "在终端中运行以下命令，然后输入 /login 登录此账号：",
+      "copy": "复制命令",
+      "copied": "已复制",
+      "delete": "移除账号",
+      "deleteTitle": "移除此账号？",
+      "deleteHelp": "其中的对话会保留，登录信息仍保存在这台电脑上。",
+      "deleteConfirm": "移除",
+      "usage": "5 小时 {{fiveHour}}% · 每周 {{week}}%"
+    }
   },
   "repair": {
     "pathLabel": "启动路径",

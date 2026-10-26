@@ -6,16 +6,18 @@
 //!
 //! - `GET  /api/agents/management` — list diagnostics-first agent rows
 //! - `POST /api/agents/custom/try-connect` — test custom agent configuration (e.g. ACP connection)
+//! - `POST /api/agents/{id}/accounts` — add another login of a builtin engine as its own row
+//! - `DELETE /api/agents/accounts/{id}` — remove such an account row
 
 use axum::Router;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Extension, Json, Path, State};
-use axum::routing::{get, patch, post, put};
+use axum::routing::{delete, get, patch, post, put};
 
 use aionui_api_types::{
-    AgentLogoEntry, AgentManagementRow, AgentMetadata, AgentOverridesResponse, ApiResponse, CustomAgentUpsertRequest,
-    DeleteCustomAgentResponse, ProviderHealthCheckRequest, ProviderHealthCheckResponse, SetAgentOverridesRequest,
-    SetEnabledRequest, TryConnectCustomAgentRequest, TryConnectCustomAgentResponse,
+    AgentLogoEntry, AgentManagementRow, AgentMetadata, AgentOverridesResponse, ApiResponse, CreateAgentAccountRequest,
+    CustomAgentUpsertRequest, DeleteCustomAgentResponse, ProviderHealthCheckRequest, ProviderHealthCheckResponse,
+    SetAgentOverridesRequest, SetEnabledRequest, TryConnectCustomAgentRequest, TryConnectCustomAgentResponse,
 };
 use aionui_auth::CurrentUser;
 use aionui_common::ApiError;
@@ -37,6 +39,8 @@ pub fn agent_routes(state: AgentRouterState) -> Router {
         .route("/api/agents/custom", post(create_custom))
         .route("/api/agents/custom/{id}", put(update_custom).delete(delete_custom))
         .route("/api/agents/custom/try-connect", post(try_connect_custom))
+        .route("/api/agents/{id}/accounts", post(create_account))
+        .route("/api/agents/accounts/{id}", delete(delete_account))
         .with_state(state)
 }
 
@@ -198,4 +202,33 @@ async fn set_agent_overrides(
             .await
             .map_err(agent_error_to_api_error)?,
     )))
+}
+
+async fn create_account(
+    State(state): State<AgentRouterState>,
+    Extension(user): Extension<CurrentUser>,
+    Path(id): Path<String>,
+    body: Result<Json<CreateAgentAccountRequest>, JsonRejection>,
+) -> Result<Json<ApiResponse<AgentMetadata>>, ApiError> {
+    let Json(req) = body.map_err(ApiError::from)?;
+    Ok(Json(ApiResponse::ok(
+        state
+            .service
+            .create_agent_account(&user.id, &id, &req.label)
+            .await
+            .map_err(agent_error_to_api_error)?,
+    )))
+}
+
+async fn delete_account(
+    State(state): State<AgentRouterState>,
+    Extension(user): Extension<CurrentUser>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<DeleteCustomAgentResponse>>, ApiError> {
+    state
+        .service
+        .delete_agent_account(&user.id, &id)
+        .await
+        .map_err(agent_error_to_api_error)?;
+    Ok(Json(ApiResponse::ok(DeleteCustomAgentResponse { deleted: true })))
 }

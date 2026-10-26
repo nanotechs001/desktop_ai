@@ -123,7 +123,7 @@ async function deliverHandoff(id: string, kind: 'acp' | 'aionrs', handoff: strin
 }
 
 /**
- * Continue a chat that hit a usage limit on another engine or model: re-pin this bot (only; an engine chat moves to
+ * Continue a chat on another engine or model (after a usage limit, or when the user chooses to): re-pin this bot (only; an engine chat moves to
  * the target engine's own entry instead), create a new chat like this one, and give it a handoff of the recent
  * conversation as its first message. The old chat stays as it is. On failure nothing is left behind: the new chat, if
  * created, is removed (never an empty chat), the pin is rolled back and the error is rethrown.
@@ -155,6 +155,8 @@ export async function switchAndContinue({ conversationId, target, labels }: Swit
       engine: engineChanges ? target.engine : undefined,
       assistant: entry,
       model: target.kind === 'model' ? toProviderModel(target.provider, target.model) : undefined,
+      acpModel: target.kind === 'engine' ? target.model : undefined,
+      thoughtLevel: target.kind === 'engine' ? target.thoughtLevel : undefined,
       sessionMode,
     });
     if (!createdId) throw new Error('The backend created no conversation');

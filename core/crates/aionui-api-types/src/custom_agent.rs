@@ -68,7 +68,14 @@ pub struct SetEnabledRequest {
     pub enabled: bool,
 }
 
-/// Response body for `DELETE /api/agents/custom/{id}`.
+/// Body for `POST /api/agents/{id}/accounts`: another login of that engine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateAgentAccountRequest {
+    /// Shown after the engine's name, e.g. "Work" in "Claude Code · Work".
+    pub label: String,
+}
+
+/// Response body for `DELETE /api/agents/custom/{id}` and `DELETE /api/agents/accounts/{id}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteCustomAgentResponse {
     pub deleted: bool,
