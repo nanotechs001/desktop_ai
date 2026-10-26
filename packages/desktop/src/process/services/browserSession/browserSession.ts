@@ -127,13 +127,8 @@ export function ensureBrowserSession(partition: string): Electron.Session {
   installRequestUserAgent(browserSession, app.userAgentFallback);
   installChallengeFallback(
     browserSession,
-    (webContentsId, url) => {
-      // Deferred a tick: loading from inside the response's own handling would race it.
-      setImmediate(() => {
-        const contents = webContents.fromId(webContentsId);
-        if (contents && !contents.isDestroyed()) contents.loadURL(url).catch(() => {});
-      });
-    },
+    app.userAgentFallback,
+    (webContentsId) => webContents.fromId(webContentsId) ?? null,
     (webContentsId, url, repeat) => void logStillChallenged(browserSession, webContentsId, url, repeat)
   );
   installDownloads(browserSession);
@@ -216,8 +211,9 @@ async function logStillChallenged(
   url: string,
   repeat: number
 ): Promise<void> {
-  const cookies = await browserSession.cookies.get({ url }).catch((): Electron.Cookie[] => []);
+  // Read before the await: the challenge fallback may put the tab on another agent right after this report.
   const tabAgent = webContents.fromId(webContentsId)?.getUserAgent();
+  const cookies = await browserSession.cookies.get({ url }).catch((): Electron.Cookie[] => []);
   const sentAgent = userAgentFor(url, app.userAgentFallback);
   console.warn(
     `[BrowserSession] Cloudflare challenged ${new URL(url).hostname} again (#${repeat}): ` +

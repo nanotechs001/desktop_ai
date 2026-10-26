@@ -69,17 +69,24 @@ const isCloudflareChallenge = (headers: Record<string, string[]> | undefined): b
   );
 
 /**
- * When Cloudflare challenges a page load, its host gets Electron's own agent from then on and the tab loads it again
- * (once per host: a challenge that remains is the user's own check, not a loop). `reload` loads the url in the tab;
- * its browser-started load switches the tab's agent (see {@link installSiteUserAgent}).
+ * When Cloudflare challenges a page load, its host gets Electron's own agent from then on and the tab loads it again on
+ * that agent (once per host: a challenge that remains is the user's own check, not a loop). A later challenge that
+ * finds the tab on another agent than its page loads send is put right and loaded once more: Cloudflare ties the
+ * clearance the check grants to the agent that passed it, so a mismatch refuses every pass (the Windows loop, logged
+ * with cf_clearance present and the tab still on plain Chrome). `contentsOf` finds a tab by its webContents id.
  */
 export function installChallengeFallback(
   session: Electron.Session,
-  reload: (webContentsId: number, url: string) => void,
+  electronUa: string,
+  contentsOf: (webContentsId: number) => Electron.WebContents | null,
   stillChallenged?: (webContentsId: number, url: string, repeat: number) => void
 ): void {
   // Repeats per host after the switch, reported the first few times (diagnostics; the loop is the user's to judge).
   const repeats = new Map<string, number>();
+  const loadInTab = (webContentsId: number | undefined, url: string): void => {
+    const contents = webContentsId === undefined ? null : contentsOf(webContentsId);
+    if (contents && !contents.isDestroyed()) loadWithSiteAgent(contents, url, electronUa);
+  };
   session.webRequest.onHeadersReceived((details, callback) => {
     callback({});
     if (details.resourceType !== 'mainFrame' || !isCloudflareChallenge(details.responseHeaders)) return;
@@ -91,12 +98,16 @@ export function installChallengeFallback(
       if (repeat <= MAX_REPORTED_REPEATS && details.webContentsId !== undefined) {
         stillChallenged?.(details.webContentsId, details.url, repeat);
       }
+      const contents = details.webContentsId === undefined ? null : contentsOf(details.webContentsId);
+      if (contents && !contents.isDestroyed() && contents.getUserAgent() !== userAgentFor(details.url, electronUa)) {
+        loadInTab(details.webContentsId, details.url);
+      }
       return;
     }
     if (keepsElectronToken(details.url)) return;
     challengedHosts.add(host);
     console.warn(`[BrowserSession] Cloudflare challenged ${host}; using the browser's own agent there`);
-    if (details.webContentsId !== undefined) reload(details.webContentsId, details.url);
+    loadInTab(details.webContentsId, details.url);
   });
 }
 
@@ -126,50 +137,52 @@ export function installRequestUserAgent(session: Electron.Session, electronUa: s
 const isLocalPage = (url: string): boolean => /^about:/i.test(url);
 
 /**
+ * Loads `url` in the tab on the agent of its site, deferred a tick (stopping or loading from inside an event of the
+ * load under way crashes Electron or races it). A tab on another agent is stopped first: Chromium answers a user-agent
+ * change during a load by reloading the page already shown, which races the new load (gmail.com → mail.google.com
+ * stayed blank).
+ */
+export function loadWithSiteAgent(contents: Electron.WebContents, url: string, electronUa: string): void {
+  setImmediate(() => {
+    if (contents.isDestroyed()) return;
+    const agent = userAgentFor(url, electronUa);
+    if (contents.getUserAgent() !== agent) {
+      contents.stop();
+      contents.setUserAgent(agent);
+    }
+    // A stopped load rejects on its own; failures of this one reach did-fail-load like any other load.
+    contents.loadURL(url).catch(() => {});
+  });
+}
+
+/**
  * Keeps a browser tab's user agent right for the site it is going to: set before each main-frame load (a link, a
  * redirect, a typed or scripted load), so the request and the page's `navigator.userAgent` agree. The session keeps
- * the Electron-token default; only tabs on other sites switch to plain Chrome.
+ * the Electron-token default; only tabs on other sites switch to plain Chrome. Each switch is judged by the tab's real
+ * agent: other code switches it too ({@link installChallengeFallback}).
  */
 export function installSiteUserAgent(contents: Electron.WebContents, electronUa: string): void {
-  // The tab's own agent (the session's), so a new tab's first load is a switch only when its site needs another.
-  let current = contents.getUserAgent();
-  /** Sets the user agent for `url`; true when it changed. An about: page sends no request, so it never switches. */
-  const follow = (url: string): boolean => {
-    if (isLocalPage(url)) return false;
-    const next = userAgentFor(url, electronUa);
-    if (next === current) return false;
-    current = next;
-    contents.setUserAgent(next);
-    return true;
-  };
-  // Chromium answers a user-agent change during a load by reloading the page already shown, which races the load
-  // under way (gmail.com → mail.google.com stayed blank). So a load that needs the other agent is stopped first,
-  // leaving nothing to reload, then sent again with the new agent. Deferred a tick: stopping a navigation from inside
-  // its own event crashes Electron. Returns whether a restart was scheduled.
-  const restart = (url: string): boolean => {
-    if (isLocalPage(url) || userAgentFor(url, electronUa) === current) return false;
-    setImmediate(() => {
-      if (contents.isDestroyed()) return;
-      contents.stop();
-      follow(url);
-      // The stopped load rejects on its own; failures of this one reach did-fail-load like any other load.
-      contents.loadURL(url).catch(() => {});
-    });
-    return true;
-  };
+  /** Whether a load of `url` needs another agent than the tab has. An about: page sends no request: never. */
+  const needsSwitch = (url: string): boolean =>
+    !isLocalPage(url) && userAgentFor(url, electronUa) !== contents.getUserAgent();
   // A link on a settled page has not started loading, so switching cancels nothing. While the tab still loads (an
   // opener pointing its popup somewhere fires this only after the load began) a switch would race that load.
   contents.on('will-navigate', (_event, url) => {
-    if (!contents.isLoading()) follow(url);
+    if (!contents.isLoading() && needsSwitch(url)) contents.setUserAgent(userAgentFor(url, electronUa));
   });
+  // A load under way that needs the other agent is stopped and sent again on it (see loadWithSiteAgent).
   // Cancelled before the redirect target is requested, so the restart is its only request.
   contents.on('will-redirect', (details) => {
-    if (details.isMainFrame && restart(details.url)) details.preventDefault();
+    if (!details.isMainFrame || !needsSwitch(details.url)) return;
+    details.preventDefault();
+    loadWithSiteAgent(contents, details.url, electronUa);
   });
   // Only a load the browser started (the address bar, loadURL, an agent's Page.navigate) restarts. A page's own load
   // (`initiator` set) has already been sent: restarting would send it twice, which spends a one-time login link
   // (ViziPlatform's site login), so it keeps the agent it has this once.
   contents.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument && !details.initiator) restart(details.url);
+    if (details.isMainFrame && !details.isSameDocument && !details.initiator && needsSwitch(details.url)) {
+      loadWithSiteAgent(contents, details.url, electronUa);
+    }
   });
 }

@@ -11,6 +11,7 @@ import {
   installRequestUserAgent,
   installSiteUserAgent,
   keepsElectronToken,
+  loadWithSiteAgent,
   toBrowserUserAgent,
   toChromeUserAgent,
   userAgentFor,
@@ -93,26 +94,27 @@ describe('userAgentFor', () => {
   });
 });
 
-describe('installSiteUserAgent', () => {
-  const tab = () => {
-    const contents = Object.assign(new EventEmitter(), {
-      ua: '',
-      setUserAgent: vi.fn(),
-      getURL: () => '',
-      getUserAgent: () => ELECTRON_UA_SESSION_DEFAULT,
-      loadURL: vi.fn(() => Promise.resolve()),
-      stop: vi.fn(),
-      isDestroyed: () => false,
-      loading: false,
-      isLoading: () => contents.loading,
-    });
-    contents.setUserAgent.mockImplementation((ua: string) => {
-      contents.ua = ua;
-    });
-    return contents;
-  };
-  const tick = () => new Promise((resolve) => setImmediate(resolve));
+/** A browser tab stub: starts on the session's agent and reports the agent it was last set to. */
+const tab = () => {
+  const contents = Object.assign(new EventEmitter(), {
+    ua: '',
+    setUserAgent: vi.fn(),
+    getURL: () => '',
+    getUserAgent: () => contents.ua || ELECTRON_UA_SESSION_DEFAULT,
+    loadURL: vi.fn(() => Promise.resolve()),
+    stop: vi.fn(),
+    isDestroyed: () => false,
+    loading: false,
+    isLoading: () => contents.loading,
+  });
+  contents.setUserAgent.mockImplementation((ua: string) => {
+    contents.ua = ua;
+  });
+  return contents;
+};
+const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+describe('installSiteUserAgent', () => {
   it('switches a tab to plain Chrome on other sites and back to Electron on Google, before each page loads', async () => {
     const contents = tab();
     installSiteUserAgent(contents as never, ELECTRON_UA);
@@ -215,6 +217,42 @@ describe('installSiteUserAgent', () => {
     expect(contents.loadURL).not.toHaveBeenCalled();
     expect(contents.setUserAgent).not.toHaveBeenCalled();
   });
+
+  // The tab's agent can be switched outside these events (the Cloudflare fallback): judged by a remembered agent, the
+  // tab stayed on it for every later site.
+  it("judges each switch by the tab's real agent, not the one it last set", () => {
+    const contents = tab();
+    installSiteUserAgent(contents as never, ELECTRON_UA);
+    contents.emit('will-navigate', {}, 'https://a.example/');
+    expect(contents.ua).toBe(CHROME_UA);
+
+    contents.ua = ELECTRON_UA_SESSION_DEFAULT;
+    contents.emit('will-navigate', {}, 'https://b.example/');
+    expect(contents.ua).toBe(CHROME_UA);
+  });
+});
+
+describe('loadWithSiteAgent', () => {
+  it("stops a tab on another agent, switches it to the site's, then loads the page", async () => {
+    const contents = tab();
+    contents.ua = CHROME_UA;
+    loadWithSiteAgent(contents as never, 'https://mail.google.com/', ELECTRON_UA);
+    expect(contents.loadURL).not.toHaveBeenCalled();
+    await tick();
+    expect(contents.stop).toHaveBeenCalled();
+    expect(contents.ua).toBe(toBrowserUserAgent(ELECTRON_UA));
+    expect(contents.loadURL).toHaveBeenCalledWith('https://mail.google.com/');
+  });
+
+  it('just loads a page whose agent the tab already has', async () => {
+    const contents = tab();
+    contents.ua = CHROME_UA;
+    loadWithSiteAgent(contents as never, 'https://a.example/', ELECTRON_UA);
+    await tick();
+    expect(contents.stop).not.toHaveBeenCalled();
+    expect(contents.setUserAgent).not.toHaveBeenCalled();
+    expect(contents.loadURL).toHaveBeenCalledWith('https://a.example/');
+  });
 });
 
 // A fresh tab's first request went out on the session default and only then switched, so a site that ties its login
@@ -273,9 +311,17 @@ describe('installChallengeFallback', () => {
   const setup = () => {
     let listener: HeadersListener | null = null;
     const session = { webRequest: { onHeadersReceived: vi.fn((fn: HeadersListener) => (listener = fn)) } };
-    const reload = vi.fn();
+    // The tab is on plain Chrome, as every non-Google site starts.
+    const page = tab();
+    page.ua = CHROME_UA;
+    const reload = page.loadURL;
     const stillChallenged = vi.fn();
-    installChallengeFallback(session as never, reload, stillChallenged);
+    installChallengeFallback(
+      session as never,
+      ELECTRON_UA,
+      (id) => (id === 9 ? (page as never) : null),
+      stillChallenged
+    );
     const respond = (
       url: string,
       statusCode: number,
@@ -286,20 +332,41 @@ describe('installChallengeFallback', () => {
       listener!({ url, resourceType, statusCode, webContentsId: 9, responseHeaders: headers }, callback);
       expect(callback).toHaveBeenCalledWith({});
     };
-    return { reload, respond, stillChallenged };
+    return { page, reload, respond, stillChallenged };
   };
 
-  it("gives a site that Cloudflare challenges Electron's own agent and reloads the tab, once", () => {
-    const { reload, respond } = setup();
+  it("gives a site that Cloudflare challenges Electron's own agent and reloads the tab on it, once", async () => {
+    const { page, reload, respond } = setup();
     const url = 'https://challenged.example.net/oauth2/authorize?x=1';
     expect(userAgentFor(url, ELECTRON_UA)).toBe(CHROME_UA);
 
     respond(url, 403, { 'CF-Mitigated': ['challenge'], Server: ['cloudflare'] });
+    await tick();
 
     expect(userAgentFor(url, ELECTRON_UA)).toBe(toBrowserUserAgent(ELECTRON_UA));
-    expect(reload).toHaveBeenCalledWith(9, url);
+    // The tab itself switches, so the check runs on the agent its page loads send.
+    expect(page.ua).toBe(toBrowserUserAgent(ELECTRON_UA));
+    expect(reload).toHaveBeenCalledWith(url);
     respond(url, 403, { 'cf-mitigated': ['challenge'] }); // still challenged: the user's own check, no reload loop
+    await tick();
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // The Windows loop (logged on v2.2.30): the check passed (cf_clearance present) on the tab's plain-Chrome agent,
+  // but the page loads went out on Electron's, so Cloudflare refused the clearance and challenged again, endlessly.
+  it('puts a tab still on another agent than its page loads back on theirs and loads it again', async () => {
+    const { page, reload, respond } = setup();
+    const url = 'https://mismatch.example.net/wp-login.php';
+    respond(url, 403, { 'cf-mitigated': ['challenge'] });
+    await tick();
+    page.ua = CHROME_UA;
+    reload.mockClear();
+
+    respond(url, 403, { 'cf-mitigated': ['challenge'] });
+    await tick();
+
+    expect(page.ua).toBe(toBrowserUserAgent(ELECTRON_UA));
+    expect(reload).toHaveBeenCalledWith(url);
   });
 
   // The Windows loop: the user passes the check, the page reloads, Cloudflare challenges again. Each repeat is
@@ -316,10 +383,11 @@ describe('installChallengeFallback', () => {
     expect(stillChallenged).toHaveBeenCalledTimes(5);
   });
 
-  it('ignores responses that are no challenge, and challenges outside the page itself', () => {
+  it('ignores responses that are no challenge, and challenges outside the page itself', async () => {
     const { reload, respond } = setup();
     respond('https://plain.example.org/', 200, { server: ['cloudflare'] });
     respond('https://frame.example.org/', 403, { 'cf-mitigated': ['challenge'] }, 'subFrame');
+    await tick();
     expect(reload).not.toHaveBeenCalled();
     expect(userAgentFor('https://plain.example.org/', ELECTRON_UA)).toBe(CHROME_UA);
   });
