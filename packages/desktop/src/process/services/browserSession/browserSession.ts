@@ -129,7 +129,7 @@ export function ensureBrowserSession(partition: string): Electron.Session {
     browserSession,
     app.userAgentFallback,
     (webContentsId) => webContents.fromId(webContentsId) ?? null,
-    (webContentsId, url, repeat) => void logStillChallenged(browserSession, webContentsId, url, repeat)
+    (webContentsId, url, repeat) => logStillChallenged(browserSession, webContentsId, url, repeat)
   );
   installDownloads(browserSession);
   installPermissions(browserSession, partition);
@@ -215,11 +215,14 @@ async function logStillChallenged(
   const tabAgent = webContents.fromId(webContentsId)?.getUserAgent();
   const cookies = await browserSession.cookies.get({ url }).catch((): Electron.Cookie[] => []);
   const sentAgent = userAgentFor(url, app.userAgentFallback);
+  // Domains show whether an older clearance rides along with the new one (the fallback drops them after this report).
+  const clearances = cookies.filter((c) => c.name === 'cf_clearance').map((c) => c.domain ?? '?');
+  const extensionCount = browserSession.extensions.getAllExtensions().length;
   console.warn(
     `[BrowserSession] Cloudflare challenged ${new URL(url).hostname} again (#${repeat}): ` +
-      `cf_clearance ${cookies.some((c) => c.name === 'cf_clearance') ? 'present' : 'missing'}, ` +
-      `${cookies.length} cookie(s) for the page, tab agent ${tabAgent === sentAgent ? 'matches' : `differs (${tabAgent})`}, ` +
-      `sent agent ${sentAgent}`
+      `cf_clearance ${clearances.length ? `x${clearances.length} (${clearances.join(', ')})` : 'missing'}, ` +
+      `cookies [${cookies.map((c) => c.name).join(', ')}], ${extensionCount} extension(s), ` +
+      `tab agent ${tabAgent === sentAgent ? 'matches' : `differs (${tabAgent})`}, sent agent ${sentAgent}`
   );
 }
 

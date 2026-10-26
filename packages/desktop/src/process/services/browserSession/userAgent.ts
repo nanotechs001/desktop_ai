@@ -62,6 +62,9 @@ export function keepsElectronToken(url: string): boolean {
 /** Repeated challenges of one host after the switch that are reported for diagnosis. */
 const MAX_REPORTED_REPEATS = 5;
 
+/** Cloudflare's clearance cookie, which its check sets and ties to the agent that passed it. */
+const CLEARANCE_COOKIE = 'cf_clearance';
+
 /** Cloudflare marks its challenge page with `cf-mitigated: challenge` (any header case). */
 const isCloudflareChallenge = (headers: Record<string, string[]> | undefined): boolean =>
   Object.entries(headers ?? {}).some(
@@ -73,16 +76,20 @@ const isCloudflareChallenge = (headers: Record<string, string[]> | undefined): b
  * that agent (once per host: a challenge that remains is the user's own check, not a loop). A later challenge that
  * finds the tab on another agent than its page loads send is put right and loaded once more: Cloudflare ties the
  * clearance the check grants to the agent that passed it, so a mismatch refuses every pass (the Windows loop, logged
- * with cf_clearance present and the tab still on plain Chrome). `contentsOf` finds a tab by its webContents id.
+ * with cf_clearance present and the tab still on plain Chrome). Each time, the host's clearance cookie goes first: one
+ * issued to another agent, or refused, would otherwise ride along with the next pass's (the v2.2.32 Windows loop:
+ * cf_clearance present, agent matching). `contentsOf` finds a tab by its webContents id.
  */
 export function installChallengeFallback(
   session: Electron.Session,
   electronUa: string,
   contentsOf: (webContentsId: number) => Electron.WebContents | null,
-  stillChallenged?: (webContentsId: number, url: string, repeat: number) => void
+  stillChallenged?: (webContentsId: number, url: string, repeat: number) => void | Promise<void>
 ): void {
   // Repeats per host after the switch, reported the first few times (diagnostics; the loop is the user's to judge).
   const repeats = new Map<string, number>();
+  // Removes every cf_clearance that would be sent to `url`; a failure leaves it and the page loads anyway.
+  const dropClearance = (url: string): Promise<void> => session.cookies.remove(url, CLEARANCE_COOKIE).catch(() => {});
   const loadInTab = (webContentsId: number | undefined, url: string): void => {
     const contents = webContentsId === undefined ? null : contentsOf(webContentsId);
     if (contents && !contents.isDestroyed()) loadWithSiteAgent(contents, url, electronUa);
@@ -95,19 +102,26 @@ export function installChallengeFallback(
     if (challengedHosts.has(host)) {
       const repeat = (repeats.get(host) ?? 0) + 1;
       repeats.set(host, repeat);
-      if (repeat <= MAX_REPORTED_REPEATS && details.webContentsId !== undefined) {
-        stillChallenged?.(details.webContentsId, details.url, repeat);
-      }
+      const report =
+        repeat <= MAX_REPORTED_REPEATS && details.webContentsId !== undefined
+          ? stillChallenged?.(details.webContentsId, details.url, repeat)
+          : undefined;
       const contents = details.webContentsId === undefined ? null : contentsOf(details.webContentsId);
-      if (contents && !contents.isDestroyed() && contents.getUserAgent() !== userAgentFor(details.url, electronUa)) {
-        loadInTab(details.webContentsId, details.url);
-      }
+      const mismatched =
+        contents && !contents.isDestroyed() && contents.getUserAgent() !== userAgentFor(details.url, electronUa);
+      // Reported first, so the log shows the cookie that was refused.
+      void Promise.resolve(report)
+        .catch(() => {})
+        .then(() => dropClearance(details.url))
+        .then(() => {
+          if (mismatched) loadInTab(details.webContentsId, details.url);
+        });
       return;
     }
     if (keepsElectronToken(details.url)) return;
     challengedHosts.add(host);
     console.warn(`[BrowserSession] Cloudflare challenged ${host}; using the browser's own agent there`);
-    loadInTab(details.webContentsId, details.url);
+    void dropClearance(details.url).then(() => loadInTab(details.webContentsId, details.url));
   });
 }
 

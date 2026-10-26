@@ -310,7 +310,11 @@ describe('installChallengeFallback', () => {
   ) => void;
   const setup = () => {
     let listener: HeadersListener | null = null;
-    const session = { webRequest: { onHeadersReceived: vi.fn((fn: HeadersListener) => (listener = fn)) } };
+    const removeCookie = vi.fn((_url: string, _name: string) => Promise.resolve());
+    const session = {
+      webRequest: { onHeadersReceived: vi.fn((fn: HeadersListener) => (listener = fn)) },
+      cookies: { remove: removeCookie },
+    };
     // The tab is on plain Chrome, as every non-Google site starts.
     const page = tab();
     page.ua = CHROME_UA;
@@ -332,7 +336,12 @@ describe('installChallengeFallback', () => {
       listener!({ url, resourceType, statusCode, webContentsId: 9, responseHeaders: headers }, callback);
       expect(callback).toHaveBeenCalledWith({});
     };
-    return { page, reload, respond, stillChallenged };
+    return { page, reload, respond, stillChallenged, removeCookie };
+  };
+  // The clearance cookie is dropped first (a promise), then the tab loads a tick later.
+  const settle = async () => {
+    await tick();
+    await tick();
   };
 
   it("gives a site that Cloudflare challenges Electron's own agent and reloads the tab on it, once", async () => {
@@ -341,14 +350,14 @@ describe('installChallengeFallback', () => {
     expect(userAgentFor(url, ELECTRON_UA)).toBe(CHROME_UA);
 
     respond(url, 403, { 'CF-Mitigated': ['challenge'], Server: ['cloudflare'] });
-    await tick();
+    await settle();
 
     expect(userAgentFor(url, ELECTRON_UA)).toBe(toBrowserUserAgent(ELECTRON_UA));
     // The tab itself switches, so the check runs on the agent its page loads send.
     expect(page.ua).toBe(toBrowserUserAgent(ELECTRON_UA));
     expect(reload).toHaveBeenCalledWith(url);
     respond(url, 403, { 'cf-mitigated': ['challenge'] }); // still challenged: the user's own check, no reload loop
-    await tick();
+    await settle();
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
@@ -358,12 +367,12 @@ describe('installChallengeFallback', () => {
     const { page, reload, respond } = setup();
     const url = 'https://mismatch.example.net/wp-login.php';
     respond(url, 403, { 'cf-mitigated': ['challenge'] });
-    await tick();
+    await settle();
     page.ua = CHROME_UA;
     reload.mockClear();
 
     respond(url, 403, { 'cf-mitigated': ['challenge'] });
-    await tick();
+    await settle();
 
     expect(page.ua).toBe(toBrowserUserAgent(ELECTRON_UA));
     expect(reload).toHaveBeenCalledWith(url);
@@ -383,11 +392,40 @@ describe('installChallengeFallback', () => {
     expect(stillChallenged).toHaveBeenCalledTimes(5);
   });
 
+  // The Windows loop (logged on v2.2.32): cf_clearance present and the tab on the right agent, still challenged. A
+  // clearance from before the switch was issued to the other agent; kept, it rides along with every new pass.
+  it("drops a host's clearance cookie before loading it again on Electron's agent", async () => {
+    const { reload, respond, removeCookie } = setup();
+    const url = 'https://stale.example.net/';
+    respond(url, 403, { 'cf-mitigated': ['challenge'] });
+    expect(reload).not.toHaveBeenCalled();
+    await settle();
+    expect(removeCookie).toHaveBeenCalledWith(url, 'cf_clearance');
+    expect(removeCookie.mock.invocationCallOrder[0]).toBeLessThan(reload.mock.invocationCallOrder[0]);
+  });
+
+  it('drops the refused clearance on each repeat, after reporting it, so the next pass sets the only one', async () => {
+    const { page, reload, respond, removeCookie, stillChallenged } = setup();
+    const url = 'https://refused.example.net/';
+    respond(url, 403, { 'cf-mitigated': ['challenge'] });
+    await settle();
+    removeCookie.mockClear();
+    reload.mockClear();
+
+    respond(url, 403, { 'cf-mitigated': ['challenge'] });
+    await settle();
+
+    expect(page.ua).toBe(toBrowserUserAgent(ELECTRON_UA));
+    expect(stillChallenged.mock.invocationCallOrder[0]).toBeLessThan(removeCookie.mock.invocationCallOrder[0]);
+    expect(removeCookie).toHaveBeenCalledWith(url, 'cf_clearance');
+    expect(reload).not.toHaveBeenCalled(); // the challenge page stays for the user's check
+  });
+
   it('ignores responses that are no challenge, and challenges outside the page itself', async () => {
     const { reload, respond } = setup();
     respond('https://plain.example.org/', 200, { server: ['cloudflare'] });
     respond('https://frame.example.org/', 403, { 'cf-mitigated': ['challenge'] }, 'subFrame');
-    await tick();
+    await settle();
     expect(reload).not.toHaveBeenCalled();
     expect(userAgentFor('https://plain.example.org/', ELECTRON_UA)).toBe(CHROME_UA);
   });
