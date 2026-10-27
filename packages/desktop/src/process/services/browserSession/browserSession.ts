@@ -5,7 +5,7 @@
  */
 
 import path from 'node:path';
-import { app, session, webContents } from 'electron';
+import { app, BrowserWindow, session, webContents } from 'electron';
 import { ipcBridge } from '@/common';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
 import { installContextMenu } from './contextMenu/contextMenuInstall';
@@ -129,7 +129,8 @@ export function ensureBrowserSession(partition: string): Electron.Session {
     browserSession,
     app.userAgentFallback,
     (webContentsId) => webContents.fromId(webContentsId) ?? null,
-    (webContentsId, url, repeat) => logStillChallenged(browserSession, webContentsId, url, repeat)
+    (webContentsId, url, repeat) => logStillChallenged(browserSession, webContentsId, url, repeat),
+    (webContentsId) => focusChallengedTab(webContents.fromId(webContentsId))
   );
   installDownloads(browserSession);
   installPermissions(browserSession, partition);
@@ -159,6 +160,11 @@ export const browserExtensionsSettled = (partition: string): Promise<void> =>
 export function initBrowserSession(deps: BrowserSessionDeps): void {
   if (initDeps) return;
   initDeps = deps;
+  // Cross-site frames (Cloudflare's challenge frame among them) run in their own process and send Electron's app-wide
+  // default agent, not the session's: with the app-name token (`PixebotBrowser/<ver>`) still in it, the challenge frame
+  // claimed another browser than its page and Cloudflare refused every pass (the socialadsmentor.com loop). Every frame
+  // now defaults to the same agent the sessions use.
+  app.userAgentFallback = toBrowserUserAgent(app.userAgentFallback);
 
   installExtensionProtocols({
     getMainWindow: deps.getMainWindow,
@@ -198,6 +204,36 @@ export function initBrowserSession(deps: BrowserSessionDeps): void {
       }
     }
   });
+}
+
+/**
+ * Cloudflare's check needs the page to have focus while it runs. A page opened from the address bar kept focus in the
+ * app's address bar, so its challenge ran unfocused and every pass was refused (the socialadsmentor.com loop). Chrome
+ * moves focus into a page loaded from its address bar; this does the same for a challenge page, but only for the tab
+ * on screen in the focused window, so a background tab never takes focus from what the user is typing.
+ */
+function focusChallengedTab(contents: Electron.WebContents | undefined): void {
+  if (!contents || contents.isDestroyed()) return;
+  const embedder = contents.hostWebContents;
+  const window = BrowserWindow.fromWebContents(embedder ?? contents);
+  if (!window || !window.isFocused()) return;
+  const pageFocus = `document.visibilityState + ',' + document.hasFocus()`;
+  // Read from an isolated world: the page cannot observe it.
+  void contents
+    .executeJavaScriptInIsolatedWorld(999, [{ code: pageFocus }])
+    .then(async (state) => {
+      const [visibility, focused] = String(state).split(',');
+      if (visibility !== 'visible' || focused === 'true' || contents.isDestroyed()) return;
+      if (embedder && !embedder.isDestroyed()) {
+        // A tab is a <webview> in the app window: focus that element, or the guest page never counts as focused.
+        await embedder.executeJavaScript(
+          `(() => { for (const w of document.querySelectorAll('webview')) {` +
+            ` if (w.getWebContentsId && w.getWebContentsId() === ${contents.id}) { w.focus(); return true; } } return false; })()`
+        );
+      }
+      contents.focus();
+    })
+    .catch(() => {});
 }
 
 /**

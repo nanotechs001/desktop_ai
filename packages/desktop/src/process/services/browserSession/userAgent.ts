@@ -84,7 +84,8 @@ export function installChallengeFallback(
   session: Electron.Session,
   electronUa: string,
   contentsOf: (webContentsId: number) => Electron.WebContents | null,
-  stillChallenged?: (webContentsId: number, url: string, repeat: number) => void | Promise<void>
+  stillChallenged?: (webContentsId: number, url: string, repeat: number) => void | Promise<void>,
+  onChallengePage?: (webContentsId: number) => void
 ): void {
   // Repeats per host after the switch, reported the first few times (diagnostics; the loop is the user's to judge).
   const repeats = new Map<string, number>();
@@ -99,6 +100,7 @@ export function installChallengeFallback(
     if (details.resourceType !== 'mainFrame' || !isCloudflareChallenge(details.responseHeaders)) return;
     const host = hostOf(details.url);
     if (host === null) return;
+    if (details.webContentsId !== undefined) onChallengePage?.(details.webContentsId);
     if (challengedHosts.has(host)) {
       const repeat = (repeats.get(host) ?? 0) + 1;
       repeats.set(host, repeat);

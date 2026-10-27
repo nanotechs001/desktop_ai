@@ -341,11 +341,13 @@ describe('installChallengeFallback', () => {
     page.ua = CHROME_UA;
     const reload = page.loadURL;
     const stillChallenged = vi.fn();
+    const onChallengePage = vi.fn();
     installChallengeFallback(
       session as never,
       ELECTRON_UA,
       (id) => (id === 9 ? (page as never) : null),
-      stillChallenged
+      stillChallenged,
+      onChallengePage
     );
     const respond = (
       url: string,
@@ -357,8 +359,20 @@ describe('installChallengeFallback', () => {
       listener!({ url, resourceType, statusCode, webContentsId: 9, responseHeaders: headers }, callback);
       expect(callback).toHaveBeenCalledWith({});
     };
-    return { page, reload, respond, stillChallenged, removeCookie };
+    return { page, reload, respond, stillChallenged, removeCookie, onChallengePage };
   };
+  // Cloudflare's check needs page focus: every challenged page load is reported so the tab can be focused.
+  it('reports every challenged page load of a tab, never other responses', () => {
+    const { respond, onChallengePage } = setup();
+    const challenge = { 'cf-mitigated': ['challenge'] };
+    respond('https://challenge-focus.example/wp-login.php', 403, challenge);
+    respond('https://challenge-focus.example/wp-login.php', 403, challenge);
+    respond('https://challenge-focus.example/ok', 200, {});
+    respond('https://challenge-focus.example/x.js', 403, challenge, 'script');
+    expect(onChallengePage).toHaveBeenCalledTimes(2);
+    expect(onChallengePage).toHaveBeenCalledWith(9);
+  });
+
   // The clearance cookie is dropped first (a promise), then the tab loads a tick later.
   const settle = async () => {
     await tick();
