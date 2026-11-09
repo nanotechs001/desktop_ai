@@ -414,7 +414,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
                 <AgentControls webContentsId={tabWebContentsId} ownership={ownership} actions={actions} />
               )}
               <BookmarksButton url={url} getTitle={() => webview?.getTitle() ?? ''} onOpen={handleUrlChange} />
-              <ExtensionActions partition={partition} profile={profile} />
+              <ExtensionActions partition={partition} profile={profile} tabWebContentsId={tabWebContentsId} />
               <DownloadsButton />
               <CookieImportMenu profile={profile ?? { kind: 'agent', agentId: DEFAULT_AGENT_ID }} />
             </>

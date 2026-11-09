@@ -32,6 +32,18 @@ describe('ExtensionActions', () => {
     expect(list?.getAttribute('alignment')).toBe('bottom right');
   });
 
+  // BugHerd sets its "project found" popup per tab (chrome.action.setPopup with a tabId); a list left on the library's
+  // last known active tab opened its default "No Project for this URL" popup instead.
+  it("binds the action list to its own tab, so an extension's per-tab popup and icon are the ones shown", () => {
+    const { container } = render(<ExtensionActions partition='persist:aionui-browser' tabWebContentsId={42} />);
+    expect(container.querySelector('browser-action-list')?.getAttribute('tab')).toBe('42');
+  });
+
+  it('leaves the tab unset until the tab has a webContents id', () => {
+    const { container } = render(<ExtensionActions partition='persist:aionui-browser' tabWebContentsId={null} />);
+    expect(container.querySelector('browser-action-list')?.hasAttribute('tab')).toBe(false);
+  });
+
   it('the "Get extensions" button opens https://chromewebstore.google.com/ in a new browser tab', () => {
     render(<ExtensionActions partition='persist:aionui-browser' />);
 

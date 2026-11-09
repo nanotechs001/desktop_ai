@@ -18,10 +18,16 @@ type ExtensionActionsProps = {
   partition: string;
   /** The tab's profile; the Web Store opens there, so installs land in this profile. */
   profile?: BrowserTabProfile;
+  /**
+   * The tab's webContents id: the actions show and open this tab's popup and icon. Extensions set those per tab
+   * (BugHerd's "project found" popup); unbound, the list follows the library's last known active tab, which can be
+   * another tab, and BugHerd answered "No Project for this URL".
+   */
+  tabWebContentsId?: number | null;
 };
 
 /** Nav-bar extension action icons (with their popups) plus a shortcut to the Chrome Web Store. */
-const ExtensionActions: React.FC<ExtensionActionsProps> = ({ partition, profile }) => {
+const ExtensionActions: React.FC<ExtensionActionsProps> = ({ partition, profile, tabWebContentsId }) => {
   const { t } = useTranslation();
   const preview = useOptionalPreviewContext();
   const label = t('preview.browserChrome.extensions.get');
@@ -29,7 +35,11 @@ const ExtensionActions: React.FC<ExtensionActionsProps> = ({ partition, profile 
   return (
     <div className='flex items-center'>
       {/* Ruling H: electron-chrome-extensions' own web component (injected by the preload), not a raw control. */}
-      <browser-action-list partition={partition} alignment='bottom right' />
+      <browser-action-list
+        partition={partition}
+        tab={tabWebContentsId == null ? undefined : String(tabWebContentsId)}
+        alignment='bottom right'
+      />
       <Button
         type='text'
         size='mini'
