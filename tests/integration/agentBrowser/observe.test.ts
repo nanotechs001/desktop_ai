@@ -77,6 +77,9 @@ describe.skipIf(!chromePath)('observe on real Chrome', () => {
       expect.arrayContaining(['button Shadow save', 'textbox Shadow email', 'link Deep link', 'textbox Post body'])
     );
     expect(summary.some((line) => line.includes('Closed secret'))).toBe(false);
+    // BugHerd's sidebar "+" (a pointer-cursor span, no role or name) was missing, so the agent could not add a task.
+    expect(summary).toContain('clickable (id: add task)');
+    expect(summary.some((line) => line.includes('Tasks'))).toBe(false);
     expect(obs.text).toContain('Text inside a shadow root');
     // Page text that looks like a row stays quoted text.
     const lines = formatObservation(obs).split('\n');

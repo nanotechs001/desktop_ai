@@ -75,6 +75,18 @@ describe.skipIf(!chromePath)('act on real Chrome', () => {
     await servers?.close();
   });
 
+  // BugHerd's sidebar "+" is a pointer-cursor span in a shadow root; the agent could neither see nor click it.
+  it("clicks an extension sidebar's pointer-cursor span inside a shadow root", async () => {
+    const session = await chrome.openPage(`${servers.originA}/shadow.html`);
+    const obs = await observePage(chrome.conn, session);
+    const { ctx } = contextFor(session);
+
+    const { results } = await act(ctx, [{ op: 'click', target: row(obs, '(id: add task)').id }]);
+
+    expect(results.map((r) => r.result)).toEqual(['done']);
+    expect(await evaluate(session, 'document.title')).toBe('added');
+  });
+
   it('clicks a button inside the OOPIF and types into its input (value verified via child session)', async () => {
     const session = await chrome.openPage(`${servers.originA}/builder-crossorigin.html`);
     const ready = (o: Observation) => rowsIn(o, servers.originB, 'Page title').length > 0;

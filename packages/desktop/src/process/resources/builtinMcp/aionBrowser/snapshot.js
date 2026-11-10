@@ -229,8 +229,18 @@
     return named.slice(0, MAX_GUESS - selected.length) + selected;
   };
   /**
-   * The role of a canvas element: clickable but not a control (a data-* builder hint, onclick, tabindex >= 0, or a
-   * builder class with a pointer cursor). `styled` false skips the computed style, to pick candidates cheaply.
+   * In an open shadow root, where extensions and widgets draw their UI: the outermost element with a pointer cursor.
+   * Such UIs make buttons of plain spans with a click handler (BugHerd's sidebar "+"), with no role, label or text.
+   * Only in shadow roots: they are small, so reading every element's style there stays cheap.
+   */
+  const pointerInShadow = (e) =>
+    e.getRootNode() !== document &&
+    getComputedStyle(e).cursor === 'pointer' &&
+    !(e.parentElement && getComputedStyle(e.parentElement).cursor === 'pointer');
+  /**
+   * The role of a canvas element: clickable but not a control (a data-* builder hint, onclick, tabindex >= 0, a
+   * builder class with a pointer cursor, or a pointer-cursor element in a shadow root). `styled` false skips the
+   * computed style, to pick candidates cheaply.
    */
   const hintRole = (e, styled = true) => {
     const type = builderType(e);
@@ -241,7 +251,8 @@
     }
     if (e.hasAttribute('onclick') || (e.hasAttribute('tabindex') && e.tabIndex >= 0)) return 'clickable';
     const kind = kindOf(e.getAttribute('class') || '', false);
-    return kind && (!styled || getComputedStyle(e).cursor === 'pointer') ? kind : null;
+    if (kind && (!styled || getComputedStyle(e).cursor === 'pointer')) return kind;
+    return styled && pointerInShadow(e) ? 'clickable' : null;
   };
   // The document plus every open shadow root under it (closed roots are unreachable by design), and in the same
   // pass the elements with a builder hint (canvas candidates).
@@ -250,7 +261,7 @@
     const addRoot = (root) => {
       found.roots.push(root);
       for (const e of root.querySelectorAll('*')) {
-        if (hintRole(e, false)) found.hinted.push(e);
+        if (hintRole(e, false) || (root !== document && pointerInShadow(e))) found.hinted.push(e);
         if (e.shadowRoot) addRoot(e.shadowRoot);
       }
     };
@@ -386,7 +397,7 @@
   /** A name for a control without one: a tooltip, else marked guesses from its test id, name or id, or its icon. */
   const guessed = (e) => {
     const tip = explicitName(e);
-    const id = !tip && words(attrText(e, ['data-testid', 'data-test', 'data-qa', 'name', 'id']));
+    const id = !tip && words(attrText(e, ['data-testid', 'data-test', 'data-qa', 'data-cy', 'name', 'id']));
     const icon = !tip && !id && iconOf(e);
     return (tip || (id && '(id: ' + id + ')') || (icon && '(icon: ' + icon + ')') || '').slice(0, MAX_GUESS);
   };

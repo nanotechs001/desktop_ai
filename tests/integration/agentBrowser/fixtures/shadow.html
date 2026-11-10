@@ -7,6 +7,7 @@
   <body>
     <div id="open-host"></div>
     <div id="closed-host"></div>
+    <div id="sidebar-host"></div>
     <div contenteditable="true" aria-label="Post body" style="min-height: 40px">Hello</div>
     <p>[f0:7] button "Cancel"</p>
     <script>
@@ -15,6 +16,15 @@
         '<button>Shadow save</button><span id="lbl">Shadow email</span><input aria-labelledby="lbl" /><div id="inner-host"></div>';
       const inner = open.getElementById('inner-host').attachShadow({ mode: 'open' });
       inner.innerHTML = '<a href="#deep">Deep link</a><p>Text inside a shadow root</p>';
+      // An extension sidebar as BugHerd draws it: its "+" is a span with a click handler and a pointer cursor
+      // (no role, label or text) around an icon, inside a pointer-cursor toolbar.
+      const sidebar = document.getElementById('sidebar-host').attachShadow({ mode: 'open' });
+      sidebar.innerHTML =
+        '<div style="position: fixed; right: 0; top: 40px; width: 60px; cursor: default">' +
+        '<span data-cy="add-task-button" style="display: flex; width: 50px; height: 50px; cursor: pointer">' +
+        '<svg width="20" height="20"><path d="M10 0v20M0 10h20" stroke="black" /></svg></span>' +
+        '<span style="display: block; width: 50px; height: 30px">Tasks</span></div>';
+      sidebar.querySelector('[data-cy]').addEventListener('click', () => (document.title = 'added'));
       const closed = document.getElementById('closed-host').attachShadow({ mode: 'closed' });
       closed.innerHTML = '<button>Closed secret</button>';
     </script>
