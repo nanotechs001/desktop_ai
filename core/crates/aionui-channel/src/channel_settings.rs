@@ -290,6 +290,33 @@ impl ChannelSettingsService {
         Ok(())
     }
 
+    /// The user's assistants (Pixebots) as `(assistant_id, name)`, for `/pixebot <name>`.
+    pub async fn list_pixebots(&self, user_id: &str) -> Result<Vec<(String, String)>, ChannelError> {
+        let Some(definition_repo) = &self.assistant_definition_repo else {
+            return Ok(vec![]);
+        };
+        if let Some(materializer) = &self.generated_assistant_materializer {
+            materializer.ensure_generated_assistants(user_id).await;
+        }
+        let definitions = definition_repo.list_for_user(user_id).await?;
+        Ok(definitions
+            .into_iter()
+            .map(|definition| (definition.assistant_id, definition.name))
+            .collect())
+    }
+
+    /// The agent a Pixebot runs on, or the default when it cannot be resolved.
+    pub async fn pixebot_agent_config(
+        &self,
+        user_id: &str,
+        assistant_id: &str,
+    ) -> Result<ResolvedAgentConfig, ChannelError> {
+        Ok(self
+            .resolve_assistant_agent_config(user_id, assistant_id)
+            .await?
+            .unwrap_or_else(default_agent_config))
+    }
+
     async fn resolve_assistant_agent_config(
         &self,
         user_id: &str,
@@ -579,7 +606,7 @@ pub fn resolved_model_to_provider(model: Option<&ResolvedModelConfig>) -> Provid
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use aionui_db::DbError;
     use aionui_db::models::{
@@ -657,8 +684,8 @@ mod tests {
         }
     }
 
-    struct MockAssistantDefinitionRepo {
-        rows: Vec<AssistantDefinitionRow>,
+    pub(crate) struct MockAssistantDefinitionRepo {
+        pub(crate) rows: Vec<AssistantDefinitionRow>,
     }
 
     #[async_trait::async_trait]
@@ -769,8 +796,8 @@ mod tests {
         }
     }
 
-    struct MockAssistantOverlayRepo {
-        rows: Vec<AssistantOverlayRow>,
+    pub(crate) struct MockAssistantOverlayRepo {
+        pub(crate) rows: Vec<AssistantOverlayRow>,
     }
 
     #[async_trait::async_trait]
@@ -820,7 +847,7 @@ mod tests {
         }
     }
 
-    fn make_definition(assistant_id: &str, agent_id: &str) -> AssistantDefinitionRow {
+    pub(crate) fn make_definition(assistant_id: &str, agent_id: &str) -> AssistantDefinitionRow {
         AssistantDefinitionRow {
             id: format!("def-{assistant_id}"),
             assistant_id: assistant_id.to_owned(),

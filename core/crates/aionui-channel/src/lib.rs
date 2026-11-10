@@ -10,6 +10,7 @@ pub mod manager;
 pub mod message_service;
 pub mod orchestrator;
 pub mod pairing;
+pub mod pixebot;
 pub mod plugin;
 pub mod plugins;
 pub mod routes;

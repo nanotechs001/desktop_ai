@@ -40,6 +40,8 @@ export type AgentBrowserOptions = {
   enabled: boolean;
   /** Loopback ports agents must not open besides the relay's own, e.g. the backend's. */
   blockedPorts: () => readonly number[];
+  /** The WebUI secure-link address while it runs, for agents asked for the remote url. */
+  remoteUrl?: () => string | null;
   /** The chat → Agent lookup the notebooks use (Task 13); without it every agent tab uses the default Agent profile. */
   resolveAgent?: (conversationId: string) => Promise<AgentResolution>;
   /** True for the built-in default Agent (a regular chat): its chats browse in a temporary per-chat session. */
@@ -460,6 +462,7 @@ export async function startAgentBrowserServices(options: AgentBrowserOptions): P
     },
     requestConfirm,
     blockedPorts: options.blockedPorts,
+    remoteUrl: options.remoteUrl,
   });
   active = registry;
   activeWaiter = waiter;

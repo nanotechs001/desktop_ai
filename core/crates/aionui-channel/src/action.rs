@@ -5,6 +5,7 @@ use tracing::{debug, info, warn};
 use crate::channel_settings::ChannelSettingsService;
 use crate::error::ChannelError;
 use crate::pairing::PairingService;
+use crate::pixebot::{ChatCommand, find_pixebot, parse_chat_command, pixebot_list_text};
 use crate::session::SessionManager;
 use crate::types::{
     ActionBehavior, ActionButton, ActionCategory, ActionResponse, UnifiedAction, UnifiedIncomingMessage,
@@ -28,6 +29,15 @@ pub enum MessageResult {
     /// Message was a text but user already has an active agent stream
     /// (no duplicate dispatch needed).
     AlreadyProcessing,
+    /// `/pixebot <name>` matched one of the user's assistants: the chat got a
+    /// fresh session, and the caller opens a conversation with that assistant
+    /// on it and confirms in the chat.
+    PixebotSelected {
+        owner_user_id: String,
+        session_id: String,
+        assistant_id: String,
+        name: String,
+    },
 }
 
 /// Processes incoming IM messages: authorization → action routing → AI dispatch.
@@ -101,7 +111,23 @@ impl ActionExecutor {
             return Ok(MessageResult::Action(response));
         }
 
-        // 3. Text message → session resolution → AI dispatch
+        // 3. Chat commands the channel handles itself
+        match parse_chat_command(&msg.content.text) {
+            Some(ChatCommand::Pixebot(name)) => {
+                return self
+                    .select_pixebot(owner_user_id, &internal_user_id, chat_id, name)
+                    .await;
+            }
+            Some(ChatCommand::NewSession) => {
+                let response = self
+                    .new_session_response(owner_user_id, &internal_user_id, chat_id, msg.platform)
+                    .await?;
+                return Ok(MessageResult::Action(response));
+            }
+            None => {}
+        }
+
+        // 4. Text message → session resolution → AI dispatch
         let agent_config = self.settings.get_agent_config(owner_user_id, msg.platform).await?;
         let session = self
             .session_mgr
@@ -150,6 +176,67 @@ impl ActionExecutor {
         );
 
         Ok(build_pairing_response(&code))
+    }
+
+    /// `/pixebot <name>`: a fresh session for this chat bound to the named
+    /// assistant, or the list of the user's assistants when none matches.
+    async fn select_pixebot(
+        &self,
+        owner_user_id: &str,
+        internal_user_id: &str,
+        chat_id: &str,
+        name: &str,
+    ) -> Result<MessageResult, ChannelError> {
+        let pixebots = self.settings.list_pixebots(owner_user_id).await?;
+        let Some((assistant_id, pixebot_name)) = (!name.is_empty()).then(|| find_pixebot(&pixebots, name)).flatten()
+        else {
+            return Ok(MessageResult::Action(text_response(pixebot_list_text(&pixebots, name))));
+        };
+        let agent = self.settings.pixebot_agent_config(owner_user_id, assistant_id).await?;
+        let session = self
+            .session_mgr
+            .reset_session(owner_user_id, internal_user_id, chat_id, &agent.agent_type, None)
+            .await?;
+        info!(session_id = %session.id, assistant_id = %assistant_id, "chat switched to pixebot");
+        Ok(MessageResult::PixebotSelected {
+            owner_user_id: owner_user_id.to_owned(),
+            session_id: session.id,
+            assistant_id: assistant_id.clone(),
+            name: pixebot_name.trim().to_owned(),
+        })
+    }
+
+    /// A fresh session on the platform's default agent (`/new` and the New Session button).
+    async fn new_session_response(
+        &self,
+        owner_user_id: &str,
+        internal_user_id: &str,
+        chat_id: &str,
+        platform: crate::types::PluginType,
+    ) -> Result<ActionResponse, ChannelError> {
+        let agent_config = self.settings.get_agent_config(owner_user_id, platform).await?;
+        let session = self
+            .session_mgr
+            .reset_session(owner_user_id, internal_user_id, chat_id, &agent_config.agent_type, None)
+            .await?;
+
+        Ok(ActionResponse {
+            text: Some(format!(
+                "New session created.\nAgent: {}\nSession: {}",
+                session.agent_type,
+                &session.id[..8]
+            )),
+            parse_mode: None,
+            buttons: Some(vec![vec![ActionButton {
+                label: "Help".into(),
+                action: "help.show".into(),
+                params: None,
+            }]]),
+            keyboard: None,
+            behavior: ActionBehavior::Send,
+            toast: None,
+            edit_message_id: None,
+        })
     }
 
     /// Routes an action to the appropriate handler by category.
@@ -261,34 +348,13 @@ impl ActionExecutor {
     ) -> Result<ActionResponse, ChannelError> {
         match action.action.as_str() {
             "session.new" => {
-                let user_id = internal_user_id;
-                let chat_id = &action.context.chat_id;
-                let agent_config = self
-                    .settings
-                    .get_agent_config(owner_user_id, action.context.platform)
-                    .await?;
-                let session = self
-                    .session_mgr
-                    .reset_session(owner_user_id, user_id, chat_id, &agent_config.agent_type, None)
-                    .await?;
-
-                Ok(ActionResponse {
-                    text: Some(format!(
-                        "New session created.\nAgent: {}\nSession: {}",
-                        session.agent_type,
-                        &session.id[..8]
-                    )),
-                    parse_mode: None,
-                    buttons: Some(vec![vec![ActionButton {
-                        label: "Help".into(),
-                        action: "help.show".into(),
-                        params: None,
-                    }]]),
-                    keyboard: None,
-                    behavior: ActionBehavior::Send,
-                    toast: None,
-                    edit_message_id: None,
-                })
+                self.new_session_response(
+                    owner_user_id,
+                    internal_user_id,
+                    &action.context.chat_id,
+                    action.context.platform,
+                )
+                .await
             }
             "session.status" => {
                 let user_id = internal_user_id;
@@ -516,6 +582,19 @@ fn build_help_response() -> ActionResponse {
                 },
             ],
         ]),
+        keyboard: None,
+        behavior: ActionBehavior::Send,
+        toast: None,
+        edit_message_id: None,
+    }
+}
+
+/// A plain text reply with no buttons.
+fn text_response(text: String) -> ActionResponse {
+    ActionResponse {
+        text: Some(text),
+        parse_mode: None,
+        buttons: None,
         keyboard: None,
         behavior: ActionBehavior::Send,
         toast: None,
@@ -903,6 +982,99 @@ mod tests {
             }
             _ => panic!("Expected Dispatched result for authorized user"),
         }
+    }
+
+    // ── Chat command tests ─────────────────────────────────────────────
+
+    fn setup_with_pixebots() -> (ActionExecutor, Arc<MockRepo>) {
+        use crate::channel_settings::tests::{MockAssistantDefinitionRepo, MockAssistantOverlayRepo, make_definition};
+        use aionui_db::{IAssistantDefinitionRepository, IAssistantOverlayRepository};
+
+        let repo = Arc::new(MockRepo::new());
+        let pairing = Arc::new(PairingService::new(repo.clone(), Arc::new(MockBroadcaster)));
+        let session_mgr = Arc::new(SessionManager::new(repo.clone()));
+        let pref_repo: Arc<dyn IClientPreferenceRepository> = Arc::new(MockPrefRepo);
+        let mut sales = make_definition("sales-bot", "claude");
+        sales.name = "Sales Bot".to_owned();
+        let definitions: Arc<dyn IAssistantDefinitionRepository> =
+            Arc::new(MockAssistantDefinitionRepo { rows: vec![sales] });
+        let overlays: Arc<dyn IAssistantOverlayRepository> = Arc::new(MockAssistantOverlayRepo { rows: vec![] });
+        let settings = Arc::new(ChannelSettingsService::new(pref_repo).with_assistant_repos(definitions, overlays));
+        let executor = ActionExecutor::new(pairing, session_mgr, settings, Some(OWNER_ID.to_owned()));
+        (executor, repo)
+    }
+
+    #[tokio::test]
+    async fn pixebot_command_selects_named_assistant_on_fresh_session() {
+        let (executor, repo) = setup_with_pixebots();
+        repo.add_authorized_user("tg_42", "telegram");
+        let first = make_text_message("tg_42", "chat_1", "hi", PluginType::Telegram);
+        let MessageResult::Dispatched { session_id: old, .. } = executor.handle_incoming_message(&first).await.unwrap()
+        else {
+            panic!("Expected Dispatched");
+        };
+
+        let msg = make_text_message("tg_42", "chat_1", "/pixebot sales bot", PluginType::Telegram);
+        match executor.handle_incoming_message(&msg).await.unwrap() {
+            MessageResult::PixebotSelected {
+                session_id,
+                assistant_id,
+                name,
+                ..
+            } => {
+                assert_eq!(assistant_id, "sales-bot");
+                assert_eq!(name, "Sales Bot");
+                assert_ne!(session_id, old);
+            }
+            other => panic!("Expected PixebotSelected, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn pixebot_command_lists_names_when_unknown() {
+        let (executor, repo) = setup_with_pixebots();
+        repo.add_authorized_user("tg_42", "telegram");
+        let msg = make_text_message("tg_42", "chat_1", "/pixebot Ghost", PluginType::Telegram);
+        match executor.handle_incoming_message(&msg).await.unwrap() {
+            MessageResult::Action(resp) => assert_eq!(
+                resp.text.as_deref(),
+                Some("No Pixebot named \"Ghost\". Your Pixebots:\n• Sales Bot")
+            ),
+            other => panic!("Expected Action, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn pixebot_command_is_not_sent_to_unauthorized_users() {
+        let (executor, _repo) = setup_with_pixebots();
+        let msg = make_text_message("tg_42", "chat_1", "/pixebot Sales Bot", PluginType::Telegram);
+        match executor.handle_incoming_message(&msg).await.unwrap() {
+            MessageResult::Action(resp) => assert!(resp.text.unwrap().contains("pairing code")),
+            other => panic!("Expected pairing Action, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn typed_new_command_resets_session() {
+        let (executor, repo) = setup();
+        repo.add_authorized_user("tg_42", "telegram");
+        let first = make_text_message("tg_42", "chat_1", "hi", PluginType::Telegram);
+        let MessageResult::Dispatched { session_id: old, .. } = executor.handle_incoming_message(&first).await.unwrap()
+        else {
+            panic!("Expected Dispatched");
+        };
+
+        let msg = make_text_message("tg_42", "chat_1", "/new", PluginType::Telegram);
+        let MessageResult::Action(resp) = executor.handle_incoming_message(&msg).await.unwrap() else {
+            panic!("Expected Action");
+        };
+        assert!(resp.text.unwrap().starts_with("New session created."));
+        let next = make_text_message("tg_42", "chat_1", "hi again", PluginType::Telegram);
+        let MessageResult::Dispatched { session_id, .. } = executor.handle_incoming_message(&next).await.unwrap()
+        else {
+            panic!("Expected Dispatched");
+        };
+        assert_ne!(session_id, old);
     }
 
     // ── Platform action tests ──────────────────────────────────────────

@@ -68,6 +68,7 @@ describe('aion-browser server', () => {
       'screenshot',
       'click_point',
       'viewport',
+      'remote_url',
       'run_script',
     ]);
     for (const tool of tools) expect(tool.description?.startsWith(PANE_SENTENCE)).toBe(true);
@@ -94,7 +95,7 @@ describe('aion-browser server', () => {
       expect(reply.isError).toBe(true);
       expect(textOf(reply)).toBe(NOT_AVAILABLE);
     }
-    expect((await client.listTools()).tools).toHaveLength(8); // still serving
+    expect((await client.listTools()).tools).toHaveLength(9); // still serving
   });
 
   it('says too many agent sessions are connected when the relay refuses with 503', async () => {
@@ -350,6 +351,31 @@ describe('tabs bookmarks', () => {
     expect(jsonOf(reply)).toEqual({ bookmarks: [{ title: 'Vizi Platform', url: 'https://viziplatform.com/' }] });
     const { tools } = await client.listTools();
     expect(tools[0].description).toContain('bookmarks');
+  });
+});
+
+describe('remote_url', () => {
+  const callRemoteUrl = async (client: Client): Promise<ToolReply> =>
+    (await client.callTool({ name: 'remote_url', arguments: {} })) as ToolReply;
+
+  it('returns the secure-link address while it runs', async () => {
+    relay.on('AionRelay.remoteUrl', () => ({ url: 'https://quiet-river.trycloudflare.com' }));
+    const client = await connectClient(relay.env);
+
+    const reply = await callRemoteUrl(client);
+
+    expect(reply.isError).toBeFalsy();
+    expect(jsonOf(reply)).toEqual({ url: 'https://quiet-river.trycloudflare.com' });
+  });
+
+  it('says where to turn the link on while it is off', async () => {
+    relay.on('AionRelay.remoteUrl', () => ({ url: null }));
+    const client = await connectClient(relay.env);
+
+    const reply = await callRemoteUrl(client);
+
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toContain('Settings > WebUI');
   });
 });
 

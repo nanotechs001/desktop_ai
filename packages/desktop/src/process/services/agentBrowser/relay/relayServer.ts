@@ -65,6 +65,8 @@ export type RelayServerDeps = {
   closeTab(webContentsId: number): void;
   /** The user's bookmarks, which agents may read (AionRelay.listBookmarks); none when absent. */
   listBookmarks?(): ReadonlyArray<{ url: string; title: string }>;
+  /** The WebUI secure-link address when it is running, which agents may read (AionRelay.remoteUrl); none when absent. */
+  remoteUrl?(): string | null;
   /** An agent's tab was claimed for it (Target.createTarget, or its bot's new chat took it over), e.g. for the tab cap. */
   onAgentTab?(webContentsId: number): void;
   onAgentAction(event: AgentActionEvent): void;
@@ -715,6 +717,8 @@ export async function startRelayServer(deps: RelayServerDeps): Promise<RelayHand
         return captureScreenshot(conn, params);
       case 'AionRelay.listBookmarks':
         return { bookmarks: (deps.listBookmarks?.() ?? []).map(({ title, url }) => ({ title, url })) };
+      case 'AionRelay.remoteUrl':
+        return { url: deps.remoteUrl?.() ?? null };
       case 'AionRelay.reportAction':
         return reportAction(conn, params);
       case 'AionRelay.requestConfirm':

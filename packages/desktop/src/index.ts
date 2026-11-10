@@ -805,6 +805,10 @@ const handleAppReady = async (): Promise<void> => {
       isDefaultAgent,
       // A chat in YOLO mode is not asked before risky clicks and page scripts.
       isYoloChat: chatIsYolo,
+      remoteUrl: () => {
+        const status = webuiTunnel.status();
+        return status.state === 'running' ? status.url : null;
+      },
     });
     if (agentBrowser) {
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;

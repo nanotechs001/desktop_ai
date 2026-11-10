@@ -709,6 +709,7 @@ describe('fallback tools', () => {
       'screenshot',
       'click_point',
       'viewport',
+      'remote_url',
       'run_script',
     ]);
     for (const tool of tools) expect(tool.description?.startsWith(PANE_SENTENCE)).toBe(true);

@@ -62,7 +62,7 @@ impl ChannelMessageService {
         let conversation_id = match &session.conversation_id {
             Some(cid) => cid.clone(),
             None => {
-                self.create_conversation_for_session(owner_user_id, session, platform)
+                self.create_conversation_for_session(owner_user_id, session, platform, None)
                     .await?
             }
         };
@@ -118,33 +118,56 @@ impl ChannelMessageService {
         })
     }
 
+    /// Opens a conversation with the assistant `assistant_id` (a Pixebot the
+    /// user picked with `/pixebot`) for `session`, instead of the platform's
+    /// default assistant. Returns the conversation id.
+    pub async fn start_pixebot_conversation(
+        &self,
+        owner_user_id: &str,
+        session: &AssistantSessionRow,
+        platform: PluginType,
+        assistant_id: &str,
+        name: &str,
+    ) -> Result<String, ChannelError> {
+        self.create_conversation_for_session(owner_user_id, session, platform, Some((assistant_id, name)))
+            .await
+    }
+
     /// Creates a new conversation for a channel session.
     ///
     /// Sets `source` to the appropriate platform and `channel_chat_id`
-    /// for per-chat isolation.
+    /// for per-chat isolation. `pixebot` is `(assistant_id, name)` to use in
+    /// place of the platform's assistant.
     async fn create_conversation_for_session(
         &self,
         owner_user_id: &str,
         session: &AssistantSessionRow,
         platform: PluginType,
+        pixebot: Option<(&str, &str)>,
     ) -> Result<String, ChannelError> {
         let source = platform_to_source(platform);
-        let agent_config = self
-            .settings
-            .get_agent_config(owner_user_id, platform)
-            .await
-            .map_err(|e| ChannelError::MessageSendFailed(e.to_string()))?;
-        let assistant_setting = self.settings.get_assistant_setting(owner_user_id, platform).await?;
-        let assistant_id = assistant_setting
-            .as_ref()
-            .and_then(|setting| setting.assistant_id.as_deref())
-            .map(ToOwned::to_owned);
-        let assistant_name = assistant_setting
-            .as_ref()
-            .and_then(|setting| setting.name.as_deref())
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(ToOwned::to_owned);
+        let agent_config = match pixebot {
+            Some((id, _)) => self.settings.pixebot_agent_config(owner_user_id, id).await,
+            None => self.settings.get_agent_config(owner_user_id, platform).await,
+        }
+        .map_err(|e| ChannelError::MessageSendFailed(e.to_string()))?;
+        let (assistant_id, assistant_name) = match pixebot {
+            Some((id, name)) => (Some(id.to_owned()), Some(name.to_owned())),
+            None => {
+                let assistant_setting = self.settings.get_assistant_setting(owner_user_id, platform).await?;
+                let assistant_id = assistant_setting
+                    .as_ref()
+                    .and_then(|setting| setting.assistant_id.as_deref())
+                    .map(ToOwned::to_owned);
+                let assistant_name = assistant_setting
+                    .as_ref()
+                    .and_then(|setting| setting.name.as_deref())
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(ToOwned::to_owned);
+                (assistant_id, assistant_name)
+            }
+        };
         let model_config = self.settings.get_model_config(owner_user_id, platform).await?;
         let agent_type = parse_agent_type(&agent_config.agent_type)?;
         let model = resolved_model_to_provider(model_config.as_ref());

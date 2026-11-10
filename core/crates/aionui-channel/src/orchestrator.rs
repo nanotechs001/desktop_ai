@@ -5,6 +5,7 @@ use tracing::{error, info, warn};
 
 use crate::action::{ActionExecutor, MessageResult};
 use crate::message_service::ChannelMessageService;
+use crate::pixebot::pixebot_selected_text;
 use crate::session::SessionManager;
 use crate::stream_relay::{ChannelSender, ChannelStreamRelay, RelayConfig, throttle_ms_for_platform};
 use crate::types::{ActionBehavior, OutgoingMessageType, UnifiedIncomingMessage, UnifiedOutgoingMessage};
@@ -105,6 +106,20 @@ impl ChannelOrchestrator {
                     )
                     .await;
                 }
+                Ok(MessageResult::PixebotSelected {
+                    owner_user_id,
+                    session_id,
+                    assistant_id,
+                    name,
+                }) => {
+                    let selection = PixebotSelection {
+                        session_id: &session_id,
+                        assistant_id: &assistant_id,
+                        name: &name,
+                    };
+                    let text = start_pixebot(&msg_svc, &session_mgr, &owner_user_id, selection, platform).await;
+                    send_text(&sender, &owner_user_id, &plugin_id, &chat_id, text).await;
+                }
                 Ok(MessageResult::AlreadyProcessing) => {
                     info!(chat_id = %chat_id, "message ignored: already processing");
                 }
@@ -151,6 +166,70 @@ async fn send_action_response(
             }
         }
     }
+}
+
+/// The Pixebot a chat picked with `/pixebot`, on its fresh session.
+struct PixebotSelection<'a> {
+    session_id: &'a str,
+    assistant_id: &'a str,
+    name: &'a str,
+}
+
+/// Opens the picked Pixebot's conversation on the session and binds it, so
+/// later messages in the chat go to that Pixebot. Returns the reply to send.
+async fn start_pixebot(
+    msg_svc: &Arc<ChannelMessageService>,
+    session_mgr: &Arc<SessionManager>,
+    owner_user_id: &str,
+    selection: PixebotSelection<'_>,
+    platform: crate::types::PluginType,
+) -> String {
+    let failed = |e: &dyn std::fmt::Display| {
+        error!(error = %e, assistant_id = %selection.assistant_id, "failed to start pixebot conversation");
+        format!("\u{274c} Could not start {}: {e}", selection.name)
+    };
+    let session = match session_mgr.get_session_by_id(owner_user_id, selection.session_id).await {
+        Ok(Some(session)) => session,
+        Ok(None) => return failed(&"session not found"),
+        Err(e) => return failed(&e),
+    };
+    let conversation_id = match msg_svc
+        .start_pixebot_conversation(
+            owner_user_id,
+            &session,
+            platform,
+            selection.assistant_id,
+            selection.name,
+        )
+        .await
+    {
+        Ok(id) => id,
+        Err(e) => return failed(&e),
+    };
+    if let Err(e) = session_mgr
+        .bind_conversation(owner_user_id, selection.session_id, &conversation_id)
+        .await
+    {
+        return failed(&e);
+    }
+    pixebot_selected_text(selection.name)
+}
+
+async fn send_text(sender: &Arc<dyn ChannelSender>, owner_user_id: &str, plugin_id: &str, chat_id: &str, text: String) {
+    let outgoing = UnifiedOutgoingMessage {
+        message_type: OutgoingMessageType::Text,
+        text: Some(text),
+        parse_mode: None,
+        buttons: None,
+        keyboard: None,
+        image_url: None,
+        file_url: None,
+        file_name: None,
+        media_actions: None,
+        reply_to_message_id: None,
+        silent: None,
+    };
+    let _ = sender.send_message(owner_user_id, plugin_id, chat_id, outgoing).await;
 }
 
 #[allow(clippy::too_many_arguments)]

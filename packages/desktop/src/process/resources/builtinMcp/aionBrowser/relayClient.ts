@@ -180,6 +180,13 @@ export class RelayClient {
       .map((b) => ({ title: b.title as string, url: b.url as string }));
   }
 
+  /** The WebUI secure-link (remote) address, or null while the link is off. */
+  async remoteUrl(): Promise<string | null> {
+    const conn = await this.ensureConnected();
+    const { url } = await conn.send<{ url?: unknown }>('AionRelay.remoteUrl');
+    return typeof url === 'string' && url ? url : null;
+  }
+
   /** Marks the shared tabs in `tabs` as seen, so only a tab the user shares later takes over the current tab. */
   noteShared(tabs: TabSummary[]): void {
     for (const tab of tabs) if (tab.owner === 'shared') this.knownShared.add(tab.tab);

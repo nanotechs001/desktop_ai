@@ -453,6 +453,10 @@ const navigateTab = (relay: RelayClient, queue: TabQueue, url: string | undefine
   });
 };
 
+const REMOTE_URL_DESCRIPTION = `${PANE_SENTENCE} The address to open Pixebot Browser remotely (the WebUI secure link, a Cloudflare https url). Use it when the user asks for the remote, WebUI or secure link url, e.g. from Telegram. Returns {url}, or an error saying the link is off. The link still asks for the WebUI login.`;
+const REMOTE_URL_OFF =
+  'The WebUI secure link is off. The user can turn it on in Pixebot Browser: Settings > WebUI > Secure link.';
+
 /** Builds the aion-browser MCP server around `relay`. Tools never throw: failures are `isError` results. */
 export function createBrowserMcpServer(relay: RelayClient): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: '1.0.0' }, { instructions: BROWSER_RULE_TEXT });
@@ -510,6 +514,12 @@ export function createBrowserMcpServer(relay: RelayClient): McpServer {
     { description: VIEWPORT_DESCRIPTION, inputSchema: viewportInput },
     ({ tab, preset, width, height }) =>
       guarded(() => onTab(relay, queue, tab, (ctx) => setViewport(ctx, { preset, width, height })))
+  );
+  server.registerTool('remote_url', { description: REMOTE_URL_DESCRIPTION }, () =>
+    guarded(async () => {
+      const url = await relay.remoteUrl();
+      return url ? ok({ url }) : fail(REMOTE_URL_OFF);
+    })
   );
   server.registerTool(
     'run_script',
