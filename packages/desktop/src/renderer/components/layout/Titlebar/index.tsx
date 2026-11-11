@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { Button } from '@arco-design/web-react';
-import { ArrowCircleLeft, ExpandLeft, ExpandRight, Search } from '@icon-park/react';
+import { ArrowCircleLeft, ExpandLeft, ExpandRight, Monitor, PreviewOpen, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -113,6 +113,11 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
     : t('common.collapse', { defaultValue: 'Collapse sidebar' });
   // The chat list lives in the history panel opened from here, on every platform.
   const searchTooltip = t('conversation.history.searchChats');
+  // Screen-share mode (browser mode only): the app's own icons hide, leaving a plain browser window.
+  const screenShare = layout?.screenShare;
+  const showScreenShareToggle = Boolean(screenShare && layout?.browserMode && !layout?.isMobile);
+  const hideAppControls = Boolean(screenShare?.active);
+  const screenShareLabel = screenShare?.enabled ? t('common.screenShareOff') : t('common.screenShareOn');
 
   const titlebarButtonClass = classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile');
 
@@ -313,7 +318,25 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {layout?.isMobile && <div id='app-titlebar-actions-slot' className='app-titlebar__actions-slot' />}
-        {!layout?.isMobile && (
+        {showScreenShareToggle && (
+          <Button
+            type='text'
+            size='mini'
+            className={titlebarButtonClass}
+            icon={
+              screenShare?.enabled ? (
+                <PreviewOpen theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />
+              ) : (
+                <Monitor theme='outline' size={iconSize} fill='currentColor' strokeWidth={desktopIconStroke} />
+              )
+            }
+            onClick={screenShare?.toggle}
+            aria-label={screenShareLabel}
+            aria-pressed={screenShare?.enabled}
+            title={screenShareLabel}
+          />
+        )}
+        {!layout?.isMobile && !hideAppControls && (
           <TitlebarNav
             buttonClassName={titlebarButtonClass}
             iconSize={iconSize}
@@ -321,7 +344,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
             leading={menuButtons}
           />
         )}
-        {showWorkspaceButton && (
+        {showWorkspaceButton && !hideAppControls && (
           <button
             type='button'
             className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}

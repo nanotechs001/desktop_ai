@@ -15,6 +15,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { setGlobalNavigate } from '@/renderer/utils/navigation';
 import { isHttpUrl, type AgentWidgetPreview } from '@/common/types/agent/agentWidget';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
+import { isBrowserTab } from '@renderer/pages/conversation/Preview/context/backgroundTabs';
+import { useScreenShareMode } from '@renderer/hooks/ui/screenShare/useScreenShareMode';
 import { ProjectPanelHost } from '@renderer/components/layout/ProjectPanelHost';
 import { ProjectPanelMobileOverlay } from '@renderer/components/layout/ProjectPanelMobileOverlay';
 import { setCurrentProject, useCurrentProject } from '@renderer/pages/conversation/explorer/currentProjectStore';
@@ -205,6 +207,7 @@ const Layout: React.FC<{
     closePreview: closePreviewOnRouteChange,
     isOpen: isPreviewOpen,
     isMaximized: isPreviewMaximized,
+    activeTab: activePreviewTab,
     isVaBotMode,
     isVaChatCollapsed,
     toggleVaChat,
@@ -221,6 +224,13 @@ const Layout: React.FC<{
     [botRail]
   );
   const toggleSider = useCallback(() => setCollapsed(!collapsed), [collapsed, setCollapsed]);
+  // Browser mode: a browser tab fills the window with the chat hidden; only then can screen-share mode apply.
+  const browserMode =
+    !isMobile &&
+    isPreviewOpen &&
+    Boolean(activePreviewTab && isBrowserTab(activePreviewTab)) &&
+    (isVaBotMode ? isVaChatCollapsed : isPreviewMaximized);
+  const screenShare = useScreenShareMode(browserMode);
   useConversationShortcuts({ navigate, toggleSider });
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
@@ -543,7 +553,9 @@ const Layout: React.FC<{
       };
 
   return (
-    <LayoutContext.Provider value={{ isMobile, siderCollapsed: collapsed, setSiderCollapsed: setCollapsed }}>
+    <LayoutContext.Provider
+      value={{ isMobile, siderCollapsed: collapsed, setSiderCollapsed: setCollapsed, browserMode, screenShare }}
+    >
       <div className='app-shell flex flex-col size-full min-h-0'>
         <Titlebar workspaceAvailable={workspaceAvailable} />
         {/* Every chat's browser tabs, mounted once for the app's lifetime: closing the panel, leaving
@@ -567,6 +579,7 @@ const Layout: React.FC<{
             width={siderWidth}
             className={classNames('!bg-2 layout-sider', {
               collapsed: siderCollapsed,
+              '!hidden': screenShare.active,
             })}
             style={siderStyle}
           >

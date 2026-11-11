@@ -686,6 +686,8 @@ export const application = {
     'update-system-info'
   ),
   getZoomFactor: bridge.buildProvider<number, void>('app.get-zoom-factor'),
+  /** Screen-share mode: show a plain globe as the app icon (true) or the normal icon (false). */
+  setShareIcon: bridge.buildProvider<void, { enabled: boolean }>('app.set-share-icon'),
   setZoomFactor: bridge.buildProvider<number, { factor: number }>('app.set-zoom-factor'),
   getCdpStatus: bridge.buildProvider<IBridgeResponse<ICdpStatus>, void>('app.get-cdp-status'),
   updateCdpConfig: bridge.buildProvider<IBridgeResponse<ICdpConfig>, Partial<ICdpConfig>>('app.update-cdp-config'),

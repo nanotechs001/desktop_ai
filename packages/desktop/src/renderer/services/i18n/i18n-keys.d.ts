@@ -329,6 +329,8 @@ export type I18nKey =
   | 'common.save'
   | 'common.saveFailed'
   | 'common.saveSuccess'
+  | 'common.screenShareOff'
+  | 'common.screenShareOn'
   | 'common.searchPlaceholder'
   | 'common.select'
   | 'common.selectedCount'

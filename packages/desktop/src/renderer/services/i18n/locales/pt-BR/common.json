@@ -182,5 +182,7 @@
     "dueCount": "{{count}} lembrete(s) vencido(s)",
     "empty": "Nenhum lembrete. Adicione um acima ou peça a um agente para lembrar você.",
     "failed": "Não foi possível atualizar o lembrete. Tente novamente."
-  }
+  },
+  "screenShareOn": "Modo compartilhar tela: ocultar controles do app",
+  "screenShareOff": "Mostrar controles do app"
 }

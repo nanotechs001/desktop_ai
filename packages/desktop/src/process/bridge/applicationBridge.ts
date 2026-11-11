@@ -18,6 +18,7 @@ import { registerBrowserProfileIpc } from '@process/services/browserSession/prof
 import { initApplicationBridgeCore } from './applicationBridgeCore';
 import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { restartApplication } from './restartApplication';
+import { setShareIcon } from '@process/utils/shareIcon';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -150,6 +151,11 @@ export function initApplicationBridge(): void {
   });
 
   ipcBridge.application.getZoomFactor.provider(() => Promise.resolve(getZoomFactor()));
+
+  ipcBridge.application.setShareIcon.provider(async (payload) => {
+    if (typeof payload?.enabled !== 'boolean') return;
+    setShareIcon(mainWindowRef, payload.enabled);
+  });
 
   ipcBridge.application.setZoomFactor.provider(async ({ factor }) => {
     const updatedFactor = setZoomFactor(factor);

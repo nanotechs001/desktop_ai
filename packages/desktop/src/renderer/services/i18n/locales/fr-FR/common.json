@@ -182,5 +182,7 @@
     "dueCount": "{{count}} rappel(s) à faire",
     "empty": "Aucun rappel. Ajoutez-en un ci-dessus ou demandez à un agent de vous le rappeler.",
     "failed": "Impossible de mettre à jour le rappel. Réessayez."
-  }
+  },
+  "screenShareOn": "Mode partage d'écran : masquer les commandes de l'app",
+  "screenShareOff": "Afficher les commandes de l'app"
 }

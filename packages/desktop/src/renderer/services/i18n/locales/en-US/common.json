@@ -182,5 +182,7 @@
     "dueCount": "{{count}} reminder(s) due",
     "empty": "No reminders. Add one above, or ask an agent to remind you.",
     "failed": "Couldn't update the reminder. Try again."
-  }
+  },
+  "screenShareOn": "Screen-share mode: hide app controls",
+  "screenShareOff": "Show app controls"
 }

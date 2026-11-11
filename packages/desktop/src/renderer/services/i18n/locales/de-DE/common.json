@@ -182,5 +182,7 @@
     "dueCount": "{{count}} Erinnerung(en) fällig",
     "empty": "Keine Erinnerungen. Füge oben eine hinzu oder bitte einen Agenten, dich zu erinnern.",
     "failed": "Die Erinnerung konnte nicht aktualisiert werden. Versuche es erneut."
-  }
+  },
+  "screenShareOn": "Bildschirmfreigabe-Modus: App-Steuerelemente ausblenden",
+  "screenShareOff": "App-Steuerelemente anzeigen"
 }

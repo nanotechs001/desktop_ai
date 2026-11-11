@@ -182,5 +182,7 @@
     "dueCount": "{{count}} recordatorio(s) pendiente(s)",
     "empty": "No hay recordatorios. Añade uno arriba o pide a un agente que te lo recuerde.",
     "failed": "No se pudo actualizar el recordatorio. Inténtalo de nuevo."
-  }
+  },
+  "screenShareOn": "Modo pantalla compartida: ocultar controles de la app",
+  "screenShareOff": "Mostrar controles de la app"
 }

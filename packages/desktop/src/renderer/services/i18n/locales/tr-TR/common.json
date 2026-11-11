@@ -182,5 +182,7 @@
     "dueCount": "{{count}} hatırlatıcının zamanı geldi",
     "empty": "Hatırlatıcı yok. Yukarıdan ekleyin veya bir ajandan hatırlatmasını isteyin.",
     "failed": "Hatırlatıcı güncellenemedi. Tekrar deneyin."
-  }
+  },
+  "screenShareOn": "Ekran paylaşımı modu: uygulama kontrollerini gizle",
+  "screenShareOff": "Uygulama kontrollerini göster"
 }

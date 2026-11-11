@@ -182,5 +182,7 @@
     "dueCount": "{{count}} 个提醒已到期",
     "empty": "暂无提醒。在上方添加，或让智能体提醒你。",
     "failed": "无法更新提醒，请重试。"
-  }
+  },
+  "screenShareOn": "屏幕共享模式：隐藏应用控件",
+  "screenShareOff": "显示应用控件"
 }
