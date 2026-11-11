@@ -13,7 +13,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const MIGRATION_BACKEND_PORT = 25912;
-const BUILTIN_ID = 'word-creator';
+// The Butler is the only built-in Agent that still ships.
+const BUILTIN_ID = 'aionui-assistant';
 const LEGACY_USER_ID = 'legacy-phase1-user';
 const LEGACY_PROMPT = 'Legacy prompt from previous versions';
 const LEGACY_RULE = '# Legacy rule\n\nKeep this rule after upgrade.\n';

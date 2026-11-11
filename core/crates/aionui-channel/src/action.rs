@@ -996,8 +996,15 @@ mod tests {
         let pref_repo: Arc<dyn IClientPreferenceRepository> = Arc::new(MockPrefRepo);
         let mut sales = make_definition("sales-bot", "claude");
         sales.name = "Sales Bot".to_owned();
-        let definitions: Arc<dyn IAssistantDefinitionRepository> =
-            Arc::new(MockAssistantDefinitionRepo { rows: vec![sales] });
+        sales.source = "user".to_owned();
+        // Built-in and generated rows are not the user's own Pixebots.
+        let mut builtin = make_definition("word-creator", "aionrs");
+        builtin.name = "Word Creator".to_owned();
+        builtin.source = "builtin".to_owned();
+        let generated = make_definition("bare-claude", "claude");
+        let definitions: Arc<dyn IAssistantDefinitionRepository> = Arc::new(MockAssistantDefinitionRepo {
+            rows: vec![sales, builtin, generated],
+        });
         let overlays: Arc<dyn IAssistantOverlayRepository> = Arc::new(MockAssistantOverlayRepo { rows: vec![] });
         let settings = Arc::new(ChannelSettingsService::new(pref_repo).with_assistant_repos(definitions, overlays));
         let executor = ActionExecutor::new(pairing, session_mgr, settings, Some(OWNER_ID.to_owned()));
@@ -1039,6 +1046,20 @@ mod tests {
             MessageResult::Action(resp) => assert_eq!(
                 resp.text.as_deref(),
                 Some("No Pixebot named \"Ghost\". Your Pixebots:\n• Sales Bot")
+            ),
+            other => panic!("Expected Action, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn pixebot_command_ignores_builtin_assistants() {
+        let (executor, repo) = setup_with_pixebots();
+        repo.add_authorized_user("tg_42", "telegram");
+        let msg = make_text_message("tg_42", "chat_1", "/pixebot Word Creator", PluginType::Telegram);
+        match executor.handle_incoming_message(&msg).await.unwrap() {
+            MessageResult::Action(resp) => assert_eq!(
+                resp.text.as_deref(),
+                Some("No Pixebot named \"Word Creator\". Your Pixebots:\n• Sales Bot")
             ),
             other => panic!("Expected Action, got {other:?}"),
         }

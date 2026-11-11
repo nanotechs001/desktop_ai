@@ -20,8 +20,8 @@ type MyAssistantsListProps = {
   onDelete: (assistant: AssistantListItem) => void;
   onToggleEnabled: (assistant: AssistantListItem, checked: boolean) => void;
   onStartChat: (assistant: AssistantListItem) => void;
-  /** Switch to the Official tab (to duplicate an official assistant). */
-  onGoOfficial: () => void;
+  /** Switch to the Official tab (to duplicate an official assistant); omitted when there are none. */
+  onGoOfficial?: () => void;
   searchActive?: boolean;
 };
 
@@ -104,11 +104,13 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
           defaultValue: 'Create one by chatting with the butler, or duplicate an official Agent into your own.',
         })}
       </p>
-      <div className='flex items-center gap-10px'>
-        <Button size='small' className='!rounded-8px' onClick={onGoOfficial} data-testid='created-empty-official'>
-          {t('settings.customEmptyBrowseOfficial', { defaultValue: 'Browse official' })}
-        </Button>
-      </div>
+      {onGoOfficial && (
+        <div className='flex items-center gap-10px'>
+          <Button size='small' className='!rounded-8px' onClick={onGoOfficial} data-testid='created-empty-official'>
+            {t('settings.customEmptyBrowseOfficial', { defaultValue: 'Browse official' })}
+          </Button>
+        </div>
+      )}
     </div>
   );
 

@@ -396,9 +396,8 @@ test.describe('Neutral Agent and Artifacts', () => {
       timeout: 10_000,
     });
     await expect(page.locator('[data-testid*="aionui-assistant"]')).toHaveCount(0);
-    await page.getByTestId('settings-tab-official').click();
-    await expect(page.locator('[data-testid*="word-creator"]').first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-testid*="aionui-assistant"]')).toHaveCount(0);
+    // No built-in Agent is listed, so the Built-in tab is not shown.
+    await expect(page.getByTestId('settings-tab-official')).toHaveCount(0);
     expect((await chromeText(page, '#root')).filter((text) => REMOVED_FEATURES.test(text))).toEqual([]);
     // No pet window was started: the app has only its main window.
     const windows = await electronApp.evaluate(

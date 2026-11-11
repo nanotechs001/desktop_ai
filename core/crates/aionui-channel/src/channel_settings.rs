@@ -290,17 +290,16 @@ impl ChannelSettingsService {
         Ok(())
     }
 
-    /// The user's assistants (Pixebots) as `(assistant_id, name)`, for `/pixebot <name>`.
+    /// The Pixebots the user created, as `(assistant_id, name)`, for `/pixebot <name>`.
     pub async fn list_pixebots(&self, user_id: &str) -> Result<Vec<(String, String)>, ChannelError> {
         let Some(definition_repo) = &self.assistant_definition_repo else {
             return Ok(vec![]);
         };
-        if let Some(materializer) = &self.generated_assistant_materializer {
-            materializer.ensure_generated_assistants(user_id).await;
-        }
         let definitions = definition_repo.list_for_user(user_id).await?;
+        // Built-in, generated and extension assistants are not the user's own Pixebots.
         Ok(definitions
             .into_iter()
+            .filter(|definition| definition.source == "user")
             .map(|definition| (definition.assistant_id, definition.name))
             .collect())
     }

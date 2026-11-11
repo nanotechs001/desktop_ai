@@ -144,11 +144,16 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
                 label: t('settings.assistantSectionEnabled', { defaultValue: 'Enabled' }),
                 count: counts.enabled,
               },
-              {
-                key: 'official',
-                label: t('settings.assistantTabOfficial', { defaultValue: 'Built-in' }),
-                count: counts.official,
-              },
+              // The Built-in tab only appears while some built-in Agent is listed.
+              ...(counts.official > 0
+                ? [
+                    {
+                      key: 'official',
+                      label: t('settings.assistantTabOfficial', { defaultValue: 'Built-in' }),
+                      count: counts.official,
+                    },
+                  ]
+                : []),
             ]}
             activeTab={tab}
             onTabChange={(key) => selectTab(key as HomeTab)}
@@ -180,7 +185,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
               onDelete={onDelete}
               onToggleEnabled={onToggleEnabled}
               onStartChat={onStartChat}
-              onGoOfficial={() => selectTab('official')}
+              onGoOfficial={counts.official > 0 ? () => selectTab('official') : undefined}
               searchActive={Boolean(normalizedSearchQuery)}
             />
           ) : (

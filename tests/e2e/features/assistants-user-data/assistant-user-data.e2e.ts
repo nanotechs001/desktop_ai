@@ -21,7 +21,6 @@ import { execFileSync } from 'node:child_process';
 import { test, expect } from '../../fixtures';
 import {
   clickCreateAssistant,
-  closeAssistantEditor,
   fillAssistantDescription,
   fillAssistantName,
   goToAssistantSettings,
@@ -29,7 +28,6 @@ import {
   httpGet,
   httpInvoke,
   httpPost,
-  openAssistantEditor,
   saveAssistant,
   toggleAssistantEnabled,
   waitForAssistantEditorClose,
@@ -37,8 +35,8 @@ import {
 
 // ── Shared constants ─────────────────────────────────────────────────────────
 
-/** Stable built-in id we probe in the built-in scenarios. */
-const BUILTIN_PROBE_ID = 'word-creator';
+/** The only built-in that still ships (the hidden Butler); probed by the built-in scenarios. */
+const BUILTIN_PROBE_ID = 'aionui-assistant';
 
 /** Port used by the sibling backend for migration scenarios (8-10). */
 const MIGRATION_BACKEND_PORT = 25902;
@@ -103,11 +101,8 @@ test.describe('Assistant User Data Migration (T5)', () => {
   test('S1: list returns built-ins (no regressions from first-launch baseline)', async ({ page }) => {
     await goToAssistantSettings(page);
     const list = await httpGet<Assistant[]>(page, '/api/assistants');
-    expect(list.length).toBeGreaterThanOrEqual(20);
     const builtins = list.filter((a) => a.source === 'builtin');
-    expect(builtins.length).toBeGreaterThanOrEqual(20);
-    const ids = builtins.map((a) => a.id);
-    expect(ids).toContain(BUILTIN_PROBE_ID);
+    expect(builtins.map((a) => a.id)).toEqual([BUILTIN_PROBE_ID]);
     // Every built-in must resolve a rule file via the dispatch endpoint.
     const ruleContent = await httpPost<string>(page, '/api/skills/assistant-rule/read', {
       assistant_id: BUILTIN_PROBE_ID,
@@ -251,17 +246,7 @@ test.describe('Assistant User Data Migration (T5)', () => {
         content: 'nope',
       })
     ).rejects.toThrow();
-
-    // UI-level: opening the built-in card shows no save button enabled for
-    // name/desc edits. We assert the card exists and the delete button is
-    // absent or disabled (built-ins cannot be deleted).
-    await openAssistantEditor(page, BUILTIN_PROBE_ID);
-    const deleteBtn = page.locator('[data-testid="btn-delete-assistant"]');
-    const isDeleteVisible = await deleteBtn.isVisible().catch(() => false);
-    if (isDeleteVisible) {
-      await expect(deleteBtn).toBeDisabled();
-    }
-    await closeAssistantEditor(page);
+    // No UI-level check: the only built-in (the Butler) has no card in the UI.
   });
 
   // ── Scenario 6 — Extension assistant edit rejected ─────────────────────────
@@ -300,7 +285,8 @@ test.describe('Assistant User Data Migration (T5)', () => {
 
   // ── Scenario 7 — Toggle built-in enabled via UI and confirm persistence ───
 
-  test('S7: toggle built-in enabled persists via assistant_overrides', async ({ page }) => {
+  // Skipped: no built-in Agent has a card in the UI any more (only the hidden Butler ships).
+  test.skip('S7: toggle built-in enabled persists via assistant_overrides', async ({ page }) => {
     await goToAssistantSettings(page);
 
     // Read current enabled value via backend.
