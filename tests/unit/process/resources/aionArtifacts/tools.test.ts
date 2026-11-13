@@ -206,7 +206,7 @@ describe('aionui-artifacts MCP', () => {
     const client = await connect(envFor('conv-1'));
     expect(client.getServerVersion()?.name).toBe(BUILTIN_ARTIFACTS_MCP_NAME);
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(['create', 'update', 'get']);
+    expect(tools.map((t) => t.name)).toEqual(['create', 'update', 'get', 'remote_url']);
     expect(tools[0].description).toContain(
       'Use for any page, app, document or diagram the user should see. Update the same id when revising.'
     );
@@ -241,5 +241,50 @@ describe('aionui-artifacts MCP', () => {
     const code = out.outputFiles[0].text;
     expect(code.length).toBeGreaterThan(0);
     expect(code).not.toMatch(/require\(["']electron["']\)/);
+  });
+});
+
+describe('remote_url', () => {
+  /** A second server whose secure link is `link()`; the browser relay plays no part. */
+  async function serverWithLink(link: () => string | null): Promise<Client> {
+    const linkRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'artifacts-link-'));
+    const withLink = await startArtifacts({ rootDir: linkRoot, remoteUrl: link });
+    if (!withLink) throw new Error('artifact server did not start');
+    closers.push(async () => {
+      await withLink.server.close();
+      await fs.rm(linkRoot, { recursive: true, force: true });
+    });
+    return connect({
+      AION_ARTIFACTS_URL: withLink.server.origin,
+      AION_ARTIFACTS_TOKEN: withLink.token,
+      AIONUI_CONVERSATION_ID: 'conv-1',
+    });
+  }
+
+  it('returns the secure-link address while it runs', async () => {
+    const client = await serverWithLink(() => 'https://quiet-river.trycloudflare.com');
+
+    const reply = await call(client, 'remote_url', {});
+
+    expect(reply.isError).toBeFalsy();
+    expect(jsonOf(reply)).toEqual({ url: 'https://quiet-river.trycloudflare.com' });
+  });
+
+  it('says where to turn the link on while it is off', async () => {
+    const client = await serverWithLink(() => null);
+
+    const reply = await call(client, 'remote_url', {});
+
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toContain('Settings > WebUI');
+  });
+
+  it('reports the link as off when the app gave the server no link source', async () => {
+    const client = await connect(envFor('conv-1'));
+
+    const reply = await call(client, 'remote_url', {});
+
+    expect(reply.isError).toBe(true);
+    expect(textOf(reply)).toContain('Settings > WebUI');
   });
 });

@@ -42,6 +42,8 @@ export type ArtifactServerOptions = {
   memory?: MemoryApiHandler;
   /** Serves `POST /api/reminders/{add,list,done,snooze,reschedule}` when given. */
   reminders?: RemindersApiHandler;
+  /** The WebUI secure-link address while it runs, served at `POST /api/remote-url`; none when absent. */
+  remoteUrl?: () => string | null;
 };
 
 const HOST = '127.0.0.1';
@@ -287,6 +289,9 @@ export async function startArtifactServer(opts: ArtifactServerOptions): Promise<
     const reminders = opts.reminders;
     const remindersMatch = req.method === 'POST' && reminders ? REMINDERS_RE.exec(pathname) : null;
     if (reminders && remindersMatch) return serveApi(req, res, (b) => reminders(remindersMatch[1], b));
+    if (req.method === 'POST' && pathname === '/api/remote-url') {
+      return serveApi(req, res, async () => ({ ok: true, value: { url: opts.remoteUrl?.() ?? null } }));
+    }
     send(res, 404, TEXT_TYPE, 'Not found');
   };
 

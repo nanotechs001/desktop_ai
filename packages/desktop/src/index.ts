@@ -805,10 +805,6 @@ const handleAppReady = async (): Promise<void> => {
       isDefaultAgent,
       // A chat in YOLO mode is not asked before risky clicks and page scripts.
       isYoloChat: chatIsYolo,
-      remoteUrl: () => {
-        const status = webuiTunnel.status();
-        return status.state === 'running' ? status.url : null;
-      },
     });
     if (agentBrowser) {
       process.env.AION_BROWSER_RELAY_URL = agentBrowser.url;
@@ -838,6 +834,11 @@ const handleAppReady = async (): Promise<void> => {
       notes: await startAgentNotes(),
       memory: await startAgentMemory(),
       reminders: await startReminders(),
+      // Served here, not by the browser relay, so agents can read it even with agent browser control off.
+      remoteUrl: () => {
+        const status = webuiTunnel.status();
+        return status.state === 'running' ? status.url : null;
+      },
     });
     if (started) {
       process.env.AION_ARTIFACTS_URL = started.server.origin;

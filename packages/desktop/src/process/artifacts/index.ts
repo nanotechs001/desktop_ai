@@ -92,6 +92,7 @@ export async function startArtifacts(
     notes?: NotesApi;
     memory?: MemoryApiHandler;
     reminders?: RemindersApiHandler;
+    remoteUrl?: () => string | null;
   } = {}
 ): Promise<{ server: ArtifactServer; token: string; store: ArtifactStore } | null> {
   try {
@@ -108,6 +109,7 @@ export async function startArtifacts(
         notes: opts.notes,
         memory: opts.memory,
         reminders: opts.reminders,
+        remoteUrl: opts.remoteUrl,
       });
     if (opts.port !== undefined) return { server: await start(opts.port), token, store };
     const lastPort = await readLastPort(rootDir);

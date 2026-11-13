@@ -90,7 +90,6 @@ const resolveProfile = vi.fn(async (conversationId?: string) => ({
 /** The user's bookmarks main hands the relay; tests set it. */
 let bookmarkList: { url: string; title: string; addedAt: number }[] = [];
 /** The WebUI secure-link address main hands the relay; tests set it. */
-let remoteAddress: string | null = null;
 
 const start = async (limits: Partial<RelayLimits> = {}, sessions?: DebuggerSessions): Promise<RelayHandle> => {
   registry = createTargetRegistry();
@@ -104,7 +103,6 @@ const start = async (limits: Partial<RelayLimits> = {}, sessions?: DebuggerSessi
     waitForTab,
     resolveProfile,
     listBookmarks: () => bookmarkList,
-    remoteUrl: () => remoteAddress,
     limits,
   });
   return relay;
@@ -440,16 +438,6 @@ describe('relay server: targets', () => {
 
     expect(reply.result).toEqual({ bookmarks: [{ title: 'Vizi Platform', url: 'https://viziplatform.com/' }] });
     bookmarkList = [];
-  });
-
-  it('lets an agent read the WebUI secure-link address, and null while it is off', async () => {
-    const handle = await start();
-    const agent = await connect(handle, 'x', { 'X-Aion-Conversation': 'conv_X' });
-
-    expect((await agent.send('AionRelay.remoteUrl')).result).toEqual({ url: null });
-    remoteAddress = 'https://quiet-river.trycloudflare.com';
-    expect((await agent.send('AionRelay.remoteUrl')).result).toEqual({ url: 'https://quiet-river.trycloudflare.com' });
-    remoteAddress = null;
   });
 
   it("a shared tab in Agent X's profile reaches only X's clients; a shared Personal tab reaches every client", async () => {
