@@ -33,10 +33,14 @@ vi.mock('electron', () => {
     visible = false;
     ignoreMouse = false;
     focused = false;
+    onTop = false;
+    inTaskbar = true;
     webContents = { send: vi.fn(), setZoomMode: vi.fn(), setVisualZoomLevelLimits: vi.fn(() => Promise.resolve()) };
     private handlers: Record<string, Array<() => void>> = {};
-    constructor(opts: Rect) {
+    constructor(opts: Rect & { alwaysOnTop?: boolean; skipTaskbar?: boolean }) {
       this.bounds = { x: opts.x, y: opts.y, width: opts.width, height: opts.height };
+      this.onTop = opts.alwaysOnTop === true;
+      this.inTaskbar = opts.skipTaskbar !== true;
       h.windows.push(this);
     }
     on(event: string, fn: () => void) {
@@ -57,7 +61,12 @@ vi.mock('electron', () => {
       this.destroyed = true;
       this.emit('closed');
     }
-    setAlwaysOnTop() {}
+    setAlwaysOnTop(flag: boolean) {
+      this.onTop = flag;
+    }
+    setSkipTaskbar(skip: boolean) {
+      this.inTaskbar = !skip;
+    }
     setIgnoreMouseEvents(ignore: boolean) {
       this.ignoreMouse = ignore;
     }
@@ -1434,6 +1443,28 @@ describe('the main window follows the robot chat', () => {
     host.getMainWindow.mockReturnValue(main);
     manager.setExpanded(A, false);
     expect(main.webContents.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('expanded chat window', () => {
+  it('is a normal Alt-Tab window while expanded, and floats again as the robot or compact popup', async () => {
+    const { manager } = await makeManager();
+    manager.ensure(A, false, 'bot-1');
+    appear(manager, A);
+    const win = liveWindows()[0];
+    expect(win).toMatchObject({ onTop: true, inTaskbar: false });
+
+    manager.openPopup(A, 'bot-1');
+    expect(win).toMatchObject({ onTop: true, inTaskbar: false }); // the compact popup closes on blur anyway
+
+    manager.setWindowMode(A, 'expanded');
+    expect(win).toMatchObject({ onTop: false, inTaskbar: true });
+
+    manager.setSettings({ alwaysOnTop: true }); // a settings change keeps the open window normal
+    expect(win).toMatchObject({ onTop: false, inTaskbar: true });
+
+    manager.setExpanded(A, false);
+    expect(win).toMatchObject({ onTop: true, inTaskbar: false });
   });
 });
 

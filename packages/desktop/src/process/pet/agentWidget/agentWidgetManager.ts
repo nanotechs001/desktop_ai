@@ -157,6 +157,8 @@ type WidgetEntry = {
   openedAt: number;
   nextWanderAt: number;
   lastLayoutKey: string;
+  /** The window level last applied (see applyWindowLevel), so a re-place does not re-stack the window. */
+  lastLevelKey: string;
   lastSize: { width: number; height: number };
   /** Open the popup as soon as the robot is live (asked for while it was still loading, appearing or away). */
   expandWhenLive: boolean;
@@ -242,7 +244,7 @@ export class AgentWidgetManager {
       if (next.enabled) this.restoreAll();
       else this.giveChatsBack();
     } else {
-      for (const entry of this.entries.values()) this.applyAlwaysOnTop(entry.win);
+      for (const entry of this.entries.values()) this.applyWindowLevel(entry);
       if (next.scale !== prev.scale) this.relayoutAll();
       if (next.reduceMotion || !next.autonomousMovement) for (const e of this.entries.values()) this.stopGlide(e);
     }
@@ -921,12 +923,13 @@ export class AgentWidgetManager {
         FIRST_WANDER_DELAY_MS[0] +
         Math.round(this.random() * (FIRST_WANDER_DELAY_MS[1] - FIRST_WANDER_DELAY_MS[0])),
       lastLayoutKey: '',
+      lastLevelKey: '',
       lastSize: { width: size, height: size },
       expandWhenLive: false,
     };
     this.entries.set(id, entry);
 
-    this.applyAlwaysOnTop(win);
+    this.applyWindowLevel(entry);
     // The robot and popup bounds are fixed in DIPs: a zoomed page (the main window's Cmd +, a pinch) would be clipped
     // and its click-through areas offset. `disabled` also keeps the main window's zoom from reaching it.
     win.webContents.setZoomMode('disabled');
@@ -1065,9 +1068,20 @@ export class AgentWidgetManager {
     entry.lifecycleTimer = null;
   }
 
-  private applyAlwaysOnTop(win: BrowserWindow): void {
+  /**
+   * The robot and its compact popup float (per the always-on-top setting) and stay off the taskbar; the expanded chat
+   * window is a normal window, in the taskbar and Alt-Tab, so other windows can cover it.
+   */
+  private applyWindowLevel(entry: WidgetEntry): void {
+    const win = entry.win;
     if (win.isDestroyed()) return;
-    if (!this.state.settings.alwaysOnTop) {
+    const normal = this.inBand(entry);
+    const onTop = !normal && this.state.settings.alwaysOnTop;
+    const key = `${normal}:${onTop}`;
+    if (key === entry.lastLevelKey) return;
+    entry.lastLevelKey = key;
+    win.setSkipTaskbar(!normal);
+    if (!onTop) {
       win.setAlwaysOnTop(false);
       return;
     }
@@ -1078,6 +1092,7 @@ export class AgentWidgetManager {
   /** Apply the current placement to the window and tell its renderer when the layout shape changed. */
   private place(entry: WidgetEntry): void {
     if (entry.win.isDestroyed()) return;
+    this.applyWindowLevel(entry);
     if (this.inBand(entry)) entry.bandBounds = roundRect(entry.bandBounds ?? this.openingBandBounds(entry));
     const placement = this.currentPlacement(entry);
     if (this.inBand(entry)) {
