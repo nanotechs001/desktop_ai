@@ -1710,6 +1710,19 @@ fn clear_stale_model(
     None
 }
 
+/// The servers an agy session gets: the app's built-ins among `servers`, once each.
+fn antigravity_mcp_servers(
+    servers: Vec<aionui_api_types::SessionMcpServer>,
+) -> Vec<aionui_api_types::SessionMcpServer> {
+    let mut seen = std::collections::HashSet::new();
+    servers
+        .into_iter()
+        .filter(|server| {
+            crate::factory::builtin_mcp_env::is_builtin_mcp_name(&server.name) && seen.insert(server.name.clone())
+        })
+        .collect()
+}
+
 /// Build a claude/codex `SessionAgentTask` (the session-model port's `IAgentTask`)
 /// from a resolved ACP build request, or `Ok(None)` for a non-session backend.
 ///
@@ -1771,13 +1784,13 @@ pub async fn build_antigravity_instance(
         None => Vec::new(),
     };
     neutral.extend(config.session_mcp_servers.iter().cloned());
-    let neutral =
-        crate::mcp_resolve::drop_competing_browser_mcps(neutral, crate::mcp_resolve::describe_session_mcp_server);
-    let mut mcp_servers: Vec<McpServerSpec> = neutral.iter().map(session_server_to_spec).collect();
-    if let Some(cfg) = config.team_mcp_stdio_config.as_ref() {
-        let mut coordination = vec![team_mcp_server_spec(cfg)];
-        coordination.append(&mut mcp_servers);
-        mcp_servers = coordination;
+    // agy reads MCP servers only from the user's global agy config, where the backend registers
+    // these: so only the app's own built-ins (launch command, no env), never the user's servers
+    // (their env may hold keys) nor Team coordination, which agy reaches through its CLI.
+    let mut mcp_servers: Vec<McpServerSpec> = Vec::new();
+    for server in antigravity_mcp_servers(neutral) {
+        let resolved = crate::factory::builtin_mcp_env::resolve_builtin_command(server).await;
+        mcp_servers.push(session_server_to_spec(&resolved));
     }
 
     let init = SessionInit {
@@ -5157,6 +5170,29 @@ mod build_mapping_tests {
 
     /// The codex lane: the built-in browser spec that reaches `config.mcp_servers`
     /// carries the relay env and conversation id; a user server does not.
+    #[test]
+    fn antigravity_gets_only_the_builtin_mcp_servers_once_each() {
+        use aionui_api_types::{SessionMcpServer, SessionMcpTransport};
+        let server = |name: &str| SessionMcpServer {
+            id: format!("id-{name}"),
+            name: name.into(),
+            transport: SessionMcpTransport::Stdio {
+                command: "node".into(),
+                args: vec![format!("{name}.js")],
+                env: Default::default(),
+            },
+        };
+        let kept = super::antigravity_mcp_servers(vec![
+            server("aionui-browser"),
+            server("my-github"),
+            server("aionui-artifacts"),
+            server("aionui-browser"),
+            server("aionui-notes"),
+        ]);
+        let names: Vec<&str> = kept.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["aionui-browser", "aionui-artifacts", "aionui-notes"]);
+    }
+
     #[test]
     fn codex_builtin_browser_spec_carries_relay_env_and_user_server_does_not() {
         use aionui_api_types::{SessionMcpServer, SessionMcpTransport};

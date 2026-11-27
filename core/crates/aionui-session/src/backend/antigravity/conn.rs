@@ -249,17 +249,23 @@ impl BackendConnection for AntigravityConnection {
                 ));
             }
         };
-        // No workspace MCP file is written. agy does NOT read
-        // `{workspace}/.agents/mcp_config.json`: measured with a purpose-built
-        // stdio MCP server under `--dangerously-skip-permissions` (which
-        // `argv.rs` always passes), the same server is invoked when configured
-        // in `~/.gemini/config/mcp_config.json` and is NOT invoked from the
-        // workspace file, where agy logs `empty component: prompt section
-        // "mcp_servers"`. Its own docs list only the global path and
-        // `plugins/<name>/mcp_config.json`, and `descriptor.rs` already declares
-        // agy with no MCP transport, which routes Team coordination down the CLI
-        // it was silently using anyway. So the writer was producing a file with
-        // no consumer -- and doing it inside the user's workspace.
+        // agy reads MCP servers only from its global config (`--settings` has no
+        // MCP key; a workspace `.agents/mcp_config.json` is ignored), so the
+        // session's servers are registered there, launch command only. Their env
+        // reaches them through the env of each turn's agy process, which agy
+        // passes on (verified: samples/antigravity/1.5.13/mcp-global-config/).
+        let program = config
+            .cli_program
+            .clone()
+            .unwrap_or_else(|| std::path::PathBuf::from("agy"));
+        super::mcp_register::register_mcp_servers(
+            &self.spawner,
+            &program,
+            &config.init.mcp_servers,
+            &config.spawn_env,
+            &session_id,
+        )
+        .await;
 
         // From the session's resolved skill dirs, not from the workspace: AionUi
         // no longer writes `.agents/skills`, and this source is exactly the
